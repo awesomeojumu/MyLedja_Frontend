@@ -37,7 +37,7 @@ export function LogoMark({ size = 32, onHero, title }: { size?: number; onHero?:
         <Rect x={12} y={43} width={40} height={11} rx={5.5} fill={l} />
         <Rect x={29} y={28} width={23} height={7} rx={3.5} fill={line} />
         <Rect x={29} y={16} width={15} height={7} rx={3.5} fill={line} />
-        <Circle cx={51} cy={19.5} r={4} fill={t.c.catOrange} />
+        <Circle cx={51} cy={19.5} r={4} fill={onHero ? t.c.onHero : t.c.catOrange} />
       </Svg>
     </View>
   );

@@ -23,10 +23,12 @@ function FieldShell({ label, helper, error, children }: { label?: string; helper
   );
 }
 
-export interface TextFieldProps { label?: string; helper?: string; error?: string; icon?: IconName; placeholder?: string; value?: string; defaultValue?: string; onChangeText?: (v: string) => void; onFocus?: () => void; keyboardType?: KeyboardTypeOptions; autoCapitalize?: 'none' | 'sentences' | 'words'; returnKeyType?: 'done' | 'next' | 'search' }
-export function TextField({ label, helper, error, icon, placeholder, value, defaultValue, onChangeText, onFocus, keyboardType, autoCapitalize = 'sentences', returnKeyType }: TextFieldProps) {
+export interface TextFieldProps { label?: string; helper?: string; error?: string; icon?: IconName; placeholder?: string; value?: string; defaultValue?: string; onChangeText?: (v: string) => void; onFocus?: () => void; keyboardType?: KeyboardTypeOptions; autoCapitalize?: 'none' | 'sentences' | 'words'; returnKeyType?: 'done' | 'next' | 'search'; secureTextEntry?: boolean }
+export function TextField({ label, helper, error, icon, placeholder, value, defaultValue, onChangeText, onFocus, keyboardType, autoCapitalize = 'sentences', returnKeyType, secureTextEntry }: TextFieldProps) {
   const t = useTheme();
   const [focus, setFocus] = useState(false);
+  const [hidden, setHidden] = useState(true);
+  const secret = !!secureTextEntry && hidden;
   return (
     <FieldShell label={label} helper={helper} error={error}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 12, borderRadius: t.radius.radiusMd, backgroundColor: t.c.surface,
@@ -34,7 +36,12 @@ export function TextField({ label, helper, error, icon, placeholder, value, defa
         {icon ? <Icon name={icon} size={18} color={t.c.inkMuted} /> : null}
         <TextInput accessibilityLabel={label ?? placeholder} placeholder={placeholder} placeholderTextColor={t.c.inkMuted} value={value} defaultValue={defaultValue}
           onChangeText={onChangeText} onFocus={() => { setFocus(true); onFocus?.(); }} onBlur={() => setFocus(false)} keyboardType={keyboardType} autoCapitalize={autoCapitalize} returnKeyType={returnKeyType}
-          style={[t.text('body'), { flex: 1, color: t.c.ink, paddingVertical: 10 }]} maxFontSizeMultiplier={2} />
+          secureTextEntry={secret} style={[t.text('body'), { flex: 1, color: t.c.ink, paddingVertical: 10 }]} maxFontSizeMultiplier={2} />
+        {secureTextEntry ? (
+          <Pressable onPress={() => setHidden((v) => !v)} accessibilityRole="button" accessibilityLabel={hidden ? 'Show password' : 'Hide password'} hitSlop={8}>
+            <Icon name={hidden ? 'eye' : 'eye-off'} size={18} color={t.c.inkMuted} />
+          </Pressable>
+        ) : null}
       </View>
     </FieldShell>
   );
@@ -178,7 +185,7 @@ export function DatePicker({ label = 'Choose a date', value, defaultValue, onCha
   const first = (month.getDay() + 6) % 7, days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   const cells: (Date | null)[] = [...Array(first).fill(null), ...Array.from({ length: days }, (_, i) => new Date(month.getFullYear(), month.getMonth(), i + 1))];
   return (
-    <View accessibilityLabel={label} style={{ gap: 12, padding: 16, borderRadius: t.radius.radiusLg, borderWidth: 1, borderColor: t.c.border, backgroundColor: t.c.surface }}>
+    <View accessibilityLabel={label} style={{ gap: 12, padding: 16, borderRadius: t.radius.radiusLg, borderWidth: 1, borderColor: t.c.borderStrong, backgroundColor: t.c.surface }}>
       {presets ? (
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {[['Today', 0], ['Yesterday', -1]].map(([l, off]) => {

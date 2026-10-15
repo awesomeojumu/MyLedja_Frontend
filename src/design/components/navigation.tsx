@@ -39,11 +39,11 @@ export function BottomNav({ active = 'home', onNavigate, onAdd, addLabel = 'Add 
   ));
   return onAdd ? (
     <View style={{ paddingHorizontal: 12, paddingBottom: Math.max(insets.bottom, 12) }}>
-      <View accessibilityRole="tablist" style={{ flexDirection: 'row', alignItems: 'center', height: 68, paddingHorizontal: 8, borderRadius: t.radius.radiusXl, backgroundColor: t.c.surface, borderWidth: 1, borderColor: t.c.border,
+      <View accessibilityRole="tablist" style={{ flexDirection: 'row', alignItems: 'center', height: 68, paddingHorizontal: 8, borderRadius: t.radius.radiusXl, backgroundColor: t.c.surface, borderWidth: 1, borderColor: t.c.borderStrong,
         shadowColor: '#131a2b', shadowOpacity: t.scheme === 'dark' ? 0.5 : 0.12, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 8 }}>{kids}</View>
     </View>
   ) : (
-    <View accessibilityRole="tablist" style={{ flexDirection: 'row', height: t.size.navBottom + insets.bottom, paddingBottom: insets.bottom, backgroundColor: t.c.surface, borderTopWidth: 1, borderTopColor: t.c.border }}>{kids}</View>
+    <View accessibilityRole="tablist" style={{ flexDirection: 'row', height: t.size.navBottom + insets.bottom, paddingBottom: insets.bottom, backgroundColor: t.c.surface, borderTopWidth: 1, borderTopColor: t.c.borderStrong }}>{kids}</View>
   );
 }
 
@@ -53,7 +53,7 @@ export function NavRail({ active = 'home', onNavigate, fab }: NavRailProps) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ width: t.size.navRail, alignItems: 'center', gap: 12, paddingTop: 16 + insets.top, backgroundColor: t.c.surface, borderRightWidth: 1, borderRightColor: t.c.border }}>
+    <View style={{ width: t.size.navRail, alignItems: 'center', gap: 12, paddingTop: 16 + insets.top, backgroundColor: t.c.surface, borderRightWidth: 1, borderRightColor: t.c.borderStrong }}>
       {fab ? (
         <SpringPressable onPress={fab.onPress} hapticOn="start" accessibilityRole="button" accessibilityLabel={fab.label}
           style={{ width: 56, height: 56, marginBottom: 12, borderRadius: t.radius.radiusLg, backgroundColor: t.c.primary, alignItems: 'center', justifyContent: 'center' }}>
@@ -81,10 +81,10 @@ export interface SidebarProps { active?: string; workspace?: string; items?: [st
 export function Sidebar({ active = 'home', workspace, items = SIDE, onNavigate, onWorkspace, footer }: SidebarProps) {
   const t = useTheme();
   return (
-    <ScrollView style={{ width: t.size.navSidebar, flexGrow: 0, backgroundColor: t.c.surface, borderRightWidth: 1, borderRightColor: t.c.border }} contentContainerStyle={{ padding: 12, paddingTop: 20, gap: 16 }}>
+    <ScrollView style={{ width: t.size.navSidebar, flexGrow: 0, backgroundColor: t.c.surface, borderRightWidth: 1, borderRightColor: t.c.borderStrong }} contentContainerStyle={{ padding: 12, paddingTop: 20, gap: 16 }}>
       <View style={{ paddingHorizontal: 12 }}><Logo size={28} /></View>
       {workspace ? (
-        <Pressable onPress={onWorkspace} accessibilityRole="button" accessibilityLabel={`Workspace: ${workspace}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48, paddingHorizontal: 12, borderRadius: t.radius.radiusMd, borderWidth: 1, borderColor: t.c.border }}>
+        <Pressable onPress={onWorkspace} accessibilityRole="button" accessibilityLabel={`Workspace: ${workspace}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48, paddingHorizontal: 12, borderRadius: t.radius.radiusMd, borderWidth: 1, borderColor: t.c.borderStrong }}>
           <View><Txt variant="caption" color={t.c.inkMuted}>Workspace</Txt><Txt variant="label" style={{ fontWeight: '600' }}>{workspace}</Txt></View>
           <Icon name="chevron-down" size={16} color={t.c.inkMuted} />
         </Pressable>

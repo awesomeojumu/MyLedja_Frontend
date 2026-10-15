@@ -139,7 +139,7 @@ export function DataTable<R extends Record<string, any>>({ columns, rows, sort, 
   const t = useTheme();
   const cell = (c: DataTableColumn<R>) => ({ width: c.width ?? 160, paddingHorizontal: 16, justifyContent: 'center' as const, alignItems: c.align === 'right' ? ('flex-end' as const) : ('flex-start' as const) });
   return (
-    <ScrollView horizontal style={{ borderWidth: 1, borderColor: t.c.border, borderRadius: t.radius.radiusLg, backgroundColor: t.c.surface }}>
+    <ScrollView horizontal style={{ borderWidth: 1, borderColor: t.c.borderStrong, borderRadius: t.radius.radiusLg, backgroundColor: t.c.surface }}>
       <View>
         <View style={{ flexDirection: 'row', height: 40, backgroundColor: t.c.surfaceAlt, borderBottomWidth: 1, borderBottomColor: t.c.border }}>
           {columns.map((c) => {

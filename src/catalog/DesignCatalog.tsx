@@ -1,7 +1,8 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { readPublicConfig } from "../config";
+import { readPublicConfig } from "../lib/config";
+import { navMode } from "../lib";
 import {
   Amount,
   AmountDisplay,
@@ -119,7 +120,18 @@ function CatalogSection({
   );
 }
 
-export function DesignCatalog() {
+const BADGE_TONES = ["neutral", "primary", "positive", "warning", "danger", "transfer"] as const;
+const STATUSES = ["synced", "pending", "syncing", "failed", "conflict", "offline", "estimate", "reconciled"] as const;
+const CAT_TONES = ["orange", "teal", "pink", "gold", "green", "purple", "sky", "slate"] as const;
+const BANNER_TONES = ["neutral", "primary", "positive", "warning", "danger"] as const;
+
+export function DesignCatalog({
+  onBack,
+  onScheme,
+}: {
+  onBack?: () => void;
+  onScheme?: (scheme: "light" | "dark") => void;
+}) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const config = readPublicConfig();
@@ -132,8 +144,9 @@ export function DesignCatalog() {
   const closeSheet = useCallback(() => setSheetOpen(false), []);
   useBackToClose(sheetOpen, closeSheet);
 
-  const isLarge = t.widthClass === "large";
-  const isRail = t.widthClass === "medium" || t.widthClass === "expanded";
+  const mode = navMode(t.widthClass, t.portrait);
+  const isLarge = mode === "side";
+  const isRail = mode === "rail";
   const sampleSoft = toneSoft(t, "positive");
   const sampleCat = toneColors(t, "orange");
   const cleaned = cleanAmount("4,500.50");
@@ -159,8 +172,26 @@ export function DesignCatalog() {
           }}
         >
           <CatalogSection title="MyLedja catalog">
+            {onBack ? (
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <IconButton icon="chevron-left" label="Back" onPress={onBack} />
+                <SegmentedControl
+                  label="Theme"
+                  options={[
+                    { value: "light", label: "Light" },
+                    { value: "dark", label: "Dark" },
+                  ]}
+                  value={t.scheme}
+                  onChange={(value) => onScheme?.(value === "dark" ? "dark" : "light")}
+                />
+              </View>
+            ) : null}
             <Logo size={32} />
             <LogoMark size={32} title="MyLedja mark" />
+            <View style={{ backgroundColor: t.c.hero, borderRadius: t.radius.radiusLg, padding: t.space.space4, gap: t.space.space3 }}>
+              <Logo size={32} onHero />
+              <LogoMark size={32} onHero title="MyLedja mark on hero" />
+            </View>
             <Txt variant="titleMd">Design system on {t.widthClass}</Txt>
             <Txt variant="bodySm" color={t.c.inkMuted}>
               {config.appEnv} · {config.apiUrl}
@@ -180,11 +211,19 @@ export function DesignCatalog() {
           <CatalogSection title="Foundations">
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: t.space.space2, alignItems: "center" }}>
               <Icon name="house" label="Home" />
-              <CategoryIcon category="Food & groceries" />
+              {CAT_TONES.map((tone) => (
+                <CategoryIcon key={tone} tone={tone} icon="shopping-cart" />
+              ))}
+              <CategoryIcon category="Transfer" />
               <Avatar name="Ada Okafor" />
-              <Badge tone="positive">Synced</Badge>
-              <StatusBadge status="pending" />
-              <StatusBadge status="failed" />
+              {BADGE_TONES.map((tone) => (
+                <Badge key={tone} tone={tone}>
+                  {tone}
+                </Badge>
+              ))}
+              {STATUSES.map((status) => (
+                <StatusBadge key={status} status={status} />
+              ))}
             </View>
             <View
               accessible
@@ -214,6 +253,8 @@ export function DesignCatalog() {
                 Save expense
               </Button>
               <IconButton icon="bell" label="Notifications" badge={2} />
+              <IconButton icon="search" label="Search" variant="filled" />
+              <FilterButton onPress={() => setSheetOpen(true)} />
               <FilterButton count={2} onPress={() => setSheetOpen(true)} />
               <Chip selected icon="check">
                 This month
@@ -225,10 +266,13 @@ export function DesignCatalog() {
           </CatalogSection>
 
           <CatalogSection title="Surfaces">
-            <Banner tone="warning" title="Rent is due in 3 days">
-              ₦250,000.00 leaves GTBank on Sat 18 Oct.
-            </Banner>
+            {BANNER_TONES.map((tone) => (
+              <Banner key={tone} tone={tone} title={`${tone} banner`} action={{ label: "Review", onPress: () => undefined }}>
+                Sample body on the {tone} tile.
+              </Banner>
+            ))}
             <Toast message="Saved on device." action={{ label: "Undo", onPress: () => undefined }} />
+            <Toast message="Could not sync." tone="danger" onClose={() => undefined} />
             <Card title="Spending">
               <SummaryCard label="Spent this month" value={185500.25} kind="expense" delta={-4.2} goodWhenUp={false} />
             </Card>
@@ -262,10 +306,15 @@ export function DesignCatalog() {
               ]}
             />
             <Amount value={4500.5} kind="expense" size="lg" animate />
+            <Amount value={450000} kind="income" />
+            <Amount value={20000} kind="transfer" />
+            <Amount value={12500} hidden />
             <View style={{ flexDirection: "row", gap: t.space.space3 }}>
               <StatTile label="Spent" value={185500.25} kind="spent" icon="arrow-down-left" />
               <StatTile label="In" value={450000} kind="income" icon="arrow-up-right" />
+              <StatTile label="Moved" value={20000} kind="transfer" icon="arrow-left-right" />
             </View>
+            <StatTile label="Accounts" count={4} kind="neutral" icon="wallet" note="Dummy" />
             <ProgressBar label="Transport" value={18000} max={20000} money />
             <ProgressRing value={18000} max={20000} label="Transport" />
             <View style={{ flexDirection: "row", gap: t.space.space3 }}>

@@ -1,0 +1,47 @@
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  useFonts,
+} from "@expo-google-fonts/inter";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { ThemeProvider } from "../src/design";
+import { SchemeProvider, useScheme } from "../src/state";
+
+export const unstable_settings = {
+  initialRouteName: "(auth)",
+};
+
+function ThemedStack() {
+  const [ready] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+  const { scheme } = useScheme();
+
+  return (
+    <ThemeProvider font={ready ? "inter" : "system"} haptics scheme={scheme}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="catalog" />
+      </Stack>
+      <StatusBar style={scheme === "dark" ? "light" : scheme === "light" ? "dark" : "auto"} />
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <SchemeProvider>
+        <ThemedStack />
+      </SchemeProvider>
+    </SafeAreaProvider>
+  );
+}

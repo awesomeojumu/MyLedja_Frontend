@@ -21,10 +21,10 @@ export function Button({ variant = 'primary', size = 'md', icon, iconRight, load
   const t = useTheme();
   const h = size === 'lg' ? t.size.controlLg : size === 'sm' ? t.size.controlSm : t.size.controlMd;
   const pal = {
-    primary: { bg: t.c.primary, fg: t.c.onPrimary, border: 'transparent' },
-    secondary: { bg: t.c.surface, fg: t.c.ink, border: t.c.borderStrong },
-    tertiary: { bg: 'transparent', fg: t.c.primary, border: 'transparent' },
-    destructive: { bg: t.c.danger, fg: t.c.surface, border: 'transparent' },
+    primary: { bg: t.c.primary, fg: t.c.onPrimary, border: 'transparent', hover: t.c.primaryHover },
+    secondary: { bg: t.c.surface, fg: t.c.ink, border: t.c.borderStrong, hover: t.c.surfaceAlt },
+    tertiary: { bg: 'transparent', fg: t.c.primary, border: 'transparent', hover: t.c.surfaceAlt },
+    destructive: { bg: t.c.danger, fg: t.c.surface, border: 'transparent', hover: t.c.danger },
   }[variant];
   const off = disabled || loading;
   const why = disabled && disabledReason ? disabledReason : undefined;
@@ -33,6 +33,7 @@ export function Button({ variant = 'primary', size = 'md', icon, iconRight, load
       onPress={off ? undefined : onPress} disabled={off} hapticOn={variant === 'primary' ? 'start' : undefined}
       accessibilityRole="button" accessibilityState={{ disabled: !!off, busy: !!loading }} accessibilityHint={why}
       hitSlop={h < 44 ? (44 - h) / 2 : 0}
+      hoverStyle={off ? undefined : { backgroundColor: pal.hover }}
       style={{ alignSelf: fullWidth ? 'stretch' : 'flex-start', minHeight: h, paddingHorizontal: size === 'sm' ? 12 : size === 'lg' ? 24 : 20, borderRadius: t.radius.radiusSm,
         backgroundColor: pal.bg, borderWidth: 1, borderColor: pal.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: off && !loading ? 0.5 : 1 }}
     >
@@ -125,7 +126,7 @@ export function Chip({ selected, onPress, icon, category, count, disabled, child
     <SpringPressable onPress={onPress} disabled={disabled} hapticOn="select" hitSlop={2}
       accessibilityRole={role === 'radio' ? 'radio' : 'togglebutton'} accessibilityState={{ checked: !!selected, disabled: !!disabled }}
       style={{ opacity: disabled ? 0.5 : 1, flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingLeft: category ? 6 : 16, paddingRight: category ? 12 : 16, borderRadius: 999,
-        borderWidth: selected ? 2 : 1, borderColor: selected ? t.c.primary : t.c.border, backgroundColor: selected ? t.c.primarySoft : t.c.surface }}>
+        borderWidth: selected ? 2 : 1, borderColor: selected ? t.c.primary : t.c.borderStrong, backgroundColor: selected ? t.c.primarySoft : t.c.surface }}>
       {category ? <CategoryIcon category={category} size="sm" round /> : icon ? <Icon name={icon} size={16} color={selected ? t.c.onPrimarySoft : t.c.ink} /> : null}
       <Text style={[t.text('label'), { color: selected ? t.c.onPrimarySoft : t.c.ink, fontWeight: selected ? '600' : '500' }]}>{children ?? category}</Text>
       {count != null ? <Text style={[t.text('caption'), { color: t.c.inkMuted, fontVariant: ['tabular-nums'] }]}>{count}</Text> : null}

@@ -1,0 +1,36 @@
+import { GlobalSearchOverlay } from "./GlobalSearchOverlay";
+import { QuickAddOverlay } from "./QuickAddOverlay";
+import { useDashboardOverlays } from "../overlay-context";
+
+export function DashboardOverlayHost({
+  onExpense,
+  onIncome,
+  onComingLater,
+}: {
+  onExpense: () => void;
+  onIncome: () => void;
+  onComingLater: (message: string) => void;
+}) {
+  const { overlay, close } = useDashboardOverlays();
+  return (
+    <>
+      <QuickAddOverlay
+        open={overlay === "quick-add"}
+        onClose={close}
+        onPick={(id) => {
+          close();
+          if (id === "expense") {
+            onExpense();
+            return;
+          }
+          if (id === "income") {
+            onIncome();
+            return;
+          }
+          onComingLater("Coming in that feature");
+        }}
+      />
+      <GlobalSearchOverlay open={overlay === "search"} onClose={close} />
+    </>
+  );
+}

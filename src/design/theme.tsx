@@ -22,6 +22,8 @@ export interface Theme {
   haptics: boolean;
   /** compact < 600, medium 600–899, expanded 900–1199, large ≥ 1200 */
   widthClass: 'compact' | 'medium' | 'expanded' | 'large';
+  /** True when the window is taller than it is wide (laptop flipped, phone). */
+  portrait: boolean;
   /** A text style for a type token, in the chosen font. */
   text: (style: TypeStyle) => { fontSize: number; lineHeight: number; fontWeight: any; letterSpacing?: number; fontFamily?: string; fontVariant?: any };
 }
@@ -43,7 +45,7 @@ function weightKey(w: string): 'regular' | 'medium' | 'semibold' | 'bold' {
 
 export function ThemeProvider(p: ThemeProviderProps) {
   const system = useColorScheme();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [reduceMotion, setReduce] = useState(false);
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduce).catch(() => {});
@@ -58,13 +60,14 @@ export function ThemeProvider(p: ThemeProviderProps) {
     space, radius, size, spring, font, reduceMotion,
     haptics: p.haptics !== false,
     widthClass: width >= breakpoint.bpLarge ? 'large' : width >= breakpoint.bpExpanded ? 'expanded' : width >= breakpoint.bpMedium ? 'medium' : 'compact',
+    portrait: height > width,
     text: (style: TypeStyle) => {
       const s: any = type[style];
       const fam = FONT_FAMILIES[font][weightKey(s.fontWeight)];
       // Custom font files carry their weight in the family name; the system font needs fontWeight.
       return { ...s, fontFamily: fam, fontWeight: fam ? undefined : s.fontWeight, fontVariant: s.fontVariant ? [...s.fontVariant] : undefined };
     },
-  }), [scheme, font, reduceMotion, p.haptics, width]);
+  }), [scheme, font, reduceMotion, p.haptics, width, height]);
   return <ThemeContext.Provider value={value}>{p.children}</ThemeContext.Provider>;
 }
 

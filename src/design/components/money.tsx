@@ -74,7 +74,7 @@ export function StatTile({ label, value = 0, count, kind = 'neutral', icon, note
   const bg = kind === 'spent' ? t.c.catOrangeSoft : kind === 'income' ? t.c.catGreenSoft : kind === 'transfer' ? t.c.transferSoft : t.c.surface;
   const fg = kind === 'spent' ? t.c.catOrange : kind === 'income' ? t.c.catGreen : kind === 'transfer' ? t.c.transfer : t.c.ink;
   return (
-    <Rise style={{ flex: 1, gap: 6, padding: size === 'lg' ? 20 : 14, borderRadius: size === 'lg' ? t.radius.radiusXl : t.radius.radiusLg, backgroundColor: bg, borderWidth: kind === 'neutral' ? 1 : 0, borderColor: t.c.border }}>
+    <Rise style={{ flex: 1, gap: 6, padding: size === 'lg' ? 20 : 14, borderRadius: size === 'lg' ? t.radius.radiusXl : t.radius.radiusLg, backgroundColor: bg, borderWidth: kind === 'neutral' ? 1 : 0, borderColor: t.c.borderStrong }}>
       {icon ? <View style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: t.c.surface, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={18} color={fg} /></View> : null}
       <Txt variant="label">{label}</Txt>
       {count != null ? <Txt variant="amountLg">{String(count)}</Txt> : <Amount value={value} kind={kind === 'transfer' ? 'transfer' : 'neutral'} size={size === 'lg' ? 'xl' : 'lg'} animate={animate} hidden={hidden} />}
@@ -161,7 +161,7 @@ export function BudgetTile({ category, value, max, layout = 'tile', currency, on
       <ProgressRing value={value} max={max} label={category} size={40} stroke={5} />
     </View>
   ) : (
-    <View style={{ width: 148, gap: 10, padding: 14, borderRadius: t.radius.radiusLg, backgroundColor: t.c.surface, borderWidth: 1, borderColor: t.c.border }}>
+    <View style={{ width: 148, gap: 10, padding: 14, borderRadius: t.radius.radiusLg, backgroundColor: t.c.surface, borderWidth: 1, borderColor: t.c.borderStrong }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><CategoryIcon category={category} size="sm" /><ProgressRing value={value} max={max} label={category} size={48} /></View>
       <Txt variant="label" style={{ fontWeight: '600' }}>{category}</Txt>
       <Txt variant="caption" color={col} style={{ fontWeight: '600', fontVariant: ['tabular-nums'] }}>{left}</Txt>

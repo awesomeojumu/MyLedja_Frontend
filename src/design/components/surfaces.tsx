@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, BackHandler, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View, ViewStyle, StyleProp } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
-import { Rise } from '../motion';
+import { nativeDriver, Rise } from '../motion';
 import { spring } from '../tokens';
 import { IconName } from '../icons';
 import { Icon, toneSoft, Tone, Txt } from './foundations';
@@ -13,7 +13,7 @@ export interface CardProps { title?: string; action?: React.ReactNode; flat?: bo
 export function Card({ title, action, flat, style, delay = 0, children }: CardProps) {
   const t = useTheme();
   return (
-    <Rise delay={delay} style={[{ backgroundColor: t.c.surface, borderRadius: t.radius.radiusLg, borderWidth: 1, borderColor: t.c.border, padding: t.space.space4, gap: 12 },
+    <Rise delay={delay} style={[{ backgroundColor: t.c.surface, borderRadius: t.radius.radiusLg, borderWidth: 1, borderColor: t.c.borderStrong, padding: t.space.space4, gap: 12 },
       flat ? null : { shadowColor: '#131a2b', shadowOpacity: t.scheme === 'dark' ? 0 : 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: t.scheme === 'dark' ? 0 : 1 }, style]}>
       {title || action ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -42,12 +42,12 @@ export interface SheetProps { title: string; open: boolean; onClose: () => void;
 export function Sheet({ title, open, onClose, footer, children }: SheetProps) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const centred = t.widthClass !== 'compact';
+  const centred = t.widthClass !== 'compact' && !t.portrait;
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!open) { v.setValue(0); return; }
     if (t.reduceMotion) { v.setValue(1); return; }
-    Animated.spring(v, { toValue: 1, useNativeDriver: true, ...spring.sheet }).start();
+    Animated.spring(v, { toValue: 1, useNativeDriver: nativeDriver(), ...spring.sheet }).start();
   }, [open]);
   const panel = centred
     ? { opacity: v, transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }] }
@@ -86,9 +86,9 @@ export function Dialog({ title, open, onClose, onConfirm, confirmLabel = 'Confir
           {destructive ? <View style={{ width: 44, height: 44, borderRadius: 999, backgroundColor: t.c.dangerSoft, alignItems: 'center', justifyContent: 'center' }}><Icon name="trash-2" size={22} color={t.c.danger} /></View> : null}
           <Txt variant="titleMd" accessibilityRole="header">{title}</Txt>
           {children ? <Txt color={t.c.inkMuted}>{children}</Txt> : null}
-          <View style={{ flexDirection: t.widthClass === 'compact' ? 'column-reverse' : 'row', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
-            <Button variant="secondary" fullWidth={t.widthClass === 'compact'} onPress={onClose}>{cancelLabel}</Button>
-            <Button variant={destructive ? 'destructive' : 'primary'} fullWidth={t.widthClass === 'compact'} onPress={onConfirm}>{confirmLabel}</Button>
+          <View style={{ flexDirection: t.portrait || t.widthClass === 'compact' ? 'column-reverse' : 'row', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
+            <Button variant="secondary" fullWidth={t.portrait || t.widthClass === 'compact'} onPress={onClose}>{cancelLabel}</Button>
+            <Button variant={destructive ? 'destructive' : 'primary'} fullWidth={t.portrait || t.widthClass === 'compact'} onPress={onConfirm}>{confirmLabel}</Button>
           </View>
         </View>
       </View>
@@ -152,8 +152,8 @@ export function Skeleton({ variant = 'text', lines = 1 }: { variant?: 'text' | '
   useEffect(() => {
     if (t.reduceMotion) return;
     const loop = Animated.loop(Animated.sequence([
-      Animated.timing(v, { toValue: 0.45, duration: 700, useNativeDriver: true }),
-      Animated.timing(v, { toValue: 1, duration: 700, useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0.45, duration: 700, useNativeDriver: nativeDriver() }),
+      Animated.timing(v, { toValue: 1, duration: 700, useNativeDriver: nativeDriver() }),
     ]));
     loop.start();
     return () => loop.stop();
