@@ -1,0 +1,16 @@
+---
+description: MyLedja UI must use src/design on iOS, Android, and web
+alwaysApply: true
+---
+
+# Design system
+
+One Expo client: iOS, Android, and web. Import UI only from `src/design`. Do not import studio `web/bundle.js`, `window.Ledja`, or `tokens.css`.
+
+- Every string goes through `Txt`. Do not use raw `Text` in app screens.
+- Every amount goes through `formatMoney`, `Amount`, `AmountInput`, or `AmountDisplay`. Store money as integer kobo or decimal strings, never floats.
+- Colours only from `useTheme().c`. No hex colours in app screens.
+- Blue fill (`primary`) only for the primary action or a selected state.
+- Compact width: `BottomNav`. Medium and expanded: `NavRail`. Large: `Sidebar`.
+- Do not invent duplicate chrome, a `src/theme`, or a second component library.
+- Do not edit `src/design/tokens.ts` by hand. Token changes start in studio `tokens.json`, then recopy `native/` into `src/design`.

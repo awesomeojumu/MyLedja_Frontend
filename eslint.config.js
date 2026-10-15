@@ -6,4 +6,11 @@ module.exports = defineConfig([
   {
     ignores: ["dist/**", "node_modules/**"],
   },
+  {
+    files: ["src/design/**/*.{ts,tsx}"],
+    rules: {
+      "react-hooks/refs": "off",
+      "react-hooks/exhaustive-deps": "off",
+    },
+  },
 ]);

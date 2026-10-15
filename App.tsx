@@ -1,26 +1,33 @@
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  useFonts,
+} from "@expo-google-fonts/inter";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View } from "react-native";
-import { readPublicConfig } from "./src/config";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { DesignCatalog } from "./src/catalog/DesignCatalog";
+import { ThemeProvider } from "./src/design";
 
 export default function App() {
-  const config = readPublicConfig();
+  const [ready] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  if (!ready) {
+    return null;
+  }
 
   return (
-    <View style={styles.container}>
-      <Text accessibilityRole="header">MyLedja</Text>
-      <Text>{config.appEnv}</Text>
-      <Text>{config.apiUrl}</Text>
-      <StatusBar style="auto" />
-    </View>
+    <SafeAreaProvider>
+      <ThemeProvider font="inter" haptics>
+        <DesignCatalog />
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-});

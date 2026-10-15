@@ -9,18 +9,24 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint -- --max-warnings=0",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit",
     "test": "tsx src/config.test.ts",
     "build": "expo export --platform web --output-dir dist",
     "apptest": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
+    "@expo-google-fonts/inter": "^0.4.2",
     "@expo/metro-runtime": "~57.0.16",
     "expo": "~57.0.29",
+    "expo-font": "~57.0.4",
+    "expo-haptics": "~57.0.3",
     "expo-status-bar": "~57.0.1",
+    "lucide-react-native": "^0.460.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-native": "^0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.4"
   },
   "devDependencies": {
