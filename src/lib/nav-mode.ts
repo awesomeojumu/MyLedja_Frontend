@@ -19,9 +19,9 @@ export function navMode(widthClass: WidthClass, portrait = false): NavMode {
   return "bottom";
 }
 
-/** Phone bar from the design system: Home, Transactions, the + button, Plan, Accounts. */
-export function phoneBarDestinations(): readonly ["home", "transactions", "plan", "accounts"] {
-  return ["home", "transactions", "plan", "accounts"];
+/** Phone bar: Home, Transactions, the + button, Plan, Accounts, More (MYL-007 navigation shell). */
+export function phoneBarDestinations(): readonly ["home", "transactions", "plan", "accounts", "more"] {
+  return ["home", "transactions", "plan", "accounts", "more"];
 }
 
 export function twoColumn(widthClass: WidthClass, portrait = false): boolean {

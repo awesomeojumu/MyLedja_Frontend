@@ -16,22 +16,23 @@ export function BottomNav({ active = 'home', onNavigate, onAdd, addLabel = 'Add 
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const list = items ?? (onAdd ? NAV.slice(0, 4) : NAV);
+  const dense = list.length > 4;
   const tab = ([id, label, icon]: [string, string, IconName]) => {
     const on = id === active;
     return (
       <Pressable key={id} onPress={() => onNavigate?.(id)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={label} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 56 }}>
-        <View style={{ width: 56, height: 30, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? t.c.primarySoft : 'transparent' }}>
+        <View style={{ width: dense ? 44 : 56, height: 30, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? t.c.primarySoft : 'transparent' }}>
           <Icon name={icon} size={22} color={on ? t.c.onPrimarySoft : t.c.inkMuted} />
         </View>
-        <Text style={[t.text('caption'), { fontSize: 11, color: on ? t.c.ink : t.c.inkMuted, fontWeight: on ? '600' : '500' }]}>{label}</Text>
+        <Text numberOfLines={1} style={[t.text('caption'), { fontSize: dense ? 10 : 11, color: on ? t.c.ink : t.c.inkMuted, fontWeight: on ? '600' : '500' }]}>{label}</Text>
       </Pressable>
     );
   };
   const kids = list.map(tab);
-  if (onAdd) kids.splice(Math.ceil(list.length / 2), 0, (
+  if (onAdd) kids.splice(Math.floor(list.length / 2), 0, (
     <View key="add" style={{ flex: 1, alignItems: 'center' }}>
       <SpringPressable onPress={onAdd} hapticOn="start" depth={0.9} accessibilityRole="button" accessibilityLabel={addLabel}
-        style={{ width: 56, height: 56, marginTop: -28, borderRadius: 999, backgroundColor: t.c.primary, borderWidth: 4, borderColor: t.c.bg, alignItems: 'center', justifyContent: 'center',
+        style={{ width: dense ? 52 : 56, height: dense ? 52 : 56, marginTop: -28, borderRadius: 999, backgroundColor: t.c.primary, borderWidth: 4, borderColor: t.c.bg, alignItems: 'center', justifyContent: 'center',
           shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}>
         <Icon name="plus" size={26} color={t.c.onPrimary} strokeWidth={2.5} />
       </SpringPressable>
