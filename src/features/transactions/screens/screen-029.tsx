@@ -1,1 +1,1 @@
-export { TransactionDetailScreen as Screen029 } from "./TransactionDetailScreen";
+export { ChooserScreen as Screen029 } from "./ChooserScreen";

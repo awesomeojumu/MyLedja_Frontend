@@ -9,3 +9,4 @@ export { ScreenStateGate, ScreenStateSwitch, useScreenPreview } from "./screen-s
 export { SCREEN_PREVIEW_OPTIONS } from "./screen-preview";
 export type { ScreenPreview } from "./screen-preview";
 export { ScreenShell } from "./screen-shell";
+export { WidePane } from "./wide-pane";

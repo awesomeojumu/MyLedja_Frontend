@@ -61,7 +61,7 @@ export function AmountInput({ label, value, onChange, currency = 'NGN', error, h
         <Txt variant="amountLg" color={t.c.inkMuted}>₦</Txt>
         <TextInput value={shown} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={t.c.inkMuted} accessibilityLabel={label ?? `Amount in ${currency}`}
           onChangeText={(s) => { const raw = s.replace(/[^0-9.]/g, ''); const [w, ...k] = raw.split('.'); onChange(w + (k.length ? '.' + k.join('').slice(0, 2) : '')); }}
-          style={[t.text('amountLg'), { flex: 1, color: t.c.ink }, hideBrowserOutline]} />
+          style={[t.text('amountLg'), { flex: 1, minWidth: 0, color: t.c.ink }, hideBrowserOutline]} />
         <Txt variant="caption" color={t.c.inkMuted} style={{ fontWeight: '600' }}>{currency}</Txt>
       </View>
     </FieldShell>

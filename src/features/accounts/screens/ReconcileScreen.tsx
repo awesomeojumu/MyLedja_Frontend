@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 import { Amount, AmountInput, Banner, Button, Card, Txt, Toast, useTheme } from "../../../design";
+import { WidePane } from "../../../lib";
 import { AccountScreenShell } from "../components/AccountScreenShell";
 import { accountById } from "../dummy-data";
 
@@ -19,11 +20,24 @@ export function ReconcileScreen() {
 
   return (
     <AccountScreenShell
-      title="Reconcile"
+      title="Reconcile account"
       emptyTitle="Nothing to match"
       errorTitle="Could not reconcile"
       footer={<Button fullWidth disabled={!matched} disabledReason={matched ? undefined : "Enter the statement closing balance so both figures match."} onPress={() => setToast(`${account?.name ?? "Account"} is reconciled.`)}>Mark reconciled</Button>}
     >
+      <WidePane tablet
+        sidebar={
+          matched ? (
+            <Banner tone="positive" title="Balances match">
+              {`${account?.name ?? "This account"} matches the statement.`}
+            </Banner>
+          ) : (
+            <Banner tone="warning" title="Balances do not match">
+              Import a statement or add the missing transactions, then try again.
+            </Banner>
+          )
+        }
+      >
       <Card>
         <View style={{ gap: t.space.space3 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -41,15 +55,7 @@ export function ReconcileScreen() {
           </View>
         </View>
       </Card>
-      {matched ? (
-        <Banner tone="positive" title="Balances match">
-          {`${account?.name ?? "This account"} matches the statement.`}
-        </Banner>
-      ) : (
-        <Banner tone="warning" title="Balances do not match">
-          Import a statement or add the missing transactions, then try again.
-        </Banner>
-      )}
+      </WidePane>
       {toast ? (
         <Toast
           message={toast}

@@ -6,6 +6,7 @@ export function AccountScreenShell({
   title,
   backLabel = "Back",
   onBack,
+  showBack,
   actions,
   footer,
   demo = false,
@@ -19,6 +20,7 @@ export function AccountScreenShell({
   title: string;
   backLabel?: string;
   onBack?: () => void;
+  showBack?: boolean;
   actions?: { icon: IconName; label: string; onPress: () => void }[];
   footer?: ReactNode;
   demo?: boolean;
@@ -34,6 +36,7 @@ export function AccountScreenShell({
       title={title}
       backLabel={backLabel}
       onBack={onBack}
+      showBack={showBack}
       homeHref="/(tabs)/accounts"
       demo={demo}
       actions={actions}

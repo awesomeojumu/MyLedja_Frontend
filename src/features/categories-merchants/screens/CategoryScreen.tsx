@@ -1,6 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View } from "react-native";
 import { Banner, Button, CategoryIcon, EmptyState, Txt, useTheme } from "../../../design";
+import { WidePane } from "../../../lib";
+import { CategoryList } from "../components/CategoryList";
 import { CatScreen } from "../components/CatScreen";
 import { categoryById } from "../dummy-data";
 
@@ -27,13 +29,15 @@ export function CategoryScreen() {
         </Button>
       }
     >
-      <View style={{ alignItems: "center", gap: t.space.space3 }}>
-        <CategoryIcon category={row.name} size="lg" />
-        <Txt variant="titleMd">{row.name}</Txt>
-      </View>
-      <Banner tone="primary" title={`${row.count} dummy records`}>
-        {row.kind === "income" ? "Money in." : "Money out."} Nothing is saved to a server yet.
-      </Banner>
+      <WidePane tablet sidebar={<CategoryList selectedId={row.id} />}>
+        <View style={{ alignItems: "center", gap: t.space.space3 }}>
+          <CategoryIcon category={row.name} size="lg" />
+          <Txt variant="titleMd">{row.name}</Txt>
+        </View>
+        <Banner tone="primary" title={`${row.count} dummy records`}>
+          {row.kind === "income" ? "Money in." : "Money out."} Nothing is saved to a server yet.
+        </Banner>
+      </WidePane>
     </CatScreen>
   );
 }

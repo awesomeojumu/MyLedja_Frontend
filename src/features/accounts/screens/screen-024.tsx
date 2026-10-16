@@ -1,1 +1,1 @@
-export { ReconcileScreen as Screen024 } from "./ReconcileScreen";
+export { TransferScreen as Screen024 } from "./TransferScreen";

@@ -1,1 +1,1 @@
-export { NeedsReviewScreen as Screen040 } from "./NeedsReviewScreen";
+export { CorrectionHistoryScreen as Screen040 } from "./CorrectionHistoryScreen";

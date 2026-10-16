@@ -1,6 +1,8 @@
 import type { IconName } from "../../../design";
 
-export type AccountKind = "bank" | "wallet" | "cash";
+export type AccountKind = "bank" | "wallet" | "cash" | "savings" | "liability";
+
+export type AccountGroup = "cash-and-bank" | "savings" | "liability";
 
 export type ImportBucket = "new" | "duplicates" | "look";
 
@@ -15,6 +17,10 @@ export interface LedgerAccount {
   reconciled: boolean;
   lastActivity: string;
   icon: IconName;
+  group: AccountGroup;
+  statusLine: string;
+  unsynced?: number;
+  archived?: boolean;
 }
 
 export interface ImportRow {

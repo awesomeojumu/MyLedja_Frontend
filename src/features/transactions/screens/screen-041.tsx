@@ -1,1 +1,1 @@
-export { EmptyTransactionsScreen as Screen041 } from "./EmptyTransactionsScreen";
+export { SyncQueueScreen as Screen041 } from "./SyncQueueScreen";

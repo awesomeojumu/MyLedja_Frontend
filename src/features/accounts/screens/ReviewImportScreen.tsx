@@ -11,6 +11,7 @@ import {
   formatMoney,
   useTheme,
 } from "../../../design";
+import { WidePane } from "../../../lib";
 import { AccountScreenShell } from "../components/AccountScreenShell";
 import { IMPORT_REVIEW, importRowsFor } from "../dummy-data";
 import type { ImportBucket } from "../types/account";
@@ -33,11 +34,11 @@ export function ReviewImportScreen() {
 
   return (
     <AccountScreenShell
-      title="Review import"
+      title="Review imported statement"
       emptyTitle="No rows to review"
       errorTitle="Could not read this statement"
       backLabel="Import statement"
-      onBack={() => router.replace(`/(tabs)/accounts/import-preview?id=${id ?? IMPORT_REVIEW.accountId}`)}
+      onBack={() => router.replace(`/(tabs)/accounts/import?id=${id ?? IMPORT_REVIEW.accountId}`)}
       footer={
         <View style={{ flexDirection: t.widthClass === "compact" || t.portrait ? "column" : "row", gap: t.space.space3, alignItems: t.widthClass === "compact" || t.portrait ? "stretch" : "center" }}>
           <Button fullWidth={t.widthClass === "compact" || t.portrait} onPress={() => setToast(`Imported ${counts.new} records.`)}>
@@ -49,14 +50,18 @@ export function ReviewImportScreen() {
         </View>
       }
     >
+      <WidePane
+        sidebar={
+          <Banner tone="positive" title="Balances match">
+            {`After this import ${IMPORT_REVIEW.accountName} will show ${closing}, the same as the statement's closing balance.`}
+          </Banner>
+        }
+      >
       <View style={{ flexDirection: "row", gap: t.space.space3 }}>
         <StatTile label="New records" count={counts.new} note="Will be added" />
         <StatTile label="Already recorded" count={counts.duplicates} note="Skipped as duplicates" />
         <StatTile label="Need a look" count={counts.look} note="Decide before importing" />
       </View>
-      <Banner tone="positive" title="Balances match">
-        {`After this import ${IMPORT_REVIEW.accountName} will show ${closing}, the same as the statement's closing balance.`}
-      </Banner>
       <Tabs
         label="Import rows"
         tabs={[
@@ -79,6 +84,7 @@ export function ReviewImportScreen() {
           />
         ))}
       </View>
+      </WidePane>
       {toast ? (
         <Toast
           message={toast}

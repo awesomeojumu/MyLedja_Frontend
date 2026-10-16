@@ -19,6 +19,25 @@ export interface WorkspaceSummary {
   role: "owner" | "admin" | "editor" | "viewer";
 }
 
+export interface BankLinkStart {
+  status: "ok";
+  data: { monoUrl: string };
+}
+
+export interface LinkedBank {
+  provider: "mono";
+  institution: string;
+  name: string;
+  mask: string;
+  balance: number;
+  currency: string;
+}
+
+export interface BankLinkComplete {
+  status: "ok";
+  data: LinkedBank;
+}
+
 export interface HttpResponse {
   status: number;
   text(): Promise<string>;
@@ -52,6 +71,10 @@ const FRIENDLY: Record<string, string> = {
   "password must be at least 10 characters": "Use at least 10 characters.",
   "password must not match the email": "Your password can’t be your email.",
   "email is invalid": "Enter a valid email address.",
+  "Bank linking is not set up on this server.": "Bank linking is not set up on this server.",
+  "That code is missing.": "Paste the code from Mono first.",
+  "Could not reach Mono. Try again.": "Could not reach Mono. Try again.",
+  "Mono could not complete that step.": "Mono could not complete that step.",
 };
 
 export function friendlyMessage(reason: string): string {
@@ -108,6 +131,10 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
     me: (accessToken: string) => call<Me>("GET", "/auth/me", undefined, accessToken),
     workspaces: (accessToken: string) =>
       call<WorkspaceSummary[]>("GET", "/workspaces", undefined, accessToken),
+    startBankLink: (accessToken: string, workspaceId?: string) =>
+      call<BankLinkStart>("POST", "/bank-integrations/link", workspaceId ? { workspaceId } : {}, accessToken),
+    completeBankLink: (accessToken: string, code: string, workspaceId?: string) =>
+      call<BankLinkComplete>("POST", "/bank-integrations/link/complete", { code, workspaceId }, accessToken),
   };
 }
 

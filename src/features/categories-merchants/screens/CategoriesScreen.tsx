@@ -1,12 +1,13 @@
 import { useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
-import { CategoryIcon, Txt, useTheme } from "../../../design";
+import { Banner } from "../../../design";
+import { WidePane } from "../../../lib";
+import { CategoryList } from "../components/CategoryList";
 import { CatScreen } from "../components/CatScreen";
 import { CATEGORY_ROWS } from "../dummy-data";
 
 export function CategoriesScreen() {
-  const t = useTheme();
   const router = useRouter();
+  const first = CATEGORY_ROWS[0];
   return (
     <CatScreen
       title="Categories"
@@ -21,33 +22,13 @@ export function CategoriesScreen() {
       emptyAction={{ label: "Add category", icon: "plus", onPress: () => router.push("/(tabs)/transactions/add-category") }}
       errorTitle="Could not load categories"
     >
-      <View style={{ borderRadius: t.radius.radiusLg, overflow: "hidden", borderWidth: 1, borderColor: t.c.borderStrong }}>
-        {CATEGORY_ROWS.map((row) => (
-          <Pressable
-            key={row.id}
-            onPress={() => router.push(`/(tabs)/transactions/category?id=${row.id}`)}
-            accessibilityRole="button"
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              minHeight: 64,
-              paddingHorizontal: 16,
-              backgroundColor: t.c.surface,
-              borderBottomWidth: 1,
-              borderBottomColor: t.c.border,
-            }}
-          >
-            <CategoryIcon category={row.name} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Txt variant="titleSm">{row.name}</Txt>
-              <Txt variant="caption" color={t.c.inkMuted}>
-                {row.kind === "income" ? "Income" : "Expense"} · {row.count} records
-              </Txt>
-            </View>
-          </Pressable>
-        ))}
-      </View>
+      <WidePane tablet sidebar={<CategoryList selectedId={first?.id} />}>
+        {first ? (
+          <Banner tone="primary" title={first.name}>
+            {first.count} dummy records. Open a row for the full category.
+          </Banner>
+        ) : null}
+      </WidePane>
     </CatScreen>
   );
 }

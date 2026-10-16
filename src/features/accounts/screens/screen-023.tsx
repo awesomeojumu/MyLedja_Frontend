@@ -1,1 +1,1 @@
-export { AccountActivityScreen as Screen023 } from "./AccountActivityScreen";
+export { OpeningBalanceScreen as Screen023 } from "./OpeningBalanceScreen";

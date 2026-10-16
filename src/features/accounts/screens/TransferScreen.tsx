@@ -3,6 +3,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { AmountInput, Banner, Button, Select, Toast } from "../../../design";
 import { formatMoney } from "../../../design/format";
+import { WidePane } from "../../../lib";
 import { AccountScreenShell } from "../components/AccountScreenShell";
 import { ACCOUNTS } from "../dummy-data";
 import { savedTransferMessage, transferDraftIssues } from "../services/account-draft";
@@ -10,8 +11,11 @@ import { savedTransferMessage, transferDraftIssues } from "../services/account-d
 export function TransferScreen() {
   const router = useRouter();
   const { from } = useLocalSearchParams<{ from?: string }>();
-  const options = ACCOUNTS.map((account) => ({ value: account.id, label: account.name }));
-  const [fromId, setFromId] = useState(from && ACCOUNTS.some((account) => account.id === from) ? from : options[0]?.value);
+  const options = ACCOUNTS.filter((account) => !account.archived && account.group !== "liability").map((account) => ({
+    value: account.id,
+    label: account.name,
+  }));
+  const [fromId, setFromId] = useState(from && options.some((option) => option.value === from) ? from : options[0]?.value);
   const [toId, setToId] = useState(options.find((option) => option.value !== fromId)?.value ?? options[1]?.value);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | undefined>();
@@ -28,13 +32,25 @@ export function TransferScreen() {
   };
 
   return (
-    <AccountScreenShell title="Transfer" emptyTitle="Pick two accounts" errorTitle="Could not move this money" footer={<Button fullWidth onPress={save}>Move money</Button>}>
-      <Banner tone="primary" title="Neither income nor expense">
-        Money moved between your own accounts is a transfer.
-      </Banner>
-      <Select label="From" options={options} value={fromId} onChange={setFromId} />
-      <Select label="To" options={options} value={toId} onChange={setToId} error={error} />
-      <AmountInput label="Amount" value={amount} onChange={setAmount} />
+    <AccountScreenShell
+      title="Create transfer"
+      emptyTitle="Only one account"
+      emptyBody="Add another account before you can move money."
+      emptyAction={{ label: "Add account", icon: "plus", onPress: () => router.push("/(tabs)/accounts/types") }}
+      errorTitle="Could not move this money"
+      footer={<Button fullWidth onPress={save}>Move money</Button>}
+    >
+      <WidePane
+        sidebar={
+          <Banner tone="primary" title="Neither income nor expense">
+            Money moved between your own accounts is a transfer.
+          </Banner>
+        }
+      >
+        <Select label="From" options={options} value={fromId} onChange={setFromId} />
+        <Select label="To" options={options} value={toId} onChange={setToId} error={error} />
+        <AmountInput label="Amount" value={amount} onChange={setAmount} />
+      </WidePane>
       {toast ? (
         <View>
           <Toast

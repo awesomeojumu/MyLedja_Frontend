@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Button, SegmentedControl, TextField, Toast } from "../../../design";
+import { WidePane } from "../../../lib";
 import { CatScreen } from "../components/CatScreen";
 import { categoryById } from "../dummy-data";
 
@@ -32,8 +33,10 @@ export function AddCategoryScreen({ mode = "add" }: { mode?: "add" | "edit" } = 
       errorTitle="Could not save this category"
       footer={<Button fullWidth onPress={save}>{mode === "edit" ? "Save category" : "Add category"}</Button>}
     >
-      <SegmentedControl label="Type" options={KINDS} value={kind} onChange={(value) => setKind(value as "expense" | "income")} />
-      <TextField label="Name" value={name} onChangeText={setName} placeholder="Food & groceries" error={error} />
+      <WidePane>
+        <SegmentedControl label="Type" options={KINDS} value={kind} onChange={(value) => setKind(value as "expense" | "income")} />
+        <TextField label="Name" value={name} onChangeText={setName} placeholder="Food & groceries" error={error} />
+      </WidePane>
       {toast ? (
         <Toast
           message={toast}

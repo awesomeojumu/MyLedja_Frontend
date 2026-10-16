@@ -95,6 +95,17 @@ function fakeBackend() {
         if (!userId) return json(401, { status: "error", error: "invalid access token" });
         return json(200, [{ id: `ws-${userId}`, name: "Personal", kind: "personal", role: "owner" }]);
       }
+      case "POST /bank-integrations/link": {
+        if (!authUser(init.headers)) return json(401, { status: "error", error: "invalid access token" });
+        return json(200, { status: "ok", data: { monoUrl: "https://connect.mono.co/sandbox" } });
+      }
+      case "POST /bank-integrations/link/complete": {
+        if (!authUser(init.headers)) return json(401, { status: "error", error: "invalid access token" });
+        return json(200, {
+          status: "ok",
+          data: { provider: "mono", institution: "GTBank", name: "Ada", mask: "3465", balance: 20000, currency: "NGN" },
+        });
+      }
       default:
         return json(404, { status: "error", error: "not found" });
     }
@@ -147,6 +158,12 @@ async function main(): Promise<void> {
   const me = await session.authed((token) => api.me(token));
   assertEqual(me.email, "ada@example.com", "authed call retried after refresh");
   assert((await store.get()) !== stored, "refresh rotated the stored token");
+
+  const started = await session.startBankLink(state.workspaces[0]?.id);
+  assertEqual(started.data.monoUrl, "https://connect.mono.co/sandbox", "startBankLink returns the widget URL");
+  const linked = await session.completeBankLink("sandbox-code", state.workspaces[0]?.id);
+  assertEqual(linked.data.institution, "GTBank", "completeBankLink returns sandbox account details");
+  assertEqual(linked.data.mask, "3465", "account number is masked");
 
   // sign out wipes everything
   await session.signOut();

@@ -1,5 +1,6 @@
 import { View } from "react-native";
 import { Amount, Banner, Card, Txt, useTheme } from "../../../design";
+import { WidePane } from "../../../lib";
 import { TxScreen } from "../components/TxScreen";
 import { SPLIT } from "../dummy-data";
 
@@ -7,10 +8,14 @@ export function SplitScreen() {
   const t = useTheme();
   const total = SPLIT.reduce((sum, part) => sum + part.amount, 0);
   return (
-    <TxScreen title="Split" emptyTitle="Nothing to split" errorTitle="Could not split this record">
-      <Banner tone="primary" title="Parts must sum">
-        Shoprite · {total.toLocaleString("en-NG", { style: "currency", currency: "NGN" })}
-      </Banner>
+    <TxScreen title="Split transaction" emptyTitle="Nothing to split" errorTitle="Could not split this record">
+      <WidePane
+        sidebar={
+          <Banner tone="primary" title="Parts must sum">
+            Shoprite · {total.toLocaleString("en-NG", { style: "currency", currency: "NGN" })}
+          </Banner>
+        }
+      >
       <Card flat>
         {SPLIT.map((part, index) => (
           <View
@@ -28,6 +33,7 @@ export function SplitScreen() {
           </View>
         ))}
       </Card>
+      </WidePane>
     </TxScreen>
   );
 }

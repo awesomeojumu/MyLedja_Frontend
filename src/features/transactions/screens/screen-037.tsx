@@ -1,1 +1,1 @@
-export { RecurringScreen as Screen037 } from "./RecurringScreen";
+export { BulkActionsScreen as Screen037 } from "./BulkActionsScreen";

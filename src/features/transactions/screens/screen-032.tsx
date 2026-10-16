@@ -1,1 +1,1 @@
-export { TransferTxScreen as Screen032 } from "./TransferTxScreen";
+export { TransactionDetailScreen as Screen032 } from "./TransactionDetailScreen";

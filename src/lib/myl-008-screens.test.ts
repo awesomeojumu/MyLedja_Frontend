@@ -6,8 +6,8 @@ function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
 }
 
-const ids = [...FEATURE_SCREENS.accounts, ...FEATURE_SCREENS.transactions.filter((id) => id !== "152"), ...FEATURE_SCREENS["categories-merchants"]];
-assert(ids.length === 34, `MYL-008 covers 34 screens, got ${ids.length}`);
+const ids = [...FEATURE_SCREENS.accounts, ...FEATURE_SCREENS.transactions, ...FEATURE_SCREENS["categories-merchants"]];
+assert(ids.length === 35, `MYL-008 covers 35 screens, got ${ids.length}`);
 
 const root = join(__dirname, "..", "..");
 
@@ -21,4 +21,4 @@ for (const id of ids) {
   assert(!source.includes("ScreenPlaceholder"), `${id} is still a placeholder`);
 }
 
-console.log("myl-008: 34 screens titled and not placeholders");
+console.log("myl-008: 35 screens titled and not placeholders");

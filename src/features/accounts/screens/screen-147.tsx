@@ -1,1 +1,1 @@
-export { MatchColumnsScreen as Screen147 } from "./MatchColumnsScreen";
+export { ConnectionStatusScreen as Screen147 } from "./ConnectionStatusScreen";

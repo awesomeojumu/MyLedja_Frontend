@@ -1,1 +1,1 @@
-export { TransferScreen as Screen025 } from "./TransferScreen";
+export { ArchivedAccountsScreen as Screen025 } from "./ArchivedAccountsScreen";

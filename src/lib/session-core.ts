@@ -1,4 +1,4 @@
-import { ApiError, type ApiClient, type Me, type WorkspaceSummary } from "../api/client";
+import { ApiError, type ApiClient, type BankLinkComplete, type BankLinkStart, type Me, type WorkspaceSummary } from "../api/client";
 
 /** Where the refresh token lives. On devices this is Keychain / Keystore only (see secure-token-store). */
 export interface TokenStore {
@@ -140,6 +140,14 @@ export class SessionCore {
     if (!email) throw new ApiError(400, "no pending email", "Start again from reset password.");
     await this.api.confirmRecovery(email, code, password);
     await this.wipe();
+  }
+
+  startBankLink(workspaceId?: string): Promise<BankLinkStart> {
+    return this.authed((token) => this.api.startBankLink(token, workspaceId));
+  }
+
+  completeBankLink(code: string, workspaceId?: string): Promise<BankLinkComplete> {
+    return this.authed((token) => this.api.completeBankLink(token, code, workspaceId));
   }
 
   async signOut(): Promise<void> {

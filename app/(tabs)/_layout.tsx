@@ -58,7 +58,7 @@ function TabsLayoutInner() {
       screenOptions={{ headerShown: false }}
       tabBar={() =>
         mode === "bottom" && !addOpen ? (
-          <BottomNav active={active} items={NAV.filter(([id]) => phoneIds.has(id))} onNavigate={go} onAdd={() => openSheet("expense")} addLabel="Add money" />
+          <BottomNav active={active} items={NAV.filter(([id]) => phoneIds.has(id))} onNavigate={go} onAdd={() => router.push("/(tabs)/transactions/chooser")} addLabel="Add money" />
         ) : null
       }
     >

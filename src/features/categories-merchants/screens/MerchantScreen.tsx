@@ -1,6 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Banner, EmptyState, Txt } from "../../../design";
+import { WidePane } from "../../../lib";
 import { CatScreen } from "../components/CatScreen";
+import { MerchantList } from "../components/MerchantList";
 import { merchantById } from "../dummy-data";
 
 export function MerchantScreen() {
@@ -16,10 +18,12 @@ export function MerchantScreen() {
   }
   return (
     <CatScreen title={row.name} emptyTitle="No records for this merchant" errorTitle="Could not load this merchant">
-      <Txt variant="titleMd">{row.name}</Txt>
-      <Banner tone="primary" title={row.category}>
-        {row.count} dummy records. Grouping is on this phone only.
-      </Banner>
+      <WidePane tablet sidebar={<MerchantList selectedId={row.id} />}>
+        <Txt variant="titleMd">{row.name}</Txt>
+        <Banner tone="primary" title={row.category}>
+          {row.count} dummy records. Grouping is on this phone only.
+        </Banner>
+      </WidePane>
     </CatScreen>
   );
 }

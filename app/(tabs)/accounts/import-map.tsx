@@ -1,5 +1,5 @@
-import { MatchColumnsScreen } from "../../../src/features/accounts";
+import { ConnectionStatusScreen } from "../../../src/features/accounts";
 
 export default function ImportMapRoute() {
-  return <MatchColumnsScreen />;
+  return <ConnectionStatusScreen />;
 }

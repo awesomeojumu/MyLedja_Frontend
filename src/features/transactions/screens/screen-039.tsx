@@ -1,1 +1,1 @@
-export { ReceiptScreen as Screen039 } from "./ReceiptScreen";
+export { RefundScreen as Screen039 } from "./RefundScreen";

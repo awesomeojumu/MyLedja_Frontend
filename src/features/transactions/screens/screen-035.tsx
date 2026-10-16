@@ -1,1 +1,1 @@
-export { FiltersScreen as Screen035 } from "./FiltersScreen";
+export { SearchScreen as Screen035 } from "./SearchScreen";

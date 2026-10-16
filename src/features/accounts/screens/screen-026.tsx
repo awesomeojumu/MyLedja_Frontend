@@ -1,1 +1,1 @@
-export { AdjustBalanceScreen as Screen026 } from "./AdjustBalanceScreen";
+export { ReconcileScreen as Screen026 } from "./ReconcileScreen";

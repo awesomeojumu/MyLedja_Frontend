@@ -1,6 +1,5 @@
 import { Pressable, View } from "react-native";
 import { Amount, CategoryIcon, Icon, StatusBadge, Txt, useTheme } from "../../../design";
-import { kindLabel } from "../dummy-data";
 import type { LedgerAccount } from "../types/account";
 
 export function AccountRow({
@@ -13,9 +12,6 @@ export function AccountRow({
   onPress?: () => void;
 }) {
   const t = useTheme();
-  const meta = [kindLabel(account.kind), account.lastFour ? `•••• ${account.lastFour}` : account.institution]
-    .filter(Boolean)
-    .join(" · ");
   const body = (
     <View
       style={{
@@ -30,19 +26,22 @@ export function AccountRow({
         borderBottomColor: t.c.border,
       }}
     >
-      <CategoryIcon icon={account.icon} category={kindLabel(account.kind)} />
+      <CategoryIcon icon={account.icon} category={account.name} />
       <View style={{ flex: 1, gap: 2 }}>
         <Txt variant="titleSm" numberOfLines={1} style={{ fontWeight: "500" }}>
           {account.name}
         </Txt>
         <Txt variant="bodySm" color={t.c.inkMuted} numberOfLines={1}>
-          {meta}
+          {account.statusLine}
         </Txt>
+        {account.unsynced ? <StatusBadge status="pending" /> : null}
       </View>
-      <View style={{ alignItems: "flex-end", gap: 4 }}>
-        <Amount value={account.balance} currency={account.currency} hidden={hidden} />
-        {account.reconciled ? <StatusBadge status="reconciled" /> : <Txt variant="caption" color={t.c.inkMuted}>{account.lastActivity}</Txt>}
-      </View>
+      <Amount
+        value={account.balance}
+        currency={account.currency}
+        hidden={hidden}
+        kind={account.group === "liability" ? "expense" : "neutral"}
+      />
       <Icon name="chevron-right" size={18} color={t.c.inkMuted} />
     </View>
   );

@@ -1,1 +1,1 @@
-export { SearchScreen as Screen036 } from "./SearchScreen";
+export { CalendarScreen as Screen036 } from "./CalendarScreen";
