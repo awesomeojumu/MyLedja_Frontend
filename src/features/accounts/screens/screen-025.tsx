@@ -1,5 +1,1 @@
-import { ScreenPlaceholder } from "../../../lib/screen-placeholder";
-
-export function Screen025() {
-  return <ScreenPlaceholder id="025" feature="accounts" />;
-}
+export { TransferScreen as Screen025 } from "./TransferScreen";

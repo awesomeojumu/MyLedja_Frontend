@@ -1,4 +1,4 @@
-import { draftIssues, savedMessage, saveLabel, type AddDraft } from "../services/add-draft";
+import { draftIssues, quickExpenseDraft, savedMessage, saveLabel, type AddDraft } from "../services/add-draft";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
@@ -35,5 +35,14 @@ assertEqual(transfer.length, 0);
 
 const zero = draftIssues({ ...ready, amount: "0" });
 assert(zero.some((issue) => issue.field === "amount"), "Zero is not an amount");
+
+const tapDraft = quickExpenseDraft();
+assertEqual(tapDraft.kind, "expense");
+assertEqual(tapDraft.description, "Expense");
+assert(
+  draftIssues(tapDraft).every((issue) => issue.field !== "description"),
+  "Default description does not block Save",
+);
+assertEqual(draftIssues({ ...tapDraft, amount: "1500" }).length, 0);
 
 console.log("add-draft: description, amount, and category are required before save");

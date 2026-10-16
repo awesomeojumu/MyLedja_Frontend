@@ -1,5 +1,5 @@
-import { HubScreen } from "../../../src/features/transactions";
+import { TransactionsScreen } from "../../../src/features/transactions";
 
 export default function TransactionsTab() {
-  return <HubScreen />;
+  return <TransactionsScreen />;
 }

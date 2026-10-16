@@ -1,5 +1,1 @@
-import { ScreenPlaceholder } from "../../../lib/screen-placeholder";
-
-export function Screen037() {
-  return <ScreenPlaceholder id="037" feature="transactions" />;
-}
+export { RecurringScreen as Screen037 } from "./RecurringScreen";

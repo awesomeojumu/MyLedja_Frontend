@@ -13,7 +13,7 @@ import {
   Txt,
   useTheme,
 } from "../../../design";
-import { draftIssues, saveLabel, savedMessage, type AddDraft, type DraftIssue, type EntryKind } from "../services/add-draft";
+import { draftIssues, quickExpenseDraft, saveLabel, savedMessage, type AddDraft, type DraftIssue, type EntryKind } from "../services/add-draft";
 
 const KINDS = [
   { value: "expense", label: "Expense" },
@@ -21,22 +21,15 @@ const KINDS = [
   { value: "transfer", label: "Transfer" },
 ];
 
-function todayIso(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
-function freshDraft(): AddDraft {
-  return {
-    kind: "expense",
-    description: "",
-    amount: "",
-    category: EXPENSE_CATEGORIES[0],
-    account: "Cash",
-    date: todayIso(),
-  };
+function draftFor(kind?: EntryKind): AddDraft {
+  const next = quickExpenseDraft();
+  if (kind === "income") {
+    return { ...next, kind: "income", description: "Income", category: INCOME_CATEGORIES[0] };
+  }
+  if (kind === "transfer") {
+    return { ...next, kind: "transfer", description: "Transfer", category: "" };
+  }
+  return next;
 }
 
 function messageFor(issues: DraftIssue[], field: DraftIssue["field"]): string | undefined {
@@ -55,15 +48,7 @@ export function AddTransactionSheet({
   initialKind?: EntryKind;
 }) {
   const t = useTheme();
-  const [draft, setDraft] = useState<AddDraft>(() => {
-    const next = freshDraft();
-    if (!initialKind) return next;
-    return {
-      ...next,
-      kind: initialKind,
-      category: initialKind === "income" ? INCOME_CATEGORIES[0] : EXPENSE_CATEGORIES[0],
-    };
-  });
+  const [draft, setDraft] = useState<AddDraft>(() => draftFor(initialKind));
   const [issues, setIssues] = useState<DraftIssue[]>([]);
   const [more, setMore] = useState(false);
 
@@ -106,6 +91,7 @@ export function AddTransactionSheet({
         label="Amount"
         value={draft.amount}
         kind={draft.kind}
+        autoFocus
         onChange={(amount) => setDraft((current) => ({ ...current, amount }))}
         error={messageFor(issues, "amount")}
       />

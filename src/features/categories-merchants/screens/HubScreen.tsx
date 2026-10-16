@@ -1,6 +1,1 @@
-import { FeatureHub } from "../../../lib/feature-hub";
-import { FEATURE_SCREENS } from "../../../lib/screen-catalog";
-
-export function HubScreen({ onBack }: { onBack?: () => void } = {}) {
-  return <FeatureHub title="Categories" ids={FEATURE_SCREENS["categories-merchants"]} onBack={onBack} />;
-}
+export { CategoriesScreen as HubScreen } from "./CategoriesScreen";

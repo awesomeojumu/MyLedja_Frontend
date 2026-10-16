@@ -5,7 +5,6 @@ import { BottomNav, Button, NAV, NavRail, Sidebar, Toast, useTheme, type Destina
 import {
   DashboardOverlayHost,
   DashboardOverlayProvider,
-  useDashboardOverlays,
 } from "../../src/features/dashboard";
 import { AddTransactionSheet } from "../../src/features/transactions";
 import { activeFromPath, navMode, phoneBarDestinations } from "../../src/lib";
@@ -38,7 +37,6 @@ function TabsLayoutInner() {
   const t = useTheme();
   const mode = navMode(t.widthClass, t.portrait);
   const active = activeFromPath(pathname);
-  const { openQuickAdd } = useDashboardOverlays();
   const { workspaces } = useSession();
   const [addOpen, setAddOpen] = useState(false);
   const [addKind, setAddKind] = useState<"expense" | "income" | undefined>();
@@ -60,7 +58,7 @@ function TabsLayoutInner() {
       screenOptions={{ headerShown: false }}
       tabBar={() =>
         mode === "bottom" && !addOpen ? (
-          <BottomNav active={active} items={NAV.filter(([id]) => phoneIds.has(id))} onNavigate={go} onAdd={openQuickAdd} />
+          <BottomNav active={active} items={NAV.filter(([id]) => phoneIds.has(id))} onNavigate={go} onAdd={() => openSheet("expense")} addLabel="Add money" />
         ) : null
       }
     >
@@ -88,13 +86,13 @@ function TabsLayoutInner() {
             onNavigate={go}
             workspace={workspaces[0]?.name ?? "Personal"}
             footer={
-              <Button fullWidth icon="plus" onPress={openQuickAdd}>
-                Add transaction
+              <Button fullWidth icon="plus" onPress={() => openSheet("expense")}>
+                Add money
               </Button>
             }
           />
         ) : (
-          <NavRail active={active} onNavigate={go} fab={{ label: "Add transaction", onPress: openQuickAdd }} />
+          <NavRail active={active} onNavigate={go} fab={{ label: "Add money", onPress: () => openSheet("expense") }} />
         )}
         <View style={{ flex: 1 }}>{tabs}</View>
       </View>

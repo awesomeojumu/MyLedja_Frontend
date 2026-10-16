@@ -1,5 +1,1 @@
-import { ScreenPlaceholder } from "../../../lib/screen-placeholder";
-
-export function Screen038() {
-  return <ScreenPlaceholder id="038" feature="transactions" />;
-}
+export { RefundScreen as Screen038 } from "./RefundScreen";

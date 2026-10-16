@@ -1,5 +1,1 @@
-import { ScreenPlaceholder } from "../../../lib/screen-placeholder";
-
-export function Screen147() {
-  return <ScreenPlaceholder id="147" feature="accounts" />;
-}
+export { MatchColumnsScreen as Screen147 } from "./MatchColumnsScreen";

@@ -1,5 +1,1 @@
-import { ScreenPlaceholder } from "../../../lib/screen-placeholder";
-
-export function Screen020() {
-  return <ScreenPlaceholder id="020" feature="accounts" />;
-}
+export { AddAccountScreen as Screen020 } from "./AddAccountScreen";
