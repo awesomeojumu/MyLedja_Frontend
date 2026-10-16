@@ -17,7 +17,9 @@ import {
   canSaveNewPassword,
   canSubmitSignIn,
   canVerifyOtp,
-  dummyOtpAccepts,
+  forgetSignup,
+  rememberedSignup,
+  rememberSignup,
   maskEmail,
   signupPath,
   workspaceSelectable,
@@ -75,7 +77,7 @@ assertEqual(afterPreferences(), AUTH_ROUTES.workspace);
 assertEqual(afterWorkspace(), AUTH_ROUTES.checklist);
 assertEqual(afterChecklist(), AUTH_ROUTES.splash);
 assertEqual(afterSplash(), AUTH_ROUTES.home);
-assertEqual(afterSignIn(), AUTH_ROUTES.mfa);
+assertEqual(afterSignIn(), AUTH_ROUTES.splash, "MFA is not built, so sign-in goes to the splash");
 assertEqual(afterMfa(), AUTH_ROUTES.splash);
 assertEqual(afterRecover(), AUTH_ROUTES.reset);
 assertEqual(afterReset(), AUTH_ROUTES.signIn);
@@ -91,8 +93,11 @@ const shortButNotName = passwordRules("ok", "Adaeze Okafor", "adaeze@example.com
 assert(shortButNotName.notNameOrEmail, "a short password that is not the name still passes that rule");
 assert(!passwordPasses(shortButNotName), "still needs length and a number");
 
-const strong = passwordRules("Ledja2026", "Adaeze Okafor", "adaeze@example.com");
-assert(strong.minLength, "eight or more");
+const nine = passwordRules("Ledja2026", "Adaeze Okafor", "adaeze@example.com");
+assert(!nine.minLength, "nine characters is below the backend's ten");
+
+const strong = passwordRules("Ledja2026!", "Adaeze Okafor", "adaeze@example.com");
+assert(strong.minLength, "ten or more, matching the backend");
 assert(strong.hasNumber, "includes a number");
 assert(strong.notNameOrEmail, "not the name or email");
 assert(passwordPasses(strong), "all three checks pass");
@@ -103,8 +108,6 @@ assert(canAgreeToTerms(true), "ticking terms enables continue");
 
 assert(!canVerifyOtp("4821"), "partial OTP keeps Verify disabled");
 assert(canVerifyOtp("482193"), "six digits enable Verify");
-assert(dummyOtpAccepts("000000"), "dummy OTP accepts any six digits");
-assert(!dummyOtpAccepts("12"), "short codes fail");
 
 assert(workspaceSelectable("personal"), "Personal is selectable");
 assert(!workspaceSelectable("family"), "Family is coming later");
@@ -120,5 +123,11 @@ assert(canSaveNewPassword("482193", strong), "code plus passing password saves")
 
 assertEqual(maskEmail("adaeze@example.com"), "a•••@example.com");
 assertEqual(maskEmail("a@example.com"), "a•••@example.com");
+
+assertEqual(rememberedSignup().email, "", "nothing is prefilled for a new user");
+rememberSignup("Ada", "ada@example.com");
+assertEqual(rememberedSignup().email, "ada@example.com");
+forgetSignup();
+assertEqual(rememberedSignup().email, "", "sign-out forgets the previous user");
 
 console.log("auth-flow: signup path, password rules, terms, OTP, workspace, recovery");

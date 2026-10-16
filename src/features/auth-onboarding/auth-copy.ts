@@ -49,7 +49,7 @@ export const WELCOME_PREVIEW = [
 ] as const;
 
 export const PASSWORD_RULE_LABELS = {
-  minLength: "At least 8 characters",
+  minLength: "At least 10 characters",
   hasNumber: "Includes a number",
   notNameOrEmail: "Not your name or email",
 } as const;

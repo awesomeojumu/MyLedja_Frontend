@@ -25,4 +25,5 @@ export {
   afterTerms,
   afterVerify,
   afterWorkspace,
+  forgetSignup,
 } from "./services/auth-flow";

@@ -1,4 +1,4 @@
-import { Tabs, usePathname, useRouter } from "expo-router";
+import { Redirect, Tabs, usePathname, useRouter } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 import { BottomNav, Button, NAV, NavRail, Sidebar, Toast, useTheme, type Destination } from "../../src/design";
@@ -9,6 +9,7 @@ import {
 } from "../../src/features/dashboard";
 import { AddTransactionSheet } from "../../src/features/transactions";
 import { activeFromPath, navMode, phoneBarDestinations } from "../../src/lib";
+import { UserScope, useSession } from "../../src/state";
 
 const HREFS: Record<Destination, "/(tabs)" | "/(tabs)/transactions" | "/(tabs)/plan" | "/(tabs)/accounts" | "/(tabs)/more"> = {
   home: "/(tabs)",
@@ -19,10 +20,15 @@ const HREFS: Record<Destination, "/(tabs)" | "/(tabs)/transactions" | "/(tabs)/p
 };
 
 export default function TabsLayout() {
+  const { status } = useSession();
+  if (status === "loading") return null;
+  if (status !== "signedIn") return <Redirect href="/(auth)" />;
   return (
-    <DashboardOverlayProvider>
-      <TabsLayoutInner />
-    </DashboardOverlayProvider>
+    <UserScope>
+      <DashboardOverlayProvider>
+        <TabsLayoutInner />
+      </DashboardOverlayProvider>
+    </UserScope>
   );
 }
 
@@ -33,6 +39,7 @@ function TabsLayoutInner() {
   const mode = navMode(t.widthClass, t.portrait);
   const active = activeFromPath(pathname);
   const { openQuickAdd } = useDashboardOverlays();
+  const { workspaces } = useSession();
   const [addOpen, setAddOpen] = useState(false);
   const [addKind, setAddKind] = useState<"expense" | "income" | undefined>();
   const [addSession, setAddSession] = useState(0);
@@ -79,7 +86,7 @@ function TabsLayoutInner() {
           <Sidebar
             active={active}
             onNavigate={go}
-            workspace="Personal"
+            workspace={workspaces[0]?.name ?? "Personal"}
             footer={
               <Button fullWidth icon="plus" onPress={openQuickAdd}>
                 Add transaction

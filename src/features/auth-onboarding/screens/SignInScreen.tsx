@@ -1,28 +1,29 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Button, TextField, Txt, useTheme } from "../../../design";
+import { Banner, Button, TextField, Txt, useTheme } from "../../../design";
 import { splitLayout } from "../../../lib";
 import { AuthShell } from "../components/AuthShell";
 import { TextLink } from "../components/TextLink";
+import { useSubmit } from "../hooks/use-submit";
 import { canSubmitSignIn, rememberSignup } from "../services/auth-flow";
 
 export function SignInScreen({
   onBack,
   onSubmit,
-  onPasskey,
   onForgot,
   onCreateAccount,
 }: {
   onBack: () => void;
-  onSubmit: () => void;
-  onPasskey: () => void;
+  onSubmit: (input: { email: string; password: string }) => Promise<void>;
   onForgot: () => void;
   onCreateAccount: () => void;
 }) {
   const t = useTheme();
   const compact = !splitLayout(t.widthClass, t.portrait);
-  const [identifier, setIdentifier] = useState("adaeze@example.com");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [passkeyNotice, setPasskeyNotice] = useState(false);
+  const { busy, error, run } = useSubmit();
   const ready = canSubmitSignIn(identifier, password);
   const createAccount = (
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
@@ -44,11 +45,14 @@ export function SignInScreen({
           <Button
             fullWidth
             size="lg"
+            loading={busy}
             disabled={!ready}
-            onPress={() => {
-              rememberSignup("", identifier);
-              onSubmit();
-            }}
+            onPress={() =>
+              run(async () => {
+                rememberSignup("", identifier);
+                await onSubmit({ email: identifier, password });
+              })
+            }
           >
             Sign in
           </Button>
@@ -59,14 +63,20 @@ export function SignInScreen({
             </Txt>
             <View style={{ flex: 1, height: 1, backgroundColor: t.c.border }} />
           </View>
-          <Button fullWidth size="lg" variant="secondary" icon="shield-check" onPress={onPasskey}>
+          <Button fullWidth size="lg" variant="secondary" icon="shield-check" onPress={() => setPasskeyNotice(true)}>
             Sign in with a passkey
           </Button>
           {compact ? createAccount : null}
         </View>
       }
     >
-      <TextField label="Email or phone number" value={identifier} onChangeText={setIdentifier} autoCapitalize="none" keyboardType="email-address" />
+      {error ? <Banner tone="danger" title={error} /> : null}
+      {passkeyNotice ? (
+        <Banner tone="primary" title="Passkeys are coming soon">
+          Sign in with your email and password for now.
+        </Banner>
+      ) : null}
+      <TextField label="Email address" value={identifier} onChangeText={setIdentifier} autoCapitalize="none" keyboardType="email-address" />
       <View style={{ gap: 6 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Txt variant="label">Password</Txt>

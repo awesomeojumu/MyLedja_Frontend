@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Button, SegmentedControl, TextField, Txt, useTheme } from "../../../design";
+import { Banner, Button, SegmentedControl, TextField, Txt, useTheme } from "../../../design";
 import { AuthShell } from "../components/AuthShell";
 import { PasswordRules } from "../components/PasswordRules";
 import { TextLink } from "../components/TextLink";
+import { useSubmit } from "../hooks/use-submit";
 import { canCreateAccount, rememberSignup } from "../services/auth-flow";
 import { passwordRules } from "../services/password-rules";
 
@@ -14,15 +15,17 @@ export function CreateAccountScreen({
 }: {
   onBack: () => void;
   onSignIn: () => void;
-  onSubmit: () => void;
+  onSubmit: (input: { email: string; password: string }) => Promise<void>;
 }) {
   const t = useTheme();
   const [channel, setChannel] = useState("email");
-  const [name, setName] = useState("Adaeze Okafor");
-  const [email, setEmail] = useState("adaeze@example.com");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const { busy, error, run } = useSubmit();
   const rules = passwordRules(password, name, email);
-  const ready = canCreateAccount(rules);
+  const byPhone = channel === "phone";
+  const ready = !byPhone && email.includes("@") && canCreateAccount(rules);
   return (
     <AuthShell
       step={{ label: "Create account", current: 1, total: 4 }}
@@ -42,20 +45,25 @@ export function CreateAccountScreen({
           <Button
             fullWidth
             size="lg"
+            loading={busy}
             disabled={!ready}
-            onPress={() => {
-              rememberSignup(name, email);
-              onSubmit();
-            }}
+            disabledReason={byPhone ? "Phone sign-up is coming soon. Use your email for now." : undefined}
+            onPress={() =>
+              run(async () => {
+                rememberSignup(name, email);
+                await onSubmit({ email, password });
+              })
+            }
           >
             Create account
           </Button>
           <Txt variant="caption" color={t.c.inkMuted} style={{ textAlign: "center" }}>
-            Next, you’ll review our Terms and Privacy Policy.
+            Next, we’ll email you a 6-digit code.
           </Txt>
         </View>
       }
     >
+      {error ? <Banner tone="danger" title={error} /> : null}
       <SegmentedControl
         label="Sign up with"
         options={[
@@ -66,10 +74,12 @@ export function CreateAccountScreen({
         onChange={setChannel}
       />
       <TextField label="Full name" value={name} onChangeText={setName} autoCapitalize="words" />
-      {channel === "email" ? (
-        <TextField label="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+      {byPhone ? (
+        <Banner tone="primary" title="Phone sign-up is coming soon">
+          Use your email address for now.
+        </Banner>
       ) : (
-        <TextField label="Phone number" placeholder="0803 000 0000" keyboardType="phone-pad" autoCapitalize="none" />
+        <TextField label="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
       )}
       <TextField label="Password" value={password} onChangeText={setPassword} autoCapitalize="none" secureTextEntry />
       <PasswordRules rules={rules} />

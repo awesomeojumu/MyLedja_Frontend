@@ -1,27 +1,33 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
-import { Button, Txt, useTheme } from "../../../design";
+import { Banner, Button, Txt, useTheme } from "../../../design";
 import { AuthShell } from "../components/AuthShell";
 import { OtpBoxes } from "../components/OtpBoxes";
 import { TextLink } from "../components/TextLink";
-import { canVerifyOtp, dummyOtpAccepts, maskEmail, rememberedSignup } from "../services/auth-flow";
+import { useSubmit } from "../hooks/use-submit";
+import { canVerifyOtp, maskEmail } from "../services/auth-flow";
 
 export function VerifyIdentityScreen({
+  email,
   onBack,
   onSignIn,
   onChangeEmail,
   onSubmit,
+  onResend,
 }: {
+  email: string | null;
   onBack: () => void;
   onSignIn: () => void;
   onChangeEmail: () => void;
-  onSubmit: () => void;
+  onSubmit: (code: string) => Promise<void>;
+  onResend: () => Promise<void>;
 }) {
   const t = useTheme();
   const [code, setCode] = useState("");
   const [seconds, setSeconds] = useState(60);
-  const ready = canVerifyOtp(code);
-  const masked = maskEmail(rememberedSignup().email);
+  const [resent, setResent] = useState(false);
+  const { busy, error, run } = useSubmit();
+  const ready = !!email && canVerifyOtp(code);
   useEffect(() => {
     if (seconds <= 0) return;
     const id = setTimeout(() => setSeconds((s) => s - 1), 1000);
@@ -41,21 +47,20 @@ export function VerifyIdentityScreen({
         </View>
       }
       title="Check your email"
-      subtitle={`Enter the 6-digit code we sent to ${masked}. It expires in 10 minutes.`}
+      subtitle={
+        email
+          ? `Enter the 6-digit code we sent to ${maskEmail(email)}. It expires in 10 minutes.`
+          : "Start from sign up or sign in so we know where to send your code."
+      }
       hint={ready ? undefined : "Enter all 6 digits"}
       footer={
-        <Button
-          fullWidth
-          size="lg"
-          disabled={!ready}
-          onPress={() => {
-            if (dummyOtpAccepts(code)) onSubmit();
-          }}
-        >
+        <Button fullWidth size="lg" loading={busy} disabled={!ready} onPress={() => run(() => onSubmit(code))}>
           Verify
         </Button>
       }
     >
+      {error ? <Banner tone="danger" title={error} /> : null}
+      {resent && !error ? <Banner tone="primary" title="We sent a new code." /> : null}
       <OtpBoxes value={code} onChange={setCode} />
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         {seconds > 0 ? (
@@ -63,7 +68,18 @@ export function VerifyIdentityScreen({
             Resend code in {mm}
           </Txt>
         ) : (
-          <TextLink onPress={() => setSeconds(60)}>Resend code</TextLink>
+          <TextLink
+            onPress={() =>
+              run(async () => {
+                await onResend();
+                setResent(true);
+                setCode("");
+                setSeconds(60);
+              })
+            }
+          >
+            Resend code
+          </TextLink>
         )}
         <TextLink onPress={onChangeEmail}>Change email</TextLink>
       </View>

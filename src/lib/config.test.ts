@@ -1,4 +1,4 @@
-import { readPublicConfig } from "./config";
+import { readPublicConfig, resolveApiUrl } from "./config";
 
 function assertEqual(actual: string, expected: string): void {
   if (actual !== expected) {
@@ -16,3 +16,10 @@ const staging = readPublicConfig({
 });
 assertEqual(staging.appEnv, "staging");
 assertEqual(staging.apiUrl, "https://staging.example.com");
+
+assertEqual(resolveApiUrl("http://localhost:4000", "192.168.1.20:8081"), "http://192.168.1.20:4000");
+assertEqual(resolveApiUrl("http://127.0.0.1:4000/", "10.0.0.5:8081"), "http://10.0.0.5:4000/");
+assertEqual(resolveApiUrl("http://localhost:4000", null), "http://localhost:4000");
+assertEqual(resolveApiUrl("http://localhost:4000", "localhost:8081"), "http://localhost:4000");
+assertEqual(resolveApiUrl("https://api.example.com", "192.168.1.20:8081"), "https://api.example.com");
+console.log("config: env and device API URL");

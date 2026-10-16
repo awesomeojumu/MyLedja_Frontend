@@ -69,8 +69,9 @@ export function afterSplash(): typeof AUTH_ROUTES.home {
   return AUTH_ROUTES.home;
 }
 
-export function afterSignIn(): typeof AUTH_ROUTES.mfa {
-  return AUTH_ROUTES.mfa;
+/** MFA is not built yet (ADR-0004 roadmap), so sign-in goes straight to the splash. */
+export function afterSignIn(): typeof AUTH_ROUTES.splash {
+  return AUTH_ROUTES.splash;
 }
 
 export function afterMfa(): typeof AUTH_ROUTES.splash {
@@ -97,10 +98,6 @@ export function canVerifyOtp(code: string): boolean {
   return isComplete(code);
 }
 
-export function dummyOtpAccepts(code: string): boolean {
-  return isComplete(code);
-}
-
 export function workspaceSelectable(kind: WorkspaceKind | string): boolean {
   return kind === "personal";
 }
@@ -119,9 +116,10 @@ export function maskEmail(email: string): string {
   return `${local[0] ?? ""}•••@${domain}`;
 }
 
-let rememberedEmail = "adaeze@example.com";
-let rememberedName = "Adaeze Okafor";
+let rememberedEmail = "";
+let rememberedName = "";
 
+/** Display-only memory of what the user typed, for later onboarding copy. Never a password. */
 export function rememberSignup(name: string, email: string): void {
   rememberedName = name.trim() || rememberedName;
   rememberedEmail = email.trim() || rememberedEmail;
@@ -129,4 +127,9 @@ export function rememberSignup(name: string, email: string): void {
 
 export function rememberedSignup(): { name: string; email: string } {
   return { name: rememberedName, email: rememberedEmail };
+}
+
+export function forgetSignup(): void {
+  rememberedName = "";
+  rememberedEmail = "";
 }

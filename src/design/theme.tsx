@@ -52,6 +52,15 @@ export function ThemeProvider(p: ThemeProviderProps) {
     const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
     return () => sub.remove();
   }, []);
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const id = 'myledja-web-focus';
+    if (document.getElementById(id)) return;
+    const style = document.createElement('style');
+    style.id = id;
+    style.textContent = 'input, textarea { outline: none; }';
+    document.head.appendChild(style);
+  }, []);
   const scheme = p.scheme || (system === 'dark' ? 'dark' : 'light');
   const font = p.font || 'inter';
   const value = useMemo<Theme>(() => ({

@@ -1,12 +1,16 @@
 /* Inputs: TextField, AmountInput, AmountDisplay, Select, CategoryPicker, DatePicker. Amounts use the phone's number keyboard. */
 import React, { useRef, useState } from 'react';
-import { KeyboardTypeOptions, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardTypeOptions, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+
 import { useTheme } from '../theme';
 import { cleanAmount, EXPENSE_CATEGORIES } from '../format';
 import { IconName } from '../icons';
 import { CategoryIcon, Icon, Txt } from './foundations';
 import { Chip, IconButton } from './actions';
 import { Sheet } from './surfaces';
+
+/* The web focus outline is also cleared globally in theme.tsx; RN types only allow outlineWidth here. */
+const hideBrowserOutline = Platform.OS === 'web' ? { outlineWidth: 0 } : null;
 
 function FieldShell({ label, helper, error, children }: { label?: string; helper?: string; error?: string; children: React.ReactNode }) {
   const t = useTheme();
@@ -36,7 +40,7 @@ export function TextField({ label, helper, error, icon, placeholder, value, defa
         {icon ? <Icon name={icon} size={18} color={t.c.inkMuted} /> : null}
         <TextInput accessibilityLabel={label ?? placeholder} placeholder={placeholder} placeholderTextColor={t.c.inkMuted} value={value} defaultValue={defaultValue}
           onChangeText={onChangeText} onFocus={() => { setFocus(true); onFocus?.(); }} onBlur={() => setFocus(false)} keyboardType={keyboardType} autoCapitalize={autoCapitalize} returnKeyType={returnKeyType}
-          secureTextEntry={secret} style={[t.text('body'), { flex: 1, color: t.c.ink, paddingVertical: 10 }]} maxFontSizeMultiplier={2} />
+          secureTextEntry={secret} style={[t.text('body'), { flex: 1, color: t.c.ink, paddingVertical: 10 }, hideBrowserOutline]} maxFontSizeMultiplier={2} />
         {secureTextEntry ? (
           <Pressable onPress={() => setHidden((v) => !v)} accessibilityRole="button" accessibilityLabel={hidden ? 'Show password' : 'Hide password'} hitSlop={8}>
             <Icon name={hidden ? 'eye' : 'eye-off'} size={18} color={t.c.inkMuted} />
@@ -57,7 +61,7 @@ export function AmountInput({ label, value, onChange, currency = 'NGN', error, h
         <Txt variant="amountLg" color={t.c.inkMuted}>₦</Txt>
         <TextInput value={shown} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={t.c.inkMuted} accessibilityLabel={label ?? `Amount in ${currency}`}
           onChangeText={(s) => { const raw = s.replace(/[^0-9.]/g, ''); const [w, ...k] = raw.split('.'); onChange(w + (k.length ? '.' + k.join('').slice(0, 2) : '')); }}
-          style={[t.text('amountLg'), { flex: 1, color: t.c.ink }]} />
+          style={[t.text('amountLg'), { flex: 1, color: t.c.ink }, hideBrowserOutline]} />
         <Txt variant="caption" color={t.c.inkMuted} style={{ fontWeight: '600' }}>{currency}</Txt>
       </View>
     </FieldShell>
@@ -86,7 +90,7 @@ export function AmountDisplay({ value, defaultValue, onChange, kind = 'neutral',
         <Text style={[big, { fontSize: 28, color, marginRight: 2 }]}>₦</Text>
         <TextInput ref={input} value={shown} onChangeText={change} keyboardType="decimal-pad" inputMode="decimal" placeholder="0" placeholderTextColor={t.c.inkMuted}
           autoFocus={autoFocus} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} accessibilityLabel={label} accessibilityHint={error ?? hint}
-          style={[big, { fontSize: 40, lineHeight: 46, color, padding: 0, minWidth: 24, textAlign: 'right' }]} maxFontSizeMultiplier={1.5} />
+          style={[big, { fontSize: 40, lineHeight: 46, color, padding: 0, minWidth: 24, textAlign: 'right' }, hideBrowserOutline]} maxFontSizeMultiplier={1.5} />
         <Text style={[big, { fontSize: 40, lineHeight: 46, color: t.c.inkMuted }]}>{ghost}</Text>
       </View>
       {error

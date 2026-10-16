@@ -11,7 +11,7 @@ export function passwordRules(password: string, name: string, email: string): Pa
   const containsName = namePart.length > 0 && lower.includes(namePart);
   const containsEmail = local.length > 0 && lower.includes(local);
   return {
-    minLength: password.length >= 8,
+    minLength: password.length >= 10,
     hasNumber: /\d/.test(password),
     notNameOrEmail: !containsName && !containsEmail,
   };

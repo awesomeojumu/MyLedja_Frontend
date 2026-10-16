@@ -4,7 +4,7 @@ import { Banner, Button, Txt, useTheme } from "../../../design";
 import { AuthShell } from "../components/AuthShell";
 import { OtpBoxes } from "../components/OtpBoxes";
 import { TextLink } from "../components/TextLink";
-import { canVerifyOtp, dummyOtpAccepts } from "../services/auth-flow";
+import { canVerifyOtp } from "../services/auth-flow";
 
 export function MfaScreen({
   onBack,
@@ -45,7 +45,7 @@ export function MfaScreen({
           size="lg"
           disabled={!ready}
           onPress={() => {
-            if (dummyOtpAccepts(code)) onSubmit();
+            if (canVerifyOtp(code)) onSubmit();
           }}
         >
           Verify and sign in

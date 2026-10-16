@@ -9,7 +9,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../src/design";
-import { SchemeProvider, useScheme } from "../src/state";
+import { SchemeProvider, SessionProvider, useScheme } from "../src/state";
 
 export const unstable_settings = {
   initialRouteName: "(auth)",
@@ -40,7 +40,9 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <SchemeProvider>
-        <ThemedStack />
+        <SessionProvider>
+          <ThemedStack />
+        </SessionProvider>
       </SchemeProvider>
     </SafeAreaProvider>
   );

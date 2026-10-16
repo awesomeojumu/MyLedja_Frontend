@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import type { ReactNode } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card, Icon, SectionHeader, Txt, useTheme } from "../design";
@@ -6,9 +7,11 @@ import { Card, Icon, SectionHeader, Txt, useTheme } from "../design";
 export function LinkHub({
   title,
   links,
+  footer,
 }: {
   title: string;
   links: readonly { href: string; label: string }[];
+  footer?: ReactNode;
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -39,6 +42,7 @@ export function LinkHub({
             </Pressable>
           ))}
         </Card>
+        {footer}
       </ScrollView>
     </View>
   );
