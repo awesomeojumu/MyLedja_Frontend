@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Icon, Txt, useTheme } from "../../../design";
-import { splitLayout } from "../../../lib";
-import { BrandPane, type BrandKind } from "./BrandPane";
-import { StepHeader } from "./StepHeader";
+import { Icon, Txt, useTheme } from "@/design";
+import { splitLayout } from "@/lib";
+import { BrandPane, type BrandKind } from "@/features/auth-onboarding/components/BrandPane";
+import { StepHeader } from "@/features/auth-onboarding/components/StepHeader";
 
 export function AuthShell({
   brand = "default",

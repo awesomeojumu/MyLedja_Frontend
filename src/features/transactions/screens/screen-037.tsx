@@ -1,1 +1,1 @@
-export { BulkActionsScreen as Screen037 } from "./BulkActionsScreen";
+export { BulkActionsScreen as Screen037 } from "@/features/transactions/screens/BulkActionsScreen";

@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { CategoryIcon, Txt, useTheme } from "../../../design";
-import { MERCHANTS, type MerchantRow } from "../dummy-data";
+import { CategoryIcon, Txt, useTheme } from "@/design";
+import { MERCHANTS, type MerchantRow } from "@/features/categories-merchants/dummy-data";
 
 export function MerchantList({ selectedId }: { selectedId?: string }) {
   const t = useTheme();

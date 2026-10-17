@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, View } from "react-native";
-import { Amount, EmptyState, Icon, IconButton, TextField, Txt, useBackToClose, useTheme } from "../../../design";
-import { HOME_DUMMY, searchDashboard, type SearchHit } from "../dummy-data";
+import { Amount, EmptyState, Icon, IconButton, TextField, Txt, useBackToClose, useTheme } from "@/design";
+import { HOME_DUMMY, searchDashboard, type SearchHit } from "@/features/dashboard/dummy-data";
 
 const GROUPS: SearchHit["group"][] = ["Transactions", "Accounts", "Goals"];
 

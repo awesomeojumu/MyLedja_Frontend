@@ -1,8 +1,8 @@
-import { Banner } from "../../../design";
-import { WidePane } from "../../../lib";
-import { CatScreen } from "../components/CatScreen";
-import { MerchantList } from "../components/MerchantList";
-import { MERCHANTS } from "../dummy-data";
+import { Banner } from "@/design";
+import { WidePane } from "@/lib";
+import { CatScreen } from "@/features/categories-merchants/components/CatScreen";
+import { MerchantList } from "@/features/categories-merchants/components/MerchantList";
+import { MERCHANTS } from "@/features/categories-merchants/dummy-data";
 
 export function MerchantsScreen() {
   const first = MERCHANTS[0];

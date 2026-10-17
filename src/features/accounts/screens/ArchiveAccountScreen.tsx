@@ -1,1 +1,1 @@
-export { ArchivedAccountsScreen as ArchiveAccountScreen } from "./ArchivedAccountsScreen";
+export { ArchivedAccountsScreen as ArchiveAccountScreen } from "@/features/accounts/screens/ArchivedAccountsScreen";

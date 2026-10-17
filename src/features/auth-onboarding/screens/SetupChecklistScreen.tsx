@@ -1,19 +1,24 @@
 import { Pressable, View } from "react-native";
-import { Button, Icon, ProgressRing, Txt, useTheme } from "../../../design";
-import type { IconName } from "../../../design";
-import { AuthShell } from "../components/AuthShell";
-import { TextLink } from "../components/TextLink";
+import { Button, Icon, ProgressRing, Txt, useTheme } from "@/design";
+import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
+import { TextLink } from "@/features/auth-onboarding/components/TextLink";
+import { EMPTY_SETUP, nextSetupStep, setupSteps, type SetupProgress } from "@/features/auth-onboarding/services/setup-progress";
 
-const STEPS: { title: string; body: string; icon: IconName; done: boolean }[] = [
-  { title: "Add your first account", body: "Done", icon: "circle-check", done: true },
-  { title: "Set its opening balance", body: "What is in it today, to the kobo", icon: "landmark", done: false },
-  { title: "Check your categories", body: "25 ready-made, rename or add your own", icon: "chart-pie", done: false },
-  { title: "Record your first transaction", body: "Takes about 15 seconds", icon: "plus", done: false },
-];
-
-export function SetupChecklistScreen({ onBack, onContinue, onSkip }: { onBack: () => void; onContinue: () => void; onSkip: () => void }) {
+export function SetupChecklistScreen({
+  onBack,
+  onContinue,
+  onSkip,
+  progress = EMPTY_SETUP,
+}: {
+  onBack: () => void;
+  onContinue: () => void;
+  onSkip: () => void;
+  progress?: SetupProgress;
+}) {
   const t = useTheme();
-  const next = STEPS.find((step) => !step.done);
+  const steps = setupSteps(progress);
+  const next = nextSetupStep(progress);
+  const doneCount = steps.filter((step) => step.done).length;
   return (
     <AuthShell
       brand="setup"
@@ -35,14 +40,14 @@ export function SetupChecklistScreen({ onBack, onContinue, onSkip }: { onBack: (
           <Txt variant="titleLg" accessibilityRole="header">
             Let’s get your money in
           </Txt>
-          <Txt color={t.c.inkMuted}>Four quick steps. Skip any and come back later.</Txt>
+          <Txt color={t.c.inkMuted}>Five quick steps. Skip any and come back later.</Txt>
         </View>
-        <ProgressRing value={1} max={4} label="Setup" size={56} tone="primary" />
+        <ProgressRing value={doneCount} max={steps.length} label="Setup" size={56} tone="primary" />
       </View>
       <View style={{ backgroundColor: t.c.surface, borderRadius: t.radius.radiusLg, borderWidth: 1, borderColor: t.c.border, overflow: "hidden" }}>
-        {STEPS.map((step, i) => (
+        {steps.map((step, i) => (
           <Pressable
-            key={step.title}
+            key={step.key}
             onPress={step.done ? undefined : onContinue}
             accessibilityRole="button"
             accessibilityState={{ disabled: step.done }}
@@ -51,7 +56,7 @@ export function SetupChecklistScreen({ onBack, onContinue, onSkip }: { onBack: (
               alignItems: "center",
               gap: t.space.space3,
               padding: t.space.space4,
-              borderBottomWidth: i === STEPS.length - 1 ? 0 : 1,
+              borderBottomWidth: i === steps.length - 1 ? 0 : 1,
               borderBottomColor: t.c.border,
             }}
           >
@@ -65,7 +70,7 @@ export function SetupChecklistScreen({ onBack, onContinue, onSkip }: { onBack: (
                 justifyContent: "center",
               }}
             >
-              <Icon name={step.done ? "check" : step.icon} size={18} color={step.done ? t.c.positive : t.c.primary} />
+              <Icon name={step.done ? "check" : "chevron-right"} size={18} color={step.done ? t.c.positive : t.c.primary} />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Txt variant="label" style={{ fontWeight: "600" }}>

@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { useRouter } from "expo-router";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { EmptyState, IconButton, maxWidth, Txt, useTheme, type IconName } from "../design";
-import { ScreenStateGate, ScreenStateSwitch, useScreenPreview } from "./screen-state";
+import { EmptyState, IconButton, maxWidth, Txt, useTheme, type IconName } from "@/design";
+import { ScreenStateGate, ScreenStateSwitch, useScreenPreview } from "@/lib/screen-state";
 
 export function ScreenShell({
   title,

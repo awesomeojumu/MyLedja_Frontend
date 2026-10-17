@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
-import { AccountCard, HubScreen } from "../../../src/features/settings-privacy";
-import { useSession, useSignOut } from "../../../src/state";
+import { AccountCard, HubScreen } from "@/features/settings-privacy";
+import { useSession, useSignOut } from "@/state";
 
 export default function SettingsRoute() {
   const router = useRouter();

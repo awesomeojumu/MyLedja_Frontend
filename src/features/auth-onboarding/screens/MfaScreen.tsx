@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Banner, Button, Txt, useTheme } from "../../../design";
-import { AuthShell } from "../components/AuthShell";
-import { OtpBoxes } from "../components/OtpBoxes";
-import { TextLink } from "../components/TextLink";
-import { canVerifyOtp } from "../services/auth-flow";
+import { Banner, Button, Txt, useTheme } from "@/design";
+import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
+import { OtpBoxes } from "@/features/auth-onboarding/components/OtpBoxes";
+import { TextLink } from "@/features/auth-onboarding/components/TextLink";
+import { canVerifyOtp } from "@/features/auth-onboarding/services/auth-flow";
 
 export function MfaScreen({
   onBack,

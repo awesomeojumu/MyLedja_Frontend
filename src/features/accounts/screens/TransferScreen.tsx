@@ -1,25 +1,43 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
-import { AmountInput, Banner, Button, Select, Toast } from "../../../design";
-import { formatMoney } from "../../../design/format";
-import { WidePane } from "../../../lib";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { ACCOUNTS } from "../dummy-data";
-import { savedTransferMessage, transferDraftIssues } from "../services/account-draft";
+import { ApiError } from "@/api/client";
+import { AmountInput, Banner, Button, Select, Toast } from "@/design";
+import { formatMoney } from "@/design/format";
+import { WidePane } from "@/lib";
+import { newId } from "@/lib/ids";
+import { useSession } from "@/state";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { ACCOUNTS } from "@/features/accounts/dummy-data";
+import { savedTransferMessage, transferDraftIssues } from "@/features/accounts/services/account-draft";
 
 export function TransferScreen() {
   const router = useRouter();
+  const { session, workspaces } = useSession();
   const { from } = useLocalSearchParams<{ from?: string }>();
-  const options = ACCOUNTS.filter((account) => !account.archived && account.group !== "liability").map((account) => ({
+  const [remote, setRemote] = useState<{ id: string; name: string }[]>([]);
+  const fallback = ACCOUNTS.filter((account) => !account.archived && account.group !== "liability").map((account) => ({
     value: account.id,
     label: account.name,
   }));
+  const options = remote.length > 0 ? remote.map((account) => ({ value: account.id, label: account.name })) : fallback;
   const [fromId, setFromId] = useState(from && options.some((option) => option.value === from) ? from : options[0]?.value);
   const [toId, setToId] = useState(options.find((option) => option.value !== fromId)?.value ?? options[1]?.value);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [toast, setToast] = useState<string | null>(null);
+  const workspaceId = workspaces[0]?.id;
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    void session.listAccounts(workspaceId).then((res) => {
+      setRemote(
+        (res.data as { id: string; name: string; archivedAt?: string | null }[])
+          .filter((row) => !row.archivedAt)
+          .map((row) => ({ id: row.id, name: row.name })),
+      );
+    });
+  }, [session, workspaceId]);
 
   const save = () => {
     const issues = transferDraftIssues({ fromId: fromId ?? "", toId: toId ?? "", amount });
@@ -27,8 +45,25 @@ export function TransferScreen() {
       setError(issues[0]?.message);
       return;
     }
+    if (!workspaceId || !fromId || !toId) {
+      setError("Add two accounts first.");
+      return;
+    }
     setError(undefined);
-    setToast(savedTransferMessage(formatMoney(Number(amount), "NGN")));
+    void session
+      .createTransaction(workspaceId, {
+        operationId: newId(),
+        type: "transfer",
+        amount: amount.includes(".") ? amount : `${amount}.00`,
+        accountId: fromId,
+        toAccountId: toId,
+        description: "Transfer",
+        status: "posted",
+      })
+      .then(() => setToast(savedTransferMessage(formatMoney(Number(amount), "NGN"))))
+      .catch((caught) => {
+        setError(caught instanceof ApiError ? caught.message : "Could not move this money.");
+      });
   };
 
   return (

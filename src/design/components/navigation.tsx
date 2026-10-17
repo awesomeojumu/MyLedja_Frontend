@@ -2,10 +2,10 @@
 import React from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../theme';
-import { SpringPressable } from '../motion';
-import { IconName } from '../icons';
-import { Icon, Logo, Txt } from './foundations';
+import { useTheme } from "@/design/theme";
+import { SpringPressable } from "@/design/motion";
+import { IconName } from "@/design/icons";
+import { Icon, Logo, Txt } from "@/design/components/foundations";
 
 export type Destination = 'home' | 'transactions' | 'plan' | 'accounts' | 'more';
 export const NAV: [Destination, string, IconName][] = [['home', 'Home', 'house'], ['transactions', 'Transactions', 'arrow-left-right'], ['plan', 'Plan', 'target'], ['accounts', 'Accounts', 'wallet'], ['more', 'More', 'ellipsis']];

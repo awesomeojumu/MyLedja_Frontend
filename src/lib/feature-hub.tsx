@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Card, EmptyState, IconButton, SectionHeader, Txt, useTheme } from "../design";
+import { Card, EmptyState, IconButton, SectionHeader, Txt, useTheme } from "@/design";
 
 export function FeatureHub({
   title,

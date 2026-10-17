@@ -1,5 +1,5 @@
-import { isPortrait, navMode, phoneBarDestinations, splitLayout, twoColumn } from "./nav-mode";
-import { shouldSkipRise } from "../design/motion-policy";
+import { isPortrait, navMode, phoneBarDestinations, splitLayout, twoColumn } from "@/lib/nav-mode";
+import { shouldSkipRise } from "@/design/motion-policy";
 
 function assertEqual<T>(actual: T, expected: T, message?: string): void {
   if (actual !== expected) {

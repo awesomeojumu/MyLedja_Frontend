@@ -1,4 +1,4 @@
-import { NeedsReviewScreen } from "../../../src/features/transactions";
+import { NeedsReviewScreen } from "@/features/transactions";
 
 export default function NeedsReviewRoute() {
   return <NeedsReviewScreen />;

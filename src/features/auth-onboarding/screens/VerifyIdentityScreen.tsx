@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
-import { Banner, Button, Txt, useTheme } from "../../../design";
-import { AuthShell } from "../components/AuthShell";
-import { OtpBoxes } from "../components/OtpBoxes";
-import { TextLink } from "../components/TextLink";
-import { useSubmit } from "../hooks/use-submit";
-import { canVerifyOtp, maskEmail } from "../services/auth-flow";
+import { Banner, Button, Txt, useTheme } from "@/design";
+import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
+import { OtpBoxes } from "@/features/auth-onboarding/components/OtpBoxes";
+import { TextLink } from "@/features/auth-onboarding/components/TextLink";
+import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
+import { canVerifyOtp, maskEmail } from "@/features/auth-onboarding/services/auth-flow";
 
 export function VerifyIdentityScreen({
   email,

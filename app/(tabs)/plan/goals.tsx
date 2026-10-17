@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { HubScreen } from "../../../src/features/plans-goals";
+import { HubScreen } from "@/features/plans-goals";
 
 export default function GoalsRoute() {
   const router = useRouter();

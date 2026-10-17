@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { CategoryIcon, Txt, useTheme } from "../../../design";
-import { CATEGORY_ROWS, type CategoryRow } from "../dummy-data";
+import { CategoryIcon, Txt, useTheme } from "@/design";
+import { CATEGORY_ROWS, type CategoryRow } from "@/features/categories-merchants/dummy-data";
 
 export function CategoryList({ selectedId }: { selectedId?: string }) {
   const t = useTheme();

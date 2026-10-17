@@ -1,4 +1,4 @@
-import type { IconName } from "../../design";
+import type { IconName } from "@/design";
 
 export interface DummyBudget {
   category: string;

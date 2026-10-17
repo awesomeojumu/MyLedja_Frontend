@@ -2,10 +2,10 @@
 import React from 'react';
 import { Pressable, StyleProp, Text, TextProps, TextStyle, View } from 'react-native';
 import Svg, { Circle, Rect } from 'react-native-svg';
-import { ICONS, IconName } from '../icons';
-import { useTheme } from '../theme';
-import { categoryInfo, CategoryTone } from '../format';
-import { TypeStyle } from '../tokens';
+import { ICONS, IconName } from "@/design/icons";
+import { useTheme } from "@/design/theme";
+import { categoryInfo, CategoryTone } from "@/design/format";
+import { TypeStyle } from "@/design/tokens";
 
 /** Text in a type token and colour token. Every string in the app goes through this. */
 export function Txt({ variant = 'body', color, style, ...rest }: TextProps & { variant?: TypeStyle; color?: string; style?: StyleProp<TextStyle> }) {

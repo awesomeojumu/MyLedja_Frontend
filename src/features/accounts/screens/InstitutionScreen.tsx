@@ -1,9 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { Card, Icon, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { INSTITUTIONS } from "../dummy-data";
+import { Card, Icon, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { INSTITUTIONS } from "@/features/accounts/dummy-data";
 
 export function InstitutionScreen() {
   const t = useTheme();

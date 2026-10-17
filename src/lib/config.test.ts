@@ -1,4 +1,4 @@
-import { readPublicConfig, resolveApiUrl } from "./config";
+import { readPublicConfig, resolveApiUrl } from "@/lib/config";
 
 function assertEqual(actual: string, expected: string): void {
   if (actual !== expected) {

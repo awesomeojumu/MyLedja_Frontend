@@ -1,4 +1,4 @@
-import { ApiError, type ApiClient, type BankLinkComplete, type BankLinkStart, type Me, type WorkspaceSummary } from "../api/client";
+import { ApiError, type ApiClient, type BankLinkComplete, type BankLinkStart, type Me, type WorkspaceSummary } from "@/api/client";
 
 /** Where the refresh token lives. On devices this is Keychain / Keystore only (see secure-token-store). */
 export interface TokenStore {
@@ -184,6 +184,42 @@ export class SessionCore {
       }
       return run(this.accessToken);
     }
+  }
+
+  createAccount(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.createAccount(token, workspaceId, body));
+  }
+
+  listAccounts(workspaceId: string, archived = false) {
+    return this.authed((token) => this.api.listAccounts(token, workspaceId, archived));
+  }
+
+  setOpening(workspaceId: string, accountId: string, opening: string) {
+    return this.authed((token) => this.api.setOpening(token, workspaceId, accountId, opening));
+  }
+
+  archiveAccount(workspaceId: string, accountId: string) {
+    return this.authed((token) => this.api.archiveAccount(token, workspaceId, accountId));
+  }
+
+  createTransaction(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.createTransaction(token, workspaceId, body));
+  }
+
+  listCategories(workspaceId: string) {
+    return this.authed((token) => this.api.listCategories(token, workspaceId));
+  }
+
+  getWorkspace(workspaceId: string) {
+    return this.authed((token) => this.api.getWorkspace(token, workspaceId));
+  }
+
+  patchSetup(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.patchSetup(token, workspaceId, body));
+  }
+
+  previewRule(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.previewRule(token, workspaceId, body));
   }
 
   private async adopt(accessToken: string, refreshToken: string): Promise<void> {

@@ -1,7 +1,7 @@
 import { Pressable, View } from "react-native";
-import { Amount, Card, Icon, Txt, useTheme } from "../../../design";
-import { DashboardScreen } from "../components/DashboardScreen";
-import { HOME_DUMMY, UPCOMING } from "../dummy-data";
+import { Amount, Card, Icon, Txt, useTheme } from "@/design";
+import { DashboardScreen } from "@/features/dashboard/components/DashboardScreen";
+import { HOME_DUMMY, UPCOMING } from "@/features/dashboard/dummy-data";
 
 export function UpcomingScreen() {
   const t = useTheme();

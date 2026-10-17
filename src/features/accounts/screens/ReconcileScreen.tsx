@@ -1,10 +1,10 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
-import { Amount, AmountInput, Banner, Button, Card, Txt, Toast, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { accountById } from "../dummy-data";
+import { Amount, AmountInput, Banner, Button, Card, Txt, Toast, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { accountById } from "@/features/accounts/dummy-data";
 
 export function ReconcileScreen() {
   const t = useTheme();

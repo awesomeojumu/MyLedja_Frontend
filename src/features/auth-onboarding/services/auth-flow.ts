@@ -1,5 +1,5 @@
-import { isComplete } from "../otp";
-import { passwordPasses, type PasswordRuleSet } from "./password-rules";
+import { isComplete } from "@/features/auth-onboarding/otp";
+import { passwordPasses, type PasswordRuleSet } from "@/features/auth-onboarding/services/password-rules";
 
 export const AUTH_ROUTES = {
   welcome: "/(auth)",
@@ -32,7 +32,6 @@ export function signupPath(): AuthHref[] {
     AUTH_ROUTES.preferences,
     AUTH_ROUTES.workspace,
     AUTH_ROUTES.checklist,
-    AUTH_ROUTES.splash,
     AUTH_ROUTES.home,
   ];
 }
@@ -61,8 +60,8 @@ export function afterWorkspace(): typeof AUTH_ROUTES.checklist {
   return AUTH_ROUTES.checklist;
 }
 
-export function afterChecklist(): typeof AUTH_ROUTES.splash {
-  return AUTH_ROUTES.splash;
+export function afterChecklist(): typeof AUTH_ROUTES.home {
+  return AUTH_ROUTES.home;
 }
 
 export function afterSplash(): typeof AUTH_ROUTES.home {

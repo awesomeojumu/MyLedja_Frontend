@@ -1,1 +1,1 @@
-export { ReconcileScreen as Screen026 } from "./ReconcileScreen";
+export { ReconcileScreen as Screen026 } from "@/features/accounts/screens/ReconcileScreen";

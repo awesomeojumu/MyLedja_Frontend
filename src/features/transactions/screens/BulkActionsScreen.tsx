@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Banner, Button, Card, Dialog, TransactionRow, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
-import { TRANSACTIONS } from "../dummy-data";
+import { Banner, Button, Card, Dialog, TransactionRow, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
+import { TRANSACTIONS } from "@/features/transactions/dummy-data";
 
 export function BulkActionsScreen() {
   const t = useTheme();

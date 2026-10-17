@@ -1,1 +1,1 @@
-export { ReconcileScreen as AdjustBalanceScreen } from "./ReconcileScreen";
+export { ReconcileScreen as AdjustBalanceScreen } from "@/features/accounts/screens/ReconcileScreen";

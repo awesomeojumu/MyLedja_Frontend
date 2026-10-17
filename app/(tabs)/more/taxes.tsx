@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { HubScreen } from "../../../src/features/taxes";
+import { HubScreen } from "@/features/taxes";
 
 export default function TaxesRoute() {
   const router = useRouter();

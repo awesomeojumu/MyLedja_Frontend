@@ -1,4 +1,4 @@
-import { SplitScreen } from "../../../src/features/transactions";
+import { SplitScreen } from "@/features/transactions";
 
 export default function SplitRoute() {
   return <SplitScreen />;

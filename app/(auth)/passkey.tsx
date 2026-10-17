@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { afterPasskey, PasskeyScreen } from "../../src/features/auth-onboarding";
+import { afterPasskey, PasskeyScreen } from "@/features/auth-onboarding";
 
 export default function PasskeyRoute() {
   const router = useRouter();

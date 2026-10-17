@@ -1,1 +1,1 @@
-export { GlobalSearchOverlay as Screen145 } from "../components/GlobalSearchOverlay";
+export { GlobalSearchOverlay as Screen145 } from "@/features/dashboard/components/GlobalSearchOverlay";

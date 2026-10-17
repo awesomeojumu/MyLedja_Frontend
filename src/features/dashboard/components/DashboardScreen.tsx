@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "expo-router";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { IconButton, maxWidth, Txt, useTheme } from "../../../design";
+import { IconButton, maxWidth, Txt, useTheme } from "@/design";
 
 export function DashboardScreen({ title, children }: { title: string; children: ReactNode }) {
   const t = useTheme();

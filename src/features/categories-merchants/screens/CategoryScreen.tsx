@@ -1,10 +1,10 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View } from "react-native";
-import { Banner, Button, CategoryIcon, EmptyState, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { CategoryList } from "../components/CategoryList";
-import { CatScreen } from "../components/CatScreen";
-import { categoryById } from "../dummy-data";
+import { Banner, Button, CategoryIcon, EmptyState, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { CategoryList } from "@/features/categories-merchants/components/CategoryList";
+import { CatScreen } from "@/features/categories-merchants/components/CatScreen";
+import { categoryById } from "@/features/categories-merchants/dummy-data";
 
 export function CategoryScreen() {
   const t = useTheme();

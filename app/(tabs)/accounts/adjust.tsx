@@ -1,4 +1,4 @@
-import { AdjustBalanceScreen } from "../../../src/features/accounts";
+import { AdjustBalanceScreen } from "@/features/accounts";
 
 export default function AdjustRoute() {
   return <AdjustBalanceScreen />;

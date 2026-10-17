@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Amount, Card, LineChart, SegmentedControl, Txt, useTheme } from "../../../design";
-import { DashboardScreen } from "../components/DashboardScreen";
-import { CASH_FLOW, cashFlowForPeriod, type CashFlowPeriod } from "../dummy-data";
+import { Amount, Card, LineChart, SegmentedControl, Txt, useTheme } from "@/design";
+import { DashboardScreen } from "@/features/dashboard/components/DashboardScreen";
+import { CASH_FLOW, cashFlowForPeriod, type CashFlowPeriod } from "@/features/dashboard/dummy-data";
 
 const PERIODS = [
   { value: "this-month", label: "This month" },

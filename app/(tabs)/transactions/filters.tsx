@@ -1,4 +1,4 @@
-import { FiltersScreen } from "../../../src/features/transactions";
+import { FiltersScreen } from "@/features/transactions";
 
 export default function FiltersRoute() {
   return <FiltersScreen />;

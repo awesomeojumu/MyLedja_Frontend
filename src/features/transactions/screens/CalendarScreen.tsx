@@ -1,9 +1,9 @@
 import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { Amount, Card, Txt } from "../../../design";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
-import { CALENDAR_DAYS } from "../dummy-data";
+import { Amount, Card, Txt } from "@/design";
+import { WidePane } from "@/lib";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
+import { CALENDAR_DAYS } from "@/features/transactions/dummy-data";
 
 export function CalendarScreen() {
   const router = useRouter();

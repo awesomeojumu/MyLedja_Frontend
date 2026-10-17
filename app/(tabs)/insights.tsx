@@ -1,4 +1,4 @@
-import { InsightsScreen } from "../../src/features/dashboard";
+import { InsightsScreen } from "@/features/dashboard";
 
 export default function InsightsRoute() {
   return <InsightsScreen />;

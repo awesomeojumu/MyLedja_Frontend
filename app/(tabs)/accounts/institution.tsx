@@ -1,4 +1,4 @@
-import { InstitutionScreen } from "../../../src/features/accounts";
+import { InstitutionScreen } from "@/features/accounts";
 
 export default function InstitutionRoute() {
   return <InstitutionScreen />;

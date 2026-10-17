@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { afterWorkspace, CreateWorkspaceScreen } from "../../src/features/auth-onboarding";
+import { afterWorkspace, CreateWorkspaceScreen } from "@/features/auth-onboarding";
 
 export default function WorkspaceRoute() {
   const router = useRouter();

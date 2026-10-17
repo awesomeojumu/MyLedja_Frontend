@@ -1,4 +1,4 @@
-import { EXPENSE_CATEGORIES, toKobo } from "../../../design/format";
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, toKobo } from "@/design/format";
 
 export type EntryKind = "expense" | "income" | "transfer";
 
@@ -26,6 +26,12 @@ export function draftIssues(draft: AddDraft): DraftIssue[] {
   }
   if (draft.kind !== "transfer" && !draft.category.trim()) {
     issues.push({ field: "category", message: "Choose a category." });
+  }
+  if (draft.kind === "expense" && INCOME_CATEGORIES.includes(draft.category)) {
+    issues.push({ field: "category", message: "An expense cannot use an income category." });
+  }
+  if (draft.kind === "income" && EXPENSE_CATEGORIES.includes(draft.category)) {
+    issues.push({ field: "category", message: "Income cannot use an expense category." });
   }
   return issues;
 }

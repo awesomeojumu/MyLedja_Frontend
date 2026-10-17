@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Banner, Button, SegmentedControl, TextField, Txt, useTheme } from "../../../design";
-import { AuthShell } from "../components/AuthShell";
-import { PasswordRules } from "../components/PasswordRules";
-import { TextLink } from "../components/TextLink";
-import { useSubmit } from "../hooks/use-submit";
-import { canCreateAccount, rememberSignup } from "../services/auth-flow";
-import { passwordRules } from "../services/password-rules";
+import { Banner, Button, SegmentedControl, TextField, Txt, useTheme } from "@/design";
+import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
+import { PasswordRules } from "@/features/auth-onboarding/components/PasswordRules";
+import { TextLink } from "@/features/auth-onboarding/components/TextLink";
+import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
+import { canCreateAccount, rememberSignup } from "@/features/auth-onboarding/services/auth-flow";
+import { passwordRules } from "@/features/auth-onboarding/services/password-rules";
 
 export function CreateAccountScreen({
   onBack,

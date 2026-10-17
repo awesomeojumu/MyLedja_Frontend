@@ -1,4 +1,4 @@
-import { SCREEN_PREVIEW_OPTIONS, type ScreenPreview } from "./screen-preview";
+import { SCREEN_PREVIEW_OPTIONS, type ScreenPreview } from "@/lib/screen-preview";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);

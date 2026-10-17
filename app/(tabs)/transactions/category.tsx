@@ -1,4 +1,4 @@
-import { CategoryScreen } from "../../../src/features/categories-merchants";
+import { CategoryScreen } from "@/features/categories-merchants";
 
 export default function CategoryRoute() {
   return <CategoryScreen />;

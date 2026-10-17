@@ -2,12 +2,12 @@
 import React, { useRef, useState } from 'react';
 import { KeyboardTypeOptions, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { useTheme } from '../theme';
-import { cleanAmount, EXPENSE_CATEGORIES } from '../format';
-import { IconName } from '../icons';
-import { CategoryIcon, Icon, Txt } from './foundations';
-import { Chip, IconButton } from './actions';
-import { Sheet } from './surfaces';
+import { useTheme } from "@/design/theme";
+import { cleanAmount, EXPENSE_CATEGORIES } from "@/design/format";
+import { IconName } from "@/design/icons";
+import { CategoryIcon, Icon, Txt } from "@/design/components/foundations";
+import { Chip, IconButton } from "@/design/components/actions";
+import { Sheet } from "@/design/components/surfaces";
 
 /* The web focus outline is also cleared globally in theme.tsx; RN types only allow outlineWidth here. */
 const hideBrowserOutline = Platform.OS === 'web' ? { outlineWidth: 0 } : null;

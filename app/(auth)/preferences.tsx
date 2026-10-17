@@ -1,7 +1,19 @@
 import { useRouter } from "expo-router";
-import { afterPreferences, InitialPreferencesScreen } from "../../src/features/auth-onboarding";
+import { afterPreferences, InitialPreferencesScreen } from "@/features/auth-onboarding";
+import { useSession } from "@/state";
 
 export default function PreferencesRoute() {
   const router = useRouter();
-  return <InitialPreferencesScreen onSubmit={() => router.push(afterPreferences())} />;
+  const { session, workspaces } = useSession();
+  return (
+    <InitialPreferencesScreen
+      onSubmit={(currency) => {
+        const workspaceId = workspaces[0]?.id;
+        if (workspaceId) {
+          void session.patchSetup(workspaceId, { defaultCurrency: currency, setupProgress: { currency: true } });
+        }
+        router.push(afterPreferences());
+      }}
+    />
+  );
 }

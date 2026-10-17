@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
-import { Icon, Txt, useTheme } from "../../../design";
+import { Icon, Txt, useTheme } from "@/design";
 
 export function CheckboxRow({
   checked,

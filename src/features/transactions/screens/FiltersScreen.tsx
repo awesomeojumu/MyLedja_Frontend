@@ -1,1 +1,1 @@
-export { SearchScreen as FiltersScreen } from "./SearchScreen";
+export { SearchScreen as FiltersScreen } from "@/features/transactions/screens/SearchScreen";

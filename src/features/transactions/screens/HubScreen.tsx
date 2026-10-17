@@ -1,1 +1,1 @@
-export { TransactionsScreen as HubScreen } from "./TransactionsScreen";
+export { TransactionsScreen as HubScreen } from "@/features/transactions/screens/TransactionsScreen";

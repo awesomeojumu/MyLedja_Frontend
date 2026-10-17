@@ -1,9 +1,9 @@
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, Icon, Logo, LogoMark, TransactionRow, Txt, useTheme } from "../../../design";
-import { splitLayout } from "../../../lib";
-import { WELCOME_PREVIEW } from "../auth-copy";
-import { AuthShell } from "../components/AuthShell";
+import { Button, Icon, Logo, LogoMark, TransactionRow, Txt, useTheme } from "@/design";
+import { splitLayout } from "@/lib";
+import { WELCOME_PREVIEW } from "@/features/auth-onboarding/auth-copy";
+import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
 
 function PreviewCard() {
   const t = useTheme();

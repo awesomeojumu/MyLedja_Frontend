@@ -1,7 +1,7 @@
-import { AccountCard } from "../../../src/features/settings-privacy";
-import { LinkHub } from "../../../src/lib/link-hub";
-import { MORE_LINKS } from "../../../src/lib/plan-links";
-import { useSession, useSignOut } from "../../../src/state";
+import { AccountCard } from "@/features/settings-privacy";
+import { LinkHub } from "@/lib/link-hub";
+import { MORE_LINKS } from "@/lib/plan-links";
+import { useSession, useSignOut } from "@/state";
 
 export default function MoreTab() {
   const { user } = useSession();

@@ -1,4 +1,4 @@
-import { TransferScreen } from "../../../src/features/accounts";
+import { TransferScreen } from "@/features/accounts";
 
 export default function TransferRoute() {
   return <TransferScreen />;

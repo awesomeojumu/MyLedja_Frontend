@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
-import { afterReset, AUTH_ROUTES, RecoveryResetScreen } from "../../src/features/auth-onboarding";
-import { useSession } from "../../src/state";
+import { afterReset, AUTH_ROUTES, RecoveryResetScreen } from "@/features/auth-onboarding";
+import { useSession } from "@/state";
 
 export default function ResetRoute() {
   const router = useRouter();

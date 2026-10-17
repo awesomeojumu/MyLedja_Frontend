@@ -1,8 +1,8 @@
 import { View } from "react-native";
-import { Card, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { RECONCILE_HISTORY } from "../dummy-data";
+import { Card, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { RECONCILE_HISTORY } from "@/features/accounts/dummy-data";
 
 export function ReconciliationHistoryScreen() {
   const t = useTheme();

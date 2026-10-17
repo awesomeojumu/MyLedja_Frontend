@@ -1,1 +1,1 @@
-export { HubScreen } from "./screens/HubScreen";
+export { HubScreen } from "@/features/bills/screens/HubScreen";

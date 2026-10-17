@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { Pressable, TextInput, View } from "react-native";
-import { Txt, useTheme } from "../../../design";
-import { OTP_LENGTH } from "../otp";
+import { Txt, useTheme } from "@/design";
+import { OTP_LENGTH } from "@/features/auth-onboarding/otp";
 
 export function OtpBoxes({
   value,

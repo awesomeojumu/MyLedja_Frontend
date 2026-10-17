@@ -1,7 +1,7 @@
-import { Card, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
-import { CORRECTIONS } from "../dummy-data";
+import { Card, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
+import { CORRECTIONS } from "@/features/transactions/dummy-data";
 
 export function CorrectionHistoryScreen() {
   const t = useTheme();

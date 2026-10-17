@@ -1,1 +1,1 @@
-export { TransactionDetailScreen as TransferTxScreen } from "./TransactionDetailScreen";
+export { TransactionDetailScreen as TransferTxScreen } from "@/features/transactions/screens/TransactionDetailScreen";

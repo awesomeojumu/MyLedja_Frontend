@@ -1,1 +1,1 @@
-export { ReviewImportScreen as Screen149 } from "./ReviewImportScreen";
+export { ReviewImportScreen as Screen149 } from "@/features/accounts/screens/ReviewImportScreen";

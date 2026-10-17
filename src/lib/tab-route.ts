@@ -1,4 +1,4 @@
-import type { Destination } from "../design";
+import type { Destination } from "@/design";
 
 export function activeFromPath(pathname: string): Destination {
   if (pathname.includes("transactions")) return "transactions";

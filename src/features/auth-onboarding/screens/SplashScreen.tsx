@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { Icon, Logo, Txt, useTheme } from "../../../design";
+import { Icon, Logo, Txt, useTheme } from "@/design";
 
 export function SplashScreen({ onDone }: { onDone: () => void }) {
   const t = useTheme();

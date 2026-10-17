@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { IconButton, Txt, maxWidth, useTheme } from "../../../design";
+import { IconButton, Txt, maxWidth, useTheme } from "@/design";
 
 export function ScreenChrome({
   title,

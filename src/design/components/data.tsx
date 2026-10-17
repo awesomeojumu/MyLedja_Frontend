@@ -2,10 +2,10 @@
 import React, { useState } from 'react';
 import { LayoutChangeEvent, Pressable, ScrollView, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
-import { useTheme } from '../theme';
-import { compactNaira, formatMoney } from '../format';
-import { CategoryIcon, Icon, Txt } from './foundations';
-import { Amount } from './money';
+import { useTheme } from "@/design/theme";
+import { compactNaira, formatMoney } from "@/design/format";
+import { CategoryIcon, Icon, Txt } from "@/design/components/foundations";
+import { Amount } from "@/design/components/money";
 
 export interface CategoryBreakdownProps { items: { label: string; value: number; count?: number }[]; total?: number; onSelect?: (item: { label: string; value: number }) => void }
 export function CategoryBreakdown({ items, total, onSelect }: CategoryBreakdownProps) {

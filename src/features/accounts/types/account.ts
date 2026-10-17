@@ -1,4 +1,4 @@
-import type { IconName } from "../../../design";
+import type { IconName } from "@/design";
 
 export type AccountKind = "bank" | "wallet" | "cash" | "savings" | "liability";
 

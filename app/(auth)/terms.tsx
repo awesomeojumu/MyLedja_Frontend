@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { afterTerms, TermsPrivacyScreen } from "../../src/features/auth-onboarding";
+import { afterTerms, TermsPrivacyScreen } from "@/features/auth-onboarding";
 
 export default function TermsRoute() {
   const router = useRouter();

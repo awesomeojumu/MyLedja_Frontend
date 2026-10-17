@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
-import { EmptyState } from "../../../design";
-import { ScreenShell } from "../../../lib";
+import { EmptyState } from "@/design";
+import { ScreenShell } from "@/lib";
 
 export function EmptyAccountsScreen() {
   const router = useRouter();

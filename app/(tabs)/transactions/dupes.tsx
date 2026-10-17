@@ -1,4 +1,4 @@
-import { DuplicateReviewScreen } from "../../../src/features/transactions";
+import { DuplicateReviewScreen } from "@/features/transactions";
 
 export default function DupesRoute() {
   return <DuplicateReviewScreen />;

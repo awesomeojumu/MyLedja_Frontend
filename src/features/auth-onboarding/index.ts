@@ -1,16 +1,16 @@
-export { WelcomeScreen } from "./screens/WelcomeScreen";
-export { CreateAccountScreen } from "./screens/CreateAccountScreen";
-export { VerifyIdentityScreen } from "./screens/VerifyIdentityScreen";
-export { TermsPrivacyScreen } from "./screens/TermsPrivacyScreen";
-export { PasskeyScreen } from "./screens/PasskeyScreen";
-export { InitialPreferencesScreen } from "./screens/InitialPreferencesScreen";
-export { CreateWorkspaceScreen } from "./screens/CreateWorkspaceScreen";
-export { SetupChecklistScreen } from "./screens/SetupChecklistScreen";
-export { SignInScreen } from "./screens/SignInScreen";
-export { MfaScreen } from "./screens/MfaScreen";
-export { StartRecoveryScreen } from "./screens/StartRecoveryScreen";
-export { RecoveryResetScreen } from "./screens/RecoveryResetScreen";
-export { SplashScreen } from "./screens/SplashScreen";
+export { WelcomeScreen } from "@/features/auth-onboarding/screens/WelcomeScreen";
+export { CreateAccountScreen } from "@/features/auth-onboarding/screens/CreateAccountScreen";
+export { VerifyIdentityScreen } from "@/features/auth-onboarding/screens/VerifyIdentityScreen";
+export { TermsPrivacyScreen } from "@/features/auth-onboarding/screens/TermsPrivacyScreen";
+export { PasskeyScreen } from "@/features/auth-onboarding/screens/PasskeyScreen";
+export { InitialPreferencesScreen } from "@/features/auth-onboarding/screens/InitialPreferencesScreen";
+export { CreateWorkspaceScreen } from "@/features/auth-onboarding/screens/CreateWorkspaceScreen";
+export { SetupChecklistScreen } from "@/features/auth-onboarding/screens/SetupChecklistScreen";
+export { SignInScreen } from "@/features/auth-onboarding/screens/SignInScreen";
+export { MfaScreen } from "@/features/auth-onboarding/screens/MfaScreen";
+export { StartRecoveryScreen } from "@/features/auth-onboarding/screens/StartRecoveryScreen";
+export { RecoveryResetScreen } from "@/features/auth-onboarding/screens/RecoveryResetScreen";
+export { SplashScreen } from "@/features/auth-onboarding/screens/SplashScreen";
 export {
   AUTH_ROUTES,
   afterChecklist,
@@ -26,4 +26,4 @@ export {
   afterVerify,
   afterWorkspace,
   forgetSignup,
-} from "./services/auth-flow";
+} from "@/features/auth-onboarding/services/auth-flow";

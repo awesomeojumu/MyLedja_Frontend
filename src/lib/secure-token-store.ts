@@ -1,6 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
-import { memoryTokenStore, type TokenStore } from "./session-core";
+import { memoryTokenStore, type TokenStore } from "@/lib/session-core";
 
 const KEY = "myledja.refreshToken";
 

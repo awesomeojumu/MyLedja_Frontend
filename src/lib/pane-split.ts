@@ -1,4 +1,4 @@
-import { twoColumn, type WidthClass } from "./nav-mode";
+import { twoColumn, type WidthClass } from "@/lib/nav-mode";
 
 /** Whether WidePane splits. `tablet` screens (list-plus-detail on the boards) also split on a landscape tablet. */
 export function paneSplits(widthClass: WidthClass, portrait: boolean, tablet: boolean): boolean {

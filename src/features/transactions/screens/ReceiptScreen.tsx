@@ -1,9 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Banner, Button, Card, EmptyState, Txt, Toast, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
-import { transactionById } from "../dummy-data";
+import { Banner, Button, Card, EmptyState, Txt, Toast, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
+import { transactionById } from "@/features/transactions/dummy-data";
 
 export function ReceiptScreen() {
   const t = useTheme();

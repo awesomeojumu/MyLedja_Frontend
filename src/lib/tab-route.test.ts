@@ -1,4 +1,4 @@
-import { activeFromPath } from "./tab-route";
+import { activeFromPath } from "@/lib/tab-route";
 
 function assertEqual<T>(actual: T, expected: T): void {
   if (actual !== expected) {

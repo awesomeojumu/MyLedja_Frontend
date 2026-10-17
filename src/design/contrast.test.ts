@@ -1,13 +1,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { colors, type ColorTokens } from "./tokens";
-import { contrastRatio, parseHex } from "./contrast";
+import { colors, type ColorTokens } from "@/design/tokens";
+import { contrastRatio, parseHex } from "@/design/contrast";
 import {
   EXEMPT_COMPONENTS,
   HELPER_EXPORTS,
   PAIRS,
   type ContrastPair,
-} from "./contrast-pairs";
+} from "@/design/contrast-pairs";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) {

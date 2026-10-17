@@ -1,5 +1,5 @@
-import { ApiError, createApiClient, type FetchLike } from "../api/client";
-import { memoryTokenStore, SessionCore, UnverifiedEmailError } from "./session-core";
+import { ApiError, createApiClient, type FetchLike } from "@/api/client";
+import { memoryTokenStore, SessionCore, UnverifiedEmailError } from "@/lib/session-core";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);

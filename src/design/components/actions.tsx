@@ -1,10 +1,10 @@
 /* Actions: Button, IconButton, SegmentedControl, Tabs, Chip, ChipGroup, FilterButton. */
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
-import { useTheme } from '../theme';
-import { SpringPressable } from '../motion';
-import { IconName } from '../icons';
-import { CategoryIcon, Icon } from './foundations';
+import { useTheme } from "@/design/theme";
+import { SpringPressable } from "@/design/motion";
+import { IconName } from "@/design/icons";
+import { CategoryIcon, Icon } from "@/design/components/foundations";
 
 export interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive';

@@ -1,4 +1,4 @@
-import { HubScreen } from "../../../src/features/accounts";
+import { HubScreen } from "@/features/accounts";
 
 export default function AccountsTab() {
   return <HubScreen />;

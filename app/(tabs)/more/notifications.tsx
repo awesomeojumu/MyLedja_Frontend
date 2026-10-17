@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { HubScreen } from "../../../src/features/notifications";
+import { HubScreen } from "@/features/notifications";
 
 export default function NotificationsRoute() {
   const router = useRouter();

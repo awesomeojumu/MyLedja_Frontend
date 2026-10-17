@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { afterMfa, AUTH_ROUTES, MfaScreen } from "../../src/features/auth-onboarding";
+import { afterMfa, AUTH_ROUTES, MfaScreen } from "@/features/auth-onboarding";
 
 export default function MfaRoute() {
   const router = useRouter();

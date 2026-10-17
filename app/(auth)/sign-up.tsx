@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
-import { afterSignUp, AUTH_ROUTES, CreateAccountScreen } from "../../src/features/auth-onboarding";
-import { useSession } from "../../src/state";
+import { afterSignUp, AUTH_ROUTES, CreateAccountScreen } from "@/features/auth-onboarding";
+import { useSession } from "@/state";
 
 export default function CreateAccountRoute() {
   const router = useRouter();

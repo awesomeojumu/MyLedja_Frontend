@@ -1,4 +1,4 @@
-import { CATEGORY_ROWS, MERCHANTS, categoryById, merchantById } from "../dummy-data";
+import { CATEGORY_ROWS, MERCHANTS, categoryById, merchantById } from "@/features/categories-merchants/dummy-data";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);

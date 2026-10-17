@@ -1,13 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View } from "react-native";
-import { Banner, Button, Dialog, TransactionRow, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
-import { QUEUE_ROWS } from "../dummy-data";
+import { Banner, Button, Dialog, TransactionRow, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { useSession } from "@/state";
+import { pendingBadge } from "@/sync/outbox";
+import { outboxForUser } from "@/sync/user-outbox";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
 
 export function SyncQueueScreen() {
   const t = useTheme();
+  const { user } = useSession();
   const [signOut, setSignOut] = useState(false);
+  const rows = useMemo(() => {
+    if (!user) return [];
+    return outboxForUser(user.userId)
+      .list(user.userId)
+      .filter((row) => pendingBadge(row.syncStatus));
+  }, [user]);
   return (
     <TxScreen
       title="Sync queue"
@@ -19,14 +28,26 @@ export function SyncQueueScreen() {
       <WidePane
         sidebar={
           <Banner tone="warning" title="Waiting on this phone">
-            Failed and pending records retry when you are online. Use Design state Empty for all synced.
+            Failed and pending records retry when you are online.
           </Banner>
         }
       >
         <View style={{ borderRadius: t.radius.radiusLg, overflow: "hidden", borderWidth: 1, borderColor: t.c.borderStrong }}>
-          {QUEUE_ROWS.map((row) => (
-            <TransactionRow key={row.id} title={row.title} category={row.category} account={row.account} amount={row.amount} kind={row.kind} time={row.time} status={row.status} />
-          ))}
+          {rows.map((row) => {
+            const payload = row.payload as { description?: string; amount?: string; type?: string };
+            return (
+              <TransactionRow
+                key={row.operationId}
+                title={payload.description ?? "Saved on this phone"}
+                category={row.syncStatus}
+                account=""
+                amount={Number(payload.amount ?? 0)}
+                kind={payload.type === "income" ? "income" : "expense"}
+                time=""
+                status={row.syncStatus === "failed_temporarily" ? "failed" : "pending"}
+              />
+            );
+          })}
         </View>
       </WidePane>
       <Dialog

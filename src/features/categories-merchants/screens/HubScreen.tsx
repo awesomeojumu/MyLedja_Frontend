@@ -1,1 +1,1 @@
-export { CategoriesScreen as HubScreen } from "./CategoriesScreen";
+export { CategoriesScreen as HubScreen } from "@/features/categories-merchants/screens/CategoriesScreen";

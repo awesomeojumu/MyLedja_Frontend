@@ -1,13 +1,13 @@
-import { formatMoney } from "../../../design/format";
-import { HOME_DUMMY } from "../../dashboard/dummy-data";
+import { formatMoney } from "@/design/format";
+import { HOME_DUMMY } from "@/features/dashboard/dummy-data";
 import {
   ACCOUNTS,
   IMPORT_REVIEW,
   accountById,
   availableCash,
   importRowsFor,
-} from "../dummy-data";
-import { accountDraftIssues, transferDraftIssues } from "../services/account-draft";
+} from "@/features/accounts/dummy-data";
+import { accountDraftIssues, transferDraftIssues } from "@/features/accounts/services/account-draft";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);

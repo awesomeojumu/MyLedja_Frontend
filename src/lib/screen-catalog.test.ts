@@ -7,7 +7,7 @@ import {
   featureForScreen,
   NESTED_ROUTES,
   SCREEN_TITLES,
-} from "./screen-catalog";
+} from "@/lib/screen-catalog";
 
 function assertEqual<T>(actual: T, expected: T, message?: string): void {
   if (actual !== expected) {

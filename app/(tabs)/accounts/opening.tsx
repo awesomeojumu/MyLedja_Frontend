@@ -1,4 +1,4 @@
-import { OpeningBalanceScreen } from "../../../src/features/accounts";
+import { OpeningBalanceScreen } from "@/features/accounts";
 
 export default function OpeningBalanceRoute() {
   return <OpeningBalanceScreen />;

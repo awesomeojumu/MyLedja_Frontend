@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { HubScreen } from "../../../src/features/bills";
+import { HubScreen } from "@/features/bills";
 
 export default function BillsRoute() {
   const router = useRouter();

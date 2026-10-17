@@ -1,9 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { AmountInput, Banner, Button, SegmentedControl, Toast } from "../../../design";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
-import { transactionById } from "../dummy-data";
+import { AmountInput, Banner, Button, SegmentedControl, Toast } from "@/design";
+import { WidePane } from "@/lib";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
+import { transactionById } from "@/features/transactions/dummy-data";
 
 const MODES = [
   { value: "refund", label: "Refund" },
@@ -28,7 +28,7 @@ export function RefundScreen() {
       <WidePane
         sidebar={
           <Banner tone="primary" title={row?.title ?? "This record"}>
-            {reversal ? "A reversal undoes the original posting with a matching opposite record." : "A refund is income. It does not delete the original expense."}
+            {reversal ? "A reversal marks this record reversed. Its effects stop counting. No second row." : "A refund is income. It does not delete the original expense."}
           </Banner>
         }
       >

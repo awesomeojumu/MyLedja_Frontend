@@ -1,14 +1,14 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Linking, View } from "react-native";
-import { ApiError } from "../../../api/client";
-import { AmountInput, Banner, Button, SegmentedControl, TextField, Toast, formatMoney } from "../../../design";
-import { useSession } from "../../../state";
-import { WidePane } from "../../../lib";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { accountById } from "../dummy-data";
-import { accountDraftIssues, savedAccountMessage } from "../services/account-draft";
-import type { AccountKind } from "../types/account";
+import { ApiError } from "@/api/client";
+import { AmountInput, Banner, Button, SegmentedControl, TextField, Toast, formatMoney } from "@/design";
+import { useSession } from "@/state";
+import { WidePane } from "@/lib";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { accountById } from "@/features/accounts/dummy-data";
+import { accountDraftIssues, savedAccountMessage } from "@/features/accounts/services/account-draft";
+import type { AccountKind } from "@/features/accounts/types/account";
 
 const KINDS = [
   { value: "bank", label: "Bank" },
@@ -40,10 +40,28 @@ export function AddAccountScreen({ mode = "add" }: { mode?: "add" | "edit" } = {
       return;
     }
     setError(undefined);
-    setToast(savedAccountMessage(name.trim()));
-    if (mode === "add") {
-      router.push("/(tabs)/accounts/opening");
+    if (!workspaceId) {
+      setError("Sign in again to add an account.");
+      return;
     }
+    void session
+      .createAccount(workspaceId, {
+        name: name.trim(),
+        kind,
+        institutionId: kind === "bank" ? "gtbank" : null,
+        connectionType: linked ? "linked" : "manual",
+        opening,
+        accountNumber: linked?.mask ? `000000${linked.mask}` : undefined,
+      })
+      .then(() => {
+        setToast(savedAccountMessage(name.trim()));
+        if (mode === "add") {
+          router.push("/(tabs)/accounts/opening");
+        }
+      })
+      .catch((caught) => {
+        setError(caught instanceof ApiError ? caught.message : "Could not save this account.");
+      });
   };
 
   const startLink = async () => {

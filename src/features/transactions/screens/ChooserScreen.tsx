@@ -1,8 +1,8 @@
 import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { Card, Icon, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
+import { Card, Icon, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
 
 const CHOICES = [
   { href: "/(tabs)/transactions/add-expense", title: "Expense", body: "Money that left an account.", icon: "arrow-up-right" as const },

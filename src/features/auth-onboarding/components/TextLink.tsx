@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable } from "react-native";
-import { Txt, useTheme } from "../../../design";
+import { Txt, useTheme } from "@/design";
 
 export function TextLink({
   onPress,

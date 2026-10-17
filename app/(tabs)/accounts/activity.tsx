@@ -1,4 +1,4 @@
-import { AccountActivityScreen } from "../../../src/features/accounts";
+import { AccountActivityScreen } from "@/features/accounts";
 
 export default function ActivityRoute() {
   return <AccountActivityScreen />;

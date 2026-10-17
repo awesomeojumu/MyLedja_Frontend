@@ -1,6 +1,6 @@
 import { View } from "react-native";
-import { Icon, Logo, Txt, useTheme } from "../../../design";
-import { BRAND, BRAND_FOOTER, TRUST_BULLETS, type BrandKind } from "../auth-copy";
+import { Icon, Logo, Txt, useTheme } from "@/design";
+import { BRAND, BRAND_FOOTER, TRUST_BULLETS, type BrandKind } from "@/features/auth-onboarding/auth-copy";
 
 export type { BrandKind };
 

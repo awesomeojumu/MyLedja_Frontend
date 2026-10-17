@@ -1,6 +1,6 @@
-import { Banner, Card } from "../../../design";
-import { DashboardScreen } from "../components/DashboardScreen";
-import { DASHBOARD_INSIGHTS } from "../dummy-data";
+import { Banner, Card } from "@/design";
+import { DashboardScreen } from "@/features/dashboard/components/DashboardScreen";
+import { DASHBOARD_INSIGHTS } from "@/features/dashboard/dummy-data";
 
 export function InsightsScreen() {
   return (

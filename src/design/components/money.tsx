@@ -1,13 +1,13 @@
 /* Money: Amount, HeroBalance, StatTile, SummaryCard, ProgressBar, ProgressRing, BudgetTile, TransactionRow, TransactionDetail. */
 import { Pressable, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { useTheme } from '../theme';
-import { formatMoney } from '../format';
-import { Rise, SpringPressable, useRollingNumber } from '../motion';
-import { IconName } from '../icons';
-import { CategoryIcon, Icon, StatusBadge, SyncStatus, Txt } from './foundations';
-import { Button } from './actions';
-import { Banner } from './surfaces';
+import { useTheme } from "@/design/theme";
+import { formatMoney } from "@/design/format";
+import { Rise, SpringPressable, useRollingNumber } from "@/design/motion";
+import { IconName } from "@/design/icons";
+import { CategoryIcon, Icon, StatusBadge, SyncStatus, Txt } from "@/design/components/foundations";
+import { Button } from "@/design/components/actions";
+import { Banner } from "@/design/components/surfaces";
 
 export type MoneyKind = 'income' | 'expense' | 'transfer' | 'neutral';
 

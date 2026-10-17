@@ -12,8 +12,8 @@ import {
   TextField,
   Txt,
   useTheme,
-} from "../../../design";
-import { draftIssues, quickExpenseDraft, saveLabel, savedMessage, type AddDraft, type DraftIssue, type EntryKind } from "../services/add-draft";
+} from "@/design";
+import { draftIssues, quickExpenseDraft, saveLabel, savedMessage, type AddDraft, type DraftIssue, type EntryKind } from "@/features/transactions/services/add-draft";
 
 const KINDS = [
   { value: "expense", label: "Expense" },

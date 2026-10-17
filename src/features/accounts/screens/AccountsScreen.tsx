@@ -1,12 +1,12 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
-import { Amount, Card, ProgressBar, Rise, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { AccountRow } from "../components/AccountRow";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { activeAccounts, groupTotal, youOwe, youOwn } from "../dummy-data";
-import type { AccountGroup } from "../types/account";
+import { Amount, Card, ProgressBar, Rise, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { AccountRow } from "@/features/accounts/components/AccountRow";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { activeAccounts, groupTotal, youOwe, youOwn } from "@/features/accounts/dummy-data";
+import type { AccountGroup } from "@/features/accounts/types/account";
 
 const GROUPS: { id: AccountGroup; title: string }[] = [
   { id: "cash-and-bank", title: "Cash and bank" },

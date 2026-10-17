@@ -13,14 +13,16 @@ import {
   TransactionRow,
   Txt,
   useTheme,
-} from "../../../design";
-import { WidePane } from "../../../lib";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { ACCOUNT_ACTIVITY, accountById, kindLabel } from "../dummy-data";
+} from "@/design";
+import { WidePane } from "@/lib";
+import { useSession } from "@/state";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { ACCOUNT_ACTIVITY, accountById, kindLabel } from "@/features/accounts/dummy-data";
 
 export function AccountScreen() {
   const t = useTheme();
   const router = useRouter();
+  const { session, workspaces } = useSession();
   const { id } = useLocalSearchParams<{ id: string }>();
   const account = accountById(String(id ?? ""));
   const [hidden, setHidden] = useState(false);
@@ -111,6 +113,8 @@ export function AccountScreen() {
         onClose={() => setBlocked(false)}
         onConfirm={() => {
           setBlocked(false);
+          const workspaceId = workspaces[0]?.id;
+          if (workspaceId) void session.archiveAccount(workspaceId, account.id);
           router.push("/(tabs)/accounts/archived");
         }}
       >

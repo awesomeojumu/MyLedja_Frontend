@@ -1,6 +1,6 @@
-export { HubScreen } from "./screens/HubScreen";
-export { CategoriesScreen } from "./screens/CategoriesScreen";
-export { CategoryScreen } from "./screens/CategoryScreen";
-export { AddCategoryScreen, EditCategoryScreen } from "./screens/AddCategoryScreen";
-export { MerchantsScreen } from "./screens/MerchantsScreen";
-export { MerchantScreen } from "./screens/MerchantScreen";
+export { HubScreen } from "@/features/categories-merchants/screens/HubScreen";
+export { CategoriesScreen } from "@/features/categories-merchants/screens/CategoriesScreen";
+export { CategoryScreen } from "@/features/categories-merchants/screens/CategoryScreen";
+export { AddCategoryScreen, EditCategoryScreen } from "@/features/categories-merchants/screens/AddCategoryScreen";
+export { MerchantsScreen } from "@/features/categories-merchants/screens/MerchantsScreen";
+export { MerchantScreen } from "@/features/categories-merchants/screens/MerchantScreen";

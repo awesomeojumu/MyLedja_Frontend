@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
-import { DesignCatalog } from "../src/catalog/DesignCatalog";
-import { useScheme } from "../src/state";
+import { DesignCatalog } from "@/catalog/DesignCatalog";
+import { useScheme } from "@/state";
 
 export default function CatalogRoute() {
   const router = useRouter();

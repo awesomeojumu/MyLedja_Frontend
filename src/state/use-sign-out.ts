@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useCallback } from "react";
-import { AUTH_ROUTES, forgetSignup } from "../features/auth-onboarding";
-import { useSession } from "./session";
+import { AUTH_ROUTES, forgetSignup } from "@/features/auth-onboarding";
+import { useSession } from "@/state/session";
 
 /** Revokes the session on the server, wipes local user state and returns to Welcome. */
 export function useSignOut(): () => Promise<void> {

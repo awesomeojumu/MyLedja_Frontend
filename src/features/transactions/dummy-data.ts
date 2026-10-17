@@ -55,5 +55,9 @@ export function transactionById(id: string): TxRow | undefined {
 }
 
 export function nairaSum(rows: readonly TxRow[]): number {
-  return rows.reduce((sum, row) => sum + (row.kind === "income" ? row.amount : -row.amount), 0);
+  return rows.reduce((sum, row) => {
+    if (row.kind === "income") return sum + row.amount;
+    if (row.kind === "transfer") return sum;
+    return sum - row.amount;
+  }, 0);
 }

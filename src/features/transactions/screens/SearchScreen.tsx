@@ -1,10 +1,10 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
-import { ChipGroup, EmptyState, FilterButton, Sheet, TextField, TransactionRow, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
-import { TRANSACTIONS } from "../dummy-data";
+import { ChipGroup, EmptyState, FilterButton, Sheet, TextField, TransactionRow, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
+import { TRANSACTIONS } from "@/features/transactions/dummy-data";
 
 const TYPES = [
   { value: "all", label: "All" },

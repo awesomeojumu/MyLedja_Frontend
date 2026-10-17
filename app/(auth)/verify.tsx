@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
-import { afterVerify, AUTH_ROUTES, VerifyIdentityScreen } from "../../src/features/auth-onboarding";
-import { useSession } from "../../src/state";
+import { afterVerify, AUTH_ROUTES, VerifyIdentityScreen } from "@/features/auth-onboarding";
+import { useSession } from "@/state";
 
 export default function VerifyRoute() {
   const router = useRouter();

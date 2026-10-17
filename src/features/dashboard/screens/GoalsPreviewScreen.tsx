@@ -1,7 +1,7 @@
 import { View } from "react-native";
-import { Amount, Card, ProgressBar, ProgressRing, Txt, useTheme } from "../../../design";
-import { DashboardScreen } from "../components/DashboardScreen";
-import { DASHBOARD_GOALS, HOME_DUMMY } from "../dummy-data";
+import { Amount, Card, ProgressBar, ProgressRing, Txt, useTheme } from "@/design";
+import { DashboardScreen } from "@/features/dashboard/components/DashboardScreen";
+import { DASHBOARD_GOALS, HOME_DUMMY } from "@/features/dashboard/dummy-data";
 
 export function GoalsPreviewScreen() {
   const t = useTheme();

@@ -1,4 +1,4 @@
-import { AddExpenseScreen } from "../../../src/features/transactions";
+import { AddExpenseScreen } from "@/features/transactions";
 
 export default function AddExpenseRoute() {
   return <AddExpenseScreen />;

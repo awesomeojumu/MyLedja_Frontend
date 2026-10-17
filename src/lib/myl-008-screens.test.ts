@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { FEATURE_SCREENS, SCREEN_TITLES, featureForScreen } from "./screen-catalog";
+import { FEATURE_SCREENS, SCREEN_TITLES, featureForScreen } from "@/lib/screen-catalog";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);

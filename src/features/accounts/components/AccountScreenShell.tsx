@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { ScreenShell } from "../../../lib";
-import type { IconName } from "../../../design";
+import { ScreenShell } from "@/lib";
+import type { IconName } from "@/design";
 
 export function AccountScreenShell({
   title,

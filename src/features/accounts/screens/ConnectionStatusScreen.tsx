@@ -1,8 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Banner, Button, Card, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { INSTITUTIONS, accountById } from "../dummy-data";
+import { Banner, Button, Card, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { INSTITUTIONS, accountById } from "@/features/accounts/dummy-data";
 
 export function ConnectionStatusScreen() {
   const t = useTheme();

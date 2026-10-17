@@ -1,1 +1,1 @@
-export { OpeningBalanceScreen as AccountActivityScreen } from "./OpeningBalanceScreen";
+export { OpeningBalanceScreen as AccountActivityScreen } from "@/features/accounts/screens/OpeningBalanceScreen";

@@ -1,4 +1,4 @@
-import { ReceiptScreen } from "../../../src/features/transactions";
+import { ReceiptScreen } from "@/features/transactions";
 
 export default function ReceiptRoute() {
   return <ReceiptScreen />;

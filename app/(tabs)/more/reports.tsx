@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { HubScreen } from "../../../src/features/financial-health";
+import { HubScreen } from "@/features/financial-health";
 
 export default function ReportsRoute() {
   const router = useRouter();

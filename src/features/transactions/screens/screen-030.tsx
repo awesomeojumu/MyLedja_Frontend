@@ -1,1 +1,1 @@
-export { AddExpenseScreen as Screen030 } from "./AddExpenseScreen";
+export { AddExpenseScreen as Screen030 } from "@/features/transactions/screens/AddExpenseScreen";

@@ -1,8 +1,8 @@
 import { View } from "react-native";
-import { Amount, Banner, Card, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
-import { SPLIT } from "../dummy-data";
+import { Amount, Banner, Card, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
+import { SPLIT } from "@/features/transactions/dummy-data";
 
 export function SplitScreen() {
   const t = useTheme();

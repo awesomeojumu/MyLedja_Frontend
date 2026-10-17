@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Banner, Button, TextField, Txt, useTheme } from "../../../design";
-import { splitLayout } from "../../../lib";
-import { AuthShell } from "../components/AuthShell";
-import { TextLink } from "../components/TextLink";
-import { useSubmit } from "../hooks/use-submit";
-import { canSubmitSignIn, rememberSignup } from "../services/auth-flow";
+import { Banner, Button, TextField, Txt, useTheme } from "@/design";
+import { splitLayout } from "@/lib";
+import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
+import { TextLink } from "@/features/auth-onboarding/components/TextLink";
+import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
+import { canSubmitSignIn, rememberSignup } from "@/features/auth-onboarding/services/auth-flow";
 
 export function SignInScreen({
   onBack,

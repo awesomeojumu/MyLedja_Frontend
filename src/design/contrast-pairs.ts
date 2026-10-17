@@ -1,4 +1,4 @@
-import type { ColorTokens } from "./tokens";
+import type { ColorTokens } from "@/design/tokens";
 
 export type ContrastRole = "text" | "ui" | "hairline";
 export type TokenName = keyof ColorTokens;

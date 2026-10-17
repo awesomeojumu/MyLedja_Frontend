@@ -1,6 +1,6 @@
-import { GlobalSearchOverlay } from "./GlobalSearchOverlay";
-import { QuickAddOverlay } from "./QuickAddOverlay";
-import { useDashboardOverlays } from "../overlay-context";
+import { GlobalSearchOverlay } from "@/features/dashboard/components/GlobalSearchOverlay";
+import { QuickAddOverlay } from "@/features/dashboard/components/QuickAddOverlay";
+import { useDashboardOverlays } from "@/features/dashboard/overlay-context";
 
 export function DashboardOverlayHost({
   onExpense,

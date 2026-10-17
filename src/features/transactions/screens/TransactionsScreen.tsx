@@ -1,13 +1,20 @@
 import { useRouter } from "expo-router";
 import { View } from "react-native";
-import { FilterButton, TransactionRow, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
-import { QUEUE_ROWS, TRANSACTIONS } from "../dummy-data";
+import { FilterButton, TransactionRow, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
+import { useSession } from "@/state";
+import { pendingBadge } from "@/sync/outbox";
+import { outboxForUser } from "@/sync/user-outbox";
+import { TRANSACTIONS } from "@/features/transactions/dummy-data";
 
 export function TransactionsScreen() {
   const t = useTheme();
   const router = useRouter();
+  const { user } = useSession();
+  const pendingCount = user
+    ? outboxForUser(user.userId).list(user.userId).filter((row) => pendingBadge(row.syncStatus)).length
+    : 0;
   return (
     <TxScreen
       title="Transactions"
@@ -26,7 +33,7 @@ export function TransactionsScreen() {
         sidebar={
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <FilterButton count={0} onPress={() => router.push("/(tabs)/transactions/search")} />
-          <FilterButton count={QUEUE_ROWS.length} label="Sync queue" onPress={() => router.push("/(tabs)/transactions/queue")} />
+          <FilterButton count={pendingCount} label="Sync queue" onPress={() => router.push("/(tabs)/transactions/queue")} />
           <FilterButton count={0} label="Calendar" onPress={() => router.push("/(tabs)/transactions/calendar")} />
           <FilterButton count={0} label="Categories" onPress={() => router.push("/(tabs)/transactions/categories")} />
         </View>

@@ -1,4 +1,4 @@
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "../../design/format";
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/design/format";
 
 export interface CategoryRow {
   id: string;

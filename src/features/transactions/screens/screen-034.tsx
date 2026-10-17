@@ -1,1 +1,1 @@
-export { SplitScreen as Screen034 } from "./SplitScreen";
+export { SplitScreen as Screen034 } from "@/features/transactions/screens/SplitScreen";

@@ -23,8 +23,8 @@ import {
   maskEmail,
   signupPath,
   workspaceSelectable,
-} from "../services/auth-flow";
-import { passwordPasses, passwordRules } from "../services/password-rules";
+} from "@/features/auth-onboarding/services/auth-flow";
+import { passwordPasses, passwordRules } from "@/features/auth-onboarding/services/password-rules";
 
 function assertEqual<T>(actual: T, expected: T, message?: string): void {
   if (actual !== expected) {
@@ -64,7 +64,6 @@ assertEqual(
     AUTH_ROUTES.preferences,
     AUTH_ROUTES.workspace,
     AUTH_ROUTES.checklist,
-    AUTH_ROUTES.splash,
     AUTH_ROUTES.home,
   ].join(" > "),
 );
@@ -75,7 +74,7 @@ assertEqual(afterTerms(), AUTH_ROUTES.passkey);
 assertEqual(afterPasskey(), AUTH_ROUTES.preferences);
 assertEqual(afterPreferences(), AUTH_ROUTES.workspace);
 assertEqual(afterWorkspace(), AUTH_ROUTES.checklist);
-assertEqual(afterChecklist(), AUTH_ROUTES.splash);
+assertEqual(afterChecklist(), AUTH_ROUTES.home);
 assertEqual(afterSplash(), AUTH_ROUTES.home);
 assertEqual(afterSignIn(), AUTH_ROUTES.splash, "MFA is not built, so sign-in goes to the splash");
 assertEqual(afterMfa(), AUTH_ROUTES.splash);

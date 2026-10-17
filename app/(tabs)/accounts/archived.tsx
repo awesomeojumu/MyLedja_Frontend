@@ -1,4 +1,4 @@
-import { ArchivedAccountsScreen } from "../../../src/features/accounts";
+import { ArchivedAccountsScreen } from "@/features/accounts";
 
 export default function ArchivedAccountsRoute() {
   return <ArchivedAccountsScreen />;

@@ -1,5 +1,5 @@
 import { View } from "react-native";
-import { EmptyState, useTheme } from "../design";
+import { EmptyState, useTheme } from "@/design";
 
 export function ScreenPlaceholder({
   id,

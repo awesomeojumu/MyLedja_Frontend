@@ -1,1 +1,1 @@
-export { SyncQueueScreen as EmptyTransactionsScreen } from "./SyncQueueScreen";
+export { SyncQueueScreen as EmptyTransactionsScreen } from "@/features/transactions/screens/SyncQueueScreen";

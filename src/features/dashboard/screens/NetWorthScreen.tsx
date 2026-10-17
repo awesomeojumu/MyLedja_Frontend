@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Amount, Card, HeroBalance, LineChart, SectionHeader, Txt, useTheme } from "../../../design";
-import { DashboardScreen } from "../components/DashboardScreen";
-import { NET_WORTH } from "../dummy-data";
+import { Amount, Card, HeroBalance, LineChart, SectionHeader, Txt, useTheme } from "@/design";
+import { DashboardScreen } from "@/features/dashboard/components/DashboardScreen";
+import { NET_WORTH } from "@/features/dashboard/dummy-data";
 
 export function NetWorthScreen() {
   const t = useTheme();

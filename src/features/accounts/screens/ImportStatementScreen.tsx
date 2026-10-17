@@ -1,9 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Banner, Button, Card, Select, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { ACCOUNTS, IMPORT_REVIEW, accountById } from "../dummy-data";
+import { Banner, Button, Card, Select, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { ACCOUNTS, IMPORT_REVIEW, accountById } from "@/features/accounts/dummy-data";
 
 export function ImportStatementScreen() {
   const t = useTheme();

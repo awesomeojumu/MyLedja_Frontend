@@ -1,7 +1,7 @@
 /* MyLedja theme for React Native: follows the phone's light/dark setting, the person's font choice and reduce-motion. */
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Platform, useColorScheme, useWindowDimensions } from 'react-native';
-import { breakpoint, colors, ColorTokens, radius, size, space, spring, type, TypeStyle } from './tokens';
+import { breakpoint, colors, ColorTokens, radius, size, space, spring, type, TypeStyle } from "@/design/tokens";
 
 /** Fonts people can pick in Settings → Display. 'system' costs no download. Add more only if they have tabular numerals. */
 export type FontChoice = 'inter' | 'system';

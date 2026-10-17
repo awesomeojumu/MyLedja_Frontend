@@ -1,6 +1,6 @@
 import { Pressable, View } from "react-native";
-import { Amount, CategoryIcon, Icon, StatusBadge, Txt, useTheme } from "../../../design";
-import type { LedgerAccount } from "../types/account";
+import { Amount, CategoryIcon, Icon, StatusBadge, Txt, useTheme } from "@/design";
+import type { LedgerAccount } from "@/features/accounts/types/account";
 
 export function AccountRow({
   account,

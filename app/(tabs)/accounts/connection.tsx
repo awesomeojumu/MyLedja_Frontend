@@ -1,4 +1,4 @@
-import { ConnectionStatusScreen } from "../../../src/features/accounts";
+import { ConnectionStatusScreen } from "@/features/accounts";
 
 export default function ConnectionRoute() {
   return <ConnectionStatusScreen />;

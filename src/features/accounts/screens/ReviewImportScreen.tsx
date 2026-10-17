@@ -10,11 +10,11 @@ import {
   TransactionRow,
   formatMoney,
   useTheme,
-} from "../../../design";
-import { WidePane } from "../../../lib";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { IMPORT_REVIEW, importRowsFor } from "../dummy-data";
-import type { ImportBucket } from "../types/account";
+} from "@/design";
+import { WidePane } from "@/lib";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { IMPORT_REVIEW, importRowsFor } from "@/features/accounts/dummy-data";
+import type { ImportBucket } from "@/features/accounts/types/account";
 
 const TAB_LABEL: Record<ImportBucket, string> = {
   new: "New",

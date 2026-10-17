@@ -6,7 +6,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "include": [
     "**/*.ts",
@@ -14,6 +19,7 @@
   ],
   "exclude": [
     "**/*.test.ts",
+    "src/sync/outbox-file.ts",
     "dist",
     "node_modules"
   ]

@@ -1,4 +1,4 @@
-import { CorrectionHistoryScreen } from "../../../src/features/transactions";
+import { CorrectionHistoryScreen } from "@/features/transactions";
 
 export default function HistoryRoute() {
   return <CorrectionHistoryScreen />;

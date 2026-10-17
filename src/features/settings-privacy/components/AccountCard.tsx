@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card, Txt, useTheme } from "../../../design";
+import { Button, Card, Txt, useTheme } from "@/design";
 
 /** Who is signed in, and the way out. Used on Settings and More. */
 export function AccountCard({ email, onSignOut }: { email: string | null; onSignOut: () => Promise<void> }) {

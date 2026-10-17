@@ -1,9 +1,9 @@
 import { View } from "react-native";
-import { Banner, Button, Card, Txt, useTheme } from "../../../design";
-import { formatMoney } from "../../../design/format";
-import { WidePane } from "../../../lib";
-import { TxScreen } from "../components/TxScreen";
-import { DUPLICATE_PAIRS } from "../dummy-data";
+import { Banner, Button, Card, Txt, useTheme } from "@/design";
+import { formatMoney } from "@/design/format";
+import { WidePane } from "@/lib";
+import { TxScreen } from "@/features/transactions/components/TxScreen";
+import { DUPLICATE_PAIRS } from "@/features/transactions/dummy-data";
 
 export function DuplicateReviewScreen() {
   const t = useTheme();

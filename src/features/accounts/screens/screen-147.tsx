@@ -1,1 +1,1 @@
-export { ConnectionStatusScreen as Screen147 } from "./ConnectionStatusScreen";
+export { ConnectionStatusScreen as Screen147 } from "@/features/accounts/screens/ConnectionStatusScreen";

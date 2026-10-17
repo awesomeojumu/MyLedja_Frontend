@@ -1,1 +1,1 @@
-export { ReceiptScreen as Screen152 } from "./ReceiptScreen";
+export { ReceiptScreen as Screen152 } from "@/features/transactions/screens/ReceiptScreen";

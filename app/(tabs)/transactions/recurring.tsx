@@ -1,4 +1,4 @@
-import { RecurringScreen } from "../../../src/features/transactions";
+import { RecurringScreen } from "@/features/transactions";
 
 export default function RecurringRoute() {
   return <RecurringScreen />;

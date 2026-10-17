@@ -135,6 +135,49 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
       call<BankLinkStart>("POST", "/bank-integrations/link", workspaceId ? { workspaceId } : {}, accessToken),
     completeBankLink: (accessToken: string, code: string, workspaceId?: string) =>
       call<BankLinkComplete>("POST", "/bank-integrations/link/complete", { code, workspaceId }, accessToken),
+    createAccount: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/accounts`, body, accessToken),
+    listAccounts: (accessToken: string, workspaceId: string, archived = false) =>
+      call<{ status: "ok"; data: unknown[] }>(
+        "GET",
+        `/workspaces/${workspaceId}/accounts${archived ? "?archived=true" : ""}`,
+        undefined,
+        accessToken,
+      ),
+    setOpening: (accessToken: string, workspaceId: string, accountId: string, opening: string) =>
+      call<{ status: "ok"; data: unknown }>(
+        "POST",
+        `/workspaces/${workspaceId}/accounts/${accountId}/opening`,
+        { opening },
+        accessToken,
+      ),
+    archiveAccount: (accessToken: string, workspaceId: string, accountId: string) =>
+      call<{ status: "ok"; data: unknown }>("DELETE", `/workspaces/${workspaceId}/accounts/${accountId}`, undefined, accessToken),
+    createTransaction: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/transactions`, body, accessToken),
+    listCategories: (accessToken: string, workspaceId: string) =>
+      call<{ status: "ok"; data: { id: string; name: string; kind: string }[] }>(
+        "GET",
+        `/workspaces/${workspaceId}/categories`,
+        undefined,
+        accessToken,
+      ),
+    getWorkspace: (accessToken: string, workspaceId: string) =>
+      call<{ id: string; setupProgress?: Record<string, boolean>; defaultCurrency?: string }>(
+        "GET",
+        `/workspaces/${workspaceId}`,
+        undefined,
+        accessToken,
+      ),
+    previewRule: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: { transactionIds: string[] } }>(
+        "POST",
+        `/workspaces/${workspaceId}/rules/preview`,
+        body,
+        accessToken,
+      ),
+    patchSetup: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/setup`, body, accessToken),
   };
 }
 

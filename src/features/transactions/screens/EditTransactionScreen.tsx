@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
-import { transactionById } from "../dummy-data";
-import { AddExpenseScreen } from "./AddExpenseScreen";
+import { transactionById } from "@/features/transactions/dummy-data";
+import { AddExpenseScreen } from "@/features/transactions/screens/AddExpenseScreen";
 
 export function EditTransactionScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();

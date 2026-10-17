@@ -1,9 +1,9 @@
 import { useRouter } from "expo-router";
-import { Banner } from "../../../design";
-import { WidePane } from "../../../lib";
-import { CategoryList } from "../components/CategoryList";
-import { CatScreen } from "../components/CatScreen";
-import { CATEGORY_ROWS } from "../dummy-data";
+import { Banner } from "@/design";
+import { WidePane } from "@/lib";
+import { CategoryList } from "@/features/categories-merchants/components/CategoryList";
+import { CatScreen } from "@/features/categories-merchants/components/CatScreen";
+import { CATEGORY_ROWS } from "@/features/categories-merchants/dummy-data";
 
 export function CategoriesScreen() {
   const router = useRouter();

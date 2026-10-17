@@ -1,4 +1,4 @@
-import { ImportStatementScreen } from "../../../src/features/accounts";
+import { ImportStatementScreen } from "@/features/accounts";
 
 export default function ImportRoute() {
   return <ImportStatementScreen />;

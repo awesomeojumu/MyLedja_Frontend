@@ -1,1 +1,1 @@
-export { AccountsScreen as Screen018 } from "./AccountsScreen";
+export { AccountsScreen as Screen018 } from "@/features/accounts/screens/AccountsScreen";

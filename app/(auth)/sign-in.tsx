@@ -1,7 +1,7 @@
 import { Redirect, useRouter } from "expo-router";
-import { afterSignIn, AUTH_ROUTES, SignInScreen } from "../../src/features/auth-onboarding";
-import { UnverifiedEmailError } from "../../src/lib/session-core";
-import { useSession } from "../../src/state";
+import { afterSignIn, AUTH_ROUTES, SignInScreen } from "@/features/auth-onboarding";
+import { UnverifiedEmailError } from "@/lib/session-core";
+import { useSession } from "@/state";
 
 export default function SignInRoute() {
   const router = useRouter();

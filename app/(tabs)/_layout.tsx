@@ -1,14 +1,14 @@
 import { Redirect, Tabs, usePathname, useRouter } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
-import { BottomNav, Button, NAV, NavRail, Sidebar, Toast, useTheme, type Destination } from "../../src/design";
+import { BottomNav, Button, NAV, NavRail, Sidebar, Toast, useTheme, type Destination } from "@/design";
 import {
   DashboardOverlayHost,
   DashboardOverlayProvider,
-} from "../../src/features/dashboard";
-import { AddTransactionSheet } from "../../src/features/transactions";
-import { activeFromPath, navMode, phoneBarDestinations } from "../../src/lib";
-import { UserScope, useSession } from "../../src/state";
+} from "@/features/dashboard";
+import { AddTransactionSheet } from "@/features/transactions";
+import { activeFromPath, navMode, phoneBarDestinations } from "@/lib";
+import { UserScope, useSession } from "@/state";
 
 const HREFS: Record<Destination, "/(tabs)" | "/(tabs)/transactions" | "/(tabs)/plan" | "/(tabs)/accounts" | "/(tabs)/more"> = {
   home: "/(tabs)",

@@ -1,4 +1,4 @@
-import type { Theme } from "../design/theme";
+import type { Theme } from "@/design/theme";
 
 export type NavMode = "bottom" | "rail" | "side";
 export type WidthClass = Theme["widthClass"];

@@ -8,8 +8,8 @@ import {
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ThemeProvider } from "../src/design";
-import { SchemeProvider, SessionProvider, useScheme } from "../src/state";
+import { ThemeProvider } from "@/design";
+import { SchemeProvider, SessionProvider, useScheme } from "@/state";
 
 export const unstable_settings = {
   initialRouteName: "(auth)",

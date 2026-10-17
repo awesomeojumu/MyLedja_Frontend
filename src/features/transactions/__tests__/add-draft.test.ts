@@ -1,4 +1,4 @@
-import { draftIssues, quickExpenseDraft, savedMessage, saveLabel, type AddDraft } from "../services/add-draft";
+import { draftIssues, quickExpenseDraft, savedMessage, saveLabel, type AddDraft } from "@/features/transactions/services/add-draft";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
@@ -32,6 +32,9 @@ assert(blank.some((issue) => issue.field === "category"), "A blank category is r
 
 const transfer = draftIssues({ ...ready, kind: "transfer", category: "", amount: "1000" });
 assertEqual(transfer.length, 0);
+
+const mismatch = draftIssues({ ...ready, category: "Salary" });
+assert(mismatch.some((issue) => issue.field === "category"), "Salary is not an expense category");
 
 const zero = draftIssues({ ...ready, amount: "0" });
 assert(zero.some((issue) => issue.field === "amount"), "Zero is not an amount");

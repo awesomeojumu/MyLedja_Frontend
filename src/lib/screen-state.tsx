@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { View } from "react-native";
-import { Banner, EmptyState, SegmentedControl, Skeleton, useTheme } from "../design";
-import { SCREEN_PREVIEW_OPTIONS, type ScreenPreview } from "./screen-preview";
+import { Banner, EmptyState, SegmentedControl, Skeleton, useTheme } from "@/design";
+import { SCREEN_PREVIEW_OPTIONS, type ScreenPreview } from "@/lib/screen-preview";
 
-export type { ScreenPreview } from "./screen-preview";
-export { SCREEN_PREVIEW_OPTIONS } from "./screen-preview";
+export type { ScreenPreview } from "@/lib/screen-preview";
+export { SCREEN_PREVIEW_OPTIONS } from "@/lib/screen-preview";
 
 export function useScreenPreview(initial: ScreenPreview = "ready"): [ScreenPreview, (value: ScreenPreview) => void] {
   return useState<ScreenPreview>(initial);

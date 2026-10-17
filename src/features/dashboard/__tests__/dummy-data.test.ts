@@ -1,4 +1,4 @@
-import { formatMoney } from "../../../design/format";
+import { formatMoney } from "@/design/format";
 import {
   CASH_FLOW,
   DASHBOARD_GOALS,
@@ -9,7 +9,7 @@ import {
   UPCOMING,
   cashFlowForPeriod,
   searchDashboard,
-} from "../dummy-data";
+} from "@/features/dashboard/dummy-data";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);

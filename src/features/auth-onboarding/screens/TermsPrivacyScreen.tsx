@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { Button, Icon, Sheet, Txt, useTheme } from "../../../design";
-import { TERMS_POINTS } from "../auth-copy";
-import { AuthShell } from "../components/AuthShell";
-import { CheckboxRow } from "../components/CheckboxRow";
-import { canAgreeToTerms } from "../services/auth-flow";
+import { Button, Icon, Sheet, Txt, useTheme } from "@/design";
+import { TERMS_POINTS } from "@/features/auth-onboarding/auth-copy";
+import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
+import { CheckboxRow } from "@/features/auth-onboarding/components/CheckboxRow";
+import { canAgreeToTerms } from "@/features/auth-onboarding/services/auth-flow";
 
 export function TermsPrivacyScreen({ onBack, onSubmit }: { onBack: () => void; onSubmit: () => void }) {
   const t = useTheme();

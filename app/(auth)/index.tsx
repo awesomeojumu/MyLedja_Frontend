@@ -1,6 +1,6 @@
 import { Redirect, useRouter } from "expo-router";
-import { AUTH_ROUTES, WelcomeScreen } from "../../src/features/auth-onboarding";
-import { useSession } from "../../src/state";
+import { AUTH_ROUTES, WelcomeScreen } from "@/features/auth-onboarding";
+import { useSession } from "@/state";
 
 export default function WelcomeRoute() {
   const router = useRouter();

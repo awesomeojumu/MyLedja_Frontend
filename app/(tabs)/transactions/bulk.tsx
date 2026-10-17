@@ -1,4 +1,4 @@
-import { BulkActionsScreen } from "../../../src/features/transactions";
+import { BulkActionsScreen } from "@/features/transactions";
 
 export default function BulkRoute() {
   return <BulkActionsScreen />;

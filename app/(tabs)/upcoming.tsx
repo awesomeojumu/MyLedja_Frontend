@@ -1,4 +1,4 @@
-import { UpcomingScreen } from "../../src/features/dashboard";
+import { UpcomingScreen } from "@/features/dashboard";
 
 export default function UpcomingRoute() {
   return <UpcomingScreen />;

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { Button, Icon, TextField, Txt, useTheme } from "../../../design";
-import type { IconName } from "../../../design";
-import { AuthShell } from "../components/AuthShell";
-import { workspaceSelectable, type WorkspaceKind } from "../services/auth-flow";
+import { Button, Icon, TextField, Txt, useTheme } from "@/design";
+import type { IconName } from "@/design";
+import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
+import { workspaceSelectable, type WorkspaceKind } from "@/features/auth-onboarding/services/auth-flow";
 
 const OPTIONS: { kind: WorkspaceKind; title: string; body: string; icon: IconName }[] = [
   { kind: "personal", title: "Personal", body: "Just you. Your own money, private.", icon: "house" },

@@ -1,4 +1,4 @@
-import type { ImportBucket, ImportRow, LedgerAccount } from "./types/account";
+import type { ImportBucket, ImportRow, LedgerAccount } from "@/features/accounts/types/account";
 
 export const ACCOUNTS: LedgerAccount[] = [
   {

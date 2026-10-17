@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
-import { useTheme } from "../design";
-import { paneSplits, sideColumnWidth } from "./pane-split";
+import { useTheme } from "@/design";
+import { paneSplits, sideColumnWidth } from "@/lib/pane-split";
 
 export function WidePane({
   sidebar,

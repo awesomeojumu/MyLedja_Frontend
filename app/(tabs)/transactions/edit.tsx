@@ -1,4 +1,4 @@
-import { EditTransactionScreen } from "../../../src/features/transactions";
+import { EditTransactionScreen } from "@/features/transactions";
 
 export default function EditTransactionRoute() {
   return <EditTransactionScreen />;

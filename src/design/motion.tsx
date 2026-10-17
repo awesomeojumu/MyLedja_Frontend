@@ -1,12 +1,12 @@
 /* Shared motion: springy press, rise-in on arrival, rolling numbers. Transform and opacity only. Native driver on phones; JS driver on web. */
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, PressableProps, StyleProp, ViewStyle } from 'react-native';
-import { useTheme } from './theme';
-import { spring as springs } from './tokens';
-import { haptic, HapticMoment } from './haptics';
-import { shouldSkipRise } from './motion-policy';
+import { useTheme } from "@/design/theme";
+import { spring as springs } from "@/design/tokens";
+import { haptic, HapticMoment } from "@/design/haptics";
+import { shouldSkipRise } from "@/design/motion-policy";
 
-export { shouldSkipRise } from './motion-policy';
+export { shouldSkipRise } from "@/design/motion-policy";
 
 export function nativeDriver(): boolean {
   return Platform.OS !== 'web';

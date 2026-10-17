@@ -1,4 +1,4 @@
-import type { AccountDraft, TransferDraft } from "../types/account";
+import type { AccountDraft, TransferDraft } from "@/features/accounts/types/account";
 
 export interface DraftIssue {
   field: string;

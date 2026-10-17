@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Modal, Platform, Pressable, View } from "react-native";
-import { Icon, Txt, useBackToClose, useTheme } from "../../../design";
-import { QUICK_ADD_TILES, type QuickAddTile } from "../dummy-data";
+import { Icon, Txt, useBackToClose, useTheme } from "@/design";
+import { QUICK_ADD_TILES, type QuickAddTile } from "@/features/dashboard/dummy-data";
 
 export function QuickAddOverlay({
   open,

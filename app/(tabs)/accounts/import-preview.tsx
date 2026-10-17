@@ -1,4 +1,4 @@
-import { PreviewImportScreen } from "../../../src/features/accounts";
+import { PreviewImportScreen } from "@/features/accounts";
 
 export default function ImportPreviewRoute() {
   return <PreviewImportScreen />;

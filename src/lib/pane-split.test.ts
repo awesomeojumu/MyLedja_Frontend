@@ -1,4 +1,4 @@
-import { paneSplits, sideColumnWidth } from "./pane-split";
+import { paneSplits, sideColumnWidth } from "@/lib/pane-split";
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
   if (actual !== expected) throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);

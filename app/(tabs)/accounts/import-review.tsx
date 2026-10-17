@@ -1,4 +1,4 @@
-import { ReviewImportScreen } from "../../../src/features/accounts";
+import { ReviewImportScreen } from "@/features/accounts";
 
 export default function ImportReviewRoute() {
   return <ReviewImportScreen />;

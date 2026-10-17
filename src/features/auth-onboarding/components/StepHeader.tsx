@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
-import { IconButton, Txt, useTheme } from "../../../design";
+import { IconButton, Txt, useTheme } from "@/design";
 
 export function StepHeader({
   label,

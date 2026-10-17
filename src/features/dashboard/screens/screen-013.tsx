@@ -1,1 +1,1 @@
-export { NetWorthScreen as Screen013 } from "./NetWorthScreen";
+export { NetWorthScreen as Screen013 } from "@/features/dashboard/screens/NetWorthScreen";

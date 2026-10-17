@@ -1,9 +1,9 @@
 import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { Card, Icon, Txt, useTheme } from "../../../design";
-import { WidePane } from "../../../lib";
-import { AccountScreenShell } from "../components/AccountScreenShell";
-import { ACCOUNT_TYPES } from "../dummy-data";
+import { Card, Icon, Txt, useTheme } from "@/design";
+import { WidePane } from "@/lib";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { ACCOUNT_TYPES } from "@/features/accounts/dummy-data";
 
 export function AccountTypeScreen() {
   const t = useTheme();

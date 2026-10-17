@@ -1,8 +1,8 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { readPublicConfig } from "../lib/config";
-import { navMode } from "../lib";
+import { readPublicConfig } from "@/lib/config";
+import { navMode } from "@/lib";
 import {
   Amount,
   AmountDisplay,
@@ -62,7 +62,7 @@ import {
   useBackToClose,
   useTheme,
   type IconName,
-} from "../design";
+} from "@/design";
 
 const PERIODS = [
   { value: "week", label: "Week" },

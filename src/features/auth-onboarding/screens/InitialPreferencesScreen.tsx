@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { Button, SegmentedControl, Select, Txt, useTheme } from "../../../design";
-import { AuthShell } from "../components/AuthShell";
+import { Button, SegmentedControl, Select, Txt, useTheme } from "@/design";
+import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
 
-export function InitialPreferencesScreen({ onBack, onSubmit }: { onBack?: () => void; onSubmit: () => void }) {
+export function InitialPreferencesScreen({
+  onBack,
+  onSubmit,
+}: {
+  onBack?: () => void;
+  onSubmit: (currency: string) => void;
+}) {
   const t = useTheme();
   const [currency, setCurrency] = useState("NGN");
   const [locale, setLocale] = useState("en-NG");
@@ -20,7 +26,7 @@ export function InitialPreferencesScreen({ onBack, onSubmit }: { onBack?: () => 
       title="How money should look"
       subtitle="Change these any time in Settings."
       footer={
-        <Button fullWidth size="lg" onPress={onSubmit}>
+        <Button fullWidth size="lg" onPress={() => onSubmit(currency)}>
           Continue
         </Button>
       }

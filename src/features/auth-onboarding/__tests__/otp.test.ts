@@ -1,4 +1,4 @@
-import { appendDigit, deleteDigit, isComplete, OTP_LENGTH } from "../otp";
+import { appendDigit, deleteDigit, isComplete, OTP_LENGTH } from "@/features/auth-onboarding/otp";
 
 function assertEqual<T>(actual: T, expected: T): void {
   if (actual !== expected) {

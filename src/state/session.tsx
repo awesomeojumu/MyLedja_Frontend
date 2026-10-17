@@ -1,9 +1,9 @@
 import Constants from "expo-constants";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { createApiClient } from "../api/client";
-import { readPublicConfig, resolveApiUrl } from "../lib/config";
-import { secureTokenStore } from "../lib/secure-token-store";
-import { SessionCore, type SessionState } from "../lib/session-core";
+import { createApiClient } from "@/api/client";
+import { readPublicConfig, resolveApiUrl } from "@/lib/config";
+import { secureTokenStore } from "@/lib/secure-token-store";
+import { SessionCore, type SessionState } from "@/lib/session-core";
 
 const SessionContext = createContext<SessionCore | null>(null);
 

@@ -1,1 +1,1 @@
-export { ImportStatementScreen as MatchColumnsScreen } from "./ImportStatementScreen";
+export { ImportStatementScreen as MatchColumnsScreen } from "@/features/accounts/screens/ImportStatementScreen";

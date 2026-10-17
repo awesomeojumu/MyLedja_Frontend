@@ -18,10 +18,10 @@ import {
   TransactionRow,
   Txt,
   useTheme,
-} from "../../../design";
-import { twoColumn } from "../../../lib";
-import { HOME_DUMMY } from "../dummy-data";
-import { useDashboardOverlays } from "../overlay-context";
+} from "@/design";
+import { twoColumn } from "@/lib";
+import { HOME_DUMMY } from "@/features/dashboard/dummy-data";
+import { useDashboardOverlays } from "@/features/dashboard/overlay-context";
 
 const PERIODS = [
   { value: "week", label: "Week" },

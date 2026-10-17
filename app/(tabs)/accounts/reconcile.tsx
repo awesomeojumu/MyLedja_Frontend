@@ -1,4 +1,4 @@
-import { ReconcileScreen } from "../../../src/features/accounts";
+import { ReconcileScreen } from "@/features/accounts";
 
 export default function ReconcileRoute() {
   return <ReconcileScreen />;

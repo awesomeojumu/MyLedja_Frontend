@@ -1,1 +1,1 @@
-export { BulkActionsScreen as RecurringScreen } from "./BulkActionsScreen";
+export { BulkActionsScreen as RecurringScreen } from "@/features/transactions/screens/BulkActionsScreen";

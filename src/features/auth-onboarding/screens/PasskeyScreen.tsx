@@ -1,7 +1,7 @@
 import { View } from "react-native";
-import { Button, Icon, Txt, useTheme } from "../../../design";
-import { PASSKEY_POINTS } from "../auth-copy";
-import { AuthShell } from "../components/AuthShell";
+import { Button, Icon, Txt, useTheme } from "@/design";
+import { PASSKEY_POINTS } from "@/features/auth-onboarding/auth-copy";
+import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
 
 export function PasskeyScreen({ onContinue }: { onContinue: () => void }) {
   const t = useTheme();

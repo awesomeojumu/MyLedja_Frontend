@@ -1,9 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Button, SegmentedControl, TextField, Toast } from "../../../design";
-import { WidePane } from "../../../lib";
-import { CatScreen } from "../components/CatScreen";
-import { categoryById } from "../dummy-data";
+import { Button, SegmentedControl, TextField, Toast } from "@/design";
+import { WidePane } from "@/lib";
+import { CatScreen } from "@/features/categories-merchants/components/CatScreen";
+import { categoryById } from "@/features/categories-merchants/dummy-data";
 
 const KINDS = [
   { value: "expense", label: "Expense" },

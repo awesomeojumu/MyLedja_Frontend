@@ -2,12 +2,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, BackHandler, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View, ViewStyle, StyleProp } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../theme';
-import { nativeDriver, Rise } from '../motion';
-import { spring } from '../tokens';
-import { IconName } from '../icons';
-import { Icon, toneSoft, Tone, Txt } from './foundations';
-import { Button, IconButton } from './actions';
+import { useTheme } from "@/design/theme";
+import { nativeDriver, Rise } from "@/design/motion";
+import { spring } from "@/design/tokens";
+import { IconName } from "@/design/icons";
+import { Icon, toneSoft, Tone, Txt } from "@/design/components/foundations";
+import { Button, IconButton } from "@/design/components/actions";
 
 export interface CardProps { title?: string; action?: React.ReactNode; flat?: boolean; style?: StyleProp<ViewStyle>; delay?: number; children?: React.ReactNode }
 export function Card({ title, action, flat, style, delay = 0, children }: CardProps) {
