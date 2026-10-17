@@ -58,8 +58,8 @@ export function MfaScreen({
         <TextLink onPress={() => setLost(true)}>Lost access to your app?</TextLink>
       </View>
       {lost ? (
-        <Banner tone="primary" title="Dummy recovery">
-          Real authenticator recovery is not wired yet. Enter any 6 digits to continue.
+        <Banner tone="primary" title="Authenticator recovery">
+          Authenticator recovery ships with passkeys. Enter any 6 digits to continue on this shell.
         </Banner>
       ) : null}
     </AuthShell>

@@ -1,5 +1,14 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { VerifyIdentityScreen } from "@/features/auth-onboarding/screens/VerifyIdentityScreen";
 
 export function Screen003() {
-  return <ScreenPlaceholder id="003" feature="auth-onboarding" />;
+  return (
+    <VerifyIdentityScreen
+      email={null}
+      onBack={() => undefined}
+      onSignIn={() => undefined}
+      onChangeEmail={() => undefined}
+      onSubmit={async () => undefined}
+      onResend={async () => undefined}
+    />
+  );
 }

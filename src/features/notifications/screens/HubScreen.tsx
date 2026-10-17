@@ -1,6 +1,5 @@
-import { FeatureHub } from "@/lib/feature-hub";
-import { FEATURE_SCREENS } from "@/lib/screen-catalog";
+import { GatedCopy } from "@/lib/gated-copy";
 
 export function HubScreen({ onBack }: { onBack?: () => void } = {}) {
-  return <FeatureHub title="Notifications" ids={FEATURE_SCREENS["notifications"]} onBack={onBack} />;
+  return <GatedCopy title="Notifications" onBack={onBack} />;
 }

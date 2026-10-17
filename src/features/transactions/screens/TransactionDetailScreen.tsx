@@ -1,77 +1,55 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import { View } from "react-native";
-import { Button, Dialog, EmptyState, TransactionDetail, detailActions } from "@/design";
-import { WidePane } from "@/lib";
+import { useCallback } from "react";
+import { useLocalSearchParams } from "expo-router";
+import { TransactionDetail, Txt, useTheme } from "@/design";
 import { TxScreen } from "@/features/transactions/components/TxScreen";
-import { transactionById } from "@/features/transactions/dummy-data";
+import { nairaAmount, rowKind, toLedgerAccount, type ApiAccount, type ApiTransaction } from "@/lib/money-map";
+import { useLiveQuery } from "@/lib/use-live-query";
+import { useSession } from "@/state";
+
+const EMPTY = { txns: [] as ApiTransaction[], names: new Map<string, string>() };
 
 export function TransactionDetailScreen() {
-  const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const row = transactionById(String(id ?? ""));
-  const [voidOpen, setVoidOpen] = useState(false);
-  if (!row) {
-    return (
-      <TxScreen title="Transaction details" emptyTitle="This record is not on this workspace">
-        <EmptyState title="This record is not on this workspace" icon="inbox" action={{ label: "See transactions", onPress: () => router.replace("/(tabs)/transactions") }} />
-      </TxScreen>
-    );
-  }
+  const t = useTheme();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { session } = useSession();
+  const load = useCallback(
+    async (workspaceId: string) => {
+      const [txRes, accountsRes] = await Promise.all([
+        session.listTransactions(workspaceId),
+        session.listAccounts(workspaceId),
+      ]);
+      const names = new Map(
+        (Array.isArray(accountsRes.data) ? accountsRes.data : []).map((row) => {
+          const account = toLedgerAccount(row as ApiAccount);
+          return [account.id, account.name] as const;
+        }),
+      );
+      return { txns: (txRes.data.transactions ?? []).filter((row) => row.id), names };
+    },
+    [session],
+  );
+  const { data } = useLiveQuery(load, EMPTY, "transaction-detail");
+  const row = data.txns.find((item) => item.id === id);
+
   return (
-    <TxScreen
-      title={row.title}
-      emptyTitle="This record is not on this workspace"
-      errorTitle="Could not load this record"
-      footer={
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          {detailActions({
-            onEdit: () => router.push(`/(tabs)/transactions/edit?id=${row.id}`),
-            onDelete: () => setVoidOpen(true),
-          })}
-        </View>
-      }
-    >
-      <WidePane tablet
-        sidebar={
-          <TransactionDetail
-            transaction={{
-              title: row.title,
-              category: row.category,
-              amount: row.amount,
-              kind: row.kind,
-              account: row.account,
-              date: row.time,
-              status: row.status ?? "synced",
-            }}
-          />
-        }
-      >
-        <Button variant="secondary" icon="receipt" onPress={() => router.push(`/(tabs)/transactions/receipt?id=${row.id}`)}>
-          Receipt
-        </Button>
-        {row.kind === "expense" ? (
-          <Button variant="tertiary" onPress={() => router.push(`/(tabs)/transactions/refund?id=${row.id}`)}>
-            Record a refund
-          </Button>
-        ) : null}
-        <Button variant="tertiary" onPress={() => router.push("/(tabs)/transactions/split")}>
-          Split
-        </Button>
-      </WidePane>
-      <Dialog
-        title="Void this record?"
-        open={voidOpen}
-        tone="destructive"
-        confirmLabel="Void"
-        onClose={() => setVoidOpen(false)}
-        onConfirm={() => {
-          setVoidOpen(false);
-          router.replace("/(tabs)/transactions");
-        }}
-      >
-        Voiding keeps the history. It does not delete the money movement from the ledger story.
-      </Dialog>
+    <TxScreen title="Transaction" showBack>
+      {!row ? (
+        <Txt variant="body" color={t.c.inkMuted}>
+          Transaction not in this workspace
+        </Txt>
+      ) : (
+        <TransactionDetail
+          transaction={{
+            title: row.description || "Transaction",
+            category: row.type,
+            amount: nairaAmount(row.amount),
+            kind: rowKind(row.type),
+            account: data.names.get(String(row.accountId)) ?? "",
+            date: row.status,
+            status: row.status === "pending" ? "pending" : undefined,
+          }}
+        />
+      )}
     </TxScreen>
   );
 }

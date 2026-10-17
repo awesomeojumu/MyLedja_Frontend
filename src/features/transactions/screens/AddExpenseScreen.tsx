@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/api/client";
-import { AmountInput, Banner, Button, CategoryPicker, Dialog, EXPENSE_CATEGORIES, INCOME_CATEGORIES, TextField, Toast } from "@/design";
+import { AmountInput, Banner, Button, CategoryPicker, Dialog, EXPENSE_CATEGORIES, INCOME_CATEGORIES, TextField, Toast, Txt } from "@/design";
 import { WidePane } from "@/lib";
+import { afterMoneyWrite } from "@/lib/after-money";
 import { newId } from "@/lib/ids";
 import { useSession } from "@/state";
 import { persistExpense, drainOnce } from "@/sync/outbox";
@@ -40,6 +41,7 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
   const postDraft = () => {
     if (!user || !workspaceId || !accountId) {
       setToast("Add an account first.");
+      router.push("/(tabs)/accounts/add");
       return;
     }
     const operationId = newId();
@@ -68,6 +70,7 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
     void drainOnce(store, user.userId, async (body, opId) => {
       try {
         await session.createTransaction(workspaceId, { ...(body as object), operationId: opId });
+        afterMoneyWrite();
         return true;
       } catch (caught) {
         if (caught instanceof ApiError && caught.status === 0) return false;
@@ -93,6 +96,9 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
       errorTitle="Could not save"
       footer={<Button fullWidth onPress={save}>{kind === "income" ? "Save income" : extras ? "Save changes" : "Save expense"}</Button>}
     >
+      <Txt variant="titleMd" accessibilityRole="header">
+        {kind === "income" ? "Add income" : "Add expense"}
+      </Txt>
       <WidePane
         sidebar={
           extras ? (

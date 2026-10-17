@@ -1,125 +1,112 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { View } from "react-native";
-import {
-  Amount,
-  Banner,
-  Button,
-  Card,
-  Dialog,
-  EmptyState,
-  HeroBalance,
-  SectionHeader,
-  TransactionRow,
-  Txt,
-  useTheme,
-} from "@/design";
-import { WidePane } from "@/lib";
-import { useSession } from "@/state";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Badge, Button, EmptyState, HeroBalance, SectionHeader, TransactionRow, Txt, useTheme } from "@/design";
+import { AccountManageSheet } from "@/features/accounts/components/AccountManageSheet";
 import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
-import { ACCOUNT_ACTIVITY, accountById, kindLabel } from "@/features/accounts/dummy-data";
+import { nairaAmount, rowKind, toLedgerAccount, type ApiAccount, type ApiTransaction } from "@/lib/money-map";
+import { useLiveQuery } from "@/lib/use-live-query";
+import { useSession } from "@/state";
+
+const EMPTY = { accounts: [] as ReturnType<typeof toLedgerAccount>[], txns: [] as ApiTransaction[] };
+
+function kindLabel(kind: string): string {
+  return kind ? kind.charAt(0).toUpperCase() + kind.slice(1) : "Account";
+}
 
 export function AccountScreen() {
   const t = useTheme();
   const router = useRouter();
-  const { session, workspaces } = useSession();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const account = accountById(String(id ?? ""));
-  const [hidden, setHidden] = useState(false);
-  const [blocked, setBlocked] = useState(false);
-
-  if (!account) {
-    return (
-      <AccountScreenShell title="Account details" emptyTitle="This account is not on this workspace" errorTitle="Could not load this account">
-        <EmptyState title="This account is not on this workspace" icon="wallet" action={{ label: "See accounts", onPress: () => router.replace("/(tabs)/accounts") }} />
-      </AccountScreenShell>
-    );
-  }
-
-  const activity = ACCOUNT_ACTIVITY[account.id] ?? [];
-  const meta = [kindLabel(account.kind), account.institution, account.lastFour ? `•••• ${account.lastFour}` : null].filter(Boolean).join(" · ");
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { session } = useSession();
+  const load = useCallback(
+    async (workspaceId: string) => {
+      const [accountsRes, txRes] = await Promise.all([
+        session.listAccounts(workspaceId),
+        session.listTransactions(workspaceId),
+      ]);
+      const accounts = (Array.isArray(accountsRes.data) ? accountsRes.data : []).map((row) =>
+        toLedgerAccount(row as ApiAccount),
+      );
+      const txns = (txRes.data.transactions ?? []).filter((row) => row.id);
+      return { accounts, txns };
+    },
+    [session],
+  );
+  const { data } = useLiveQuery(load, EMPTY, id ? `account:${id}` : "account");
+  const [manage, setManage] = useState(false);
+  const account = data.accounts.find((row) => row.id === id);
+  const names = new Map(data.accounts.map((row) => [row.id, row.name]));
+  const activity = data.txns.filter((row) => row.accountId === id || row.toAccountId === id);
 
   return (
     <AccountScreenShell
-      title={account.name}
-      emptyTitle="No activity yet"
-      errorTitle="Could not load this account"
-      actions={[
-        { icon: "pencil", label: "Edit account", onPress: () => router.push(`/(tabs)/accounts/edit?id=${account.id}`) },
-        { icon: "ellipsis", label: "More", onPress: () => setBlocked(true) },
-      ]}
+      title={account?.name ?? "Account"}
+      showBack
+      actions={
+        account ? [{ icon: "ellipsis", label: "Manage", onPress: () => setManage(true) }] : undefined
+      }
     >
-      <WidePane tablet
-        sidebar={
-          <HeroBalance
-          label={meta}
-          value={account.balance}
-          currency={account.currency}
-          hidden={hidden}
-          onToggleHidden={() => setHidden((prev) => !prev)}
-          actions={[
-            { label: "Transfer", icon: "arrow-left-right", onPress: () => router.push(`/(tabs)/accounts/transfer?from=${account.id}`) },
-            { label: "Reconcile", icon: "circle-check", onPress: () => router.push(`/(tabs)/accounts/reconcile?id=${account.id}`) },
-          ]}
-        />
-        }
-      >
-        {account.reconciled ? (
-          <Banner tone="positive" title="Reconciled">
-            Last matched on {account.lastActivity}.
-          </Banner>
-        ) : (
-          <Banner tone="warning" title="Not reconciled yet">
-            Import a statement or enter the bank’s closing balance.
-          </Banner>
-        )}
-        <Card flat>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: t.space.space2 }}>
-            <Txt variant="bodySm" color={t.c.inkMuted}>
-              Opening balance
-            </Txt>
-            <Amount value={account.kind === "cash" ? account.balance : 400000} currency={account.currency} hidden={hidden} />
+      {!account && data.accounts.length > 0 ? (
+        <Txt variant="body" color={t.c.inkMuted}>
+          Account not in this workspace
+        </Txt>
+      ) : !account ? null : (
+        <>
+          <HeroBalance value={account.balance} label="Balance" freshness={account.institution || undefined} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Badge tone="primary" icon="wallet">
+              {kindLabel(account.kind)}
+            </Badge>
+            {account.institution ? (
+              <Badge tone="neutral" icon={false}>
+                {account.institution}
+              </Badge>
+            ) : null}
           </View>
-          <Txt variant="caption" color={t.c.inkMuted}>
-            Opening balances are not income.
-          </Txt>
-        </Card>
-        <SectionHeader title="Activity" action={{ label: "History", onPress: () => router.push("/(tabs)/accounts/history") }} />
-        <View style={{ borderRadius: t.radius.radiusLg, overflow: "hidden", borderWidth: 1, borderColor: t.c.borderStrong }}>
-          {activity.map((row) => (
-            <TransactionRow
-              key={row.id}
-              title={row.title}
-              category={row.category}
-              account={account.name}
-              amount={row.amount}
-              kind={row.kind}
-              time={row.when}
-              hidden={hidden}
-            />
-          ))}
-        </View>
-        <Button variant="secondary" icon="receipt" onPress={() => router.push(`/(tabs)/accounts/institution?id=${account.id}`)}>
-          Import statement
-        </Button>
-        <Button variant="tertiary" onPress={() => router.push(`/(tabs)/accounts/archived`)}>
-          Archived accounts
-        </Button>
-      </WidePane>
-      <Dialog
-        title="Delete is blocked"
-        open={blocked}
-        confirmLabel="Archive instead"
-        onClose={() => setBlocked(false)}
-        onConfirm={() => {
-          setBlocked(false);
-          const workspaceId = workspaces[0]?.id;
-          if (workspaceId) void session.archiveAccount(workspaceId, account.id);
-          router.push("/(tabs)/accounts/archived");
-        }}
-      >
-        {`We keep ${account.name} because it has transactions. Archive it so it leaves the list.`}
-      </Dialog>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Button fullWidth onPress={() => router.push("/(tabs)/accounts/transfer")}>
+                Transfer
+              </Button>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button fullWidth variant="secondary" onPress={() => router.push("/(tabs)/transactions/chooser")}>
+                Add
+              </Button>
+            </View>
+          </View>
+          <SectionHeader title="Activity" />
+          {activity.length === 0 ? (
+            <EmptyState title="Nothing here yet" icon="inbox">
+              Add a transfer or expense and it will show on this account.
+            </EmptyState>
+          ) : (
+            <View
+              style={{
+                borderRadius: t.radius.radiusLg,
+                overflow: "hidden",
+                borderWidth: 1,
+                borderColor: t.c.borderStrong,
+                backgroundColor: t.c.surface,
+              }}
+            >
+              {activity.map((row) => (
+                <TransactionRow
+                  key={String(row.id)}
+                  title={row.description || "Transaction"}
+                  category={row.type}
+                  account={names.get(String(row.accountId)) ?? ""}
+                  amount={nairaAmount(row.amount)}
+                  kind={rowKind(row.type)}
+                  onPress={() => router.push(`/(tabs)/transactions/${row.id}`)}
+                />
+              ))}
+            </View>
+          )}
+          <AccountManageSheet key={account.id} account={account} open={manage} onClose={() => setManage(false)} />
+        </>
+      )}
     </AccountScreenShell>
   );
 }

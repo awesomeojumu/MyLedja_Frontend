@@ -1,9 +1,5 @@
-import { useLocalSearchParams } from "expo-router";
-import { transactionById } from "@/features/transactions/dummy-data";
-import { AddExpenseScreen } from "@/features/transactions/screens/AddExpenseScreen";
+import { TxLiveScreen } from "@/features/transactions/screens/tx-live";
 
 export function EditTransactionScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const row = transactionById(String(id ?? ""));
-  return <AddExpenseScreen kind={row?.kind === "income" ? "income" : "expense"} extras />;
+  return <TxLiveScreen title="Edit transaction" empty="No transaction to edit" />;
 }

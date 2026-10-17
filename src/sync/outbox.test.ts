@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertRowUser, sqlitePathForUser } from "@/database/sqlite-partition";
-import { fileOutbox } from "@/sync/outbox-file";
+import { sqliteOutbox } from "@/sync/outbox-sqlite-fs";
 import { drainOnce, pendingBadge, persistExpense } from "@/sync/outbox";
 
 function assert(condition: boolean, message: string): void {
@@ -21,26 +21,26 @@ try {
 const dir = mkdtempSync(join(tmpdir(), "myledja-outbox-"));
 mkdirSync(dir, { recursive: true });
 
-const first = fileOutbox("user-a", dir);
-persistExpense(first, {
-  operationId: "op-1",
-  userId: "user-a",
-  workspaceId: "ws",
-  entityType: "transaction",
-  entityId: "tx-1",
-  operationType: "create",
-  payload: { amount: "10.00" },
-  syncStatus: "saved_on_device",
-  attemptCount: 0,
-});
-assert(first.list("user-a").length === 1, "survives in the store after save");
-assert(first.list("user-b").length === 0, "user B cannot see user A");
-assert(pendingBadge("saved_on_device"), "badge until ack");
+async function run(): Promise<void> {
+  const first = await sqliteOutbox("user-a", dir);
+  persistExpense(first, {
+    operationId: "op-1",
+    userId: "user-a",
+    workspaceId: "ws",
+    entityType: "transaction",
+    entityId: "tx-1",
+    operationType: "create",
+    payload: { amount: "10.00" },
+    syncStatus: "saved_on_device",
+    attemptCount: 0,
+  });
+  assert(first.list("user-a").length === 1, "survives in sqlite after save");
+  assert(first.list("user-b").length === 0, "user B cannot see user A");
+  assert(pendingBadge("saved_on_device"), "badge until ack");
 
-const afterKill = fileOutbox("user-a", dir);
-assert(afterKill.list("user-a").length === 1, "survives process kill via the same file");
+  const afterKill = await sqliteOutbox("user-a", dir);
+  assert(afterKill.list("user-a").length === 1, "survives process kill via the same db file");
 
-async function runDrain(): Promise<void> {
   let posts = 0;
   const sent = await drainOnce(afterKill, "user-a", async () => {
     posts += 1;
@@ -54,7 +54,7 @@ async function runDrain(): Promise<void> {
   assert(again === 0 && posts === 1, "second drain sends nothing");
   assert(!pendingBadge(afterKill.list("user-a")[0]?.syncStatus ?? "saved_on_device"), "badge clears after ack");
   rmSync(dir, { recursive: true, force: true });
-  console.log("outbox: TC-10 once, badge, partition, kill");
+  console.log("outbox: TC-10 once, badge, SQLite partition, kill");
 }
 
-void runDrain();
+void run();

@@ -61,7 +61,7 @@ export function NavRail({ active = 'home', onNavigate, fab }: NavRailProps) {
           <Icon name={fab.icon ?? 'plus'} size={22} color={t.c.onPrimary} />
         </SpringPressable>
       ) : null}
-      {NAV.map(([id, label, icon]) => {
+      {NAV.filter(([id]) => id !== "more").map(([id, label, icon]) => {
         const on = id === active;
         return (
           <Pressable key={id} onPress={() => onNavigate?.(id)} accessibilityRole="tab" accessibilityState={{ selected: on }} style={{ alignItems: 'center', gap: 4, width: '100%' }}>

@@ -13,6 +13,7 @@ export interface LedgerAccount {
   institution: string;
   currency: "NGN";
   balance: number;
+  opening: number;
   lastFour?: string;
   reconciled: boolean;
   lastActivity: string;

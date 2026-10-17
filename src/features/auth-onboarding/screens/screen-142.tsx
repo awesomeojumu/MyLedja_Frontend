@@ -1,5 +1,11 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { MfaScreen } from "@/features/auth-onboarding/screens/MfaScreen";
 
 export function Screen142() {
-  return <ScreenPlaceholder id="142" feature="auth-onboarding" />;
+  return (
+    <MfaScreen
+      onBack={() => undefined}
+      onSubmit={() => undefined}
+      onCreateAccount={() => undefined}
+    />
+  );
 }

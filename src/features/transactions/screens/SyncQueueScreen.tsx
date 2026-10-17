@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { View } from "react-native";
-import { Banner, Button, Dialog, TransactionRow, useTheme } from "@/design";
+import { Banner, Button, Dialog, TransactionRow, Txt, useTheme } from "@/design";
 import { WidePane } from "@/lib";
 import { useSession } from "@/state";
 import { pendingBadge } from "@/sync/outbox";
@@ -57,7 +57,7 @@ export function SyncQueueScreen() {
         onClose={() => setSignOut(false)}
         onConfirm={() => setSignOut(false)}
       >
-        Sign out will keep these on this phone until they sync.
+        <Txt color={t.c.inkMuted}>Sign out will keep these on this phone until they sync.</Txt>
       </Dialog>
     </TxScreen>
   );

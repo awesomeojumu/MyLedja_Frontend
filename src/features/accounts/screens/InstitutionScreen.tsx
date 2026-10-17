@@ -1,35 +1,24 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
-import { Card, Icon, Txt, useTheme } from "@/design";
-import { WidePane } from "@/lib";
+import { useCallback } from "react";
 import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
-import { INSTITUTIONS } from "@/features/accounts/dummy-data";
+import { WorkspaceLiveList } from "@/lib/workspace-live-list";
+import { useSession } from "@/state";
 
 export function InstitutionScreen() {
-  const t = useTheme();
-  const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { session } = useSession();
+  const load = useCallback(
+    async (workspaceId: string) => {
+      const res = await session.listAccounts(workspaceId);
+      const rows = Array.isArray(res.data) ? res.data : [];
+      return rows.map((row) => {
+        const rec = row as { id?: string; name?: string; institution?: string };
+        return { id: String(rec.id ?? ""), name: rec.institution ?? rec.name };
+      });
+    },
+    [session],
+  );
   return (
-    <AccountScreenShell title="Select financial institution" emptyTitle="No banks yet" errorTitle="Could not load institutions">
-      <WidePane>
-      {INSTITUTIONS.map((item) => (
-        <Pressable
-          key={item.id}
-          onPress={() => router.push(`/(tabs)/accounts/connection?id=${id ?? "gtbank"}&institution=${item.id}`)}
-          accessibilityRole="button"
-          accessibilityLabel={item.name}
-        >
-          <Card>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <Txt variant="titleSm" style={{ flex: 1 }}>
-                {item.name}
-              </Txt>
-              <Icon name="chevron-right" size={18} color={t.c.inkMuted} />
-            </View>
-          </Card>
-        </Pressable>
-      ))}
-      </WidePane>
+    <AccountScreenShell title="Institution" showBack>
+      <WorkspaceLiveList load={load} empty="No linked institutions" />
     </AccountScreenShell>
   );
 }

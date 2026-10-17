@@ -54,15 +54,25 @@ export function TextField({ label, helper, error, icon, placeholder, value, defa
 /** Inline amount field for tables and filters. The add form uses the bigger AmountDisplay. */
 export function AmountInput({ label, value, onChange, currency = 'NGN', error, helper }: { label?: string; value: string; onChange: (v: string) => void; currency?: string; error?: string; helper?: string }) {
   const t = useTheme();
-  const shown = value ? value.split('.')[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (value.includes('.') ? '.' + value.split('.')[1] : '') : '';
   return (
     <FieldShell label={label} helper={helper} error={error}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 56, paddingHorizontal: 12, borderRadius: t.radius.radiusMd, borderWidth: 1, borderColor: error ? t.c.danger : t.c.borderStrong, backgroundColor: t.c.surface }}>
         <Txt variant="amountLg" color={t.c.inkMuted}>₦</Txt>
-        <TextInput value={shown} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={t.c.inkMuted} accessibilityLabel={label ?? `Amount in ${currency}`}
-          onChangeText={(s) => { const raw = s.replace(/[^0-9.]/g, ''); const [w, ...k] = raw.split('.'); onChange(w + (k.length ? '.' + k.join('').slice(0, 2) : '')); }}
-          style={[t.text('amountLg'), { flex: 1, minWidth: 0, color: t.c.ink }, hideBrowserOutline]} />
-        <Txt variant="caption" color={t.c.inkMuted} style={{ fontWeight: '600' }}>{currency}</Txt>
+        <TextInput
+          value={value}
+          keyboardType="decimal-pad"
+          inputMode="decimal"
+          placeholder="0.00"
+          placeholderTextColor={t.c.inkMuted}
+          accessibilityLabel={label ?? `Amount in ${currency}`}
+          onChangeText={(s) => {
+            const raw = s.replace(/[^0-9.]/g, "");
+            const dot = raw.indexOf(".");
+            onChange(dot === -1 ? raw : `${raw.slice(0, dot)}.${raw.slice(dot + 1).replace(/\./g, "").slice(0, 2)}`);
+          }}
+          style={[t.text("amountLg"), { flex: 1, minWidth: 0, color: t.c.ink }, hideBrowserOutline]}
+        />
+        <Txt variant="caption" color={t.c.inkMuted} style={{ fontWeight: "600" }}>{currency}</Txt>
       </View>
     </FieldShell>
   );

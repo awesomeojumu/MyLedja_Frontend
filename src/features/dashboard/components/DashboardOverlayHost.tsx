@@ -5,10 +5,12 @@ import { useDashboardOverlays } from "@/features/dashboard/overlay-context";
 export function DashboardOverlayHost({
   onExpense,
   onIncome,
+  onTransfer,
   onComingLater,
 }: {
   onExpense: () => void;
   onIncome: () => void;
+  onTransfer: () => void;
   onComingLater: (message: string) => void;
 }) {
   const { overlay, close } = useDashboardOverlays();
@@ -25,6 +27,10 @@ export function DashboardOverlayHost({
           }
           if (id === "income") {
             onIncome();
+            return;
+          }
+          if (id === "transfer") {
+            onTransfer();
             return;
           }
           onComingLater("Coming in that feature");

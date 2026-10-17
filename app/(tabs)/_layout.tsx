@@ -2,12 +2,14 @@ import { Redirect, Tabs, usePathname, useRouter } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 import { BottomNav, Button, NAV, NavRail, Sidebar, Toast, useTheme, type Destination } from "@/design";
+import { AUTH_ROUTES } from "@/features/auth-onboarding";
 import {
   DashboardOverlayHost,
   DashboardOverlayProvider,
 } from "@/features/dashboard";
 import { AddTransactionSheet } from "@/features/transactions";
-import { activeFromPath, navMode, phoneBarDestinations } from "@/lib";
+import { activeFromPath, isTabRoot, navMode, phoneBarDestinations } from "@/lib";
+import { isWarmed } from "@/lib/session-warmup";
 import { UserScope, useSession } from "@/state";
 
 const HREFS: Record<Destination, "/(tabs)" | "/(tabs)/transactions" | "/(tabs)/plan" | "/(tabs)/accounts" | "/(tabs)/more"> = {
@@ -22,6 +24,7 @@ export default function TabsLayout() {
   const { status } = useSession();
   if (status === "loading") return null;
   if (status !== "signedIn") return <Redirect href="/(auth)" />;
+  if (!isWarmed()) return <Redirect href={AUTH_ROUTES.splash} />;
   return (
     <UserScope>
       <DashboardOverlayProvider>
@@ -45,6 +48,7 @@ function TabsLayoutInner() {
   const phoneIds = new Set<string>(phoneBarDestinations());
   const go = (id: string) => {
     const href = HREFS[id as Destination] ?? HREFS.home;
+    if (id === active && isTabRoot(pathname, id as Destination)) return;
     router.replace(href);
   };
   const openSheet = (kind: "expense" | "income") => {
@@ -109,6 +113,7 @@ function TabsLayoutInner() {
       <DashboardOverlayHost
         onExpense={() => openSheet("expense")}
         onIncome={() => openSheet("income")}
+        onTransfer={() => router.push("/(tabs)/accounts/transfer")}
         onComingLater={(message) => setToast(message)}
       />
       <AddTransactionSheet

@@ -1,48 +1,46 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Banner, Button, Card, Select, Txt, useTheme } from "@/design";
-import { WidePane } from "@/lib";
+import { Banner, Button, TextField, Txt } from "@/design";
 import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
-import { ACCOUNTS, IMPORT_REVIEW, accountById } from "@/features/accounts/dummy-data";
+import { useSession } from "@/state";
+
+const SAMPLE = `posted_at,narration,amount,type
+2026-10-02,SHOPRITE,25.00,expense`;
 
 export function ImportStatementScreen() {
-  const t = useTheme();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const options = ACCOUNTS.map((account) => ({ value: account.id, label: account.name }));
-  const initial = id && ACCOUNTS.some((account) => account.id === id) ? id : IMPORT_REVIEW.accountId;
-  const [accountId, setAccountId] = useState(initial);
-  const account = accountById(accountId);
+  const { session, workspaces } = useSession();
+  const [text, setText] = useState(SAMPLE);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <AccountScreenShell
       title="Import bank statement"
-      demo
       emptyTitle="No statement yet"
-      emptyBody="Choose a CSV from your bank or wallet, then preview every row."
       errorTitle="Could not read this statement"
-      errorBody="The file could not be opened. Try another CSV."
       footer={
-        <Button fullWidth onPress={() => router.push(`/(tabs)/accounts/import-review?id=${accountId}`)}>
-          Use {IMPORT_REVIEW.fileName}
+        <Button
+          fullWidth
+          loading={busy}
+          onPress={() => {
+            const workspaceId = workspaces[0]?.id;
+            if (!workspaceId) return;
+            setBusy(true);
+            void session
+              .previewImport(workspaceId, text)
+              .then((res) => router.push(`/(tabs)/accounts/import-review?importId=${res.data.importId}`))
+              .catch((err: Error) => setError(err.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          Preview
         </Button>
       }
     >
-      <WidePane
-        sidebar={
-          <Banner tone="primary" title="CSV first">
-            Preview every row before it is recorded. Duplicates stay skipped.
-          </Banner>
-        }
-      >
-      <Select label="Account" options={options} value={accountId} onChange={setAccountId} />
-      <Card title="Ready file">
-        <Txt variant="titleSm">{IMPORT_REVIEW.fileName}</Txt>
-        <Txt variant="bodySm" color={t.c.inkMuted}>
-          Dummy September statement for {account?.name ?? "this account"}.
-        </Txt>
-      </Card>
-      </WidePane>
+      <Banner tone="primary" title="CSV first">Preview every row before it is recorded.</Banner>
+      {error ? <Txt variant="body">{error}</Txt> : null}
+      <TextField label="CSV" value={text} onChangeText={setText} />
     </AccountScreenShell>
   );
 }

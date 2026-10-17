@@ -314,7 +314,7 @@ export function DesignCatalog({
               <StatTile label="In" value={450000} kind="income" icon="arrow-up-right" />
               <StatTile label="Moved" value={20000} kind="transfer" icon="arrow-left-right" />
             </View>
-            <StatTile label="Accounts" count={4} kind="neutral" icon="wallet" note="Dummy" />
+            <StatTile label="Accounts" count={4} kind="neutral" icon="wallet" note="Preview" />
             <ProgressBar label="Transport" value={18000} max={20000} money />
             <ProgressRing value={18000} max={20000} label="Transport" />
             <View style={{ flexDirection: "row", gap: t.space.space3 }}>
@@ -420,7 +420,7 @@ export function DesignCatalog({
         onClose={closeSheet}
         footer={<>{detailActions({ onEdit: closeSheet, onDelete: closeSheet })}</>}
       >
-        <Txt>Dummy sheet so every surface is wired.</Txt>
+        <Txt>Preview sheet so every surface is wired.</Txt>
       </Sheet>
       <Dialog
         title="Delete this transaction?"

@@ -12,7 +12,7 @@ assertEqual(navMode("medium"), "rail");
 assertEqual(navMode("expanded"), "rail");
 assertEqual(navMode("large"), "side");
 
-assertEqual(phoneBarDestinations().join(","), "home,transactions,plan,accounts,more");
+assertEqual(phoneBarDestinations().join(","), "home,transactions,plan,accounts");
 
 assertEqual(twoColumn("compact"), false);
 assertEqual(twoColumn("medium"), false);

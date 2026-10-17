@@ -1,5 +1,5 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { CreateWorkspaceScreen } from "@/features/auth-onboarding/screens/CreateWorkspaceScreen";
 
 export function Screen009() {
-  return <ScreenPlaceholder id="009" feature="auth-onboarding" />;
+  return <CreateWorkspaceScreen onBack={() => undefined} onSubmit={() => undefined} />;
 }

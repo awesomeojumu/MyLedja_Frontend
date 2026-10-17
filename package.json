@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "lint": "expo lint -- --max-warnings=0",
     "typecheck": "node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit",
-    "test": "tsx src/lib/config.test.ts && tsx src/lib/session-core.test.ts && tsx src/lib/tab-route.test.ts && tsx src/lib/nav-mode.test.ts && tsx src/lib/pane-split.test.ts && tsx src/lib/screen-catalog.test.ts && tsx src/lib/screen-state.test.ts && tsx src/lib/myl-008-screens.test.ts && tsx src/design/contrast.test.ts && tsx src/features/auth-onboarding/__tests__/auth-flow.test.ts && tsx src/features/auth-onboarding/__tests__/otp.test.ts && tsx src/features/auth-onboarding/__tests__/setup-progress.test.ts && tsx src/features/auth-onboarding/__tests__/setup-journey.test.ts && tsx src/sync/outbox.test.ts && tsx src/features/dashboard/__tests__/dummy-data.test.ts && tsx src/features/accounts/__tests__/dummy-data.test.ts && tsx src/features/transactions/__tests__/add-draft.test.ts && tsx src/features/transactions/__tests__/dummy-data.test.ts && tsx src/features/categories-merchants/__tests__/dummy-data.test.ts && tsx src/features/boundaries.test.ts",
+    "test": "tsx src/lib/config.test.ts && tsx src/lib/session-core.test.ts && tsx src/lib/session-isolation.test.ts && tsx src/lib/tab-route.test.ts && tsx src/lib/nav-mode.test.ts && tsx src/lib/pane-split.test.ts && tsx src/lib/screen-catalog.test.ts && tsx src/lib/screen-state.test.ts && tsx src/lib/myl-008-screens.test.ts && tsx src/lib/plan-screens.test.ts && tsx src/lib/plan-wiring.test.ts && tsx src/lib/lock-copy.test.ts && tsx src/lib/loading-zero.test.ts && tsx src/lib/a11y-journeys.test.ts && tsx src/lib/page-ready.test.ts && tsx src/lib/banned-words.test.ts && tsx src/lib/money-map.test.ts && tsx src/design/contrast.test.ts && tsx src/features/auth-onboarding/__tests__/auth-flow.test.ts && tsx src/features/auth-onboarding/__tests__/otp.test.ts && tsx src/features/auth-onboarding/__tests__/setup-progress.test.ts && tsx src/features/auth-onboarding/__tests__/setup-journey.test.ts && tsx src/sync/outbox.test.ts && tsx src/features/dashboard/__tests__/range-cache.test.ts && tsx src/features/transactions/__tests__/add-draft.test.ts && tsx src/features/boundaries.test.ts",
     "build": "expo export --platform web --output-dir dist",
     "apptest": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
@@ -24,6 +24,7 @@
     "expo-linking": "~57.0.13",
     "expo-router": "~57.0.28",
     "expo-secure-store": "~57.0.4",
+    "expo-sqlite": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "lucide-react-native": "^0.460.0",
@@ -34,7 +35,8 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
-    "react-native-web": "^0.21.4"
+    "react-native-web": "^0.21.4",
+    "sql.js": "^1.15.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

@@ -1,5 +1,5 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { SettingsLiveScreen } from "@/lib/settings-live-screen";
 
 export function Screen119() {
-  return <ScreenPlaceholder id="119" feature="notifications" />;
+  return <SettingsLiveScreen id="119" />;
 }

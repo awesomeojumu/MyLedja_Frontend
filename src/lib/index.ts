@@ -1,6 +1,6 @@
 export { readPublicConfig } from "@/lib/config";
 export type { PublicConfig } from "@/lib/config";
-export { activeFromPath } from "@/lib/tab-route";
+export { activeFromPath, isTabRoot } from "@/lib/tab-route";
 export { isPortrait, navMode, phoneBarDestinations, splitLayout, twoColumn } from "@/lib/nav-mode";
 export type { NavMode, WidthClass } from "@/lib/nav-mode";
 export { allScreenIds, FEATURE_SCREENS, FEATURE_FOLDERS } from "@/lib/screen-catalog";

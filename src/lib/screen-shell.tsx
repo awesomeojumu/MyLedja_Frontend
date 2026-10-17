@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "expo-router";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { EmptyState, IconButton, maxWidth, Txt, useTheme, type IconName } from "@/design";
-import { ScreenStateGate, ScreenStateSwitch, useScreenPreview } from "@/lib/screen-state";
+import { IconButton, maxWidth, Txt, useTheme, type IconName } from "@/design";
 
 export function ScreenShell({
   title,
@@ -40,7 +39,11 @@ export function ScreenShell({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   void demo;
-  const [state, setState] = useScreenPreview();
+  void emptyTitle;
+  void emptyBody;
+  void emptyAction;
+  void errorTitle;
+  void errorBody;
   const goBack =
     onBack ??
     (() => {
@@ -70,23 +73,9 @@ export function ScreenShell({
             <IconButton key={action.label} icon={action.icon} label={action.label} onPress={action.onPress} />
           ))}
         </View>
-        <ScreenStateSwitch value={state} onChange={setState} />
-        <ScreenStateGate
-          state={state}
-          errorTitle={errorTitle}
-          errorBody={errorBody}
-          empty={
-            emptyTitle ? (
-              <EmptyState title={emptyTitle} icon="inbox" action={emptyAction}>
-                {emptyBody}
-              </EmptyState>
-            ) : undefined
-          }
-        >
-          {children}
-        </ScreenStateGate>
+        {children}
       </ScrollView>
-      {footer && state !== "loading" && state !== "error" && state !== "empty" ? (
+      {footer ? (
         <View
           style={{
             paddingHorizontal: t.space.space5,

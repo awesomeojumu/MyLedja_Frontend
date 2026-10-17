@@ -1,5 +1,6 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { GatedScreen } from "@/lib/feature-screen";
 
 export function Screen099() {
-  return <ScreenPlaceholder id="099" feature="investments" />;
+  return <GatedScreen id="099" />;
 }
+

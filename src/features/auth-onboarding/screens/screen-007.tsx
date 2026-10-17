@@ -1,5 +1,5 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { TermsPrivacyScreen } from "@/features/auth-onboarding/screens/TermsPrivacyScreen";
 
 export function Screen007() {
-  return <ScreenPlaceholder id="007" feature="auth-onboarding" />;
+  return <TermsPrivacyScreen onBack={() => undefined} onSubmit={() => undefined} />;
 }

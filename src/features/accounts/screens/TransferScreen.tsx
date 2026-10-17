@@ -1,55 +1,50 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { View } from "react-native";
-import { ApiError } from "@/api/client";
-import { AmountInput, Banner, Button, Select, Toast } from "@/design";
-import { formatMoney } from "@/design/format";
-import { WidePane } from "@/lib";
+import { useRouter } from "expo-router";
+import { AmountInput, Button, SegmentedControl, Toast } from "@/design";
+import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { afterMoneyWrite } from "@/lib/after-money";
 import { newId } from "@/lib/ids";
 import { useSession } from "@/state";
-import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
-import { ACCOUNTS } from "@/features/accounts/dummy-data";
-import { savedTransferMessage, transferDraftIssues } from "@/features/accounts/services/account-draft";
+
+type AccountRow = { id: string; name: string };
 
 export function TransferScreen() {
   const router = useRouter();
   const { session, workspaces } = useSession();
-  const { from } = useLocalSearchParams<{ from?: string }>();
-  const [remote, setRemote] = useState<{ id: string; name: string }[]>([]);
-  const fallback = ACCOUNTS.filter((account) => !account.archived && account.group !== "liability").map((account) => ({
-    value: account.id,
-    label: account.name,
-  }));
-  const options = remote.length > 0 ? remote.map((account) => ({ value: account.id, label: account.name })) : fallback;
-  const [fromId, setFromId] = useState(from && options.some((option) => option.value === from) ? from : options[0]?.value);
-  const [toId, setToId] = useState(options.find((option) => option.value !== fromId)?.value ?? options[1]?.value);
-  const [amount, setAmount] = useState("");
-  const [error, setError] = useState<string | undefined>();
+  const [accounts, setAccounts] = useState<AccountRow[]>([]);
+  const [fromId, setFromId] = useState("");
+  const [toId, setToId] = useState("");
+  const [amount, setAmount] = useState("0.00");
+  const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const workspaceId = workspaces[0]?.id;
 
   useEffect(() => {
+    const workspaceId = workspaces[0]?.id;
     if (!workspaceId) return;
     void session.listAccounts(workspaceId).then((res) => {
-      setRemote(
-        (res.data as { id: string; name: string; archivedAt?: string | null }[])
-          .filter((row) => !row.archivedAt)
-          .map((row) => ({ id: row.id, name: row.name })),
-      );
+      const rows = (Array.isArray(res.data) ? res.data : []).map((row) => {
+        const rec = row as { id?: string; name?: string };
+        return { id: String(rec.id ?? ""), name: String(rec.name ?? rec.id) };
+      });
+      setAccounts(rows);
+      if (rows[0]) setFromId(rows[0].id);
+      if (rows[1]) setToId(rows[1].id);
     });
-  }, [session, workspaceId]);
+  }, [session, workspaces]);
+
+  const options = accounts.map((row) => ({ value: row.id, label: row.name }));
 
   const save = () => {
-    const issues = transferDraftIssues({ fromId: fromId ?? "", toId: toId ?? "", amount });
-    if (issues.length > 0) {
-      setError(issues[0]?.message);
-      return;
-    }
+    const workspaceId = workspaces[0]?.id;
     if (!workspaceId || !fromId || !toId) {
-      setError("Add two accounts first.");
+      setToast("Add two accounts before you transfer.");
       return;
     }
-    setError(undefined);
+    if (fromId === toId) {
+      setToast("Pick two different accounts.");
+      return;
+    }
+    setBusy(true);
     void session
       .createTransaction(workspaceId, {
         operationId: newId(),
@@ -60,42 +55,35 @@ export function TransferScreen() {
         description: "Transfer",
         status: "posted",
       })
-      .then(() => setToast(savedTransferMessage(formatMoney(Number(amount), "NGN"))))
-      .catch((caught) => {
-        setError(caught instanceof ApiError ? caught.message : "Could not move this money.");
-      });
+      .then(() => {
+        afterMoneyWrite();
+        setToast("Transfer posted.");
+      })
+      .catch((err: Error) => setToast(err.message))
+      .finally(() => setBusy(false));
   };
 
   return (
     <AccountScreenShell
-      title="Create transfer"
-      emptyTitle="Only one account"
-      emptyBody="Add another account before you can move money."
-      emptyAction={{ label: "Add account", icon: "plus", onPress: () => router.push("/(tabs)/accounts/types") }}
-      errorTitle="Could not move this money"
-      footer={<Button fullWidth onPress={save}>Move money</Button>}
+      title="Transfer"
+      showBack
+      footer={<Button fullWidth loading={busy} onPress={save}>Save transfer</Button>}
     >
-      <WidePane
-        sidebar={
-          <Banner tone="primary" title="Neither income nor expense">
-            Money moved between your own accounts is a transfer.
-          </Banner>
-        }
-      >
-        <Select label="From" options={options} value={fromId} onChange={setFromId} />
-        <Select label="To" options={options} value={toId} onChange={setToId} error={error} />
-        <AmountInput label="Amount" value={amount} onChange={setAmount} />
-      </WidePane>
+      {options.length >= 1 ? (
+        <SegmentedControl label="From" options={options} value={fromId} onChange={setFromId} />
+      ) : null}
+      {options.length >= 2 ? (
+        <SegmentedControl label="To" options={options} value={toId} onChange={setToId} />
+      ) : null}
+      <AmountInput label="Amount" value={amount} onChange={setAmount} />
       {toast ? (
-        <View>
-          <Toast
-            message={toast}
-            onClose={() => {
-              setToast(null);
-              router.back();
-            }}
-          />
-        </View>
+        <Toast
+          message={toast}
+          onClose={() => {
+            setToast(null);
+            if (toast === "Transfer posted.") router.back();
+          }}
+        />
       ) : null}
     </AccountScreenShell>
   );

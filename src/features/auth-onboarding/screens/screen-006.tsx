@@ -1,5 +1,12 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { RecoveryResetScreen } from "@/features/auth-onboarding/screens/RecoveryResetScreen";
 
 export function Screen006() {
-  return <ScreenPlaceholder id="006" feature="auth-onboarding" />;
+  return (
+    <RecoveryResetScreen
+      email={null}
+      onBack={() => undefined}
+      onSubmit={async () => undefined}
+      onCreateAccount={() => undefined}
+    />
+  );
 }

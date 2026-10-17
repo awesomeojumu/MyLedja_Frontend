@@ -8,7 +8,7 @@ const SchemeContext = createContext<{
 }>({ scheme: undefined, setScheme: () => undefined });
 
 export function SchemeProvider({ children }: { children: ReactNode }) {
-  const [scheme, setScheme] = useState<Scheme>();
+  const [scheme, setScheme] = useState<Scheme>("light");
   const value = useMemo(() => ({ scheme, setScheme }), [scheme]);
   return <SchemeContext.Provider value={value}>{children}</SchemeContext.Provider>;
 }

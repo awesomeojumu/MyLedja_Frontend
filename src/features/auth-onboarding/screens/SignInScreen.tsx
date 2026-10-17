@@ -40,35 +40,6 @@ export function SignInScreen({
       topRight={createAccount}
       title="Welcome back"
       subtitle="Sign in to pick up where you left off."
-      footer={
-        <View style={{ gap: t.space.space4 }}>
-          <Button
-            fullWidth
-            size="lg"
-            loading={busy}
-            disabled={!ready}
-            onPress={() =>
-              run(async () => {
-                rememberSignup("", identifier);
-                await onSubmit({ email: identifier, password });
-              })
-            }
-          >
-            Sign in
-          </Button>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space3 }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: t.c.border }} />
-            <Txt variant="caption" color={t.c.inkMuted}>
-              or
-            </Txt>
-            <View style={{ flex: 1, height: 1, backgroundColor: t.c.border }} />
-          </View>
-          <Button fullWidth size="lg" variant="secondary" icon="shield-check" onPress={() => setPasskeyNotice(true)}>
-            Sign in with a passkey
-          </Button>
-          {compact ? createAccount : null}
-        </View>
-      }
     >
       {error ? <Banner tone="danger" title={error} /> : null}
       {passkeyNotice ? (
@@ -76,6 +47,7 @@ export function SignInScreen({
           Sign in with your email and password for now.
         </Banner>
       ) : null}
+      <View accessibilityLabel="Sign in">
       <TextField label="Email address" value={identifier} onChangeText={setIdentifier} autoCapitalize="none" keyboardType="email-address" />
       <View style={{ gap: 6 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
@@ -83,6 +55,34 @@ export function SignInScreen({
           <TextLink onPress={onForgot}>Forgot password?</TextLink>
         </View>
         <TextField placeholder="Password" value={password} onChangeText={setPassword} autoCapitalize="none" secureTextEntry />
+      </View>
+      <View style={{ gap: t.space.space4 }}>
+        <Button
+          fullWidth
+          size="lg"
+          loading={busy}
+          disabled={!ready}
+          onPress={() =>
+            run(async () => {
+              rememberSignup("", identifier);
+              await onSubmit({ email: identifier, password });
+            })
+          }
+        >
+          Sign in
+        </Button>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space3 }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: t.c.border }} />
+          <Txt variant="caption" color={t.c.inkMuted}>
+            or
+          </Txt>
+          <View style={{ flex: 1, height: 1, backgroundColor: t.c.border }} />
+        </View>
+        <Button fullWidth size="lg" variant="secondary" icon="shield-check" onPress={() => setPasskeyNotice(true)}>
+          Sign in with a passkey
+        </Button>
+        {compact ? createAccount : null}
+      </View>
       </View>
     </AuthShell>
   );

@@ -1,6 +1,16 @@
-import { FeatureHub } from "@/lib/feature-hub";
-import { FEATURE_SCREENS } from "@/lib/screen-catalog";
+import { PlanModuleScreen } from "@/lib/plan-module-screen";
 
 export function HubScreen({ onBack }: { onBack?: () => void } = {}) {
-  return <FeatureHub title="Goals" ids={FEATURE_SCREENS["plans-goals"]} onBack={onBack} />;
+  return (
+    <PlanModuleScreen
+      title="Goals"
+      onBack={onBack}
+      path="goals"
+      empty="No goals yet"
+      fields={[
+        { key: "name", label: "Name", value: "Emergency" },
+        { key: "target", label: "Target", value: "10000.00" },
+      ]}
+    />
+  );
 }

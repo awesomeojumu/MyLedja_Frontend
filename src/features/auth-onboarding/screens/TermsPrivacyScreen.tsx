@@ -65,7 +65,7 @@ export function TermsPrivacyScreen({ onBack, onSubmit }: { onBack: () => void; o
       </View>
       <Sheet title={doc === "privacy" ? "Privacy Policy" : "Terms of Service"} open={!!doc} onClose={() => setDoc(null)}>
         <Txt color={t.c.inkMuted}>
-          Dummy Version 1.0. Full legal copy is not in this pass. MyLedja never asks for bank logins, PINs or OTPs. You can export or delete
+          Version 1.0. Full legal copy is not in this pass. MyLedja never asks for bank logins, PINs or OTPs. You can export or delete
           your records from Settings.
         </Txt>
       </Sheet>

@@ -1,5 +1,5 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { InitialPreferencesScreen } from "@/features/auth-onboarding/screens/InitialPreferencesScreen";
 
 export function Screen008() {
-  return <ScreenPlaceholder id="008" feature="auth-onboarding" />;
+  return <InitialPreferencesScreen onBack={() => undefined} onSubmit={() => undefined} />;
 }

@@ -1,20 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, View } from "react-native";
-import { Amount, EmptyState, Icon, IconButton, TextField, Txt, useBackToClose, useTheme } from "@/design";
-import { HOME_DUMMY, searchDashboard, type SearchHit } from "@/features/dashboard/dummy-data";
-
-const GROUPS: SearchHit["group"][] = ["Transactions", "Accounts", "Goals"];
+import { EmptyState, IconButton, TextField, Txt, useBackToClose, useTheme } from "@/design";
+import { useSession } from "@/state";
 
 export function GlobalSearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useTheme();
   const compact = t.widthClass === "compact" || t.portrait;
+  const { session, workspaces, status } = useSession();
   const [query, setQuery] = useState("");
-  const hits = useMemo(() => searchDashboard(query), [query]);
+  const [hits, setHits] = useState<{ id: string; label: string }[]>([]);
   const close = useCallback(() => {
     setQuery("");
+    setHits([]);
     onClose();
   }, [onClose]);
   useBackToClose(open, close);
+
   useEffect(() => {
     if (!open || Platform.OS !== "web") return;
     const onKey = (event: { key: string }) => {
@@ -23,6 +24,17 @@ export function GlobalSearchOverlay({ open, onClose }: { open: boolean; onClose:
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, close]);
+
+  useEffect(() => {
+    if (status !== "signedIn" || !workspaces[0] || query.trim().length < 2) {
+      queueMicrotask(() => setHits([]));
+      return;
+    }
+    void session
+      .search(workspaces[0].id, query.trim())
+      .then((res) => setHits(res.data.transactions ?? []))
+      .catch(() => setHits([]));
+  }, [query, session, status, workspaces]);
 
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
@@ -36,12 +48,7 @@ export function GlobalSearchOverlay({ open, onClose }: { open: boolean; onClose:
           paddingTop: compact ? 72 : t.space.space5,
         }}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          onPress={close}
-          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-        />
+        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} />
         <View
           accessibilityViewIsModal
           style={{
@@ -63,7 +70,7 @@ export function GlobalSearchOverlay({ open, onClose }: { open: boolean; onClose:
           <TextField
             icon="search"
             label="Search"
-            placeholder="Transactions, accounts, goals"
+            placeholder="Transactions, accounts, bills, goals, debts"
             value={query}
             onChangeText={setQuery}
             returnKeyType="search"
@@ -72,55 +79,18 @@ export function GlobalSearchOverlay({ open, onClose }: { open: boolean; onClose:
           <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }} contentContainerStyle={{ gap: t.space.space4 }}>
             {hits.length === 0 ? (
               <EmptyState title="Nothing matches" icon="search">
-                Try Shoprite, GTBank, or Emergency.
+                Type at least two characters. Results come from your workspace.
               </EmptyState>
             ) : (
-              GROUPS.map((group) => {
-                const rows = hits.filter((hit) => hit.group === group);
-                if (rows.length === 0) return null;
-                return (
-                  <View key={group} style={{ gap: t.space.space2 }}>
-                    <Txt variant="caption" color={t.c.inkMuted} style={{ fontWeight: "600" }}>
-                      {group}
-                    </Txt>
-                    {rows.map((hit) => (
-                      <SearchRow key={hit.id} hit={hit} />
-                    ))}
-                  </View>
-                );
-              })
+              hits.map((hit) => (
+                <Txt key={hit.id} variant="label">
+                  {hit.label}
+                </Txt>
+              ))
             )}
           </ScrollView>
         </View>
       </View>
     </Modal>
-  );
-}
-
-function SearchRow({ hit }: { hit: SearchHit }) {
-  const t = useTheme();
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: t.space.space3,
-        minHeight: t.size.touchTarget,
-        paddingVertical: t.space.space2,
-        borderBottomWidth: 1,
-        borderBottomColor: t.c.border,
-      }}
-    >
-      <Icon name={hit.group === "Accounts" ? "landmark" : hit.group === "Goals" ? "target" : "receipt"} size={18} color={t.c.inkMuted} />
-      <View style={{ flex: 1, gap: 2 }}>
-        <Txt variant="label" style={{ fontWeight: "600" }}>
-          {hit.title}
-        </Txt>
-        <Txt variant="caption" color={t.c.inkMuted}>
-          {hit.subtitle}
-        </Txt>
-      </View>
-      {hit.amount != null ? <Amount value={hit.amount} currency={HOME_DUMMY.currency} size="sm" /> : null}
-    </View>
   );
 }

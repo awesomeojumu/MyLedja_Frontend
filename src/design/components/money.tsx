@@ -39,7 +39,7 @@ export function HeroBalance({ value, label = 'Available cash', currency, freshne
   const t = useTheme();
   const rolled = useRollingNumber(value, t.reduceMotion);
   return (
-    <Rise style={{ overflow: 'hidden', borderRadius: t.radius.radiusXl, backgroundColor: t.c.hero, padding: 20, gap: 8 }}>
+    <Rise style={{ overflow: 'hidden', borderRadius: t.radius.radiusXl, backgroundColor: t.c.hero, paddingVertical: 20, paddingHorizontal: 16, gap: 8 }}>
       <View pointerEvents="none" style={{ position: 'absolute', right: -40, top: -50, width: 160, height: 160, borderRadius: 999, backgroundColor: t.c.heroDeco }} />
       <View pointerEvents="none" style={{ position: 'absolute', right: -24, bottom: -30, width: 96, height: 96, borderRadius: 999, backgroundColor: t.c.heroDeco }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -55,10 +55,10 @@ export function HeroBalance({ value, label = 'Available cash', currency, freshne
       </Text>
       {freshness ? <Txt variant="caption" color={t.c.onHeroMuted}>{freshness}</Txt> : null}
       {actions ? (
-        <View style={{ flexDirection: 'row', marginTop: 12 }}>
+        <View style={{ flexDirection: 'row', marginTop: 6 }}>
           {actions.map((a) => (
-            <SpringPressable key={a.label} onPress={a.onPress} hapticOn="start" accessibilityRole="button" accessibilityLabel={a.label} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 48, height: 48, borderRadius: 999, backgroundColor: t.c.heroDeco, alignItems: 'center', justifyContent: 'center' }}><Icon name={a.icon} size={20} color={t.c.onHero} /></View>
+            <SpringPressable key={a.label} onPress={a.onPress} hapticOn="start" accessibilityRole="button" accessibilityLabel={a.label} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 999, backgroundColor: t.c.heroDeco, alignItems: 'center', justifyContent: 'center' }}><Icon name={a.icon} size={18} color={t.c.onHero} /></View>
               <Txt variant="caption" color={t.c.onHero} style={{ fontWeight: '500' }}>{a.label}</Txt>
             </SpringPressable>
           ))}
@@ -74,10 +74,12 @@ export function StatTile({ label, value = 0, count, kind = 'neutral', icon, note
   const bg = kind === 'spent' ? t.c.catOrangeSoft : kind === 'income' ? t.c.catGreenSoft : kind === 'transfer' ? t.c.transferSoft : t.c.surface;
   const fg = kind === 'spent' ? t.c.catOrange : kind === 'income' ? t.c.catGreen : kind === 'transfer' ? t.c.transfer : t.c.ink;
   return (
-    <Rise style={{ flex: 1, gap: 6, padding: size === 'lg' ? 20 : 14, borderRadius: size === 'lg' ? t.radius.radiusXl : t.radius.radiusLg, backgroundColor: bg, borderWidth: kind === 'neutral' ? 1 : 0, borderColor: t.c.borderStrong }}>
-      {icon ? <View style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: t.c.surface, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={18} color={fg} /></View> : null}
-      <Txt variant="label">{label}</Txt>
-      {count != null ? <Txt variant="amountLg">{String(count)}</Txt> : <Amount value={value} kind={kind === 'transfer' ? 'transfer' : 'neutral'} size={size === 'lg' ? 'xl' : 'lg'} animate={animate} hidden={hidden} />}
+    <Rise style={{ flex: 1, gap: 8, padding: size === 'lg' ? 20 : 10, borderRadius: size === 'lg' ? t.radius.radiusXl : t.radius.radiusLg, backgroundColor: bg, borderWidth: kind === 'neutral' ? 1 : 0, borderColor: t.c.borderStrong }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {icon ? <View style={{ width: 28, height: 28, borderRadius: 999, backgroundColor: t.c.surface, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={16} color={fg} /></View> : null}
+        <Txt variant="label">{label}</Txt>
+      </View>
+      {count != null ? <Txt variant="amountLg">{String(count)}</Txt> : <Amount value={value} kind={kind === 'transfer' ? 'transfer' : 'neutral'} size={size === 'lg' ? 'xl' : 'md'} animate={animate} hidden={hidden} />}
       {note ? <Txt variant="caption" color={t.c.inkMuted}>{note}</Txt> : null}
     </Rise>
   );

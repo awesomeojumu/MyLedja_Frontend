@@ -1,12 +1,9 @@
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  Banner,
-  BudgetTile,
   EmptyState,
-  formatMoney,
   HeroBalance,
   IconButton,
   maxWidth,
@@ -20,10 +17,13 @@ import {
   useTheme,
 } from "@/design";
 import { twoColumn } from "@/lib";
-import { HOME_DUMMY } from "@/features/dashboard/dummy-data";
+import { getSnapshot, putSnapshot, cacheKey, dashboardBounds, lastSnapshot, type DashboardSnapshot } from "@/features/dashboard/services/range-cache";
 import { useDashboardOverlays } from "@/features/dashboard/overlay-context";
+import { nairaAmount, rowKind, toLedgerAccount, type ApiAccount, type ApiTransaction } from "@/lib/money-map";
+import { useSession } from "@/state";
 
 const PERIODS = [
+  { value: "today", label: "Today" },
   { value: "week", label: "Week" },
   { value: "month", label: "Month" },
   { value: "year", label: "Year" },
@@ -33,24 +33,59 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { openQuickAdd, openSearch } = useDashboardOverlays();
+  const { openSearch } = useDashboardOverlays();
+  const { session, status, workspaces } = useSession();
+  const signedIn = status === "signedIn";
   const [hidden, setHidden] = useState(false);
-  const [period, setPeriod] = useState("month");
+  const [period, setPeriod] = useState("today");
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(() => lastSnapshot() ?? null);
+  const [recent, setRecent] = useState<{ row: ApiTransaction; account: string }[]>([]);
   const columns = twoColumn(t.widthClass, t.portrait);
-  const month = period === "month";
+  const workspaceId = workspaces[0]?.id;
+
+  const load = useCallback(() => {
+    if (!signedIn || !workspaceId) return;
+    const range = dashboardBounds(period);
+    const key = cacheKey(workspaceId, range.from, range.to);
+    const cached = getSnapshot(key) ?? lastSnapshot();
+    if (cached) setSnapshot(cached);
+    void session.dashboard(workspaceId, range.from, range.to).then((res) => {
+      setSnapshot(putSnapshot(key, res.data as unknown as DashboardSnapshot));
+    }).catch(() => {
+      if (!cached) setSnapshot(lastSnapshot() ?? null);
+    });
+    void Promise.all([session.listTransactions(workspaceId), session.listAccounts(workspaceId)])
+      .then(([txRes, accountsRes]) => {
+        const names = new Map(
+          (Array.isArray(accountsRes.data) ? accountsRes.data : []).map((item) => {
+            const account = toLedgerAccount(item as ApiAccount);
+            return [account.id, account.name] as const;
+          }),
+        );
+        const txns = (txRes.data.transactions ?? []).slice(-5).reverse();
+        setRecent(txns.map((row) => ({ row, account: names.get(String(row.accountId)) ?? "" })));
+      })
+      .catch(() => {
+        setRecent([]);
+      });
+  }, [signedIn, workspaceId, period, session]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  const naira = (value?: string) => Number.parseFloat(value ?? "0") || 0;
 
   const hero = (
     <Rise delay={0}>
       <HeroBalance
-        value={HOME_DUMMY.balance}
-        currency={HOME_DUMMY.currency}
-        freshness={HOME_DUMMY.freshness}
+        value={naira(snapshot?.netWorth.value)}
+        currency="NGN"
+        freshness="Live"
         hidden={hidden}
         onToggleHidden={() => setHidden((prev) => !prev)}
-        actions={HOME_DUMMY.heroActions.map((action) => ({
-          ...action,
-          onPress: openQuickAdd,
-        }))}
       />
     </Rise>
   );
@@ -58,8 +93,8 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
   const stats = (
     <Rise delay={40}>
       <View style={{ flexDirection: "row", gap: t.space.space3 }}>
-        <StatTile label="Spent" value={HOME_DUMMY.spent} kind="spent" icon="arrow-down-left" hidden={hidden} />
-        <StatTile label="In" value={HOME_DUMMY.income} kind="income" icon="arrow-up-right" hidden={hidden} />
+        <StatTile label="Spent" value={naira(snapshot?.expense.value)} kind="spent" icon="arrow-down-left" hidden={hidden} />
+        <StatTile label="In" value={naira(snapshot?.income.value)} kind="income" icon="arrow-up-right" hidden={hidden} />
       </View>
     </Rise>
   );
@@ -68,74 +103,19 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
     <Rise delay={80}>
       <View style={{ gap: t.space.space3 }}>
         <SegmentedControl label="Period" options={PERIODS} value={period} onChange={setPeriod} />
-        {month ? (
+        {snapshot ? (
           <SummaryCard
-            label="Spent this month"
-            value={HOME_DUMMY.spent}
+            label="Spent"
+            value={naira(snapshot.expense.value)}
             kind="expense"
-            delta={-4.2}
-            goodWhenUp={false}
             hidden={hidden}
-            freshness={HOME_DUMMY.freshness}
+            freshness={snapshot.expense.basis}
           />
         ) : (
           <EmptyState title="Nothing recorded for this period" icon="calendar">
-            Switch back to Month to see the dummy naira figures.
+            Add a posted expense to see this range.
           </EmptyState>
         )}
-      </View>
-    </Rise>
-  );
-
-  const upcoming = (
-    <Rise delay={100}>
-      <View style={{ gap: t.space.space3 }}>
-        <SectionHeader title="Coming up" action={{ label: "See all", onPress: () => router.push("/(tabs)/upcoming") }} />
-        <Banner tone="warning" title="Rent is due in 3 days" icon="calendar">
-          {formatMoney(250000, HOME_DUMMY.currency)} from GTBank.
-        </Banner>
-      </View>
-    </Rise>
-  );
-
-  const budgets = (
-    <Rise delay={120}>
-      <View style={{ gap: t.space.space3 }}>
-        <SectionHeader title="Budgets" meta="Dummy naira" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.space.space3 }}>
-          {HOME_DUMMY.budgets.map((budget) => (
-            <BudgetTile
-              key={budget.category}
-              category={budget.category}
-              value={budget.value}
-              max={budget.max}
-              currency={HOME_DUMMY.currency}
-            />
-          ))}
-        </ScrollView>
-      </View>
-    </Rise>
-  );
-
-  const recent = (
-    <Rise delay={160}>
-      <View style={{ gap: t.space.space3 }}>
-        <SectionHeader title="Recent" action={{ label: "See all", onPress: () => router.push("/(tabs)/cash-flow") }} />
-        <View style={{ borderRadius: t.radius.radiusLg, overflow: "hidden", borderWidth: 1, borderColor: t.c.borderStrong }}>
-          {HOME_DUMMY.recent.map((row) => (
-            <TransactionRow
-              key={`${row.title}-${row.time}`}
-              title={row.title}
-              category={row.category}
-              account={row.account}
-              amount={row.amount}
-              kind={row.kind}
-              time={row.time}
-              status={row.status}
-              hidden={hidden}
-            />
-          ))}
-        </View>
       </View>
     </Rise>
   );
@@ -166,23 +146,53 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
           <View style={{ flexDirection: "row", gap: t.space.space6, alignItems: "flex-start" }}>
             <View style={{ flex: 1, gap: t.space.space5 }}>
               {hero}
-              {month ? stats : null}
+              {stats}
               {summary}
-              {upcoming}
             </View>
             <View style={{ flex: 1, gap: t.space.space5 }}>
-              {budgets}
-              {recent}
+              <SectionHeader title="Budgets" meta={snapshot?.budgetRemaining.basis ?? "Account budgets"} />
+              <Txt variant="body">{snapshot ? `Remaining ${snapshot.budgetRemaining.value}` : "No snapshot yet."}</Txt>
+              <SectionHeader title="Recent" action={{ label: "See all", onPress: () => router.push("/(tabs)/transactions") }} />
+              {recent.map(({ row, account }) => (
+                <TransactionRow
+                  key={String(row.id)}
+                  title={row.description || "Transaction"}
+                  category={row.type}
+                  account={account}
+                  amount={nairaAmount(row.amount)}
+                  kind={rowKind(row.type)}
+                  hidden={hidden}
+                  onPress={() => router.push(`/(tabs)/transactions/${row.id}`)}
+                />
+              ))}
             </View>
           </View>
         ) : (
           <>
             {hero}
-            {month ? stats : null}
+            {stats}
             {summary}
-            {upcoming}
-            {budgets}
-            {recent}
+            <SectionHeader title="Budgets" />
+            <Txt variant="body">{snapshot ? `Remaining ${snapshot.budgetRemaining.value}` : "No snapshot yet."}</Txt>
+            <SectionHeader title="Recent" action={{ label: "See all", onPress: () => router.push("/(tabs)/transactions") }} />
+            {recent.length === 0 ? (
+              <Txt variant="body" color={t.c.inkMuted}>
+                Nothing recorded yet
+              </Txt>
+            ) : (
+              recent.map(({ row, account }) => (
+                <TransactionRow
+                  key={String(row.id)}
+                  title={row.description || "Transaction"}
+                  category={row.type}
+                  account={account}
+                  amount={nairaAmount(row.amount)}
+                  kind={rowKind(row.type)}
+                  hidden={hidden}
+                  onPress={() => router.push(`/(tabs)/transactions/${row.id}`)}
+                />
+              ))
+            )}
           </>
         )}
       </ScrollView>

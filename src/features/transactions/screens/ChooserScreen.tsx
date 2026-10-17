@@ -8,6 +8,7 @@ const CHOICES = [
   { href: "/(tabs)/transactions/add-expense", title: "Expense", body: "Money that left an account.", icon: "arrow-up-right" as const },
   { href: "/(tabs)/transactions/add-income", title: "Income", body: "Money that arrived.", icon: "arrow-down-left" as const },
   { href: "/(tabs)/accounts/transfer", title: "Transfer", body: "Between your own accounts.", icon: "arrow-left-right" as const },
+  { href: "/(tabs)/transactions/refund", title: "Refund", body: "A new refund row. Original stays posted.", icon: "undo-2" as const },
 ];
 
 export function ChooserScreen() {

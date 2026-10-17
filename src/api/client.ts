@@ -155,6 +155,33 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
       call<{ status: "ok"; data: unknown }>("DELETE", `/workspaces/${workspaceId}/accounts/${accountId}`, undefined, accessToken),
     createTransaction: (accessToken: string, workspaceId: string, body: unknown) =>
       call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/transactions`, body, accessToken),
+    listTransactions: (accessToken: string, workspaceId: string) =>
+      call<{
+        status: "ok";
+        data: {
+          transactions: {
+            id: string;
+            description?: string;
+            accountId?: string;
+            toAccountId?: string | null;
+            amount?: string;
+            type?: string;
+            status?: string;
+          }[];
+        };
+      }>(
+        "GET",
+        `/workspaces/${workspaceId}/transactions`,
+        undefined,
+        accessToken,
+      ),
+    listMerchants: (accessToken: string, workspaceId: string) =>
+      call<{ status: "ok"; data: { id: string; name: string }[] }>(
+        "GET",
+        `/workspaces/${workspaceId}/merchants`,
+        undefined,
+        accessToken,
+      ),
     listCategories: (accessToken: string, workspaceId: string) =>
       call<{ status: "ok"; data: { id: string; name: string; kind: string }[] }>(
         "GET",
@@ -178,6 +205,49 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
       ),
     patchSetup: (accessToken: string, workspaceId: string, body: unknown) =>
       call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/setup`, body, accessToken),
+    dashboard: (accessToken: string, workspaceId: string, from?: string, to?: string) =>
+      call<{ status: "ok"; data: Record<string, { value: string; basis: string }> }>(
+        "GET",
+        `/workspaces/${workspaceId}/dashboard${from && to ? `?from=${from}&to=${to}` : ""}`,
+        undefined,
+        accessToken,
+      ),
+    search: (accessToken: string, workspaceId: string, q: string) =>
+      call<{ status: "ok"; data: { transactions: { id: string; label: string }[] } }>(
+        "GET",
+        `/workspaces/${workspaceId}/search?q=${encodeURIComponent(q)}`,
+        undefined,
+        accessToken,
+      ),
+    patchSettings: (accessToken: string, hideLockScreenAmounts: boolean) =>
+      call<{ status: "ok"; data: { hideLockScreenAmounts: boolean } }>(
+        "PATCH",
+        "/me/settings",
+        { hideLockScreenAmounts },
+        accessToken,
+      ),
+    listCollection: (accessToken: string, workspaceId: string, path: string) =>
+      call<{ status: "ok"; data: { id: string }[] }>("GET", `/workspaces/${workspaceId}/${path}`, undefined, accessToken),
+    postCollection: (accessToken: string, workspaceId: string, path: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/${path}`, body, accessToken),
+    listSessions: (accessToken: string) =>
+      call<{ status: "ok"; data: { id: string }[] }>("GET", "/me/sessions", undefined, accessToken),
+    revokeSession: (accessToken: string, id: string) =>
+      call<{ status: "ok"; data: { id: string } }>("DELETE", `/me/sessions/${id}`, undefined, accessToken),
+    previewImport: (accessToken: string, workspaceId: string, text: string) =>
+      call<{ status: "ok"; data: { importId: string; accepted: unknown[]; rejected: unknown[] } }>(
+        "POST",
+        `/workspaces/${workspaceId}/imports/preview`,
+        { text },
+        accessToken,
+      ),
+    commitImport: (accessToken: string, workspaceId: string, importId: string, body: unknown) =>
+      call<{ status: "ok"; data: { ids: string[] } }>(
+        "POST",
+        `/workspaces/${workspaceId}/imports/${importId}/commit`,
+        body,
+        accessToken,
+      ),
   };
 }
 

@@ -6,7 +6,7 @@ import { useSession } from "@/state";
 export default function SignInRoute() {
   const router = useRouter();
   const { session, status } = useSession();
-  if (status === "signedIn") return <Redirect href={AUTH_ROUTES.home} />;
+  if (status === "signedIn") return <Redirect href={AUTH_ROUTES.splash} />;
   return (
     <SignInScreen
       onBack={() => router.back()}

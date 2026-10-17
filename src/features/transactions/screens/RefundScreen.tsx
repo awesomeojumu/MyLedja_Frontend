@@ -1,46 +1,104 @@
+import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
 import { AmountInput, Banner, Button, SegmentedControl, Toast } from "@/design";
-import { WidePane } from "@/lib";
 import { TxScreen } from "@/features/transactions/components/TxScreen";
-import { transactionById } from "@/features/transactions/dummy-data";
+import { afterMoneyWrite } from "@/lib/after-money";
+import { newId } from "@/lib/ids";
+import { useSession } from "@/state";
 
-const MODES = [
-  { value: "refund", label: "Refund" },
-  { value: "reversal", label: "Reversal" },
-];
+type TxRow = { id: string; accountId?: string; description?: string; amount?: string };
 
 export function RefundScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const row = transactionById(String(id ?? "shoprite")) ?? transactionById("shoprite");
-  const [amount, setAmount] = useState(row ? String(row.amount) : "");
+  const params = useLocalSearchParams<{ id?: string; accountId?: string }>();
+  const { session, workspaces } = useSession();
+  const [rows, setRows] = useState<TxRow[]>([]);
+  const [id, setId] = useState(params.id ?? "");
+  const [accountId, setAccountId] = useState(params.accountId ?? "");
+  const [amount, setAmount] = useState("0.00");
   const [toast, setToast] = useState<string | null>(null);
-  const [mode, setMode] = useState("refund");
-  const reversal = mode === "reversal";
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const workspaceId = workspaces[0]?.id;
+    if (!workspaceId) return;
+    void session.listTransactions(workspaceId).then((res) => {
+      const next = (res.data.transactions ?? []) as TxRow[];
+      setRows(next);
+      if (!id && next[0]) {
+        setId(next[0].id);
+        if (next[0].accountId) setAccountId(next[0].accountId);
+      }
+    });
+  }, [id, session, workspaces]);
+
+  const options = rows.map((row) => ({
+    value: row.id,
+    label: row.description ?? row.id,
+  }));
+
   return (
     <TxScreen
       title="Refund or reversal"
       emptyTitle="Nothing to refund"
       errorTitle="Could not record this refund"
-      footer={<Button fullWidth onPress={() => setToast(reversal ? "Reversal saved on this phone." : "Refund saved on this phone.")}>{reversal ? "Save reversal" : "Save refund"}</Button>}
+      footer={
+        <Button
+          fullWidth
+          loading={busy}
+          onPress={() => {
+            const workspaceId = workspaces[0]?.id;
+            const original = rows.find((row) => row.id === id);
+            const acct = accountId || original?.accountId;
+            if (!workspaceId || !id || !acct) {
+              setToast("Need the original transaction and account.");
+              return;
+            }
+            setBusy(true);
+            void session
+              .createTransaction(workspaceId, {
+                operationId: newId(),
+                type: "refund",
+                amount: amount.includes(".") ? amount : `${amount}.00`,
+                accountId: acct,
+                originalTransactionId: id,
+                description: "Refund",
+                status: "posted",
+              })
+              .then(() => {
+                afterMoneyWrite();
+                setToast("Refund posted. Original stays posted.");
+              })
+              .catch((err: Error) => setToast(err.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          Save refund
+        </Button>
+      }
     >
-      <WidePane
-        sidebar={
-          <Banner tone="primary" title={row?.title ?? "This record"}>
-            {reversal ? "A reversal marks this record reversed. Its effects stop counting. No second row." : "A refund is income. It does not delete the original expense."}
-          </Banner>
-        }
-      >
-        <SegmentedControl label="Kind" options={MODES} value={mode} onChange={setMode} />
-        <AmountInput label={reversal ? "Reversal amount" : "Refund amount"} value={amount} onChange={setAmount} />
-      </WidePane>
+      <Banner tone="primary" title="Refund is a new row">
+        A refund does not delete the original expense.
+      </Banner>
+      {options.length > 0 ? (
+        <SegmentedControl
+          label="Original"
+          options={options}
+          value={id}
+          onChange={(next) => {
+            setId(next);
+            const row = rows.find((item) => item.id === next);
+            if (row?.accountId) setAccountId(row.accountId);
+          }}
+        />
+      ) : null}
+      <AmountInput label="Refund amount" value={amount} onChange={setAmount} />
       {toast ? (
         <Toast
           message={toast}
           onClose={() => {
             setToast(null);
-            router.back();
+            if (toast.startsWith("Refund posted")) router.back();
           }}
         />
       ) : null}

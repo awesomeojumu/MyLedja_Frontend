@@ -1,26 +1,24 @@
-import { View } from "react-native";
-import { Card, Txt, useTheme } from "@/design";
-import { WidePane } from "@/lib";
+import { useCallback } from "react";
 import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
-import { RECONCILE_HISTORY } from "@/features/accounts/dummy-data";
+import { WorkspaceLiveList } from "@/lib/workspace-live-list";
+import { useSession } from "@/state";
 
 export function ReconciliationHistoryScreen() {
-  const t = useTheme();
+  const { session } = useSession();
+  const load = useCallback(
+    async (workspaceId: string) => {
+      const res = await session.listAccounts(workspaceId);
+      const rows = Array.isArray(res.data) ? res.data : [];
+      return rows.map((row) => {
+        const rec = row as { id?: string; name?: string };
+        return { id: String(rec.id ?? ""), name: rec.name };
+      });
+    },
+    [session],
+  );
   return (
-    <AccountScreenShell title="Reconciliation history" emptyTitle="No reconciliations yet" errorTitle="Could not load history">
-      <WidePane>
-      {RECONCILE_HISTORY.map((row) => (
-        <Card key={row.id}>
-          <Txt variant="titleSm">{row.account}</Txt>
-          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Txt variant="bodySm" color={t.c.inkMuted}>
-              {row.when}
-            </Txt>
-            <Txt variant="bodySm">{row.result}</Txt>
-          </View>
-        </Card>
-      ))}
-      </WidePane>
+    <AccountScreenShell title="Reconciliation history" showBack>
+      <WorkspaceLiveList load={load} empty="No reconciliations yet" />
     </AccountScreenShell>
   );
 }

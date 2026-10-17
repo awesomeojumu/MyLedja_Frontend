@@ -1,5 +1,5 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { SplashScreen } from "@/features/auth-onboarding/screens/SplashScreen";
 
 export function Screen141() {
-  return <ScreenPlaceholder id="141" feature="auth-onboarding" />;
+  return <SplashScreen onDone={() => undefined} />;
 }

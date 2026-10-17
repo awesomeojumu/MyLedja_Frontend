@@ -1,5 +1,11 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { SetupChecklistScreen } from "@/features/auth-onboarding/screens/SetupChecklistScreen";
 
 export function Screen010() {
-  return <ScreenPlaceholder id="010" feature="auth-onboarding" />;
+  return (
+    <SetupChecklistScreen
+      onBack={() => undefined}
+      onContinue={() => undefined}
+      onSkip={() => undefined}
+    />
+  );
 }

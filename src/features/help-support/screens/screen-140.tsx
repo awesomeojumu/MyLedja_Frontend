@@ -1,5 +1,5 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { HelpCopyScreen } from "@/lib/settings-live-screen";
 
 export function Screen140() {
-  return <ScreenPlaceholder id="140" feature="help-support" />;
+  return <HelpCopyScreen id="140" />;
 }

@@ -2,7 +2,7 @@ import { createApiClient, type FetchLike } from "@/api/client";
 import { afterChecklist } from "@/features/auth-onboarding/services/auth-flow";
 import { EMPTY_SETUP, markSetup, nextSetupStep, type SetupProgress } from "@/features/auth-onboarding/services/setup-progress";
 import { memoryTokenStore, SessionCore } from "@/lib/session-core";
-import { fileOutbox } from "@/sync/outbox-file";
+import { sqliteOutbox } from "@/sync/outbox-sqlite-fs";
 import { drainOnce, persistExpense } from "@/sync/outbox";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -96,7 +96,7 @@ async function run(): Promise<void> {
   await session.listCategories(ws);
   const dir = mkdtempSync(join(tmpdir(), "journey-"));
   mkdirSync(dir, { recursive: true });
-  const store = fileOutbox("user-a", dir);
+  const store = await sqliteOutbox("user-a", dir);
   persistExpense(store, {
     operationId: "01999999-9999-7999-8999-999999999999",
     userId: "user-a",

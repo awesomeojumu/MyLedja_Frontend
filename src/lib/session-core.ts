@@ -206,6 +206,14 @@ export class SessionCore {
     return this.authed((token) => this.api.createTransaction(token, workspaceId, body));
   }
 
+  listTransactions(workspaceId: string) {
+    return this.authed((token) => this.api.listTransactions(token, workspaceId));
+  }
+
+  listMerchants(workspaceId: string) {
+    return this.authed((token) => this.api.listMerchants(token, workspaceId));
+  }
+
   listCategories(workspaceId: string) {
     return this.authed((token) => this.api.listCategories(token, workspaceId));
   }
@@ -222,6 +230,42 @@ export class SessionCore {
     return this.authed((token) => this.api.previewRule(token, workspaceId, body));
   }
 
+  dashboard(workspaceId: string, from?: string, to?: string) {
+    return this.authed((token) => this.api.dashboard(token, workspaceId, from, to));
+  }
+
+  search(workspaceId: string, q: string) {
+    return this.authed((token) => this.api.search(token, workspaceId, q));
+  }
+
+  patchSettings(hideLockScreenAmounts: boolean) {
+    return this.authed((token) => this.api.patchSettings(token, hideLockScreenAmounts));
+  }
+
+  listCollection(workspaceId: string, path: string) {
+    return this.authed((token) => this.api.listCollection(token, workspaceId, path));
+  }
+
+  postCollection(workspaceId: string, path: string, body: unknown) {
+    return this.authed((token) => this.api.postCollection(token, workspaceId, path, body));
+  }
+
+  listSessions() {
+    return this.authed((token) => this.api.listSessions(token));
+  }
+
+  revokeSession(id: string) {
+    return this.authed((token) => this.api.revokeSession(token, id));
+  }
+
+  previewImport(workspaceId: string, text: string) {
+    return this.authed((token) => this.api.previewImport(token, workspaceId, text));
+  }
+
+  commitImport(workspaceId: string, importId: string, body: unknown) {
+    return this.authed((token) => this.api.commitImport(token, workspaceId, importId, body));
+  }
+
   private async adopt(accessToken: string, refreshToken: string): Promise<void> {
     this.accessToken = accessToken;
     await this.store.set(refreshToken);
@@ -230,6 +274,12 @@ export class SessionCore {
       this.authed((token) => this.api.workspaces(token)),
     ]);
     this.set({ status: "signedIn", user, workspaces, pendingEmail: null });
+    try {
+      const { primeUserOutbox } = await import("@/sync/user-outbox");
+      await primeUserOutbox(user.userId);
+    } catch {
+      /* SQLite engine missing in some test hosts; memory store hydrates when it can. */
+    }
   }
 
   private async wipe(): Promise<void> {

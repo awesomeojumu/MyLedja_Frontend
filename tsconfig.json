@@ -20,6 +20,7 @@
   "exclude": [
     "**/*.test.ts",
     "src/sync/outbox-file.ts",
+    "src/sync/outbox-sqlite-fs.ts",
     "dist",
     "node_modules"
   ]

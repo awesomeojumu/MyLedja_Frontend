@@ -1,5 +1,6 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { FeatureScreen } from "@/lib/feature-screen";
 
 export function Screen151() {
-  return <ScreenPlaceholder id="151" feature="debts" />;
+  return <FeatureScreen id="151" />;
 }
+

@@ -1,5 +1,5 @@
-import { ScreenPlaceholder } from "@/lib/screen-placeholder";
+import { DashboardSnapshotScreen } from "@/lib/dashboard-snapshot-screen";
 
 export function Screen113() {
-  return <ScreenPlaceholder id="113" feature="financial-health" />;
+  return <DashboardSnapshotScreen id="113" />;
 }
