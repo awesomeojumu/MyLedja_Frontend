@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { AmountInput, Button, SegmentedControl, Toast } from "@/design";
 import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
 import { afterMoneyWrite } from "@/lib/after-money";
@@ -10,6 +10,7 @@ type AccountRow = { id: string; name: string };
 
 export function TransferScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const { session, workspaces } = useSession();
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [fromId, setFromId] = useState("");
@@ -27,10 +28,11 @@ export function TransferScreen() {
         return { id: String(rec.id ?? ""), name: String(rec.name ?? rec.id) };
       });
       setAccounts(rows);
-      if (rows[0]) setFromId(rows[0].id);
-      if (rows[1]) setToId(rows[1].id);
+      if (from && rows.some((row) => row.id === from)) setFromId(from);
+      else if (rows[0]) setFromId(rows[0].id);
+      if (rows[1]) setToId(rows.find((row) => row.id !== (from || rows[0]?.id))?.id ?? rows[1].id);
     });
-  }, [session, workspaces]);
+  }, [from, session, workspaces]);
 
   const options = accounts.map((row) => ({ value: row.id, label: row.name }));
 

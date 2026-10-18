@@ -1,6 +1,7 @@
 /* MyLedja theme for React Native: follows the phone's light/dark setting, the person's font choice and reduce-motion. */
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Platform, useColorScheme, useWindowDimensions } from 'react-native';
+import { namedFontFamily, WEB_SPACE_CSS } from "@/design/font-stack";
 import { breakpoint, colors, ColorTokens, radius, size, space, spring, type, TypeStyle } from "@/design/tokens";
 
 /** Fonts people can pick in Settings → Display. 'system' costs no download. Add more only if they have tabular numerals. */
@@ -55,12 +56,21 @@ export function ThemeProvider(p: ThemeProviderProps) {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const id = 'myledja-web-focus';
-    if (document.getElementById(id)) return;
-    const style = document.createElement('style');
-    style.id = id;
-    style.textContent = 'input, textarea { outline: none; }';
-    document.head.appendChild(style);
+    let style = document.getElementById(id) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement('style');
+      style.id = id;
+      document.head.appendChild(style);
+    }
+    style.textContent = WEB_SPACE_CSS;
   }, []);
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    const next = p.scheme || (system === "dark" ? "dark" : "light");
+    document.documentElement.style.colorScheme = next;
+    document.documentElement.style.backgroundColor = colors[next].bg;
+    document.body.style.backgroundColor = colors[next].bg;
+  }, [p.scheme, system]);
   const scheme = p.scheme || (system === 'dark' ? 'dark' : 'light');
   const font = p.font || 'inter';
   const value = useMemo<Theme>(() => ({
@@ -72,9 +82,10 @@ export function ThemeProvider(p: ThemeProviderProps) {
     portrait: height > width,
     text: (style: TypeStyle) => {
       const s: any = type[style];
-      const fam = FONT_FAMILIES[font][weightKey(s.fontWeight)];
+      const fam = namedFontFamily(FONT_FAMILIES[font][weightKey(s.fontWeight)], Platform.OS === "web");
       // Custom font files carry their weight in the family name; the system font needs fontWeight.
-      return { ...s, fontFamily: fam, fontWeight: fam ? undefined : s.fontWeight, fontVariant: s.fontVariant ? [...s.fontVariant] : undefined };
+      // On web we keep fontWeight so Inter / system-ui still pick the right cut if the named face misses a glyph.
+      return { ...s, fontFamily: fam, fontWeight: fam && Platform.OS !== "web" ? undefined : s.fontWeight, fontVariant: s.fontVariant ? [...s.fontVariant] : undefined };
     },
   }), [scheme, font, reduceMotion, p.haptics, width, height]);
   return <ThemeContext.Provider value={value}>{p.children}</ThemeContext.Provider>;

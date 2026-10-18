@@ -20,7 +20,7 @@ export function StepHeader({
   if (!onBack && !label && !topRight && bars.length === 0) return null;
   return (
     <View style={{ gap: t.space.space3 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", minHeight: t.size.touchTarget, gap: t.space.space2 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", minHeight: onBack && !label && !topRight ? undefined : t.size.touchTarget, gap: t.space.space2 }}>
         {onBack ? <IconButton icon="chevron-left" label="Back" onPress={onBack} /> : null}
         {label ? (
           <Txt variant="caption" color={t.c.inkMuted} style={{ flex: 1 }}>

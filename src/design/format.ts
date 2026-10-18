@@ -47,6 +47,32 @@ export function categoryInfo(name?: string): [string, CategoryTone] {
   return (name && CATEGORIES[name]) || ['ellipsis', 'slate'];
 }
 
+/** People see 17/10/2026. Storage and APIs stay YYYY-MM-DD. */
+export function parseDateInput(value?: string | null): Date | null {
+  if (!value) return null;
+  const iso = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const next = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+    return Number.isNaN(next.getTime()) ? null : next;
+  }
+  const dmy = value.trim().match(/^(\d{1,2})[ /.-](\d{1,2})[ /.-](\d{4})$/);
+  if (dmy) {
+    const next = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+    return Number.isNaN(next.getTime()) ? null : next;
+  }
+  return null;
+}
+
+export function toIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function formatDateDMY(value?: string | Date | null): string {
+  const d = value instanceof Date ? value : parseDateInput(value ?? undefined);
+  if (!d || Number.isNaN(d.getTime())) return "";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
 export function compactNaira(n: number): string {
   const a = Math.abs(n);
   if (a >= 1e9) return '₦' + +(n / 1e9).toFixed(2) + 'bn';

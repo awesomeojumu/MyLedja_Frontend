@@ -1,6 +1,6 @@
 /* Foundations: Txt, Icon, Logo, LogoMark, CategoryIcon, Avatar, Badge, StatusBadge. */
 import React from 'react';
-import { Pressable, StyleProp, Text, TextProps, TextStyle, View } from 'react-native';
+import { Platform, Pressable, StyleProp, Text, TextProps, TextStyle, View } from 'react-native';
 import Svg, { Circle, Rect } from 'react-native-svg';
 import { ICONS, IconName } from "@/design/icons";
 import { useTheme } from "@/design/theme";
@@ -10,7 +10,18 @@ import { TypeStyle } from "@/design/tokens";
 /** Text in a type token and colour token. Every string in the app goes through this. */
 export function Txt({ variant = 'body', color, style, ...rest }: TextProps & { variant?: TypeStyle; color?: string; style?: StyleProp<TextStyle> }) {
   const t = useTheme();
-  return <Text maxFontSizeMultiplier={2} {...rest} style={[t.text(variant), { color: color ?? t.c.ink }, style]} />;
+  return (
+    <Text
+      maxFontSizeMultiplier={2}
+      {...rest}
+      style={[
+        t.text(variant),
+        { color: color ?? t.c.ink },
+        Platform.OS === "web" ? ({ whiteSpace: "pre-wrap", wordBreak: "normal" } as TextStyle) : null,
+        style,
+      ]}
+    />
+  );
 }
 
 export interface IconProps { name: IconName; size?: number; color?: string; label?: string; strokeWidth?: number }

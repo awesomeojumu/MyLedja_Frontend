@@ -1,8 +1,18 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
-import { memoryTokenStore, type TokenStore } from "@/lib/session-core";
+import { memoryTokenStore, type Identity, type TokenStore } from "@/lib/session-core";
 
 const KEY = "myledja.refreshToken";
+const IDENTITY_KEY = "myledja.session.identity";
+
+function readIdentity(): Identity | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(IDENTITY_KEY);
+    return raw ? (JSON.parse(raw) as Identity) : null;
+  } catch {
+    return null;
+  }
+}
 
 function webTokenStore(): TokenStore {
   return {
@@ -23,6 +33,15 @@ function webTokenStore(): TokenStore {
     clear: async () => {
       try {
         globalThis.localStorage?.removeItem(KEY);
+        globalThis.localStorage?.removeItem(IDENTITY_KEY);
+      } catch {
+        /* private mode */
+      }
+    },
+    getIdentity: async () => readIdentity(),
+    setIdentity: async (identity) => {
+      try {
+        globalThis.localStorage?.setItem(IDENTITY_KEY, JSON.stringify(identity));
       } catch {
         /* private mode */
       }
@@ -42,6 +61,19 @@ export function secureTokenStore(): TokenStore {
   return {
     get: () => SecureStore.getItemAsync(KEY, options),
     set: (token) => SecureStore.setItemAsync(KEY, token, options),
-    clear: () => SecureStore.deleteItemAsync(KEY, options),
+    clear: async () => {
+      await SecureStore.deleteItemAsync(KEY, options);
+      await SecureStore.deleteItemAsync(IDENTITY_KEY, options);
+    },
+    getIdentity: async () => {
+      const raw = await SecureStore.getItemAsync(IDENTITY_KEY, options);
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw) as Identity;
+      } catch {
+        return null;
+      }
+    },
+    setIdentity: (identity) => SecureStore.setItemAsync(IDENTITY_KEY, JSON.stringify(identity), options),
   };
 }

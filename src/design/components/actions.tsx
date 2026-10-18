@@ -1,7 +1,8 @@
 /* Actions: Button, IconButton, SegmentedControl, Tabs, Chip, ChipGroup, FilterButton. */
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextStyle, View } from 'react-native';
 import { useTheme } from "@/design/theme";
+import { a11yState } from "@/design/a11y";
 import { SpringPressable } from "@/design/motion";
 import { IconName } from "@/design/icons";
 import { CategoryIcon, Icon } from "@/design/components/foundations";
@@ -17,7 +18,7 @@ export interface ButtonProps {
   children?: React.ReactNode;
 }
 /** A pill button. One primary per screen. Labels are verbs. */
-export function Button({ variant = 'primary', size = 'md', icon, iconRight, loading, disabled, fullWidth, disabledReason, onPress, children }: ButtonProps) {
+export function Button({ variant = 'primary', size = 'md', icon, iconRight, loading = false, disabled, fullWidth, disabledReason, onPress, children }: ButtonProps) {
   const t = useTheme();
   const h = size === 'lg' ? t.size.controlLg : size === 'sm' ? t.size.controlSm : t.size.controlMd;
   const pal = {
@@ -31,14 +32,14 @@ export function Button({ variant = 'primary', size = 'md', icon, iconRight, load
   const button = (
     <SpringPressable
       onPress={off ? undefined : onPress} disabled={off} hapticOn={variant === 'primary' ? 'start' : undefined}
-      accessibilityRole="button" accessibilityState={{ disabled: !!off, busy: !!loading }} accessibilityHint={why}
+      accessibilityRole="button" {...a11yState({ disabled: !!off, busy: !!loading })} accessibilityHint={why}
       hitSlop={h < 44 ? (44 - h) / 2 : 0}
       hoverStyle={off ? undefined : { backgroundColor: pal.hover }}
       style={{ alignSelf: fullWidth ? 'stretch' : 'flex-start', minHeight: h, paddingHorizontal: size === 'sm' ? 12 : size === 'lg' ? 24 : 20, borderRadius: t.radius.radiusSm,
         backgroundColor: pal.bg, borderWidth: 1, borderColor: pal.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: off && !loading ? 0.5 : 1 }}
     >
       {loading ? <ActivityIndicator size="small" color={pal.fg} /> : icon ? <Icon name={icon} size={18} color={pal.fg} /> : null}
-      <Text style={[t.text('titleSm'), { color: pal.fg, fontSize: size === 'sm' ? 13 : 15, fontWeight: '500' }]}>{children}</Text>
+      <Text style={[t.text('titleSm'), { color: pal.fg, fontSize: size === 'sm' ? 13 : 15, fontWeight: '500' }, Platform.OS === 'web' ? ({ whiteSpace: 'pre-wrap' } as TextStyle) : null]}>{children}</Text>
       {iconRight && !loading ? <Icon name={iconRight} size={18} color={pal.fg} /> : null}
     </SpringPressable>
   );
@@ -86,9 +87,9 @@ export function SegmentedControl({ label, options, value, defaultValue, onChange
       {options.map((o) => {
         const on = o.value === cur;
         return (
-          <SpringPressable key={o.value} onPress={() => set(o.value)} hapticOn="select" accessibilityRole="radio" accessibilityState={{ checked: on }}
+          <SpringPressable key={o.value} onPress={() => set(o.value)} hapticOn="select" accessibilityRole="radio" {...a11yState({ checked: on })}
             hitSlop={6} style={{ flexGrow: 1, minHeight: 32, paddingHorizontal: 12, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? t.c.surface : 'transparent' }}>
-            <Text style={[t.text('label'), { color: on ? t.c.ink : t.c.inkMuted, fontWeight: on ? '600' : '500' }]}>{o.label}</Text>
+            <Text style={[t.text('label'), { color: on ? t.c.ink : t.c.inkMuted, fontWeight: on ? '600' : '500' }, Platform.OS === 'web' ? ({ whiteSpace: 'pre-wrap' } as TextStyle) : null]}>{o.label}</Text>
           </SpringPressable>
         );
       })}
@@ -106,7 +107,7 @@ export function Tabs({ label, tabs, value, defaultValue, onChange }: TabsProps) 
       {tabs.map((o) => {
         const on = o.value === cur;
         return (
-          <Pressable key={o.value} onPress={() => set(o.value)} accessibilityRole="tab" accessibilityState={{ selected: on }}
+          <Pressable key={o.value} onPress={() => set(o.value)} accessibilityRole="tab" {...a11yState({ selected: on })}
             style={({ pressed }) => ({ backgroundColor: pressed ? t.c.surfaceAlt : 'transparent', height: t.size.touchTarget, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8, borderBottomWidth: 2, borderBottomColor: on ? t.c.primary : 'transparent' })}>
             <Text style={[t.text('label'), { fontSize: 14, color: on ? t.c.ink : t.c.inkMuted, fontWeight: on ? '600' : '500' }]}>{o.label}</Text>
             {o.count != null ? <Text style={[t.text('caption'), { color: on ? t.c.ink : t.c.inkMuted, backgroundColor: t.c.surfaceAlt, paddingHorizontal: 6, borderRadius: 999, overflow: 'hidden', fontVariant: ['tabular-nums'] }]}>{o.count}</Text> : null}
@@ -124,11 +125,12 @@ export function Chip({ selected, onPress, icon, category, count, disabled, child
   const t = useTheme();
   return (
     <SpringPressable onPress={onPress} disabled={disabled} hapticOn="select" hitSlop={2}
-      accessibilityRole={role === 'radio' ? 'radio' : 'togglebutton'} accessibilityState={{ checked: !!selected, disabled: !!disabled }}
+      accessibilityRole={role === 'radio' ? 'radio' : Platform.OS === 'web' ? 'button' : 'togglebutton'}
+      {...(role === 'radio' || Platform.OS !== 'web' ? a11yState({ checked: !!selected, disabled: !!disabled }) : { ...a11yState({ disabled: !!disabled }), 'aria-pressed': !!selected })}
       style={{ opacity: disabled ? 0.5 : 1, flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingLeft: category ? 6 : 16, paddingRight: category ? 12 : 16, borderRadius: 999,
         borderWidth: selected ? 2 : 1, borderColor: selected ? t.c.primary : t.c.borderStrong, backgroundColor: selected ? t.c.primarySoft : t.c.surface }}>
       {category ? <CategoryIcon category={category} size="sm" round /> : icon ? <Icon name={icon} size={16} color={selected ? t.c.onPrimarySoft : t.c.ink} /> : null}
-      <Text style={[t.text('label'), { color: selected ? t.c.onPrimarySoft : t.c.ink, fontWeight: selected ? '600' : '500' }]}>{children ?? category}</Text>
+      <Text style={[t.text('label'), { color: selected ? t.c.onPrimarySoft : t.c.ink, fontWeight: selected ? '600' : '500' }, Platform.OS === 'web' ? ({ whiteSpace: 'pre-wrap' } as TextStyle) : null]}>{children ?? category}</Text>
       {count != null ? <Text style={[t.text('caption'), { color: t.c.inkMuted, fontVariant: ['tabular-nums'] }]}>{count}</Text> : null}
       {selected && role !== 'radio' ? <Icon name="check" size={16} color={t.c.onPrimarySoft} /> : null}
     </SpringPressable>

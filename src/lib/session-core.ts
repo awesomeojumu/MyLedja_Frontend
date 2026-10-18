@@ -1,14 +1,28 @@
 import { ApiError, type ApiClient, type BankLinkComplete, type BankLinkStart, type Me, type WorkspaceSummary } from "@/api/client";
+import { readCache, removeCache, writeCache } from "@/lib/offline-cache";
 
-/** Where the refresh token lives. On devices this is Keychain / Keystore only (see secure-token-store). */
+/** Who was last signed in on this device, so an offline launch can open the app instead of Welcome. */
+const IDENTITY_KEY = "myledja.session.identity";
+export type Identity = { user: Me; workspaces: WorkspaceSummary[] };
+
+export function isNetworkFailure(error: unknown): boolean {
+  if (error instanceof ApiError && error.status === 0) return true;
+  if (error instanceof TypeError) return true;
+  return error instanceof Error && /failed to fetch|network request failed/i.test(error.message);
+}
+
+/** Where the refresh token and last signed-in identity live. On devices this is Keychain / Keystore only. */
 export interface TokenStore {
   get(): Promise<string | null>;
   set(token: string): Promise<void>;
   clear(): Promise<void>;
+  getIdentity?(): Promise<Identity | null>;
+  setIdentity?(identity: Identity): Promise<void>;
 }
 
 export function memoryTokenStore(): TokenStore {
   let value: string | null = null;
+  let identity: Identity | null = null;
   return {
     get: async () => value,
     set: async (token) => {
@@ -16,6 +30,11 @@ export function memoryTokenStore(): TokenStore {
     },
     clear: async () => {
       value = null;
+      identity = null;
+    },
+    getIdentity: async () => identity,
+    setIdentity: async (next) => {
+      identity = next;
     },
   };
 }
@@ -24,6 +43,8 @@ export interface SessionState {
   status: "loading" | "signedOut" | "signedIn";
   user: Me | null;
   workspaces: WorkspaceSummary[];
+  /** Signed in from this device's saved identity while the server can't be reached. Screens show cached data. */
+  offline?: boolean;
   /** Email waiting for a verification or recovery code. Never a password. */
   pendingEmail: string | null;
 }
@@ -42,6 +63,7 @@ export class UnverifiedEmailError extends Error {
  * the TokenStore. Signing out wipes both and every user-scoped value, so the next user starts clean.
  */
 export class SessionCore {
+  private reconnecting = false;
   private state: SessionState = { ...SIGNED_OUT, status: "loading" };
   private accessToken: string | null = null;
   /** Held only between sign-up and verification so we can sign in right after; cleared straight away. */
@@ -76,12 +98,41 @@ export class SessionCore {
       const tokens = await this.api.refresh(refreshToken);
       await this.adopt(tokens.accessToken, tokens.refreshToken);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 0) {
-        // Offline at launch: keep the token for next time but do not pretend to be signed in.
-        this.set(SIGNED_OUT);
+      if (isNetworkFailure(error)) {
+        const saved = await this.readIdentity();
+        if (saved?.user) {
+          this.set({ status: "signedIn", user: saved.user, workspaces: saved.workspaces ?? [], pendingEmail: null, offline: true });
+          return;
+        }
+        // Token is still valid locally. Stay off Welcome and retry when the network returns.
+        this.set({ status: "signedIn", user: null, workspaces: [], pendingEmail: null, offline: true });
         return;
       }
       await this.wipe();
+    }
+  }
+
+  /**
+   * Turns an offline launch into a live session once the server answers. A network failure leaves the session as
+   * it is; only a real refusal (revoked or expired refresh token) signs the user out.
+   */
+  async reconnect(): Promise<boolean> {
+    if (!this.state.offline || this.reconnecting) return !this.state.offline;
+    this.reconnecting = true;
+    try {
+      const refreshToken = await this.store.get();
+      if (!refreshToken) {
+        await this.wipe();
+        return false;
+      }
+      const tokens = await this.api.refresh(refreshToken);
+      await this.adopt(tokens.accessToken, tokens.refreshToken);
+      return true;
+    } catch (error) {
+      if (!isNetworkFailure(error)) await this.wipe();
+      return false;
+    } finally {
+      this.reconnecting = false;
     }
   }
 
@@ -164,6 +215,10 @@ export class SessionCore {
 
   /** Runs an authenticated call, refreshing once if the access token has expired. */
   async authed<T>(run: (accessToken: string) => Promise<T>): Promise<T> {
+    if (!this.accessToken && this.state.offline) {
+      await this.reconnect();
+      if (!this.accessToken) throw new ApiError(0, "network", "Can’t reach MyLedja. Check your connection and try again.");
+    }
     if (!this.accessToken) throw new ApiError(401, "invalid access token", "Sign in again.");
     try {
       return await run(this.accessToken);
@@ -179,11 +234,16 @@ export class SessionCore {
         this.accessToken = tokens.accessToken;
         await this.store.set(tokens.refreshToken);
       } catch (refreshError) {
-        await this.wipe();
+        // A dropped connection is not a sign-out; only the server refusing the refresh token is.
+        if (!isNetworkFailure(refreshError)) await this.wipe();
         throw refreshError;
       }
       return run(this.accessToken);
     }
+  }
+
+  listInstitutions(workspaceId: string) {
+    return this.authed((token) => this.api.listInstitutions(token, workspaceId));
   }
 
   createAccount(workspaceId: string, body: unknown) {
@@ -198,8 +258,28 @@ export class SessionCore {
     return this.authed((token) => this.api.setOpening(token, workspaceId, accountId, opening));
   }
 
+  setAccountKind(workspaceId: string, accountId: string, kind: string) {
+    return this.authed((token) => this.api.setAccountKind(token, workspaceId, accountId, kind));
+  }
+
   archiveAccount(workspaceId: string, accountId: string) {
     return this.authed((token) => this.api.archiveAccount(token, workspaceId, accountId));
+  }
+
+  getAccount(workspaceId: string, accountId: string) {
+    return this.authed((token) => this.api.getAccount(token, workspaceId, accountId));
+  }
+
+  renameAccount(workspaceId: string, accountId: string, name: string) {
+    return this.authed((token) => this.api.renameAccount(token, workspaceId, accountId, name));
+  }
+
+  restoreAccount(workspaceId: string, accountId: string) {
+    return this.authed((token) => this.api.restoreAccount(token, workspaceId, accountId));
+  }
+
+  listReconciliations(workspaceId: string, accountId: string) {
+    return this.authed((token) => this.api.listReconciliations(token, workspaceId, accountId));
   }
 
   createTransaction(workspaceId: string, body: unknown) {
@@ -238,8 +318,21 @@ export class SessionCore {
     return this.authed((token) => this.api.search(token, workspaceId, q));
   }
 
-  patchSettings(hideLockScreenAmounts: boolean) {
-    return this.authed((token) => this.api.patchSettings(token, hideLockScreenAmounts));
+  budgetViews(workspaceId: string, budgetId: string) {
+    return this.authed((token) => this.api.budgetViews(token, workspaceId, budgetId));
+  }
+
+  async patchSettings(hideLockScreenAmounts: boolean) {
+    const res = await this.authed((token) => this.api.patchSettings(token, hideLockScreenAmounts));
+    const { user, workspaces } = this.state;
+    if (user) {
+      const next = { ...user, hideLockScreenAmounts: res.data.hideLockScreenAmounts };
+      this.set({ ...this.state, user: next });
+      const identity = { user: next, workspaces } satisfies Identity;
+      writeCache(IDENTITY_KEY, identity);
+      await this.store.setIdentity?.(identity);
+    }
+    return res;
   }
 
   listCollection(workspaceId: string, path: string) {
@@ -258,8 +351,12 @@ export class SessionCore {
     return this.authed((token) => this.api.revokeSession(token, id));
   }
 
-  previewImport(workspaceId: string, text: string) {
-    return this.authed((token) => this.api.previewImport(token, workspaceId, text));
+  startDeletion() {
+    return this.authed((token) => this.api.startDeletion(token));
+  }
+
+  previewImport(workspaceId: string, text: string, accountId?: string) {
+    return this.authed((token) => this.api.previewImport(token, workspaceId, text, accountId));
   }
 
   commitImport(workspaceId: string, importId: string, body: unknown) {
@@ -273,7 +370,10 @@ export class SessionCore {
       this.authed((token) => this.api.me(token)),
       this.authed((token) => this.api.workspaces(token)),
     ]);
-    this.set({ status: "signedIn", user, workspaces, pendingEmail: null });
+    this.set({ status: "signedIn", user, workspaces, pendingEmail: null, offline: false });
+    const identity = { user, workspaces } satisfies Identity;
+    writeCache(IDENTITY_KEY, identity);
+    await this.store.setIdentity?.(identity);
     try {
       const { primeUserOutbox } = await import("@/sync/user-outbox");
       await primeUserOutbox(user.userId);
@@ -285,7 +385,14 @@ export class SessionCore {
   private async wipe(): Promise<void> {
     this.accessToken = null;
     this.pendingPassword = null;
+    removeCache(IDENTITY_KEY);
     await this.store.clear();
     this.set(SIGNED_OUT);
+  }
+
+  private async readIdentity(): Promise<Identity | null> {
+    const fromStore = await this.store.getIdentity?.();
+    if (fromStore?.user) return fromStore;
+    return readCache<Identity>(IDENTITY_KEY);
   }
 }

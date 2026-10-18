@@ -19,6 +19,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void session.restore();
   }, [session]);
+  const offline = useSyncExternalStore(session.subscribe, () => session.getState().offline === true, () => false);
+  // After an offline launch, keep trying to turn the saved identity back into a live session.
+  useEffect(() => {
+    if (!offline) return;
+    const retry = () => void session.reconnect();
+    const timer = setInterval(retry, 15_000);
+    const hasWindow = typeof window !== "undefined" && typeof window.addEventListener === "function";
+    if (hasWindow) window.addEventListener("online", retry);
+    return () => {
+      clearInterval(timer);
+      if (hasWindow) window.removeEventListener("online", retry);
+    };
+  }, [offline, session]);
   return <SessionContext.Provider value={session}>{children}</SessionContext.Provider>;
 }
 

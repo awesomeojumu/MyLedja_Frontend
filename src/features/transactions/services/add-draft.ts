@@ -16,11 +16,19 @@ export interface DraftIssue {
   message: string;
 }
 
+/**
+ * The description is optional so quick add stays three taps (+, amount, Save). A blank one falls back to the
+ * category, or "Transfer" for a transfer, so every record still reads clearly in lists.
+ */
+export function descriptionFor(draft: AddDraft): string {
+  const typed = draft.description.trim();
+  if (typed) return typed;
+  if (draft.kind === "transfer") return "Transfer";
+  return draft.category.trim() || (draft.kind === "income" ? "Income" : "Expense");
+}
+
 export function draftIssues(draft: AddDraft): DraftIssue[] {
   const issues: DraftIssue[] = [];
-  if (!draft.description.trim()) {
-    issues.push({ field: "description", message: "Say what this was for." });
-  }
   if (toKobo(draft.amount) <= 0) {
     issues.push({ field: "amount", message: "Enter an amount." });
   }
@@ -42,7 +50,7 @@ export function quickExpenseDraft(): AddDraft {
   const day = String(now.getDate()).padStart(2, "0");
   return {
     kind: "expense",
-    description: "Expense",
+    description: "",
     amount: "",
     category: EXPENSE_CATEGORIES[0],
     account: "Cash",

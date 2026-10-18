@@ -1,45 +1,70 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
+import { ApiError } from "@/api/client";
 import { onMoneyWrite } from "@/lib/after-money";
+import { readCache, scopedKey, writeCache } from "@/lib/offline-cache";
 import { useSession } from "@/state";
 
-const cache = new Map<string, unknown>();
-
-export function useLiveQuery<T>(
-  load: (workspaceId: string) => Promise<T>,
-  empty: T,
-  cacheKey?: string,
-): {
+export interface LiveQuery<T> {
   data: T;
+  /** First load with nothing to show yet. Screens show a skeleton, never an empty list or ₦0. */
   loading: boolean;
-} {
-  const { status, workspaces } = useSession();
-  const fallback = useRef(empty);
-  const hadData = useRef(false);
-  const [data, setData] = useState<T>(() => {
-    if (cacheKey && cache.has(cacheKey)) return cache.get(cacheKey) as T;
-    return empty;
-  });
-  const [loading, setLoading] = useState(false);
+  /** The server is unreachable. `data` is the last copy saved on this device, if any. */
+  offline: boolean;
+  /** A non-network failure, in words a person can act on. */
+  error: string | null;
+  /** True once real data (live or cached) has been shown, so an empty list is a real empty. */
+  known: boolean;
+  refresh: () => void;
+}
+
+/**
+ * Loads workspace data on focus and after every money write. The last good result is kept per user and workspace
+ * (in memory and on the device), so a flaky or missing connection shows the user's real records with an offline
+ * note instead of an empty list.
+ */
+export function useLiveQuery<T>(load: (workspaceId: string) => Promise<T>, empty: T, cacheKey?: string): LiveQuery<T> {
+  const { status, workspaces, user } = useSession();
+  const workspaceId = workspaces[0]?.id;
+  const key = cacheKey && user && workspaceId ? scopedKey(user.userId, workspaceId, cacheKey) : null;
+  const [initial] = useState(() => (key ? readCache<T>(key) : null));
+  const [data, setData] = useState<T>(() => initial ?? empty);
+  const [known, setKnown] = useState(initial != null);
+  const [loading, setLoading] = useState(initial == null);
+  const [offline, setOffline] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const shownKey = useRef(key);
 
   const refresh = useCallback(() => {
-    if (status !== "signedIn" || !workspaces[0]) {
-      setData(fallback.current);
-      setLoading(false);
+    if (status !== "signedIn" || !workspaceId) {
+      setLoading(status === "loading");
       return;
     }
-    if (!hadData.current && !(cacheKey && cache.has(cacheKey))) setLoading(true);
-    void load(workspaces[0].id)
+    if (shownKey.current !== key) {
+      shownKey.current = key;
+      const next = key ? readCache<T>(key) : null;
+      setData(next ?? empty);
+      setKnown(next != null);
+      setLoading(next == null);
+    }
+    void load(workspaceId)
       .then((next) => {
-        hadData.current = true;
-        if (cacheKey) cache.set(cacheKey, next);
+        if (key) writeCache(key, next);
         setData(next);
+        setKnown(true);
+        setOffline(false);
+        setError(null);
       })
-      .catch(() => {
-        if (!hadData.current) setData(fallback.current);
+      .catch((caught: unknown) => {
+        if (caught instanceof ApiError && caught.status === 0) {
+          setOffline(true);
+          setError(null);
+        } else {
+          setError(caught instanceof Error && caught.message ? caught.message : "Something went wrong. Try again.");
+        }
       })
       .finally(() => setLoading(false));
-  }, [cacheKey, load, status, workspaces]);
+  }, [empty, key, load, status, workspaceId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -50,5 +75,5 @@ export function useLiveQuery<T>(
     }, [refresh]),
   );
 
-  return { data, loading };
+  return { data, loading, offline, error, known, refresh };
 }

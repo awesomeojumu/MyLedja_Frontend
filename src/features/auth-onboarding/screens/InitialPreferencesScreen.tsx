@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { Button, SegmentedControl, Select, Txt, useTheme } from "@/design";
+import { Button, SegmentedControl, Select, Txt, useTheme, a11yState } from "@/design";
 import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
 
 export function InitialPreferencesScreen({
@@ -103,7 +103,7 @@ function ToggleRow({
         disabled={disabled}
         accessibilityRole="switch"
         accessibilityLabel={title}
-        accessibilityState={{ checked: value, disabled: !!disabled }}
+        {...a11yState({ checked: value, disabled: !!disabled })}
         style={{
           width: 48,
           height: 28,

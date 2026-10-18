@@ -1,9 +1,10 @@
 /* Inputs: TextField, AmountInput, AmountDisplay, Select, CategoryPicker, DatePicker. Amounts use the phone's number keyboard. */
 import React, { useRef, useState } from 'react';
-import { KeyboardTypeOptions, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardTypeOptions, Platform, Pressable, Text, TextInput, TextInputProps, View } from 'react-native';
 
 import { useTheme } from "@/design/theme";
-import { cleanAmount, EXPENSE_CATEGORIES } from "@/design/format";
+import { a11yState, textContentTypeFor } from "@/design/a11y";
+import { cleanAmount, EXPENSE_CATEGORIES, formatDateDMY, parseDateInput, toIsoDate } from "@/design/format";
 import { IconName } from "@/design/icons";
 import { CategoryIcon, Icon, Txt } from "@/design/components/foundations";
 import { Chip, IconButton } from "@/design/components/actions";
@@ -27,8 +28,10 @@ function FieldShell({ label, helper, error, children }: { label?: string; helper
   );
 }
 
-export interface TextFieldProps { label?: string; helper?: string; error?: string; icon?: IconName; placeholder?: string; value?: string; defaultValue?: string; onChangeText?: (v: string) => void; onFocus?: () => void; keyboardType?: KeyboardTypeOptions; autoCapitalize?: 'none' | 'sentences' | 'words'; returnKeyType?: 'done' | 'next' | 'search'; secureTextEntry?: boolean }
-export function TextField({ label, helper, error, icon, placeholder, value, defaultValue, onChangeText, onFocus, keyboardType, autoCapitalize = 'sentences', returnKeyType, secureTextEntry }: TextFieldProps) {
+export interface TextFieldProps { label?: string; helper?: string; error?: string; icon?: IconName; placeholder?: string; value?: string; defaultValue?: string; onChangeText?: (v: string) => void; onFocus?: () => void; keyboardType?: KeyboardTypeOptions; autoCapitalize?: 'none' | 'sentences' | 'words'; returnKeyType?: 'done' | 'next' | 'search'; secureTextEntry?: boolean;
+  /** Says what the field holds, so password managers and assistive tech can fill it (WCAG 1.3.5). */
+  autoComplete?: TextInputProps['autoComplete'] }
+export function TextField({ label, helper, error, icon, placeholder, value, defaultValue, onChangeText, onFocus, keyboardType, autoCapitalize = 'sentences', returnKeyType, secureTextEntry, autoComplete }: TextFieldProps) {
   const t = useTheme();
   const [focus, setFocus] = useState(false);
   const [hidden, setHidden] = useState(true);
@@ -38,8 +41,9 @@ export function TextField({ label, helper, error, icon, placeholder, value, defa
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 12, borderRadius: t.radius.radiusMd, backgroundColor: t.c.surface,
         borderWidth: focus ? 2 : 1, borderColor: error ? t.c.danger : focus ? t.c.focus : t.c.borderStrong }}>
         {icon ? <Icon name={icon} size={18} color={t.c.inkMuted} /> : null}
-        <TextInput accessibilityLabel={label ?? placeholder} placeholder={placeholder} placeholderTextColor={t.c.inkMuted} value={value} defaultValue={defaultValue}
-          onChangeText={onChangeText} onFocus={() => { setFocus(true); onFocus?.(); }} onBlur={() => setFocus(false)} keyboardType={keyboardType} autoCapitalize={autoCapitalize} returnKeyType={returnKeyType}
+        <TextInput accessibilityLabel={label ?? placeholder} accessibilityHint={secureTextEntry ? 'Secure text field' : undefined} placeholder={placeholder} placeholderTextColor={t.c.inkMuted} value={value} defaultValue={defaultValue}
+          onChangeText={onChangeText} onFocus={() => { setFocus(true); onFocus?.(); }} onBlur={() => setFocus(false)} keyboardType={keyboardType} autoCapitalize={autoCapitalize} returnKeyType={returnKeyType} autoComplete={autoComplete}
+          textContentType={textContentTypeFor(autoComplete)}
           secureTextEntry={secret} style={[t.text('body'), { flex: 1, color: t.c.ink, paddingVertical: 10 }, hideBrowserOutline]} maxFontSizeMultiplier={2} />
         {secureTextEntry ? (
           <Pressable onPress={() => setHidden((v) => !v)} accessibilityRole="button" accessibilityLabel={hidden ? 'Show password' : 'Hide password'} hitSlop={8}>
@@ -95,12 +99,12 @@ export function AmountDisplay({ value, defaultValue, onChange, kind = 'neutral',
   const change = (s: string) => { const c = cleanAmount(s); if (value === undefined) setOwn(c); onChange?.(c); };
   return (
     <Pressable onPress={() => input.current?.focus()} accessible={false} style={{ alignItems: 'center', gap: 4, paddingVertical: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', paddingHorizontal: 12, paddingBottom: 4, borderBottomWidth: 2, borderBottomColor: error ? t.c.danger : focus ? t.c.focus : t.c.borderStrong }}>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', maxWidth: '100%', minWidth: 0, paddingHorizontal: 12, paddingBottom: 4, borderBottomWidth: 2, borderBottomColor: error ? t.c.danger : focus ? t.c.focus : t.c.borderStrong }}>
         <Text style={[big, { fontSize: 40, lineHeight: 46, color }]}>{sign}</Text>
         <Text style={[big, { fontSize: 28, color, marginRight: 2 }]}>₦</Text>
         <TextInput ref={input} value={shown} onChangeText={change} keyboardType="decimal-pad" inputMode="decimal" placeholder="0" placeholderTextColor={t.c.inkMuted}
           autoFocus={autoFocus} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} accessibilityLabel={label} accessibilityHint={error ?? hint}
-          style={[big, { fontSize: 40, lineHeight: 46, color, padding: 0, minWidth: 24, textAlign: 'right' }, hideBrowserOutline]} maxFontSizeMultiplier={1.5} />
+          style={[big, { fontSize: 40, lineHeight: 46, color, padding: 0, minWidth: 24, flexShrink: 1, textAlign: 'right' }, hideBrowserOutline]} maxFontSizeMultiplier={1.5} />
         <Text style={[big, { fontSize: 40, lineHeight: 46, color: t.c.inkMuted }]}>{ghost}</Text>
       </View>
       {error
@@ -130,7 +134,7 @@ export function Select({ label, options, value, defaultValue, onChange, placehol
           {options.map((o) => {
             const on = o.value === cur;
             return (
-              <Pressable key={o.value} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => { if (value === undefined) setOwn(o.value); onChange?.(o.value); setOpen(false); }}
+              <Pressable key={o.value} accessibilityRole="radio" {...a11yState({ checked: on })} onPress={() => { if (value === undefined) setOwn(o.value); onChange?.(o.value); setOpen(false); }}
                 style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48, paddingHorizontal: 8, borderRadius: t.radius.radiusSm, backgroundColor: on ? t.c.surfaceAlt : 'transparent' }}>
                 <Txt style={{ flex: 1, fontWeight: on ? '600' : '400' }}>{o.label}</Txt>{on ? <Icon name="check" size={18} color={t.c.primary} /> : null}
               </Pressable>
@@ -142,9 +146,9 @@ export function Select({ label, options, value, defaultValue, onChange, placehol
   );
 }
 
-export interface CategoryPickerProps { label?: string; categories?: string[]; recent?: string[]; value?: string; defaultValue?: string; onChange?: (c: string) => void }
-/** Recent categories as chips, then a field that opens the full searchable list. */
-export function CategoryPicker({ label = 'Category', categories = EXPENSE_CATEGORIES, recent, value, defaultValue, onChange }: CategoryPickerProps) {
+export interface CategoryPickerProps { label?: string; categories?: string[]; value?: string; defaultValue?: string; onChange?: (c: string) => void }
+/** A field that opens the full searchable category list. */
+export function CategoryPicker({ label = 'Category', categories = EXPENSE_CATEGORIES, value, defaultValue, onChange }: CategoryPickerProps) {
   const t = useTheme();
   const [own, setOwn] = useState(defaultValue ?? categories[0]);
   const [open, setOpen] = useState(false);
@@ -155,9 +159,6 @@ export function CategoryPicker({ label = 'Category', categories = EXPENSE_CATEGO
   return (
     <View style={{ gap: 8 }}>
       <Txt variant="label">{label}</Txt>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-        {(recent ?? categories.slice(0, 4)).map((c) => <Chip key={c} category={c} selected={c === cur} onPress={() => pick(c)} />)}
-      </ScrollView>
       <Pressable onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`${label}: ${cur}. Show all ${categories.length}`}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 12, height: 52, paddingHorizontal: 10, borderRadius: t.radius.radiusMd, borderWidth: 1, borderColor: t.c.borderStrong, backgroundColor: t.c.surface }}>
         <CategoryIcon category={cur} size="sm" />
@@ -171,7 +172,7 @@ export function CategoryPicker({ label = 'Category', categories = EXPENSE_CATEGO
           {shown.map((c) => {
             const on = c === cur;
             return (
-              <Pressable key={c} onPress={() => pick(c)} accessibilityRole="radio" accessibilityState={{ checked: on }}
+              <Pressable key={c} onPress={() => pick(c)} accessibilityRole="radio" {...a11yState({ checked: on })}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48, paddingHorizontal: 8, borderRadius: t.radius.radiusSm, backgroundColor: on ? t.c.surfaceAlt : 'transparent' }}>
                 <CategoryIcon category={c} size="sm" /><Txt style={{ flex: 1, fontWeight: on ? '600' : '400' }}>{c}</Txt>{on ? <Icon name="check" size={18} color={t.c.primary} /> : null}
               </Pressable>
@@ -185,29 +186,34 @@ export function CategoryPicker({ label = 'Category', categories = EXPENSE_CATEGO
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function asIso(value?: string, fallback = new Date()): string {
+  return toIsoDate(parseDateInput(value) ?? fallback);
+}
 export interface DatePickerProps { label?: string; value?: string; defaultValue?: string; onChange?: (isoDate: string) => void; today?: string; noFuture?: boolean; presets?: boolean }
-/** Month grid, weeks start Monday, with Today/Yesterday shortcuts. */
+/** Month grid, weeks start Monday, with Today/Yesterday shortcuts. Selected date reads DD/MM/YYYY. */
 export function DatePicker({ label = 'Choose a date', value, defaultValue, onChange, today, noFuture, presets = true }: DatePickerProps) {
   const t = useTheme();
-  const now = today ? new Date(today + 'T00:00:00') : new Date();
-  const [own, setOwn] = useState(defaultValue ?? iso(now));
-  const cur = value ?? own;
-  const sel = new Date(cur + 'T00:00:00');
+  const now = parseDateInput(today) ?? new Date();
+  const [own, setOwn] = useState(asIso(defaultValue, now));
+  const cur = parseDateInput(value) ? asIso(value, now) : own;
+  const sel = parseDateInput(cur) ?? now;
   const [month, setMonth] = useState(new Date(sel.getFullYear(), sel.getMonth(), 1));
-  const set = (d: Date) => { const s = iso(d); if (value === undefined) setOwn(s); onChange?.(s); };
+  const set = (d: Date) => { const s = toIsoDate(d); if (value === undefined) setOwn(s); onChange?.(s); };
   const first = (month.getDay() + 6) % 7, days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   const cells: (Date | null)[] = [...Array(first).fill(null), ...Array.from({ length: days }, (_, i) => new Date(month.getFullYear(), month.getMonth(), i + 1))];
   return (
     <View accessibilityLabel={label} style={{ gap: 12, padding: 16, borderRadius: t.radius.radiusLg, borderWidth: 1, borderColor: t.c.borderStrong, backgroundColor: t.c.surface }}>
       {presets ? (
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View accessibilityRole="radiogroup" accessibilityLabel="Quick dates" style={{ flexDirection: 'row', gap: 8 }}>
           {[['Today', 0], ['Yesterday', -1]].map(([l, off]) => {
             const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (off as number));
-            return <Chip key={l as string} selected={iso(d) === cur} onPress={() => { set(d); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); }}>{l}</Chip>;
+            return <Chip key={l as string} role="radio" selected={toIsoDate(d) === cur} onPress={() => { set(d); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); }}>{l}</Chip>;
           })}
         </View>
       ) : null}
+      <Txt variant="titleSm" accessibilityLiveRegion="polite">
+        {formatDateDMY(cur)}
+      </Txt>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <IconButton icon="chevron-left" label="Previous month" onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} />
         <Txt variant="titleSm" accessibilityLiveRegion="polite">{MONTHS[month.getMonth()]} {month.getFullYear()}</Txt>
@@ -217,9 +223,9 @@ export function DatePicker({ label = 'Choose a date', value, defaultValue, onCha
         {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => <Txt key={d} variant="caption" color={t.c.inkMuted} style={{ width: '14.28%', textAlign: 'center', paddingVertical: 4 }}>{d}</Txt>)}
         {cells.map((d, i) => {
           if (!d) return <View key={'e' + i} style={{ width: '14.28%', height: 44 }} />;
-          const k = iso(d), on = k === cur, isToday = k === iso(now), fut = !!noFuture && d > now;
+          const k = toIsoDate(d), on = k === cur, isToday = k === toIsoDate(now), fut = !!noFuture && d > now;
           return (
-            <Pressable key={k} disabled={fut} onPress={() => set(d)} accessibilityRole="button" accessibilityState={{ selected: on, disabled: fut }}
+            <Pressable key={k} disabled={fut} onPress={() => set(d)} accessibilityRole="button" {...a11yState({ selected: on, disabled: fut })}
               accessibilityLabel={`${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}${isToday ? ', today' : ''}`}
               style={{ width: '14.28%', height: 44, alignItems: 'center', justifyContent: 'center' }}>
               <View style={{ width: 40, height: 40, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? t.c.primary : 'transparent', borderWidth: isToday && !on ? 1 : 0, borderColor: t.c.primary }}>

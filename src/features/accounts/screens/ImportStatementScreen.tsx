@@ -1,7 +1,8 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Banner, Button, TextField, Txt } from "@/design";
 import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
+import { rememberImportPreview } from "@/features/accounts/services/import-preview";
 import { useSession } from "@/state";
 
 const SAMPLE = `posted_at,narration,amount,type
@@ -9,6 +10,7 @@ const SAMPLE = `posted_at,narration,amount,type
 
 export function ImportStatementScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string }>();
   const { session, workspaces } = useSession();
   const [text, setText] = useState(SAMPLE);
   const [busy, setBusy] = useState(false);
@@ -28,8 +30,18 @@ export function ImportStatementScreen() {
             if (!workspaceId) return;
             setBusy(true);
             void session
-              .previewImport(workspaceId, text)
-              .then((res) => router.push(`/(tabs)/accounts/import-review?importId=${res.data.importId}`))
+              .previewImport(workspaceId, text, id)
+              .then((res) => {
+                rememberImportPreview({
+                  importId: res.data.importId,
+                  accountId: id,
+                  accepted: res.data.accepted as { row: number; description?: string }[],
+                  rejected: res.data.rejected as { row: number; reason?: string }[],
+                });
+                router.push(
+                  `/(tabs)/accounts/import-review?importId=${res.data.importId}${id ? `&accountId=${id}` : ""}`,
+                );
+              })
               .catch((err: Error) => setError(err.message))
               .finally(() => setBusy(false));
           }}

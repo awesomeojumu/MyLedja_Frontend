@@ -1,24 +1,36 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/api/client";
 import { AmountInput, Banner, Button, CategoryPicker, Dialog, EXPENSE_CATEGORIES, INCOME_CATEGORIES, TextField, Toast, Txt } from "@/design";
 import { WidePane } from "@/lib";
+import { rememberAccountOptions } from "@/features/accounts/services/account-options";
 import { afterMoneyWrite } from "@/lib/after-money";
-import { newId } from "@/lib/ids";
+import { fetchScoped, readScoped } from "@/lib/cached-fetch";
 import { useSession } from "@/state";
-import { persistExpense, drainOnce } from "@/sync/outbox";
 import { outboxForUser } from "@/sync/user-outbox";
 import { TxScreen } from "@/features/transactions/components/TxScreen";
-import { draftIssues, quickExpenseDraft, savedMessage, type DraftIssue } from "@/features/transactions/services/add-draft";
+import { draftIssues, quickExpenseDraft, type DraftIssue } from "@/features/transactions/services/add-draft";
+import { commitAdd } from "@/features/transactions/services/commit-add";
 
 export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: "expense" | "income"; extras?: boolean } = {}) {
   const router = useRouter();
   const { session, user, workspaces } = useSession();
-  const [categories, setCategories] = useState<{ id: string; name: string; kind: string }[]>([]);
-  const [accountId, setAccountId] = useState<string | undefined>();
+  const cacheUser = user?.userId;
+  const cacheWorkspace = workspaces[0]?.id;
+  const [initialAccounts] = useState(() =>
+    cacheUser && cacheWorkspace ? readScoped<{ id: string; name: string }[]>(cacheUser, cacheWorkspace, "account-options") : null,
+  );
+  const [accounts, setAccounts] = useState<{ id: string; name: string }[]>(() => initialAccounts ?? []);
+  const [categories, setCategories] = useState<{ id: string; name: string; kind: string }[]>(() =>
+    cacheUser && cacheWorkspace
+      ? readScoped<{ id: string; name: string; kind: string }[]>(cacheUser, cacheWorkspace, "category-options") ?? []
+      : [],
+  );
+  const [accountId, setAccountId] = useState<string | undefined>(() => initialAccounts?.[0]?.id);
+  const [accountsKnown, setAccountsKnown] = useState(initialAccounts != null);
+  const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState(() => {
     const next = quickExpenseDraft();
-    return kind === "income" ? { ...next, kind: "income" as const, description: "Income", category: INCOME_CATEGORIES[0] } : next;
+    return kind === "income" ? { ...next, kind: "income" as const, description: "", category: INCOME_CATEGORIES[0] } : next;
   });
   const [toast, setToast] = useState<string | null>(null);
   const [issues, setIssues] = useState<DraftIssue[]>([]);
@@ -30,53 +42,58 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
   const workspaceId = workspaces[0]?.id;
 
   useEffect(() => {
-    if (!workspaceId) return;
-    void session.listCategories(workspaceId).then((res) => setCategories(res.data));
-    void session.listAccounts(workspaceId).then((res) => {
-      const first = res.data[0] as { id?: string } | undefined;
-      if (first?.id) setAccountId(first.id);
+    const userId = user?.userId;
+    if (!workspaceId || !userId) return;
+    type Option = { id: string; name: string };
+    void fetchScoped(userId, workspaceId, "category-options", async () => {
+      const res = await session.listCategories(workspaceId);
+      return res.data.map((row) => ({ id: row.id, name: row.name, kind: row.kind }));
+    }).then(({ data }) => {
+      if (data) setCategories(data);
     });
-  }, [session, workspaceId]);
-
-  const postDraft = () => {
-    if (!user || !workspaceId || !accountId) {
-      setToast("Add an account first.");
-      router.push("/(tabs)/accounts/add");
-      return;
-    }
-    const operationId = newId();
-    const categoryId = categories.find((row) => row.name === draft.category)?.id;
-    const payload = {
-      type: draft.kind,
-      amount: draft.amount.includes(".") ? draft.amount : `${draft.amount}.00`,
-      accountId,
-      categoryId,
-      description: draft.description,
-      status: "posted",
-    };
-    const store = outboxForUser(user.userId);
-    persistExpense(store, {
-      operationId,
-      userId: user.userId,
-      workspaceId,
-      entityType: "transaction",
-      entityId: operationId,
-      operationType: "create",
-      payload,
-      syncStatus: "saved_on_device",
-      attemptCount: 0,
-    });
-    setToast(savedMessage(draft.kind));
-    void drainOnce(store, user.userId, async (body, opId) => {
-      try {
-        await session.createTransaction(workspaceId, { ...(body as object), operationId: opId });
-        afterMoneyWrite();
-        return true;
-      } catch (caught) {
-        if (caught instanceof ApiError && caught.status === 0) return false;
-        throw caught;
+    void fetchScoped<Option[]>(userId, workspaceId, "account-options", async () => {
+      const res = await session.listAccounts(workspaceId);
+      return rememberAccountOptions(userId, workspaceId, res.data);
+    }).then(({ data, offline }) => {
+      if (data) {
+        setAccounts(data);
+        setAccountsKnown(true);
+        if (data[0]) setAccountId((current) => current ?? data[0].id);
+      } else if (!offline) {
+        setAccountsKnown(true);
       }
     });
+  }, [session, user, workspaceId]);
+
+  const postDraft = () => {
+    if (!user || !workspaceId) return;
+    const categoryId = categories.find((row) => row.name === draft.category)?.id;
+    setSaving(true);
+    void commitAdd(
+      outboxForUser(user.userId),
+      {
+        userId: user.userId,
+        workspaceId,
+        draft,
+        chosenAccountId: accountId,
+        accounts,
+        knownEmpty: accountsKnown && accounts.length === 0,
+        categoryId,
+      },
+      (ws, body, opId) => session.createTransaction(ws, { ...(body as object), operationId: opId }),
+    )
+      .then((result) => {
+        if (result.kind === "invalid") return;
+        if (result.kind === "refused") {
+          setToast(result.message);
+          if (result.message === "Add an account first.") router.push("/(tabs)/accounts/add");
+          return;
+        }
+        if (result.outcome === "synced" || result.outcome === "saved_on_device") afterMoneyWrite();
+        setToast(result.toast);
+      })
+      .catch((err: Error) => setToast(err.message))
+      .finally(() => setSaving(false));
   };
 
   const save = () => {
@@ -94,7 +111,7 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
       title={extras ? "Edit transaction" : kind === "income" ? "Add income" : "Add expense"}
       emptyTitle="Nothing to save yet"
       errorTitle="Could not save"
-      footer={<Button fullWidth onPress={save}>{kind === "income" ? "Save income" : extras ? "Save changes" : "Save expense"}</Button>}
+      footer={<Button fullWidth loading={saving} onPress={save}>{kind === "income" ? "Save income" : extras ? "Save changes" : "Save expense"}</Button>}
     >
       <Txt variant="titleMd" accessibilityRole="header">
         {kind === "income" ? "Add income" : "Add expense"}
@@ -105,11 +122,7 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
             <Banner tone="warning" title="Changed on another device">
               This record was edited elsewhere. Review before you save.
             </Banner>
-          ) : (
-            <Banner tone="neutral" title="Saved on this phone">
-              The expense is written locally first, then sent once.
-            </Banner>
-          )
+          ) : undefined
         }
       >
         {mismatch ? (
@@ -117,7 +130,13 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
             An expense cannot use an income category.
           </Banner>
         ) : null}
-        <TextField label="What it was for" value={draft.description} onChangeText={(description) => setDraft((current) => ({ ...current, description }))} error={fieldError("description")} />
+        <TextField
+          label="What it was for"
+          placeholder={kind === "income" ? "Optional, e.g. Salary" : "Optional, e.g. Shoprite"}
+          value={draft.description}
+          onChangeText={(description) => setDraft((current) => ({ ...current, description }))}
+          error={fieldError("description")}
+        />
         <AmountInput label="Amount" value={draft.amount} onChange={(amount) => setDraft((current) => ({ ...current, amount }))} error={fieldError("amount")} />
         <CategoryPicker categories={extras ? [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES] : allowed} value={draft.category} onChange={(category) => setDraft((current) => ({ ...current, category }))} />
       </WidePane>

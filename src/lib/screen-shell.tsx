@@ -10,7 +10,7 @@ export function ScreenShell({
   onBack,
   homeHref = "/(tabs)",
   showBack = true,
-  demo = true,
+  demo = false,
   actions,
   footer,
   emptyTitle,
@@ -93,4 +93,3 @@ export function ScreenShell({
     </View>
   );
 }
-

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { Button, Icon, TextField, Txt, useTheme } from "@/design";
+import { Button, Icon, TextField, Txt, useTheme, a11yState } from "@/design";
 import type { IconName } from "@/design";
 import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
 import { workspaceSelectable, type WorkspaceKind } from "@/features/auth-onboarding/services/auth-flow";
@@ -38,7 +38,7 @@ export function CreateWorkspaceScreen({ onBack, onSubmit }: { onBack: () => void
               onPress={enabled ? () => { setKind(option.kind); setName(option.title); } : undefined}
               disabled={!enabled}
               accessibilityRole="radio"
-              accessibilityState={{ checked: selected, disabled: !enabled }}
+              {...a11yState({ checked: selected, disabled: !enabled })}
               style={{
                 flexDirection: "row",
                 alignItems: "center",

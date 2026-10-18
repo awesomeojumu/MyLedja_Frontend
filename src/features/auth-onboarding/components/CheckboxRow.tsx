@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
-import { Icon, Txt, useTheme } from "@/design";
+import { Icon, Txt, useTheme, a11yState } from "@/design";
 
 export function CheckboxRow({
   checked,
@@ -16,7 +16,7 @@ export function CheckboxRow({
     <Pressable
       onPress={() => onChange(!checked)}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
+      {...a11yState({ checked })}
       style={{ flexDirection: "row", alignItems: "flex-start", gap: t.space.space3, paddingVertical: 4 }}
     >
       <View

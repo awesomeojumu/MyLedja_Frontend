@@ -6,7 +6,7 @@ import { nairaAmount, rowKind, toLedgerAccount, type ApiAccount, type ApiTransac
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useSession } from "@/state";
 
-const EMPTY = { txns: [] as ApiTransaction[], names: new Map<string, string>() };
+const EMPTY = { txns: [] as ApiTransaction[], names: {} as Record<string, string> };
 
 export function TransactionDetailScreen() {
   const t = useTheme();
@@ -18,12 +18,12 @@ export function TransactionDetailScreen() {
         session.listTransactions(workspaceId),
         session.listAccounts(workspaceId),
       ]);
-      const names = new Map(
+      const names = Object.fromEntries(
         (Array.isArray(accountsRes.data) ? accountsRes.data : []).map((row) => {
           const account = toLedgerAccount(row as ApiAccount);
           return [account.id, account.name] as const;
         }),
-      );
+      ) as Record<string, string>;
       return { txns: (txRes.data.transactions ?? []).filter((row) => row.id), names };
     },
     [session],
@@ -44,7 +44,7 @@ export function TransactionDetailScreen() {
             category: row.type,
             amount: nairaAmount(row.amount),
             kind: rowKind(row.type),
-            account: data.names.get(String(row.accountId)) ?? "",
+            account: data.names[String(row.accountId)] ?? "",
             date: row.status,
             status: row.status === "pending" ? "pending" : undefined,
           }}

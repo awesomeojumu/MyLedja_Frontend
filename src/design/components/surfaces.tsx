@@ -58,12 +58,14 @@ export function Sheet({ title, open, onClose, footer, children }: SheetProps) {
         <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: t.c.scrim, opacity: v }}>
           <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Close" />
         </Animated.View>
-        <Animated.View accessibilityViewIsModal style={[{ width: '100%', maxWidth: centred ? 480 : undefined, maxHeight: centred ? '85%' : '90%', backgroundColor: t.c.surface,
+        <Animated.View accessibilityViewIsModal style={[{ width: '100%', maxWidth: centred ? 480 : undefined, maxHeight: centred ? '85%' : '90%', alignSelf: 'stretch', overflow: 'hidden', backgroundColor: t.c.surface,
           borderRadius: t.radius.radiusLg, borderBottomLeftRadius: centred ? t.radius.radiusLg : 0, borderBottomRightRadius: centred ? t.radius.radiusLg : 0,
           paddingBottom: centred ? 0 : insets.bottom }, panel]}>
           {centred ? null : <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 999, backgroundColor: t.c.borderStrong, marginTop: 8 }} />}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 16, paddingRight: 8, paddingVertical: 8 }}>
-            <Txt variant="titleMd" accessibilityRole="header">{title}</Txt>
+            <Txt variant="titleMd" accessibilityRole="header" style={{ flex: 1, minWidth: 0 }}>
+              {title}
+            </Txt>
             <IconButton icon="x" label="Close" onPress={onClose} />
           </View>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 16 }}>{children}</ScrollView>
@@ -85,7 +87,13 @@ export function Dialog({ title, open, onClose, onConfirm, confirmLabel = 'Confir
         <View accessibilityViewIsModal style={{ width: '100%', maxWidth: 400, backgroundColor: t.c.surface, borderRadius: t.radius.radiusLg, padding: 24, gap: 12 }}>
           {destructive ? <View style={{ width: 44, height: 44, borderRadius: 999, backgroundColor: t.c.dangerSoft, alignItems: 'center', justifyContent: 'center' }}><Icon name="trash-2" size={22} color={t.c.danger} /></View> : null}
           <Txt variant="titleMd" accessibilityRole="header">{title}</Txt>
-          {children ? <Txt color={t.c.inkMuted}>{children}</Txt> : null}
+          {children ? (
+            typeof children === "string" ? (
+              <Txt color={t.c.inkMuted}>{children}</Txt>
+            ) : (
+              children
+            )
+          ) : null}
           <View style={{ flexDirection: t.portrait || t.widthClass === 'compact' ? 'column-reverse' : 'row', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
             <Button variant="secondary" fullWidth={t.portrait || t.widthClass === 'compact'} onPress={onClose}>{cancelLabel}</Button>
             <Button variant={destructive ? 'destructive' : 'primary'} fullWidth={t.portrait || t.widthClass === 'compact'} onPress={onConfirm}>{confirmLabel}</Button>

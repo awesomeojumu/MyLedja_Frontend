@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { AmountInput, Banner, Button, SegmentedControl, Toast } from "@/design";
+import { AmountInput, Banner, Button, ChipGroup, EmptyState, formatMoney, Toast } from "@/design";
 import { TxScreen } from "@/features/transactions/components/TxScreen";
 import { afterMoneyWrite } from "@/lib/after-money";
 import { newId } from "@/lib/ids";
 import { useSession } from "@/state";
 
-type TxRow = { id: string; accountId?: string; description?: string; amount?: string };
+type TxRow = { id: string; accountId?: string; description?: string; amount?: string; type?: string; status?: string };
 
 export function RefundScreen() {
   const router = useRouter();
@@ -23,7 +23,8 @@ export function RefundScreen() {
     const workspaceId = workspaces[0]?.id;
     if (!workspaceId) return;
     void session.listTransactions(workspaceId).then((res) => {
-      const next = (res.data.transactions ?? []) as TxRow[];
+      // TC-07: only a posted expense can be refunded.
+      const next = ((res.data.transactions ?? []) as TxRow[]).filter((row) => row.type === "expense" && (row.status ?? "posted") === "posted");
       setRows(next);
       if (!id && next[0]) {
         setId(next[0].id);
@@ -34,7 +35,7 @@ export function RefundScreen() {
 
   const options = rows.map((row) => ({
     value: row.id,
-    label: row.description ?? row.id,
+    label: `${row.description || "Expense"} · ${formatMoney(Number.parseFloat(row.amount ?? "0") || 0)}`,
   }));
 
   return (
@@ -67,7 +68,7 @@ export function RefundScreen() {
               })
               .then(() => {
                 afterMoneyWrite();
-                setToast("Refund posted. Original stays posted.");
+                setToast("Refund posted. It comes off your spending; the original stays posted.");
               })
               .catch((err: Error) => setToast(err.message))
               .finally(() => setBusy(false));
@@ -78,20 +79,25 @@ export function RefundScreen() {
       }
     >
       <Banner tone="primary" title="Refund is a new row">
-        A refund does not delete the original expense.
+        A refund does not delete the original expense. It reduces your spending by the refund amount.
       </Banner>
       {options.length > 0 ? (
-        <SegmentedControl
-          label="Original"
+        <ChipGroup
+          label="Original expense"
+          scroll
           options={options}
           value={id}
-          onChange={(next) => {
+          onChange={(next: string) => {
             setId(next);
             const row = rows.find((item) => item.id === next);
             if (row?.accountId) setAccountId(row.accountId);
           }}
         />
-      ) : null}
+      ) : (
+        <EmptyState title="No expenses to refund yet" icon="inbox">
+          Record an expense first, then refund it here.
+        </EmptyState>
+      )}
       <AmountInput label="Refund amount" value={amount} onChange={setAmount} />
       {toast ? (
         <Toast

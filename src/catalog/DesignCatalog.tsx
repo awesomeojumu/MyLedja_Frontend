@@ -290,7 +290,7 @@ export function DesignCatalog({
             <AmountInput label="Inline amount" value={amount} onChange={setAmount} />
             <AmountDisplay value={amount} onChange={setAmount} kind="expense" />
             <Select label="Account" options={ACCOUNT_OPTIONS} defaultValue="gtb" />
-            <CategoryPicker recent={["Food & groceries", "Transport", "Rent"]} defaultValue="Food & groceries" />
+            <CategoryPicker defaultValue="Food & groceries" />
             <DatePicker today="2026-10-15" defaultValue="2026-10-15" noFuture />
           </CatalogSection>
 

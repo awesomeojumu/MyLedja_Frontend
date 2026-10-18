@@ -56,7 +56,7 @@ export function RecoveryResetScreen({
         <Txt variant="label">Code</Txt>
         <OtpBoxes value={code} onChange={setCode} />
       </View>
-      <TextField label="New password" value={password} onChangeText={setPassword} autoCapitalize="none" secureTextEntry />
+      <TextField label="New password" autoComplete="new-password" value={password} onChangeText={setPassword} autoCapitalize="none" secureTextEntry />
       <PasswordRules rules={rules} />
       <Banner tone="primary" title="You’ll be signed out on every device." />
     </AuthShell>

@@ -236,6 +236,7 @@ export const NESTED_ROUTES = [
   "app/(tabs)/transactions/queue.tsx",
   "app/(tabs)/transactions/receipt.tsx",
   "app/(tabs)/transactions/refund.tsx",
+  "app/(tabs)/transactions/rules.tsx",
   "app/(tabs)/accounts/index.tsx",
   "app/(tabs)/accounts/_layout.tsx",
   "app/(tabs)/accounts/add.tsx",

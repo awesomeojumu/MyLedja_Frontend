@@ -10,7 +10,7 @@ export default function MoreTab() {
     <LinkHub
       title="More"
       links={MORE_LINKS}
-      footer={<AccountCard email={user?.email ?? null} onSignOut={signOut} />}
+      footer={<AccountCard email={user?.email ?? null} onSignOut={signOut} hideLockScreenAmounts={user?.hideLockScreenAmounts !== false} />}
     />
   );
 }

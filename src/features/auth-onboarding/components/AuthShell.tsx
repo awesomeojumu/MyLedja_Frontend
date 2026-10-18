@@ -39,16 +39,17 @@ export function AuthShell({
       topRight={compact ? undefined : topRight}
     />
   );
+  const heading = title ? (
+    <View style={{ gap: 4 }}>
+      <Txt variant="titleLg" accessibilityRole="header">
+        {title}
+      </Txt>
+      {subtitle ? (typeof subtitle === "string" ? <Txt variant="bodySm" color={t.c.inkMuted}>{subtitle}</Txt> : subtitle) : null}
+    </View>
+  ) : null;
   const body = (
     <View style={{ gap: t.space.space4 }}>
-      {title ? (
-        <View style={{ gap: 6 }}>
-          <Txt variant="titleLg" accessibilityRole="header">
-            {title}
-          </Txt>
-          {subtitle ? (typeof subtitle === "string" ? <Txt color={t.c.inkMuted}>{subtitle}</Txt> : subtitle) : null}
-        </View>
-      ) : null}
+      {!compact ? heading : null}
       {children}
       {!compact ? footer : null}
       {!compact && hint ? (
@@ -65,7 +66,10 @@ export function AuthShell({
   if (compact) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg, paddingTop: insets.top }}>
-        <View style={{ paddingHorizontal: t.space.space5, paddingTop: t.space.space2 }}>{header}</View>
+        <View style={{ paddingHorizontal: t.space.space5, paddingTop: t.space.space2, gap: t.space.space3 }}>
+          {header}
+          {heading}
+        </View>
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
@@ -73,7 +77,6 @@ export function AuthShell({
             paddingTop: t.space.space4,
             paddingBottom: t.space.space6,
             gap: t.space.space4,
-            flexGrow: 1,
           }}
         >
           {body}

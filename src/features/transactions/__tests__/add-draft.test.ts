@@ -1,4 +1,4 @@
-import { draftIssues, quickExpenseDraft, savedMessage, saveLabel, type AddDraft } from "@/features/transactions/services/add-draft";
+import { descriptionFor, draftIssues, quickExpenseDraft, savedMessage, saveLabel, type AddDraft } from "@/features/transactions/services/add-draft";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
@@ -26,7 +26,7 @@ assertEqual(saveLabel("transfer"), "Save transfer");
 assertEqual(savedMessage("expense"), "Expense saved");
 
 const blank = draftIssues({ ...ready, description: "  ", amount: "", category: "" });
-assert(blank.some((issue) => issue.field === "description"), "A blank description is rejected");
+assert(!blank.some((issue) => issue.field === "description"), "A blank description is allowed");
 assert(blank.some((issue) => issue.field === "amount"), "A blank amount is rejected");
 assert(blank.some((issue) => issue.field === "category"), "A blank category is rejected");
 
@@ -41,11 +41,10 @@ assert(zero.some((issue) => issue.field === "amount"), "Zero is not an amount");
 
 const tapDraft = quickExpenseDraft();
 assertEqual(tapDraft.kind, "expense");
-assertEqual(tapDraft.description, "Expense");
-assert(
-  draftIssues(tapDraft).every((issue) => issue.field !== "description"),
-  "Default description does not block Save",
-);
+assertEqual(tapDraft.description, "");
 assertEqual(draftIssues({ ...tapDraft, amount: "1500" }).length, 0);
+assertEqual(descriptionFor({ ...tapDraft, amount: "1500" }), tapDraft.category);
+assertEqual(descriptionFor({ ...tapDraft, description: "  Shoprite " }), "Shoprite");
+assertEqual(descriptionFor({ ...tapDraft, kind: "transfer", category: "" }), "Transfer");
 
-console.log("add-draft: description, amount, and category are required before save");
+console.log("add-draft: amount and category required; blank description falls back to the category (3 taps)");

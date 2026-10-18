@@ -9,7 +9,11 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "@/design";
+import { installDurableCache } from "@/lib/durable-kv";
+import { useBillReminders } from "@/notifications/use-bill-reminders";
 import { SchemeProvider, SessionProvider, useScheme } from "@/state";
+
+installDurableCache();
 
 export const unstable_settings = {
   initialRouteName: "(auth)",
@@ -23,6 +27,7 @@ function ThemedStack() {
     Inter_700Bold,
   });
   const { scheme } = useScheme();
+  useBillReminders();
 
   return (
     <ThemeProvider font={ready ? "inter" : "system"} haptics scheme={scheme}>

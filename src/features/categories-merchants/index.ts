@@ -4,3 +4,4 @@ export { CategoryScreen } from "@/features/categories-merchants/screens/Category
 export { AddCategoryScreen, EditCategoryScreen } from "@/features/categories-merchants/screens/AddCategoryScreen";
 export { MerchantsScreen } from "@/features/categories-merchants/screens/MerchantsScreen";
 export { MerchantScreen } from "@/features/categories-merchants/screens/MerchantScreen";
+export { RulePreviewScreen } from "@/features/categories-merchants/screens/RulePreviewScreen";

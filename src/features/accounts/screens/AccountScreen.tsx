@@ -1,17 +1,23 @@
 import { useCallback, useState } from "react";
 import { View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Badge, Button, EmptyState, HeroBalance, SectionHeader, TransactionRow, Txt, useTheme } from "@/design";
+import { Badge, Button, Card, EmptyState, formatDateDMY, HeroBalance, SectionHeader, TransactionRow, Txt, useTheme } from "@/design";
 import { AccountManageSheet } from "@/features/accounts/components/AccountManageSheet";
 import { AccountScreenShell } from "@/features/accounts/components/AccountScreenShell";
 import { nairaAmount, rowKind, toLedgerAccount, type ApiAccount, type ApiTransaction } from "@/lib/money-map";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useSession } from "@/state";
 
-const EMPTY = { accounts: [] as ReturnType<typeof toLedgerAccount>[], txns: [] as ApiTransaction[] };
+const EMPTY = { account: null as ReturnType<typeof toLedgerAccount> | null, txns: [] as ApiTransaction[] };
 
 function kindLabel(kind: string): string {
   return kind ? kind.charAt(0).toUpperCase() + kind.slice(1) : "Account";
+}
+
+function connectionLabel(value?: string): string {
+  if (value === "imported") return "Imported";
+  if (value === "linked") return "Linked";
+  return "Manual";
 }
 
 export function AccountScreen() {
@@ -21,22 +27,20 @@ export function AccountScreen() {
   const { session } = useSession();
   const load = useCallback(
     async (workspaceId: string) => {
-      const [accountsRes, txRes] = await Promise.all([
-        session.listAccounts(workspaceId),
+      if (!id) return EMPTY;
+      const [accountRes, txRes] = await Promise.all([
+        session.getAccount(workspaceId, id),
         session.listTransactions(workspaceId),
       ]);
-      const accounts = (Array.isArray(accountsRes.data) ? accountsRes.data : []).map((row) =>
-        toLedgerAccount(row as ApiAccount),
-      );
+      const account = toLedgerAccount(accountRes.data as ApiAccount);
       const txns = (txRes.data.transactions ?? []).filter((row) => row.id);
-      return { accounts, txns };
+      return { account, txns };
     },
-    [session],
+    [id, session],
   );
   const { data } = useLiveQuery(load, EMPTY, id ? `account:${id}` : "account");
   const [manage, setManage] = useState(false);
-  const account = data.accounts.find((row) => row.id === id);
-  const names = new Map(data.accounts.map((row) => [row.id, row.name]));
+  const account = data.account;
   const activity = data.txns.filter((row) => row.accountId === id || row.toAccountId === id);
 
   return (
@@ -47,14 +51,13 @@ export function AccountScreen() {
         account ? [{ icon: "ellipsis", label: "Manage", onPress: () => setManage(true) }] : undefined
       }
     >
-      {!account && data.accounts.length > 0 ? (
-        <Txt variant="body" color={t.c.inkMuted}>
-          Account not in this workspace
-        </Txt>
-      ) : !account ? null : (
+      {!account ? null : (
         <>
           <HeroBalance value={account.balance} label="Balance" freshness={account.institution || undefined} />
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Txt variant="caption" color={t.c.inkMuted}>
+            Opening ₦{account.opening.toLocaleString("en-NG", { minimumFractionDigits: 2 })} · not income
+          </Txt>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <Badge tone="primary" icon="wallet">
               {kindLabel(account.kind)}
             </Badge>
@@ -63,10 +66,29 @@ export function AccountScreen() {
                 {account.institution}
               </Badge>
             ) : null}
+            {account.lastFour ? (
+              <Badge tone="neutral" icon={false}>
+                {`•••• ${account.lastFour}`}
+              </Badge>
+            ) : null}
+            {account.connectionType ? (
+              <Badge tone="neutral" icon={false}>
+                {account.connectionType}
+              </Badge>
+            ) : null}
           </View>
+          <Card>
+            <Txt variant="titleSm">Connection</Txt>
+            <Txt variant="body">{connectionLabel(account.connectionType)}</Txt>
+            <Txt variant="caption" color={t.c.inkMuted}>
+              {account.reconciledAsOf
+                ? `Last reconcile ${formatDateDMY(account.reconciledAsOf)}`
+                : "No import or reconcile yet"}
+            </Txt>
+          </Card>
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={{ flex: 1 }}>
-              <Button fullWidth onPress={() => router.push("/(tabs)/accounts/transfer")}>
+              <Button fullWidth onPress={() => router.push(`/(tabs)/accounts/transfer?from=${account.id}`)}>
                 Transfer
               </Button>
             </View>
@@ -76,6 +98,13 @@ export function AccountScreen() {
               </Button>
             </View>
           </View>
+          <Button
+            fullWidth
+            variant="secondary"
+            onPress={() => router.push(`/(tabs)/accounts/history?id=${account.id}`)}
+          >
+            Reconciliation history
+          </Button>
           <SectionHeader title="Activity" />
           {activity.length === 0 ? (
             <EmptyState title="Nothing here yet" icon="inbox">
@@ -96,7 +125,7 @@ export function AccountScreen() {
                   key={String(row.id)}
                   title={row.description || "Transaction"}
                   category={row.type}
-                  account={names.get(String(row.accountId)) ?? ""}
+                  account={account.name}
                   amount={nairaAmount(row.amount)}
                   kind={rowKind(row.type)}
                   onPress={() => router.push(`/(tabs)/transactions/${row.id}`)}
@@ -104,7 +133,12 @@ export function AccountScreen() {
               ))}
             </View>
           )}
-          <AccountManageSheet key={account.id} account={account} open={manage} onClose={() => setManage(false)} />
+          <AccountManageSheet
+            key={`${account.id}-${account.kind}-${account.opening}-${account.archived ? "a" : "l"}`}
+            account={account}
+            open={manage}
+            onClose={() => setManage(false)}
+          />
         </>
       )}
     </AccountScreenShell>

@@ -32,6 +32,7 @@ const config: ExpoConfig = {
   plugins: [
     "expo-font",
     "expo-sqlite",
+    "expo-notifications",
     [
       "expo-router",
       {

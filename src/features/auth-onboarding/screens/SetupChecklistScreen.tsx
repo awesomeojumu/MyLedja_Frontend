@@ -1,5 +1,5 @@
 import { Pressable, View } from "react-native";
-import { Button, Icon, ProgressRing, Txt, useTheme } from "@/design";
+import { Button, Icon, ProgressRing, Txt, useTheme, a11yState } from "@/design";
 import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
 import { TextLink } from "@/features/auth-onboarding/components/TextLink";
 import { EMPTY_SETUP, nextSetupStep, setupSteps, type SetupProgress } from "@/features/auth-onboarding/services/setup-progress";
@@ -8,12 +8,16 @@ export function SetupChecklistScreen({
   onBack,
   onContinue,
   onSkip,
+  onStep,
   progress = EMPTY_SETUP,
+  progressKnown = true,
 }: {
   onBack: () => void;
   onContinue: () => void;
   onSkip: () => void;
+  onStep?: (key: keyof SetupProgress) => void;
   progress?: SetupProgress;
+  progressKnown?: boolean;
 }) {
   const t = useTheme();
   const steps = setupSteps(progress);
@@ -26,7 +30,7 @@ export function SetupChecklistScreen({
       onBack={onBack}
       footer={
         <View style={{ gap: t.space.space3, alignItems: "stretch" }}>
-          <Button fullWidth size="lg" icon="landmark" onPress={onContinue}>
+          <Button fullWidth size="lg" icon="landmark" onPress={onContinue} disabled={!progressKnown} loading={!progressKnown}>
             {next?.title ?? "Go to Home"}
           </Button>
           <View style={{ alignItems: "center" }}>
@@ -48,9 +52,9 @@ export function SetupChecklistScreen({
         {steps.map((step, i) => (
           <Pressable
             key={step.key}
-            onPress={step.done ? undefined : onContinue}
+            onPress={!progressKnown || step.done ? undefined : () => (onStep ? onStep(step.key) : onContinue())}
             accessibilityRole="button"
-            accessibilityState={{ disabled: step.done }}
+            {...a11yState({ disabled: !progressKnown || step.done })}
             style={{
               flexDirection: "row",
               alignItems: "center",

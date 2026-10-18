@@ -1,5 +1,6 @@
 /* MyLedja Design System for React Native. Same names and props as the web bundle (window.Ledja). */
 export * from "@/design/tokens";
+export * from "@/design/font-stack";
 export * from "@/design/theme";
 export * from "@/design/format";
 export * from "@/design/haptics";
@@ -13,3 +14,4 @@ export * from "@/design/components/inputs";
 export * from "@/design/components/money";
 export * from "@/design/components/data";
 export * from "@/design/components/navigation";
+export * from "@/design/a11y";

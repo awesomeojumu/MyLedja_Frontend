@@ -11,12 +11,15 @@ export interface LedgerAccount {
   name: string;
   kind: AccountKind;
   institution: string;
+  connectionType?: "manual" | "linked" | "imported";
   currency: "NGN";
   balance: number;
   opening: number;
   lastFour?: string;
   reconciled: boolean;
   lastActivity: string;
+  externalBalance?: string | null;
+  reconciledAsOf?: string | null;
   icon: IconName;
   group: AccountGroup;
   statusLine: string;

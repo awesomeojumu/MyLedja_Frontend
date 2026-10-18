@@ -73,15 +73,15 @@ export function CreateAccountScreen({
         value={channel}
         onChange={setChannel}
       />
-      <TextField label="Full name" value={name} onChangeText={setName} autoCapitalize="words" />
+      <TextField label="Full name" value={name} onChangeText={setName} autoCapitalize="words" autoComplete="name" />
       {byPhone ? (
         <Banner tone="primary" title="Phone sign-up is coming soon">
           Use your email address for now.
         </Banner>
       ) : (
-        <TextField label="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+        <TextField label="Email address" autoComplete="email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
       )}
-      <TextField label="Password" value={password} onChangeText={setPassword} autoCapitalize="none" secureTextEntry />
+      <TextField label="Password" autoComplete="new-password" value={password} onChangeText={setPassword} autoCapitalize="none" secureTextEntry />
       <PasswordRules rules={rules} />
     </AuthShell>
   );

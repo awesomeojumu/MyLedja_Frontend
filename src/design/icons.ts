@@ -1,6 +1,6 @@
 /* Lucide icons used by MyLedja (lucide-react-native 0.460.0, ISC). Generated; add new icons here. */
 import {
-  House, ArrowLeftRight, Target, Wallet, Ellipsis, Plus, Search, Bell, ArrowDownLeft, ArrowUpRight, Repeat, Check, TriangleAlert, WifiOff, RefreshCw, X, ChevronRight, ChevronDown, Eye, EyeOff, Clock, Info, Undo2, Calendar, Settings, ShieldCheck, Landmark, Receipt, CloudOff, CircleCheck, CircleAlert, LoaderCircle, ChartPie, Banknote, PiggyBank, TrendingUp, TrendingDown, ChevronLeft, ChevronUp, Inbox, ListFilter, ArrowUpDown, Trash2, Pencil, Smartphone, Bus, ShoppingCart, Zap, Utensils, Fuel, GraduationCap, HeartPulse, Shirt, Gift, Clapperboard, Briefcase, Plane, Users, HandHeart, Sparkles, Wrench, CreditCard, Tv, PartyPopper, Sofa, Coins, Laptop, RotateCcw, Lightbulb, Delete, ArrowRight, Sun, Moon, Signal, Ban, Mail,
+  House, ArrowLeftRight, Target, Wallet, Ellipsis, Plus, Search, Bell, ArrowDownLeft, ArrowUpRight, Repeat, Check, TriangleAlert, WifiOff, RefreshCw, X, ChevronRight, ChevronDown, Eye, EyeOff, Clock, Info, Undo2, Calendar, Settings, ShieldCheck, Landmark, Receipt, CloudOff, CircleCheck, CircleAlert, LoaderCircle, ChartPie, Banknote, PiggyBank, TrendingUp, TrendingDown, ChevronLeft, ChevronUp, Inbox, ListFilter, ArrowUpDown, Trash2, Pencil, Smartphone, Bus, ShoppingCart, Zap, Utensils, Fuel, GraduationCap, HeartPulse, Shirt, Gift, Clapperboard, Briefcase, Plane, Users, HandHeart, Sparkles, Wrench, CreditCard, Tv, PartyPopper, Sofa, Coins, Laptop, RotateCcw, Lightbulb, Delete, ArrowRight, Sun, Moon, Signal, Ban, Mail, Archive,
 } from 'lucide-react-native';
 
 export const ICONS = {
@@ -80,6 +80,7 @@ export const ICONS = {
   'moon': Moon,
   'ban': Ban,
   'mail': Mail,
+  'archive': Archive,
 } as const;
 
 export type IconName = keyof typeof ICONS;

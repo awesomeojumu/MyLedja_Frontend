@@ -2,7 +2,7 @@
 import { Pressable, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from "@/design/theme";
-import { formatMoney } from "@/design/format";
+import { formatDateDMY, formatMoney } from "@/design/format";
 import { Rise, SpringPressable, useRollingNumber } from "@/design/motion";
 import { IconName } from "@/design/icons";
 import { CategoryIcon, Icon, StatusBadge, SyncStatus, Txt } from "@/design/components/foundations";
@@ -50,7 +50,7 @@ export function HeroBalance({ value, label = 'Available cash', currency, freshne
           </Pressable>
         ) : null}
       </View>
-      <Text accessibilityLabel={hidden ? 'Balance hidden' : formatMoney(value, currency)} style={[t.text('amountHero'), { color: t.c.onHero }]}>
+      <Text accessibilityLabel={hidden ? 'Balance hidden' : `Balance ${formatMoney(value, currency)}`} style={[t.text('amountHero'), { color: t.c.onHero }]}>
         {hidden ? '₦ ••••••' : formatMoney(rolled, currency)}
       </Text>
       {freshness ? <Txt variant="caption" color={t.c.onHeroMuted}>{freshness}</Txt> : null}
@@ -189,7 +189,22 @@ export function TransactionRow({ title, category, account, amount, kind, time, s
       </View>
     </View>
   );
-  return onPress ? <Pressable onPress={onPress} accessibilityRole="button" accessibilityHint="Opens the details" android_ripple={{ color: t.c.surfaceAlt }}>{body}</Pressable> : body;
+  const spoken = `${title}, ${kind}${hidden ? ', amount hidden' : ''}`;
+  return onPress ? (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={spoken}
+      accessibilityHint="Opens the details"
+      android_ripple={{ color: t.c.surfaceAlt }}
+    >
+      {body}
+    </Pressable>
+  ) : (
+    <View accessible accessibilityLabel={spoken}>
+      {body}
+    </View>
+  );
 }
 
 export interface TransactionDetailProps { transaction: { title: string; category?: string; amount: number; kind: 'expense' | 'income' | 'transfer'; account?: string; date?: string; status?: SyncStatus; added?: string }; onRetry?: () => void }
@@ -199,7 +214,7 @@ export function TransactionDetail({ transaction: x, onRetry }: TransactionDetail
   const facts: [string, string | undefined][] = [
     ['Category', x.kind === 'transfer' ? 'Transfer' : x.category],
     [x.kind === 'income' ? 'Paid into' : x.kind === 'transfer' ? 'Accounts' : 'Paid from', x.account],
-    ['Date', x.date],
+    ['Date', formatDateDMY(x.date) || x.date],
     ['Added', x.added ?? 'By you, on this phone'],
     ['Sync', x.status === 'failed' ? 'Not backed up yet' : x.status === 'pending' ? 'Waiting to sync' : x.status === 'conflict' ? 'Needs review' : 'Backed up'],
   ];

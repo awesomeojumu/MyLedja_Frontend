@@ -13,10 +13,16 @@ import {
   Txt,
   useTheme,
 } from "@/design";
-import { draftIssues, quickExpenseDraft, saveLabel, savedMessage, type AddDraft, type DraftIssue, type EntryKind } from "@/features/transactions/services/add-draft";
+import { rememberAccountOptions, type AccountOption } from "@/features/accounts/services/account-options";
+import { draftIssues, quickExpenseDraft, saveLabel, type AddDraft, type DraftIssue, type EntryKind } from "@/features/transactions/services/add-draft";
+import { commitAdd } from "@/features/transactions/services/commit-add";
 import { afterMoneyWrite } from "@/lib/after-money";
-import { newId } from "@/lib/ids";
+import { fetchScoped, readScoped } from "@/lib/cached-fetch";
 import { useSession } from "@/state";
+import { outboxForUser } from "@/sync/user-outbox";
+
+type Option = AccountOption;
+type CategoryOption = Option & { kind: string };
 
 const KINDS = [
   { value: "expense", label: "Expense" },
@@ -27,10 +33,10 @@ const KINDS = [
 function draftFor(kind?: EntryKind): AddDraft {
   const next = quickExpenseDraft();
   if (kind === "income") {
-    return { ...next, kind: "income", description: "Income", category: INCOME_CATEGORIES[0] };
+    return { ...next, kind: "income", description: "", category: INCOME_CATEGORIES[0] };
   }
   if (kind === "transfer") {
-    return { ...next, kind: "transfer", description: "Transfer", category: "" };
+    return { ...next, kind: "transfer", description: "", category: "" };
   }
   return next;
 }
@@ -51,28 +57,49 @@ export function AddTransactionSheet({
   initialKind?: EntryKind;
 }) {
   const t = useTheme();
-  const { session, workspaces } = useSession();
+  const { session, workspaces, user } = useSession();
   const [draft, setDraft] = useState<AddDraft>(() => draftFor(initialKind));
   const [issues, setIssues] = useState<DraftIssue[]>([]);
   const [more, setMore] = useState(false);
-  const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
-  const [fromId, setFromId] = useState("");
-  const [toId, setToId] = useState("");
+  const cacheUser = user?.userId;
+  const cacheWorkspace = workspaces[0]?.id;
+  const [initialAccounts] = useState(() =>
+    cacheUser && cacheWorkspace ? readScoped<Option[]>(cacheUser, cacheWorkspace, "account-options") : null,
+  );
+  const [accounts, setAccounts] = useState<Option[]>(() => initialAccounts ?? []);
+  const [categories, setCategories] = useState<CategoryOption[]>(() =>
+    cacheUser && cacheWorkspace ? readScoped<CategoryOption[]>(cacheUser, cacheWorkspace, "category-options") ?? [] : [],
+  );
+  const [accountsKnown, setAccountsKnown] = useState(initialAccounts != null);
+  const [fromId, setFromId] = useState(() => initialAccounts?.[0]?.id ?? "");
+  const [toId, setToId] = useState(() => initialAccounts?.[1]?.id ?? "");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const workspaceId = workspaces[0]?.id;
-    if (!workspaceId) return;
-    void session.listAccounts(workspaceId).then((res) => {
-      const rows = (Array.isArray(res.data) ? res.data : []).map((row) => {
-        const rec = row as { id?: string; name?: string };
-        return { id: String(rec.id ?? ""), name: String(rec.name ?? rec.id) };
-      });
+    const userId = user?.userId;
+    if (!workspaceId || !userId || !open) return;
+    const applyAccounts = (rows: Option[] | null) => {
+      if (!rows) return;
       setAccounts(rows);
-      if (rows[0]) setFromId(rows[0].id);
-      if (rows[1]) setToId(rows[1].id);
+      setAccountsKnown(true);
+      setFromId((current) => current || rows[0]?.id || "");
+      setToId((current) => current || rows[1]?.id || "");
+    };
+    void fetchScoped<Option[]>(userId, workspaceId, "account-options", async () => {
+      const res = await session.listAccounts(workspaceId);
+      return rememberAccountOptions(userId, workspaceId, res.data);
+    }).then(({ data, offline }) => {
+      if (data) applyAccounts(data);
+      else if (!offline) setAccountsKnown(true);
     });
-  }, [session, workspaces]);
+    void fetchScoped<CategoryOption[]>(userId, workspaceId, "category-options", async () => {
+      const res = await session.listCategories(workspaceId);
+      return res.data.map((row) => ({ id: row.id, name: row.name, kind: row.kind }));
+    }).then(({ data }) => {
+      if (data) setCategories(data);
+    });
+  }, [open, session, user, workspaces]);
 
   const setKind = (kind: EntryKind) => {
     const category = kind === "income" ? INCOME_CATEGORIES[0] : EXPENSE_CATEGORIES[0];
@@ -84,36 +111,32 @@ export function AddTransactionSheet({
     setIssues(next);
     if (next.length > 0) return;
     const workspaceId = workspaces[0]?.id;
-    if (!workspaceId || !fromId) {
-      onSaved("Add an account first.");
-      return;
-    }
-    const amount = draft.amount.includes(".") ? draft.amount : `${draft.amount}.00`;
-    const body =
-      draft.kind === "transfer"
-        ? {
-            operationId: newId(),
-            type: "transfer",
-            amount,
-            accountId: fromId,
-            toAccountId: toId,
-            description: draft.description,
-            status: "posted",
-          }
-        : {
-            operationId: newId(),
-            type: draft.kind,
-            amount,
-            accountId: fromId,
-            description: draft.description,
-            status: "posted",
-          };
+    const userId = user?.userId;
+    if (!workspaceId || !userId) return;
+    const categoryId = categories.find((row) => row.name === draft.category && row.kind === draft.kind)?.id;
     setBusy(true);
-    void session
-      .createTransaction(workspaceId, body)
-      .then(() => {
-        afterMoneyWrite();
-        onSaved(savedMessage(draft.kind));
+    void commitAdd(
+      outboxForUser(userId),
+      {
+        userId,
+        workspaceId,
+        draft,
+        chosenAccountId: fromId || undefined,
+        accounts,
+        knownEmpty: accountsKnown && accounts.length === 0,
+        categoryId,
+        toAccountId: toId,
+      },
+      (ws, payload, operationId) => session.createTransaction(ws, { ...(payload as object), operationId }),
+    )
+      .then((result) => {
+        if (result.kind === "invalid") return;
+        if (result.kind === "refused") {
+          onSaved(result.message);
+          return;
+        }
+        if (result.outcome === "synced" || result.outcome === "saved_on_device") afterMoneyWrite();
+        onSaved(result.toast);
       })
       .catch((err: Error) => onSaved(err.message))
       .finally(() => setBusy(false));
@@ -138,7 +161,7 @@ export function AddTransactionSheet({
       <SegmentedControl label="Type" options={KINDS} value={draft.kind} onChange={(value) => setKind(value as EntryKind)} />
       <TextField
         label="What it was for"
-        placeholder="Jollof rice"
+        placeholder={draft.kind === "transfer" ? "Optional" : `Optional, e.g. ${draft.category || "Jollof rice"}`}
         value={draft.description}
         onChangeText={(description) => setDraft((current) => ({ ...current, description }))}
         error={messageFor(issues, "description")}
@@ -183,13 +206,13 @@ export function AddTransactionSheet({
             value={draft.account}
             onChangeText={(account) => setDraft((current) => ({ ...current, account }))}
           />
-          <DatePicker label="Date" value={draft.date} onChange={(date) => setDraft((current) => ({ ...current, date }))} />
+          <DatePicker
+            label="Date"
+            value={draft.date}
+            onChange={(date) => setDraft((current) => ({ ...current, date }))}
+          />
         </View>
-      ) : (
-        <Txt variant="caption" color={t.c.inkMuted}>
-          Posted today
-        </Txt>
-      )}
+      ) : null}
     </Sheet>
   );
 }

@@ -12,5 +12,15 @@
       "distribution": "internal"
     },
     "production": {}
+  },
+  "submit": {
+    "preview": {
+      "android": {
+        "track": "internal"
+      },
+      "ios": {
+        "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID"
+      }
+    }
   }
 }

@@ -19,7 +19,7 @@ export function navMode(widthClass: WidthClass, portrait = false): NavMode {
   return "bottom";
 }
 
-/** Phone bar: Home, Transactions, +, Plan, Accounts. More is the Home overflow. */
+/** Phone bar: Home, Transactions, +, Plan, Accounts. */
 export function phoneBarDestinations(): readonly ["home", "transactions", "plan", "accounts"] {
   return ["home", "transactions", "plan", "accounts"];
 }

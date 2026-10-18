@@ -1,5 +1,5 @@
 import { ApiError, createApiClient, type FetchLike } from "@/api/client";
-import { memoryTokenStore, SessionCore, UnverifiedEmailError } from "@/lib/session-core";
+import { isNetworkFailure, memoryTokenStore, SessionCore, UnverifiedEmailError } from "@/lib/session-core";
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
@@ -234,7 +234,67 @@ async function main(): Promise<void> {
   assertEqual(recovering.getState().status, "signedOut", "reset leaves the device signed out");
   assertEqual(recovering.getState().pendingEmail, null, "reset clears the pending email");
 
-  console.log("session-core: sign-up, verify, refresh, sign-out wipe, user switch, restore, recovery");
+  // An offline launch opens on the saved identity instead of Welcome, then reconnects once the server answers.
+  const travelStore = memoryTokenStore();
+  const traveller = new SessionCore(api, travelStore);
+  await traveller.signIn("ada@example.com", "correct-horse-1");
+  backend.setOffline(true);
+  const relaunched = new SessionCore(api, travelStore);
+  await relaunched.restore();
+  assertEqual(relaunched.getState().status, "signedIn", "offline launch stays signed in");
+  assertEqual(relaunched.getState().offline, true, "offline launch is marked offline");
+  assertEqual(relaunched.getState().user?.email, "ada@example.com", "offline launch knows who is signed in");
+  let offlineCall = 0;
+  try {
+    await relaunched.authed((token) => api.me(token));
+  } catch (error) {
+    offlineCall = error instanceof ApiError ? error.status : -1;
+  }
+  assertEqual(offlineCall, 0, "calls while offline fail as network, never as a sign-out");
+  assertEqual(relaunched.getState().status, "signedIn", "a failed call offline does not sign out");
+  backend.setOffline(false);
+  assertEqual(await relaunched.reconnect(), true, "reconnect succeeds once online");
+  assertEqual(relaunched.getState().offline, false, "back to a live session");
+  const live = await relaunched.authed((token) => api.me(token));
+  assertEqual(live.email, "ada@example.com", "live calls work after reconnect");
+
+  // A revoked token found on reconnect is a real sign-out.
+  backend.setOffline(true);
+  const revoked = new SessionCore(api, travelStore);
+  await revoked.restore();
+  backend.refreshTokens.clear();
+  backend.setOffline(false);
+  assertEqual(await revoked.reconnect(), false, "revoked token cannot reconnect");
+  assertEqual(revoked.getState().status, "signedOut", "revoked token signs out");
+  const afterRevoke = new SessionCore(api, memoryTokenStore());
+  backend.setOffline(true);
+  await afterRevoke.restore();
+  assertEqual(afterRevoke.getState().status, "signedOut", "no saved token, no offline sign-in");
+  backend.setOffline(false);
+
+  backend.setOffline(false);
+  const travelAgain = memoryTokenStore();
+  const onlineCore = new SessionCore(api, travelAgain);
+  await onlineCore.signIn("ada@example.com", "correct-horse-1");
+  backend.setOffline(true);
+  const afterFetch = new SessionCore(api, travelAgain);
+  await afterFetch.restore();
+  assertEqual(afterFetch.getState().status, "signedIn", "TypeError refresh stays signed in");
+  assertEqual(afterFetch.getState().offline, true, "TypeError refresh is offline");
+  assertEqual(Boolean(await travelAgain.get()), true, "TypeError must not clear the refresh token");
+  assert(isNetworkFailure(new TypeError("Failed to fetch")), "TypeError is a network failure");
+  assert(isNetworkFailure(new Error("Network request failed")), "fetch wording is a network failure");
+  const tokenOnly = memoryTokenStore();
+  await tokenOnly.set("rt-keep");
+  backend.setOffline(true);
+  const noIdentity = new SessionCore(api, tokenOnly);
+  await noIdentity.restore();
+  assertEqual(noIdentity.getState().status, "signedIn", "a token without identity does not open Welcome");
+  assertEqual(noIdentity.getState().offline, true, "token-only restore is offline");
+  assertEqual(await tokenOnly.get(), "rt-keep", "the refresh token stays on the device");
+  backend.setOffline(false);
+
+  console.log("session-core: sign-up, verify, refresh, sign-out wipe, user switch, restore, recovery, offline launch");
 }
 
 main().catch((error: unknown) => {

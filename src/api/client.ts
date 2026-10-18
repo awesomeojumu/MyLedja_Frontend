@@ -10,6 +10,8 @@ export interface Tokens {
 export interface Me {
   userId: string;
   email: string;
+  /** Lock-screen privacy (MYL-023). Missing means on. */
+  hideLockScreenAmounts?: boolean;
 }
 
 export interface WorkspaceSummary {
@@ -75,6 +77,9 @@ const FRIENDLY: Record<string, string> = {
   "That code is missing.": "Paste the code from Mono first.",
   "Could not reach Mono. Try again.": "Could not reach Mono. Try again.",
   "Mono could not complete that step.": "Mono could not complete that step.",
+  "Refund needs the original transaction.": "Choose the expense you’re refunding.",
+  "Only an expense can be refunded.": "Only an expense can be refunded.",
+  "A refund can’t be more than what’s left of the original expense.": "That’s more than what’s left to refund on this expense.",
 };
 
 export function friendlyMessage(reason: string): string {
@@ -135,6 +140,13 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
       call<BankLinkStart>("POST", "/bank-integrations/link", workspaceId ? { workspaceId } : {}, accessToken),
     completeBankLink: (accessToken: string, code: string, workspaceId?: string) =>
       call<BankLinkComplete>("POST", "/bank-integrations/link/complete", { code, workspaceId }, accessToken),
+    listInstitutions: (accessToken: string, workspaceId: string) =>
+      call<{ status: "ok"; data: { id: string; name: string }[] }>(
+        "GET",
+        `/workspaces/${workspaceId}/institutions`,
+        undefined,
+        accessToken,
+      ),
     createAccount: (accessToken: string, workspaceId: string, body: unknown) =>
       call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/accounts`, body, accessToken),
     listAccounts: (accessToken: string, workspaceId: string, archived = false) =>
@@ -151,8 +163,41 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
         { opening },
         accessToken,
       ),
+    setAccountKind: (accessToken: string, workspaceId: string, accountId: string, kind: string) =>
+      call<{ status: "ok"; data: unknown }>(
+        "POST",
+        `/workspaces/${workspaceId}/accounts/${accountId}/kind`,
+        { kind },
+        accessToken,
+      ),
     archiveAccount: (accessToken: string, workspaceId: string, accountId: string) =>
       call<{ status: "ok"; data: unknown }>("DELETE", `/workspaces/${workspaceId}/accounts/${accountId}`, undefined, accessToken),
+    getAccount: (accessToken: string, workspaceId: string, accountId: string) =>
+      call<{ status: "ok"; data: unknown }>(
+        "GET",
+        `/workspaces/${workspaceId}/accounts/${accountId}`,
+        undefined,
+        accessToken,
+      ),
+    renameAccount: (accessToken: string, workspaceId: string, accountId: string, name: string) =>
+      call<{ status: "ok"; data: unknown }>(
+        "PATCH",
+        `/workspaces/${workspaceId}/accounts/${accountId}`,
+        { name },
+        accessToken,
+      ),
+    restoreAccount: (accessToken: string, workspaceId: string, accountId: string) =>
+      call<{ status: "ok"; data: unknown }>(
+        "POST",
+        `/workspaces/${workspaceId}/accounts/${accountId}/restore`,
+        {},
+        accessToken,
+      ),
+    listReconciliations: (accessToken: string, workspaceId: string, accountId: string) =>
+      call<{
+        status: "ok";
+        data: { at: string; external: string; calculated: string; difference: string; reconciled: boolean }[];
+      }>("GET", `/workspaces/${workspaceId}/accounts/${accountId}/reconciliations`, undefined, accessToken),
     createTransaction: (accessToken: string, workspaceId: string, body: unknown) =>
       call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/transactions`, body, accessToken),
     listTransactions: (accessToken: string, workspaceId: string) =>
@@ -213,9 +258,20 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
         accessToken,
       ),
     search: (accessToken: string, workspaceId: string, q: string) =>
-      call<{ status: "ok"; data: { transactions: { id: string; label: string }[] } }>(
+      call<{
+        status: "ok";
+        data: {
+          transactions: { id: string; label: string; amount?: string; type?: string }[];
+          accounts: { id: string; label: string }[];
+          bills: { id: string; label: string }[];
+          goals: { id: string; label: string }[];
+          debts: { id: string; label: string }[];
+        };
+      }>("GET", `/workspaces/${workspaceId}/search?q=${encodeURIComponent(q)}`, undefined, accessToken),
+    budgetViews: (accessToken: string, workspaceId: string, budgetId: string) =>
+      call<{ status: "ok"; data: { spent: string; remaining: string; views: Record<string, { value: string; basis: string }> } }>(
         "GET",
-        `/workspaces/${workspaceId}/search?q=${encodeURIComponent(q)}`,
+        `/workspaces/${workspaceId}/budgets/${budgetId}`,
         undefined,
         accessToken,
       ),
@@ -234,11 +290,13 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
       call<{ status: "ok"; data: { id: string }[] }>("GET", "/me/sessions", undefined, accessToken),
     revokeSession: (accessToken: string, id: string) =>
       call<{ status: "ok"; data: { id: string } }>("DELETE", `/me/sessions/${id}`, undefined, accessToken),
-    previewImport: (accessToken: string, workspaceId: string, text: string) =>
+    startDeletion: (accessToken: string) =>
+      call<{ status: "ok"; data: { started: boolean } }>("POST", "/me/deletion", {}, accessToken),
+    previewImport: (accessToken: string, workspaceId: string, text: string, accountId?: string) =>
       call<{ status: "ok"; data: { importId: string; accepted: unknown[]; rejected: unknown[] } }>(
         "POST",
         `/workspaces/${workspaceId}/imports/preview`,
-        { text },
+        { text, accountId },
         accessToken,
       ),
     commitImport: (accessToken: string, workspaceId: string, importId: string, body: unknown) =>

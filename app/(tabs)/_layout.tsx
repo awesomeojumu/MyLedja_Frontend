@@ -8,9 +8,10 @@ import {
   DashboardOverlayProvider,
 } from "@/features/dashboard";
 import { AddTransactionSheet } from "@/features/transactions";
-import { activeFromPath, isTabRoot, navMode, phoneBarDestinations } from "@/lib";
+import { activeFromPath, isTabRoot, navMode, phoneBarDestinations, showPhoneBar } from "@/lib";
 import { isWarmed } from "@/lib/session-warmup";
 import { UserScope, useSession } from "@/state";
+import { useOutboxSync } from "@/sync/use-outbox-sync";
 
 const HREFS: Record<Destination, "/(tabs)" | "/(tabs)/transactions" | "/(tabs)/plan" | "/(tabs)/accounts" | "/(tabs)/more"> = {
   home: "/(tabs)",
@@ -41,6 +42,7 @@ function TabsLayoutInner() {
   const mode = navMode(t.widthClass, t.portrait);
   const active = activeFromPath(pathname);
   const { workspaces } = useSession();
+  useOutboxSync();
   const [addOpen, setAddOpen] = useState(false);
   const [addKind, setAddKind] = useState<"expense" | "income" | undefined>();
   const [addSession, setAddSession] = useState(0);
@@ -59,10 +61,19 @@ function TabsLayoutInner() {
 
   const tabs = (
     <Tabs
-      screenOptions={{ headerShown: false }}
+      screenOptions={{
+        headerShown: false,
+        sceneStyle: { backgroundColor: t.c.bg },
+        tabBarStyle: {
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+      }}
       tabBar={() =>
-        mode === "bottom" && !addOpen ? (
-          <BottomNav active={active} items={NAV.filter(([id]) => phoneIds.has(id))} onNavigate={go} onAdd={() => router.push("/(tabs)/transactions/chooser")} addLabel="Add money" />
+        mode === "bottom" && !addOpen && showPhoneBar(pathname) ? (
+          <BottomNav key={t.scheme} active={active} items={NAV.filter(([id]) => phoneIds.has(id))} onNavigate={go} onAdd={() => openSheet("expense")} addLabel="Add money" />
         ) : null
       }
     >
@@ -70,7 +81,7 @@ function TabsLayoutInner() {
       <Tabs.Screen name="transactions" />
       <Tabs.Screen name="plan" />
       <Tabs.Screen name="accounts" />
-      <Tabs.Screen name="more" />
+      <Tabs.Screen name="more" options={{ href: null }} />
       <Tabs.Screen name="cash-flow" options={{ href: null }} />
       <Tabs.Screen name="net-worth" options={{ href: null }} />
       <Tabs.Screen name="upcoming" options={{ href: null }} />
