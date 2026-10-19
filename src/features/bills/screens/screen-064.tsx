@@ -1,1 +1,1 @@
-export { BillsListScreen as Screen064 } from "@/features/bills/screens/bill-screens";
+export { BillPaymentHistoryScreen as Screen064 } from "@/features/bills/screens/bill-screens";

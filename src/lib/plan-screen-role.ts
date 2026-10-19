@@ -28,6 +28,19 @@ const DEBT: Record<string, PlanRole> = {
   "151": "history",
 };
 
+const BILLS: Record<string, PlanRole> = {
+  "058": "list",
+  "059": "create",
+  "060": "detail",
+  "061": "edit",
+  "062": "action",
+  "063": "action",
+  "064": "history",
+  "065": "insights",
+  "066": "edit",
+  "150": "list",
+};
+
 const BUDGET: Record<string, PlanRole> = {
   "048": "list",
   "049": "create",
@@ -44,7 +57,7 @@ const BUDGET: Record<string, PlanRole> = {
 export function planScreenSpec(id: string, title: string): PlanScreenSpec | null {
   const path = pathFor(id);
   if (!path) return null;
-  const role = BUDGET[id] ?? INCOME[id] ?? DEBT[id] ?? roleFromTitle(title);
+  const role = BUDGET[id] ?? BILLS[id] ?? INCOME[id] ?? DEBT[id] ?? roleFromTitle(title);
   return { path, role, empty: `No ${title.toLowerCase()} yet` };
 }
 
