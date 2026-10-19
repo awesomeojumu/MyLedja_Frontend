@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createApiClient } from "@/api/client";
-import { readPublicConfig, resolveApiUrl } from "@/lib/config";
+import { apiUrlForPageHost, readPublicConfig, resolveApiUrl } from "@/lib/config";
 import { secureTokenStore } from "@/lib/secure-token-store";
 import { SessionCore, type SessionState } from "@/lib/session-core";
 
@@ -9,8 +9,10 @@ const SessionContext = createContext<SessionCore | null>(null);
 
 function createSession(): SessionCore {
   const config = readPublicConfig();
-  const baseUrl =
+  const fromEnv =
     config.appEnv === "development" ? resolveApiUrl(config.apiUrl, Constants.expoConfig?.hostUri) : config.apiUrl;
+  const pageHost = typeof location !== "undefined" ? location.hostname : undefined;
+  const baseUrl = apiUrlForPageHost(pageHost, fromEnv);
   return new SessionCore(createApiClient(baseUrl, (url, init) => fetch(url, init)), secureTokenStore());
 }
 

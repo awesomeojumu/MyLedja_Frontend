@@ -14,7 +14,16 @@ export function readPublicConfig(env: EnvMap = process.env): PublicConfig {
   };
 }
 
+const LIVE_API = "https://myledja-backend.onrender.com";
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Expo may drop Vercel env at export time, so hosted web still needs a real API. */
+export function apiUrlForPageHost(hostname: string | undefined, apiUrl: string): string {
+  if (!hostname) return apiUrl;
+  if (hostname === "app.myledja.com") return LIVE_API;
+  if (/^myledja-(web|app)(-[a-z0-9-]+)?\.vercel\.app$/.test(hostname)) return LIVE_API;
+  return apiUrl;
+}
 
 /**
  * On a phone, "localhost" is the phone itself. In development, point a loopback API URL at the machine Expo

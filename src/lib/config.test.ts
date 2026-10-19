@@ -1,4 +1,4 @@
-import { readPublicConfig, resolveApiUrl } from "@/lib/config";
+import { apiUrlForPageHost, readPublicConfig, resolveApiUrl } from "@/lib/config";
 
 function assertEqual(actual: string, expected: string): void {
   if (actual !== expected) {
@@ -25,4 +25,7 @@ assertEqual(resolveApiUrl("http://127.0.0.1:4000/", "10.0.0.5:8081"), "http://10
 assertEqual(resolveApiUrl("http://localhost:4000", null), "http://localhost:4000");
 assertEqual(resolveApiUrl("http://localhost:4000", "localhost:8081"), "http://localhost:4000");
 assertEqual(resolveApiUrl("https://api.example.com", "192.168.1.20:8081"), "https://api.example.com");
+assertEqual(apiUrlForPageHost("app.myledja.com", "http://localhost:4000"), "https://myledja-backend.onrender.com");
+assertEqual(apiUrlForPageHost("myledja-app.vercel.app", "http://localhost:4000"), "https://myledja-backend.onrender.com");
+assertEqual(apiUrlForPageHost("localhost", "http://localhost:4000"), "http://localhost:4000");
 console.log("config: env and device API URL");
