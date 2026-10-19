@@ -5,7 +5,6 @@ import {
   Banner,
   Button,
   Card,
-  Icon,
   Txt,
   useTheme,
 } from "@/design";
