@@ -1,1 +1,1 @@
-export { HealthRunwayScreen as Screen112 } from "@/features/financial-health/screens/health-screens";
+export { CategoryTrendsScreen as Screen112 } from "@/features/financial-health/screens/health-screens";

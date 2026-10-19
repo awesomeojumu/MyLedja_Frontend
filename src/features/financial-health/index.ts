@@ -1,5 +1,15 @@
 export { HubScreen } from "@/features/financial-health/screens/HubScreen";
 export {
+  ReportsHubScreen,
+  IncomeExpenseReportScreen,
+  CategoryTrendsScreen,
+  NetWorthReportScreen,
+  CashFlowReportScreen,
+  DataQualityHealthScreen,
+  CustomReportScreen,
+  ExportPrintScreen,
+  StatementOfAccountScreen,
+  PeriodComparisonsScreen,
   HealthHubScreen,
   HealthScoreScreen,
   HealthRunwayScreen,
