@@ -20,6 +20,26 @@ export interface TokenStore {
   setIdentity?(identity: Identity): Promise<void>;
 }
 
+let inFlightRefresh: Promise<{ accessToken: string; refreshToken: string }> | null = null;
+
+/** One refresh at a time per tab. Two restores (React Strict Mode) must not rotate the same token twice. */
+export async function exchangeRefresh(
+  api: Pick<ApiClient, "refresh">,
+  store: TokenStore,
+): Promise<{ accessToken: string; refreshToken: string }> {
+  if (inFlightRefresh) return inFlightRefresh;
+  inFlightRefresh = (async () => {
+    const refreshToken = await store.get();
+    if (!refreshToken) throw new ApiError(401, "invalid refresh token", "Sign in again.");
+    const tokens = await api.refresh(refreshToken);
+    await store.set(tokens.refreshToken);
+    return tokens;
+  })().finally(() => {
+    inFlightRefresh = null;
+  });
+  return inFlightRefresh;
+}
+
 export function memoryTokenStore(): TokenStore {
   let value: string | null = null;
   let identity: Identity | null = null;
@@ -95,7 +115,7 @@ export class SessionCore {
       return;
     }
     try {
-      const tokens = await this.api.refresh(refreshToken);
+      const tokens = await exchangeRefresh(this.api, this.store);
       await this.adopt(tokens.accessToken, tokens.refreshToken);
     } catch (error) {
       if (isNetworkFailure(error)) {
@@ -125,7 +145,7 @@ export class SessionCore {
         await this.wipe();
         return false;
       }
-      const tokens = await this.api.refresh(refreshToken);
+      const tokens = await exchangeRefresh(this.api, this.store);
       await this.adopt(tokens.accessToken, tokens.refreshToken);
       return true;
     } catch (error) {
@@ -230,9 +250,8 @@ export class SessionCore {
         throw error;
       }
       try {
-        const tokens = await this.api.refresh(refreshToken);
+        const tokens = await exchangeRefresh(this.api, this.store);
         this.accessToken = tokens.accessToken;
-        await this.store.set(tokens.refreshToken);
       } catch (refreshError) {
         // A dropped connection is not a sign-out; only the server refusing the refresh token is.
         if (!isNetworkFailure(refreshError)) await this.wipe();

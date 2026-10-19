@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { afterPreferences, InitialPreferencesScreen } from "@/features/auth-onboarding";
+import { preferencesPatch } from "@/features/auth-onboarding/services/preferences-patch";
 import { useSession } from "@/state";
 
 export default function PreferencesRoute() {
@@ -7,10 +8,10 @@ export default function PreferencesRoute() {
   const { session, workspaces } = useSession();
   return (
     <InitialPreferencesScreen
-      onSubmit={(currency) => {
+      onSubmit={async (prefs) => {
         const workspaceId = workspaces[0]?.id;
         if (workspaceId) {
-          void session.patchSetup(workspaceId, { defaultCurrency: currency, setupProgress: { currency: true } });
+          await session.patchSetup(workspaceId, preferencesPatch(prefs));
         }
         router.push(afterPreferences());
       }}

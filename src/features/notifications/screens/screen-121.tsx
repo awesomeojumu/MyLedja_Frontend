@@ -1,5 +1,1 @@
-import { SettingsLiveScreen } from "@/lib/settings-live-screen";
-
-export function Screen121() {
-  return <SettingsLiveScreen id="121" />;
-}
+export { LockScreenAlertsScreen as Screen121 } from "@/features/notifications/screens/prefs-screens";

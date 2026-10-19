@@ -376,7 +376,13 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
         accessToken,
       ),
     getWorkspace: (accessToken: string, workspaceId: string) =>
-      call<{ id: string; name?: string; setupProgress?: Record<string, boolean>; defaultCurrency?: string }>(
+      call<{
+        id: string;
+        name?: string;
+        setupProgress?: Record<string, boolean>;
+        defaultCurrency?: string;
+        reminders?: { bills?: boolean; budget?: boolean; summary?: boolean };
+      }>(
         "GET",
         `/workspaces/${workspaceId}`,
         undefined,

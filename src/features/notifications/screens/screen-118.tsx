@@ -1,5 +1,1 @@
-import { SettingsLiveScreen } from "@/lib/settings-live-screen";
-
-export function Screen118() {
-  return <SettingsLiveScreen id="118" />;
-}
+export { NotificationsListScreen as Screen118 } from "@/features/notifications/screens/notice-screens";

@@ -1,5 +1,5 @@
-import { GatedCopy } from "@/lib/gated-copy";
+import { NotificationsListScreen } from "@/features/notifications/screens/notice-screens";
 
-export function HubScreen({ onBack }: { onBack?: () => void } = {}) {
-  return <GatedCopy title="Notifications" onBack={onBack} />;
+export function HubScreen({ onBack: _onBack }: { onBack?: () => void } = {}) {
+  return <NotificationsListScreen />;
 }

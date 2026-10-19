@@ -1,23 +1,36 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { Button, SegmentedControl, Select, Txt, useTheme, a11yState } from "@/design";
+import { Banner, Button, SegmentedControl, Select, Txt, useTheme, a11yState } from "@/design";
 import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
+import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
+import type { InitialPreferences } from "@/features/auth-onboarding/services/preferences-patch";
 
 export function InitialPreferencesScreen({
   onBack,
   onSubmit,
 }: {
   onBack?: () => void;
-  onSubmit: (currency: string) => void;
+  onSubmit: (prefs: InitialPreferences) => void | Promise<void>;
 }) {
   const t = useTheme();
+  const { busy, error, run } = useSubmit();
   const [currency, setCurrency] = useState("NGN");
   const [locale, setLocale] = useState("en-NG");
   const [zone, setZone] = useState("Africa/Lagos");
-  const [weekStart, setWeekStart] = useState("monday");
+  const [weekStart, setWeekStart] = useState<"monday" | "sunday">("monday");
   const [bills, setBills] = useState(true);
   const [budget, setBudget] = useState(true);
   const [summary, setSummary] = useState(false);
+  const save = () =>
+    run(async () => {
+      await onSubmit({
+        currency,
+        locale,
+        timezone: zone,
+        weekStartsOn: weekStart,
+        reminders: { bills, budget, summary },
+      });
+    });
   return (
     <AuthShell
       brand="setup"
@@ -26,11 +39,12 @@ export function InitialPreferencesScreen({
       title="How money should look"
       subtitle="Change these any time in Settings."
       footer={
-        <Button fullWidth size="lg" onPress={() => onSubmit(currency)}>
+        <Button fullWidth size="lg" loading={busy} onPress={save}>
           Continue
         </Button>
       }
     >
+      {error ? <Banner tone="danger" title={error} /> : null}
       <Select
         label="Main currency"
         value={currency}
@@ -60,7 +74,7 @@ export function InitialPreferencesScreen({
             { value: "sunday", label: "Sunday" },
           ]}
           value={weekStart}
-          onChange={setWeekStart}
+          onChange={(value) => setWeekStart(value === "sunday" ? "sunday" : "monday")}
         />
       </View>
       <Txt variant="overline" color={t.c.inkMuted}>

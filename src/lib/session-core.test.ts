@@ -294,6 +294,15 @@ async function main(): Promise<void> {
   assertEqual(await tokenOnly.get(), "rt-keep", "the refresh token stays on the device");
   backend.setOffline(false);
 
+  await session.signIn("ada@example.com", "correct-horse-1");
+  const raceStore = store;
+  const first = new SessionCore(api, raceStore);
+  const second = new SessionCore(api, raceStore);
+  await Promise.all([first.restore(), second.restore()]);
+  assertEqual(first.getState().status, "signedIn", "first restore stays signed in");
+  assertEqual(second.getState().status, "signedIn", "second restore stays signed in");
+  assert(Boolean(await raceStore.get()), "shared refresh does not drop the token");
+
   console.log("session-core: sign-up, verify, refresh, sign-out wipe, user switch, restore, recovery, offline launch");
 }
 

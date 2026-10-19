@@ -1,5 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import { clearWebRefresh, persistWebRefresh, readWebRefresh } from "@/lib/session-cookies";
 import { memoryTokenStore, type Identity, type TokenStore } from "@/lib/session-core";
 
 const KEY = "myledja.refreshToken";
@@ -16,27 +17,12 @@ function readIdentity(): Identity | null {
 
 function webTokenStore(): TokenStore {
   return {
-    get: async () => {
-      try {
-        return globalThis.localStorage?.getItem(KEY) ?? null;
-      } catch {
-        return null;
-      }
-    },
+    get: async () => readWebRefresh(),
     set: async (token) => {
-      try {
-        globalThis.localStorage?.setItem(KEY, token);
-      } catch {
-        /* private mode */
-      }
+      persistWebRefresh(token);
     },
     clear: async () => {
-      try {
-        globalThis.localStorage?.removeItem(KEY);
-        globalThis.localStorage?.removeItem(IDENTITY_KEY);
-      } catch {
-        /* private mode */
-      }
+      clearWebRefresh();
     },
     getIdentity: async () => readIdentity(),
     setIdentity: async (identity) => {
@@ -51,7 +37,7 @@ function webTokenStore(): TokenStore {
 
 /**
  * iOS Keychain / Android Keystore via expo-secure-store, readable only while the device is unlocked and never
- * synced to other devices. Web keeps the refresh token in localStorage so a reload stays signed in.
+ * synced to other devices. Web keeps the refresh token in localStorage and a 90-day SameSite cookie.
  */
 export function secureTokenStore(): TokenStore {
   if (Platform.OS === "web") {
