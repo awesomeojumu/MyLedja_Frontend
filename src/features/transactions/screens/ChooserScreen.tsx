@@ -9,6 +9,9 @@ const CHOICES = [
   { href: "/(tabs)/transactions/add-income", title: "Income", body: "Money that arrived.", icon: "arrow-down-left" as const },
   { href: "/(tabs)/accounts/transfer", title: "Transfer", body: "Between your own accounts.", icon: "arrow-left-right" as const },
   { href: "/(tabs)/transactions/refund", title: "Refund", body: "A new refund row. Original stays posted.", icon: "undo-2" as const },
+  { href: "/(tabs)/plan/debt-repay", title: "Loan repayment", body: "Principal reduces debt; interest & fees are spending.", icon: "banknote" as const },
+  { href: "/(tabs)/plan/debt-lend", title: "Money lent", body: "Lending is not spending.", icon: "repeat" as const },
+  { href: "/(tabs)/plan/debt-borrow", title: "Money borrowed", body: "Borrowed money is not income.", icon: "coins" as const },
 ];
 
 export function ChooserScreen() {

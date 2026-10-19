@@ -1,1 +1,1 @@
-export { MerchantsScreen as Screen046 } from "@/features/categories-merchants/screens/MerchantsScreen";
+export { SuggestedCategorizationScreen as Screen046 } from "@/features/categories-merchants/screens/SuggestedCategorizationScreen";
