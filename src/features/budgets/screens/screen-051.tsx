@@ -1,1 +1,1 @@
-export { BudgetFormScreen as Screen051 } from "@/features/budgets/screens/budget-screens";
+export { BudgetCategoryAllocationScreen as Screen051 } from "@/features/budgets/screens/budget-screens";

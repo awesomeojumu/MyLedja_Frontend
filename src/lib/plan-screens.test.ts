@@ -41,8 +41,8 @@ assert(budgetViewKeys().join(",") === "day,week,month,year", "budget detail has 
 const row = { id: "01a14d5e-77ce-750e-a2ad-d3fe6a9cbbf2", accountId: "acc-1", primaryPeriod: "month", amount: "5000.00" };
 assert(planName(row, { "acc-1": "GTBank Salary" }) === "GTBank Salary · monthly budget", "budget label is the account");
 assert(liveKind({ known: false, offline: false, error: null, rows: 0 }) !== "empty", "loading is not the empty title");
-assert(planScreenSpec("049", "Budget")?.role === "detail", "049 is the budget detail");
-assert(planScreenSpec("048", "Budgets")?.role === "list", "048 is the list");
+assert(planScreenSpec("049", "Create budget")?.role === "create", "049 is the budget create");
+assert(planScreenSpec("048", "Budget overview")?.role === "list", "048 is the list");
 assert(planScreenSpec("075", "Income streams")?.path === "income", "075 is the income list route");
 assert(planScreenSpec("076", "Income stream")?.path === "income-detail", "076 is not the list path");
 assert(planScreenSpec("077", "Add income stream")?.path === "income-add", "077 is add");

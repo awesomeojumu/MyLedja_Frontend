@@ -1,1 +1,1 @@
-export { BudgetDetailScreen as Screen049 } from "@/features/budgets/screens/budget-screens";
+export { BudgetCreateScreen as Screen049 } from "@/features/budgets/screens/budget-screens";

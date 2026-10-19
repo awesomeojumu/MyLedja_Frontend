@@ -30,15 +30,15 @@ const DEBT: Record<string, PlanRole> = {
 
 const BUDGET: Record<string, PlanRole> = {
   "048": "list",
-  "049": "detail",
-  "050": "create",
+  "049": "create",
+  "050": "edit",
   "051": "edit",
-  "052": "period",
-  "053": "remaining",
-  "054": "history",
-  "055": "overspent",
-  "056": "accounts",
-  "057": "insights",
+  "052": "detail",
+  "053": "period",
+  "054": "overspent",
+  "055": "edit",
+  "056": "history",
+  "057": "action",
 };
 
 export function planScreenSpec(id: string, title: string): PlanScreenSpec | null {
