@@ -1,5 +1,1 @@
-import { SecurityScreen } from "@/features/settings-privacy/screens/SecurityScreen";
-
-export function Screen124() {
-  return <SecurityScreen />;
-}
+export { Screen124WorkspaceSettings as Screen124 } from "./settings-screens";

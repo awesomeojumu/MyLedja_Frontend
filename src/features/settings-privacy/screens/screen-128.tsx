@@ -1,5 +1,1 @@
-import { SettingsLiveScreen } from "@/lib/settings-live-screen";
-
-export function Screen128() {
-  return <SettingsLiveScreen id="128" />;
-}
+export { Screen128SessionsDevices as Screen128 } from "./settings-screens";

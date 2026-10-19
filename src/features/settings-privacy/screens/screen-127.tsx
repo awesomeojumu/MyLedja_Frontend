@@ -1,5 +1,1 @@
-import { SettingsLiveScreen } from "@/lib/settings-live-screen";
-
-export function Screen127() {
-  return <SettingsLiveScreen id="127" />;
-}
+export { Screen127SecurityOverview as Screen127 } from "./settings-screens";

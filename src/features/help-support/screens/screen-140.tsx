@@ -1,5 +1,1 @@
-import { HelpCopyScreen } from "@/lib/settings-live-screen";
-
-export function Screen140() {
-  return <HelpCopyScreen id="140" />;
-}
+export { Screen140LegalDocuments as Screen140 } from "./help-screens";
