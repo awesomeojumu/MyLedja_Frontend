@@ -1,6 +1,5 @@
-import { FeatureScreen } from "@/lib/feature-screen";
+import { DebtFormScreen } from "@/features/debts/screens/debt-screens";
 
 export function Screen084() {
-  return <FeatureScreen id="084" />;
+  return <DebtFormScreen direction="i_owe" />;
 }
-

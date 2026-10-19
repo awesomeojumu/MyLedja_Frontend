@@ -1,5 +1,5 @@
-import { GatedCopy } from "@/lib/gated-copy";
+import { HoldingsListScreen } from "@/features/investments/screens/investment-screens";
 
-export function HubScreen({ onBack }: { onBack?: () => void } = {}) {
-  return <GatedCopy title="Investments" onBack={onBack} />;
+export function HubScreen({ onBack: _onBack }: { onBack?: () => void } = {}) {
+  return <HoldingsListScreen />;
 }

@@ -1,17 +1,5 @@
-import { PlanModuleScreen } from "@/lib/plan-module-screen";
+import { BillsListScreen } from "@/features/bills/screens/bill-screens";
 
-export function HubScreen({ onBack }: { onBack?: () => void } = {}) {
-  return (
-    <PlanModuleScreen
-      title="Bills"
-      onBack={onBack}
-      path="bills"
-      empty="No bills yet"
-      fields={[
-        { key: "name", label: "Name", value: "DSTV" },
-        { key: "amount", label: "Amount", value: "50.00" },
-      ]}
-      extra={{ cadence: "monthly" }}
-    />
-  );
+export function HubScreen({ onBack: _onBack }: { onBack?: () => void } = {}) {
+  return <BillsListScreen />;
 }

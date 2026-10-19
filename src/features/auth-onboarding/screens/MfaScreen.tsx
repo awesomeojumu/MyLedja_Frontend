@@ -4,6 +4,7 @@ import { Banner, Button, Txt, useTheme } from "@/design";
 import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
 import { OtpBoxes } from "@/features/auth-onboarding/components/OtpBoxes";
 import { TextLink } from "@/features/auth-onboarding/components/TextLink";
+import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
 import { canVerifyOtp } from "@/features/auth-onboarding/services/auth-flow";
 
 export function MfaScreen({
@@ -12,13 +13,14 @@ export function MfaScreen({
   onCreateAccount,
 }: {
   onBack: () => void;
-  onSubmit: () => void;
+  onSubmit: (input: { code?: string; backupCode?: string }) => Promise<void>;
   onCreateAccount: () => void;
 }) {
   const t = useTheme();
   const [code, setCode] = useState("");
   const [backup, setBackup] = useState(false);
   const [lost, setLost] = useState(false);
+  const { busy, error, run } = useSubmit();
   const ready = canVerifyOtp(code);
   return (
     <AuthShell
@@ -43,15 +45,20 @@ export function MfaScreen({
         <Button
           fullWidth
           size="lg"
+          loading={busy}
           disabled={!ready}
-          onPress={() => {
-            if (canVerifyOtp(code)) onSubmit();
-          }}
+          onPress={() =>
+            run(async () => {
+              if (!canVerifyOtp(code)) return;
+              await onSubmit(backup ? { backupCode: code } : { code });
+            })
+          }
         >
           Verify and sign in
         </Button>
       }
     >
+      {error ? <Banner tone="danger" title={error} /> : null}
       <OtpBoxes value={code} onChange={setCode} />
       <View style={{ gap: t.space.space3 }}>
         <TextLink onPress={() => setBackup((v) => !v)}>{backup ? "Use authenticator code instead" : "Use a backup code instead"}</TextLink>
@@ -59,7 +66,7 @@ export function MfaScreen({
       </View>
       {lost ? (
         <Banner tone="primary" title="Authenticator recovery">
-          Authenticator recovery ships with passkeys. Enter any 6 digits to continue on this shell.
+          Use a backup code, or reset from the email you used to sign up.
         </Banner>
       ) : null}
     </AuthShell>

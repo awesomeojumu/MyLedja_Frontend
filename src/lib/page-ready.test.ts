@@ -7,7 +7,7 @@ function assert(condition: boolean, message: string): void {
 }
 
 const root = join(__dirname, "..", "..");
-const gated = new Set([...FEATURE_SCREENS.savings, ...FEATURE_SCREENS.investments, ...FEATURE_SCREENS.taxes]);
+const gated = new Set([...FEATURE_SCREENS.savings, ...FEATURE_SCREENS.taxes]);
 
 for (const folder of FEATURE_FOLDERS) {
   for (const id of FEATURE_SCREENS[folder]) {

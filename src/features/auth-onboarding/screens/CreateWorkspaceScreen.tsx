@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
-import { Button, Icon, TextField, Txt, useTheme, a11yState } from "@/design";
+import { Banner, Button, Icon, TextField, Txt, useTheme, a11yState } from "@/design";
 import type { IconName } from "@/design";
 import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
+import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
 import { workspaceSelectable, type WorkspaceKind } from "@/features/auth-onboarding/services/auth-flow";
+import { useSession } from "@/state";
 
 const OPTIONS: { kind: WorkspaceKind; title: string; body: string; icon: IconName }[] = [
   { kind: "personal", title: "Personal", body: "Just you. Your own money, private.", icon: "house" },
@@ -13,8 +15,19 @@ const OPTIONS: { kind: WorkspaceKind; title: string; body: string; icon: IconNam
 
 export function CreateWorkspaceScreen({ onBack, onSubmit }: { onBack: () => void; onSubmit: () => void }) {
   const t = useTheme();
+  const { session, workspaces } = useSession();
+  const workspaceId = workspaces[0]?.id;
   const [kind, setKind] = useState<WorkspaceKind>("personal");
-  const [name, setName] = useState("Personal");
+  const [name, setName] = useState(workspaces[0]?.name ?? "Personal");
+  const { busy, error, run } = useSubmit();
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    void session.getWorkspace(workspaceId).then((ws) => {
+      if (ws.name) setName(ws.name);
+    });
+  }, [session, workspaceId]);
+
   return (
     <AuthShell
       brand="setup"
@@ -23,11 +36,22 @@ export function CreateWorkspaceScreen({ onBack, onSubmit }: { onBack: () => void
       title="Create your workspace"
       subtitle="A workspace holds your accounts, budgets and records."
       footer={
-        <Button fullWidth size="lg" onPress={onSubmit}>
-          Create workspace
+        <Button
+          fullWidth
+          size="lg"
+          loading={busy}
+          onPress={() =>
+            run(async () => {
+              if (workspaceId && name.trim()) await session.updateWorkspace(workspaceId, name.trim());
+              onSubmit();
+            })
+          }
+        >
+          Save workspace
         </Button>
       }
     >
+      {error ? <Banner tone="danger" title={error} /> : null}
       <View style={{ gap: t.space.space3 }}>
         {OPTIONS.map((option) => {
           const enabled = workspaceSelectable(option.kind);

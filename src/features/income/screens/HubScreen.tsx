@@ -1,17 +1,5 @@
-import { PlanModuleScreen } from "@/lib/plan-module-screen";
+import { IncomeListScreen } from "@/features/income/screens/income-screens";
 
-export function HubScreen({ onBack }: { onBack?: () => void } = {}) {
-  return (
-    <PlanModuleScreen
-      title="Income"
-      onBack={onBack}
-      path="income-streams"
-      empty="No income streams yet"
-      fields={[
-        { key: "name", label: "Name", value: "Salary" },
-        { key: "expected", label: "Expected", value: "0.00" },
-      ]}
-      extra={{ taxClass: "paye" }}
-    />
-  );
+export function HubScreen({ onBack: _onBack }: { onBack?: () => void } = {}) {
+  return <IncomeListScreen />;
 }

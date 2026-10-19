@@ -12,6 +12,7 @@ export interface Me {
   email: string;
   /** Lock-screen privacy (MYL-023). Missing means on. */
   hideLockScreenAmounts?: boolean;
+  totpEnabled?: boolean;
 }
 
 export interface WorkspaceSummary {
@@ -62,6 +63,13 @@ export class ApiError extends Error {
   }
 }
 
+export class MfaRequiredError extends Error {
+  constructor(readonly challengeId: string) {
+    super("Enter your authenticator code.");
+    this.name = "MfaRequiredError";
+  }
+}
+
 const FRIENDLY: Record<string, string> = {
   "invalid credentials": "That email and password don’t match.",
   "email not verified": "Verify your email to finish setting up your account.",
@@ -80,6 +88,15 @@ const FRIENDLY: Record<string, string> = {
   "Refund needs the original transaction.": "Choose the expense you’re refunding.",
   "Only an expense can be refunded.": "Only an expense can be refunded.",
   "A refund can’t be more than what’s left of the original expense.": "That’s more than what’s left to refund on this expense.",
+  "Already matched.": "Already matched",
+  "Amount does not match.": "Amount does not match.",
+  "Say who you owe.": "Say who you owe.",
+  "Say who owes you.": "Say who owes you.",
+  "direction required.": "Pick whether you owe them or they owe you.",
+  "Principal is more than remaining.": "That’s more than what’s left on this debt.",
+  "Amount is more than remaining.": "That’s more than what’s left on this debt.",
+  "This person is not someone you owe.": "This person is not someone you owe.",
+  "This person does not owe you.": "This person does not owe you.",
 };
 
 export function friendlyMessage(reason: string): string {
@@ -111,10 +128,11 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
       json = null;
     }
     if (res.status >= 400) {
-      const reason =
-        json && typeof json === "object" && typeof (json as { error?: unknown }).error === "string"
-          ? (json as { error: string }).error
-          : `http ${res.status}`;
+      const rec = json && typeof json === "object" ? (json as { status?: unknown; data?: { challengeId?: string }; error?: unknown }) : {};
+      if (rec.status === "mfa_required") {
+        throw new MfaRequiredError(String(rec.data?.challengeId ?? ""));
+      }
+      const reason = typeof rec.error === "string" ? rec.error : `http ${res.status}`;
       throw new ApiError(res.status, reason, friendlyMessage(reason));
     }
     return json as T;
@@ -128,6 +146,127 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
     resendVerification: (email: string) =>
       call<{ status: "accepted" }>("POST", "/auth/verify/resend", { email }),
     login: (email: string, password: string) => call<Tokens>("POST", "/auth/login", { email, password }),
+    completeMfa: (body: { challengeId: string; code?: string; backupCode?: string }) =>
+      call<Tokens>("POST", "/auth/mfa", body),
+    startTotp: (accessToken: string) =>
+      call<{ status: "ok"; data: { otpauthUri: string; secret: string } }>("POST", "/me/mfa/totp/start", {}, accessToken),
+    confirmTotp: (accessToken: string, code: string) =>
+      call<{ status: "ok"; data: { backupCodes: string[] } }>("POST", "/me/mfa/totp/confirm", { code }, accessToken),
+    disableTotp: (accessToken: string, code: string) =>
+      call<{ status: "ok"; data: { totpEnabled: boolean } }>("POST", "/me/mfa/totp/disable", { code }, accessToken),
+    passkeyStart: (accessToken: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>("POST", "/me/passkeys/register/start", {}, accessToken),
+    passkeyFinish: (accessToken: string, body: unknown) =>
+      call<{ status: "ok"; data: { credentialId: string } }>("POST", "/me/passkeys/register/finish", body, accessToken),
+    updateWorkspace: (accessToken: string, workspaceId: string, name: string) =>
+      call<{ id: string; name: string }>("PATCH", `/workspaces/${workspaceId}`, { name }, accessToken),
+    getCategory: (accessToken: string, workspaceId: string, categoryId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>(
+        "GET",
+        `/workspaces/${workspaceId}/categories/${categoryId}`,
+        undefined,
+        accessToken,
+      ),
+    createCategory: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/categories`, body, accessToken),
+    patchCategory: (accessToken: string, workspaceId: string, categoryId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/categories/${categoryId}`, body, accessToken),
+    getMerchant: (accessToken: string, workspaceId: string, merchantId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>(
+        "GET",
+        `/workspaces/${workspaceId}/merchants/${merchantId}`,
+        undefined,
+        accessToken,
+      ),
+    createMerchant: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/merchants`, body, accessToken),
+    patchMerchant: (accessToken: string, workspaceId: string, merchantId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/merchants/${merchantId}`, body, accessToken),
+    listBudgets: (accessToken: string, workspaceId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown>[] }>("GET", `/workspaces/${workspaceId}/budgets`, undefined, accessToken),
+    getBudget: (accessToken: string, workspaceId: string, budgetId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>(
+        "GET",
+        `/workspaces/${workspaceId}/budgets/${budgetId}`,
+        undefined,
+        accessToken,
+      ),
+    createBudget: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/budgets`, body, accessToken),
+    patchBudget: (accessToken: string, workspaceId: string, budgetId: string, body: unknown) =>
+      call<{ status: "ok"; data: { id: string } }>("PATCH", `/workspaces/${workspaceId}/budgets/${budgetId}`, body, accessToken),
+    listBills: (accessToken: string, workspaceId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown>[] }>("GET", `/workspaces/${workspaceId}/bills`, undefined, accessToken),
+    getBill: (accessToken: string, workspaceId: string, billId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>("GET", `/workspaces/${workspaceId}/bills/${billId}`, undefined, accessToken),
+    createBill: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/bills`, body, accessToken),
+    patchBill: (accessToken: string, workspaceId: string, billId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/bills/${billId}`, body, accessToken),
+    markBillPaid: (accessToken: string, workspaceId: string, billId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/bills/${billId}/paid`, body, accessToken),
+    listBillReminders: (accessToken: string, workspaceId: string, billId: string) =>
+      call<{ status: "ok"; data: { dueDate: string; createdAt?: string }[] }>(
+        "GET",
+        `/workspaces/${workspaceId}/bills/${billId}/reminders`,
+        undefined,
+        accessToken,
+      ),
+    listIncomeStreams: (accessToken: string, workspaceId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown>[] }>("GET", `/workspaces/${workspaceId}/income-streams`, undefined, accessToken),
+    getIncomeStream: (accessToken: string, workspaceId: string, streamId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>("GET", `/workspaces/${workspaceId}/income-streams/${streamId}`, undefined, accessToken),
+    createIncomeStream: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/income-streams`, body, accessToken),
+    patchIncomeStream: (accessToken: string, workspaceId: string, streamId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/income-streams/${streamId}`, body, accessToken),
+    incomeStreamPeriod: (accessToken: string, workspaceId: string, streamId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>("GET", `/workspaces/${workspaceId}/income-streams/${streamId}/period`, undefined, accessToken),
+    matchIncome: (accessToken: string, workspaceId: string, streamId: string, transactionId: string) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/income-streams/${streamId}/match`, { transactionId }, accessToken),
+    listGoals: (accessToken: string, workspaceId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown>[] }>("GET", `/workspaces/${workspaceId}/goals`, undefined, accessToken),
+    getGoal: (accessToken: string, workspaceId: string, goalId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>("GET", `/workspaces/${workspaceId}/goals/${goalId}`, undefined, accessToken),
+    createGoal: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/goals`, body, accessToken),
+    patchGoal: (accessToken: string, workspaceId: string, goalId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/goals/${goalId}`, body, accessToken),
+    allocateGoal: (accessToken: string, workspaceId: string, goalId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/goals/${goalId}/allocate`, body, accessToken),
+    scheduleGoal: (accessToken: string, workspaceId: string, goalId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/goals/${goalId}/schedule`, body, accessToken),
+    listHoldings: (accessToken: string, workspaceId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown>[] }>("GET", `/workspaces/${workspaceId}/holdings`, undefined, accessToken),
+    getHolding: (accessToken: string, workspaceId: string, holdingId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>("GET", `/workspaces/${workspaceId}/holdings/${holdingId}`, undefined, accessToken),
+    createHolding: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/holdings`, body, accessToken),
+    patchHolding: (accessToken: string, workspaceId: string, holdingId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/holdings/${holdingId}`, body, accessToken),
+    buyHolding: (accessToken: string, workspaceId: string, holdingId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/holdings/${holdingId}/buy`, body, accessToken),
+    sellHolding: (accessToken: string, workspaceId: string, holdingId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/holdings/${holdingId}/sell`, body, accessToken),
+    dividendHolding: (accessToken: string, workspaceId: string, holdingId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/holdings/${holdingId}/dividend`, body, accessToken),
+    holdingPerformance: (accessToken: string, workspaceId: string, holdingId: string, from?: string, to?: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>(
+        "GET",
+        `/workspaces/${workspaceId}/holdings/${holdingId}/performance${from && to ? `?from=${from}&to=${to}` : ""}`,
+        undefined,
+        accessToken,
+      ),
+    listDebts: (accessToken: string, workspaceId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown>[] }>("GET", `/workspaces/${workspaceId}/debts`, undefined, accessToken),
+    getDebt: (accessToken: string, workspaceId: string, debtId: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>("GET", `/workspaces/${workspaceId}/debts/${debtId}`, undefined, accessToken),
+    createDebt: (accessToken: string, workspaceId: string, body: unknown) =>
+      call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/debts`, body, accessToken),
+    patchDebt: (accessToken: string, workspaceId: string, debtId: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/debts/${debtId}`, body, accessToken),
+    debtMove: (accessToken: string, workspaceId: string, debtId: string, kind: string, body: unknown) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/debts/${debtId}/${kind}`, body, accessToken),
     refresh: (refreshToken: string) => call<Tokens>("POST", "/auth/refresh", { refreshToken }),
     logout: (refreshToken: string) => call<{ status: "ok" }>("POST", "/auth/logout", { refreshToken }),
     startRecovery: (email: string) => call<{ status: "accepted" }>("POST", "/auth/recovery", { email }),
@@ -212,6 +351,8 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
             amount?: string;
             type?: string;
             status?: string;
+            categoryId?: string | null;
+            occurredAt?: string;
           }[];
         };
       }>(
@@ -228,14 +369,14 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
         accessToken,
       ),
     listCategories: (accessToken: string, workspaceId: string) =>
-      call<{ status: "ok"; data: { id: string; name: string; kind: string }[] }>(
+      call<{ status: "ok"; data: { id: string; name: string; kind: string; parentId?: string | null }[] }>(
         "GET",
         `/workspaces/${workspaceId}/categories`,
         undefined,
         accessToken,
       ),
     getWorkspace: (accessToken: string, workspaceId: string) =>
-      call<{ id: string; setupProgress?: Record<string, boolean>; defaultCurrency?: string }>(
+      call<{ id: string; name?: string; setupProgress?: Record<string, boolean>; defaultCurrency?: string }>(
         "GET",
         `/workspaces/${workspaceId}`,
         undefined,

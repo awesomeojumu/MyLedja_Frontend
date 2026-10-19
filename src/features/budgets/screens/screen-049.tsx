@@ -1,6 +1,1 @@
-import { FeatureScreen } from "@/lib/feature-screen";
-
-export function Screen049() {
-  return <FeatureScreen id="049" />;
-}
-
+export { BudgetDetailScreen as Screen049 } from "@/features/budgets/screens/budget-screens";

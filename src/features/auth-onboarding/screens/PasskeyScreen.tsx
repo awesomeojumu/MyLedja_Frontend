@@ -1,24 +1,46 @@
-import { View } from "react-native";
-import { Button, Icon, Txt, useTheme } from "@/design";
+import { Platform, View } from "react-native";
+import { Banner, Button, Icon, Txt, useTheme } from "@/design";
 import { PASSKEY_POINTS } from "@/features/auth-onboarding/auth-copy";
 import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
+import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
 
-export function PasskeyScreen({ onContinue }: { onContinue: () => void }) {
+export function PasskeyScreen({
+  onCreate,
+  onSkip,
+}: {
+  onCreate: () => Promise<void>;
+  onSkip: () => void;
+}) {
   const t = useTheme();
+  const { busy, error, run } = useSubmit();
+  const native = Platform.OS !== "web";
   return (
     <AuthShell
       step={{ label: "Create account", current: 4, total: 4 }}
       footer={
         <View style={{ gap: t.space.space3 }}>
-          <Button fullWidth size="lg" icon="shield-check" onPress={onContinue}>
+          <Button
+            fullWidth
+            size="lg"
+            icon="shield-check"
+            loading={busy}
+            disabled={native}
+            onPress={() => run(onCreate)}
+          >
             Create passkey
           </Button>
-          <Button variant="tertiary" fullWidth onPress={onContinue}>
+          <Button variant="tertiary" fullWidth onPress={onSkip}>
             Not now
           </Button>
         </View>
       }
     >
+      {error ? <Banner tone="danger" title={error} /> : null}
+      {native ? (
+        <Banner tone="primary" title="Passkeys on this device">
+          Use a browser that supports passkeys.
+        </Banner>
+      ) : null}
       <View style={{ alignItems: "center", gap: t.space.space4 }}>
         <View
           style={{

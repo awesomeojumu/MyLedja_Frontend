@@ -4,7 +4,7 @@ export function Screen142() {
   return (
     <MfaScreen
       onBack={() => undefined}
-      onSubmit={() => undefined}
+      onSubmit={async () => undefined}
       onCreateAccount={() => undefined}
     />
   );

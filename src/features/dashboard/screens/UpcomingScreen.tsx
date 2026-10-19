@@ -1,10 +1,5 @@
-import { DashboardScreen } from "@/features/dashboard/components/DashboardScreen";
-import { PlanLiveList } from "@/lib/plan-live-list";
+import { BillsListScreen } from "@/features/bills";
 
 export function UpcomingScreen() {
-  return (
-    <DashboardScreen title="Upcoming">
-      <PlanLiveList path="bills" empty="No upcoming bills" />
-    </DashboardScreen>
-  );
+  return <BillsListScreen filter="upcoming" title="Upcoming" />;
 }

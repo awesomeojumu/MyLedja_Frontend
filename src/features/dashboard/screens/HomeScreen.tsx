@@ -4,6 +4,7 @@ import { createLatestGate } from "@/lib/take-latest";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  Banner,
   Button,
   HeroBalance,
   IconButton,
@@ -31,6 +32,7 @@ import { nairaAmount, rowKind, toLedgerAccount, type ApiAccount, type ApiTransac
 import { readCache, scopedKey, writeCache } from "@/lib/offline-cache";
 import { DefaultLoading } from "@/lib/screen-state";
 import { remainingText } from "@/lib/budget-text";
+import { goalNudge } from "@/features/plans-goals/services/goal-pace";
 import { useSession } from "@/state";
 
 type RecentRow = { row: ApiTransaction; account: string };
@@ -46,7 +48,7 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { openSearch } = useDashboardOverlays();
+  const { openSearch, openQuickAdd } = useDashboardOverlays();
   const { session, status, workspaces, user, offline: sessionOffline } = useSession();
   const signedIn = status === "signedIn";
   const [hidden, setHidden] = useState(false);
@@ -57,6 +59,7 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
   const [budgetCount, setBudgetCount] = useState<number | null>(null);
   const [offline, setOffline] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [nudge, setNudge] = useState<string | null>(null);
   const columns = twoColumn(t.widthClass, t.portrait);
   const workspaceId = workspaces[0]?.id;
   const latest = useRef(createLatestGate()).current;
@@ -101,6 +104,18 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
           writeCache(budgetsKey, value);
           setBudgetCount(value);
         });
+      })
+      .catch(() => undefined);
+    void session
+      .listGoals(workspaceId)
+      .then((res) => {
+        const rows = ((res.data ?? []) as { name?: string; target?: string; saved?: string; dueAt?: string | null }[]).map((row) => ({
+          name: row.name,
+          target: nairaAmount(row.target),
+          saved: nairaAmount(row.saved),
+          dueAt: row.dueAt,
+        }));
+        ticket.apply(goalNudge(rows)?.text ?? null, setNudge);
       })
       .catch(() => undefined);
     void Promise.all([session.listTransactions(workspaceId), session.listAccounts(workspaceId)])
@@ -232,11 +247,33 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
             Home
           </Txt>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <IconButton icon="plus" label="Quick add" onPress={openQuickAdd} />
             <IconButton icon="search" label="Search" onPress={openSearch} />
             {onMore ? <IconButton icon="ellipsis" label="More" onPress={onMore} /> : null}
           </View>
         </View>
         <LiveNotice offline={offline || pending.offline} error={loadError} hasData={snapshot != null || recentKnown} onRetry={load} />
+        {nudge ? <Banner tone="warning" title={nudge} /> : null}
+        <View style={{ gap: t.space.space2 }}>
+          <SectionHeader title="Look closer" />
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: t.space.space2 }}>
+            <Button variant="tertiary" size="sm" onPress={() => router.push("/(tabs)/cash-flow")}>
+              Cash flow
+            </Button>
+            <Button variant="tertiary" size="sm" onPress={() => router.push("/(tabs)/net-worth")}>
+              Net worth
+            </Button>
+            <Button variant="tertiary" size="sm" onPress={() => router.push("/(tabs)/upcoming")}>
+              Upcoming
+            </Button>
+            <Button variant="tertiary" size="sm" onPress={() => router.push("/(tabs)/goals-preview")}>
+              Goals
+            </Button>
+            <Button variant="tertiary" size="sm" onPress={() => router.push("/(tabs)/insights")}>
+              Insights
+            </Button>
+          </View>
+        </View>
         {columns ? (
           <View style={{ flexDirection: "row", gap: t.space.space6, alignItems: "flex-start" }}>
             <View style={{ flex: 1, gap: t.space.space5 }}>

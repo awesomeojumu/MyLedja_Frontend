@@ -363,6 +363,199 @@ export class SessionCore {
     return this.authed((token) => this.api.commitImport(token, workspaceId, importId, body));
   }
 
+  async completeMfa(body: { challengeId: string; code?: string; backupCode?: string }) {
+    const tokens = await this.api.completeMfa(body);
+    await this.adopt(tokens.accessToken, tokens.refreshToken);
+  }
+
+  startTotp() {
+    return this.authed((token) => this.api.startTotp(token));
+  }
+
+  confirmTotp(code: string) {
+    return this.authed((token) => this.api.confirmTotp(token, code));
+  }
+
+  disableTotp(code: string) {
+    return this.authed((token) => this.api.disableTotp(token, code));
+  }
+
+  passkeyStart() {
+    return this.authed((token) => this.api.passkeyStart(token));
+  }
+
+  passkeyFinish(body: unknown) {
+    return this.authed((token) => this.api.passkeyFinish(token, body));
+  }
+
+  updateWorkspace(workspaceId: string, name: string) {
+    return this.authed((token) => this.api.updateWorkspace(token, workspaceId, name));
+  }
+
+  getCategory(workspaceId: string, categoryId: string) {
+    return this.authed((token) => this.api.getCategory(token, workspaceId, categoryId));
+  }
+
+  createCategory(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.createCategory(token, workspaceId, body));
+  }
+
+  patchCategory(workspaceId: string, categoryId: string, body: unknown) {
+    return this.authed((token) => this.api.patchCategory(token, workspaceId, categoryId, body));
+  }
+
+  getMerchant(workspaceId: string, merchantId: string) {
+    return this.authed((token) => this.api.getMerchant(token, workspaceId, merchantId));
+  }
+
+  createMerchant(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.createMerchant(token, workspaceId, body));
+  }
+
+  patchMerchant(workspaceId: string, merchantId: string, body: unknown) {
+    return this.authed((token) => this.api.patchMerchant(token, workspaceId, merchantId, body));
+  }
+
+  listBudgets(workspaceId: string) {
+    return this.authed((token) => this.api.listBudgets(token, workspaceId));
+  }
+
+  getBudget(workspaceId: string, budgetId: string) {
+    return this.authed((token) => this.api.getBudget(token, workspaceId, budgetId));
+  }
+
+  createBudget(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.createBudget(token, workspaceId, body));
+  }
+
+  patchBudget(workspaceId: string, budgetId: string, body: unknown) {
+    return this.authed((token) => this.api.patchBudget(token, workspaceId, budgetId, body));
+  }
+
+  listBills(workspaceId: string) {
+    return this.authed((token) => this.api.listBills(token, workspaceId));
+  }
+
+  getBill(workspaceId: string, billId: string) {
+    return this.authed((token) => this.api.getBill(token, workspaceId, billId));
+  }
+
+  createBill(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.createBill(token, workspaceId, body));
+  }
+
+  patchBill(workspaceId: string, billId: string, body: unknown) {
+    return this.authed((token) => this.api.patchBill(token, workspaceId, billId, body));
+  }
+
+  markBillPaid(workspaceId: string, billId: string, body: unknown) {
+    return this.authed((token) => this.api.markBillPaid(token, workspaceId, billId, body));
+  }
+
+  listBillReminders(workspaceId: string, billId: string) {
+    return this.authed((token) => this.api.listBillReminders(token, workspaceId, billId));
+  }
+
+  listIncomeStreams(workspaceId: string) {
+    return this.authed((token) => this.api.listIncomeStreams(token, workspaceId));
+  }
+
+  getIncomeStream(workspaceId: string, streamId: string) {
+    return this.authed((token) => this.api.getIncomeStream(token, workspaceId, streamId));
+  }
+
+  createIncomeStream(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.createIncomeStream(token, workspaceId, body));
+  }
+
+  patchIncomeStream(workspaceId: string, streamId: string, body: unknown) {
+    return this.authed((token) => this.api.patchIncomeStream(token, workspaceId, streamId, body));
+  }
+
+  incomeStreamPeriod(workspaceId: string, streamId: string) {
+    return this.authed((token) => this.api.incomeStreamPeriod(token, workspaceId, streamId));
+  }
+
+  matchIncome(workspaceId: string, streamId: string, transactionId: string) {
+    return this.authed((token) => this.api.matchIncome(token, workspaceId, streamId, transactionId));
+  }
+
+  listGoals(workspaceId: string) {
+    return this.authed((token) => this.api.listGoals(token, workspaceId));
+  }
+
+  getGoal(workspaceId: string, goalId: string) {
+    return this.authed((token) => this.api.getGoal(token, workspaceId, goalId));
+  }
+
+  createGoal(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.createGoal(token, workspaceId, body));
+  }
+
+  patchGoal(workspaceId: string, goalId: string, body: unknown) {
+    return this.authed((token) => this.api.patchGoal(token, workspaceId, goalId, body));
+  }
+
+  allocateGoal(workspaceId: string, goalId: string, body: unknown) {
+    return this.authed((token) => this.api.allocateGoal(token, workspaceId, goalId, body));
+  }
+
+  scheduleGoal(workspaceId: string, goalId: string, body: unknown) {
+    return this.authed((token) => this.api.scheduleGoal(token, workspaceId, goalId, body));
+  }
+
+  listHoldings(workspaceId: string) {
+    return this.authed((token) => this.api.listHoldings(token, workspaceId));
+  }
+
+  getHolding(workspaceId: string, holdingId: string) {
+    return this.authed((token) => this.api.getHolding(token, workspaceId, holdingId));
+  }
+
+  createHolding(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.createHolding(token, workspaceId, body));
+  }
+
+  patchHolding(workspaceId: string, holdingId: string, body: unknown) {
+    return this.authed((token) => this.api.patchHolding(token, workspaceId, holdingId, body));
+  }
+
+  buyHolding(workspaceId: string, holdingId: string, body: unknown) {
+    return this.authed((token) => this.api.buyHolding(token, workspaceId, holdingId, body));
+  }
+
+  sellHolding(workspaceId: string, holdingId: string, body: unknown) {
+    return this.authed((token) => this.api.sellHolding(token, workspaceId, holdingId, body));
+  }
+
+  dividendHolding(workspaceId: string, holdingId: string, body: unknown) {
+    return this.authed((token) => this.api.dividendHolding(token, workspaceId, holdingId, body));
+  }
+
+  holdingPerformance(workspaceId: string, holdingId: string, from?: string, to?: string) {
+    return this.authed((token) => this.api.holdingPerformance(token, workspaceId, holdingId, from, to));
+  }
+
+  listDebts(workspaceId: string) {
+    return this.authed((token) => this.api.listDebts(token, workspaceId));
+  }
+
+  getDebt(workspaceId: string, debtId: string) {
+    return this.authed((token) => this.api.getDebt(token, workspaceId, debtId));
+  }
+
+  createDebt(workspaceId: string, body: unknown) {
+    return this.authed((token) => this.api.createDebt(token, workspaceId, body));
+  }
+
+  patchDebt(workspaceId: string, debtId: string, body: unknown) {
+    return this.authed((token) => this.api.patchDebt(token, workspaceId, debtId, body));
+  }
+
+  debtMove(workspaceId: string, debtId: string, kind: string, body: unknown) {
+    return this.authed((token) => this.api.debtMove(token, workspaceId, debtId, kind, body));
+  }
+
   private async adopt(accessToken: string, refreshToken: string): Promise<void> {
     this.accessToken = accessToken;
     await this.store.set(refreshToken);

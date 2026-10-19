@@ -1,5 +1,1 @@
-import { DashboardSnapshotScreen } from "@/lib/dashboard-snapshot-screen";
-
-export function Screen111() {
-  return <DashboardSnapshotScreen id="111" />;
-}
+export { HealthScoreScreen as Screen111 } from "@/features/financial-health/screens/health-screens";

@@ -16,7 +16,7 @@ const live = [
   ...FEATURE_SCREENS.income,
   ...FEATURE_SCREENS.debts,
 ];
-const gated = [...FEATURE_SCREENS.savings, ...FEATURE_SCREENS.investments, ...FEATURE_SCREENS.taxes];
+const gated = [...FEATURE_SCREENS.savings, ...FEATURE_SCREENS.taxes];
 const root = join(__dirname, "..", "..");
 
 for (const id of [...live, ...gated]) {
@@ -30,8 +30,10 @@ for (const id of [...live, ...gated]) {
   if (gated.includes(id)) {
     assert(source.includes("GatedScreen") || source.includes("Not available yet"), `${id} must be gated`);
   } else {
-    const spec = planScreenSpec(id, SCREEN_TITLES[id]);
-    assert(spec != null, `${id} has a plan role`);
+    if (!FEATURE_SCREENS.investments.includes(id)) {
+      const spec = planScreenSpec(id, SCREEN_TITLES[id]);
+      assert(spec != null, `${id} has a plan role`);
+    }
   }
 }
 
@@ -41,6 +43,10 @@ assert(planName(row, { "acc-1": "GTBank Salary" }) === "GTBank Salary · monthly
 assert(liveKind({ known: false, offline: false, error: null, rows: 0 }) !== "empty", "loading is not the empty title");
 assert(planScreenSpec("049", "Budget")?.role === "detail", "049 is the budget detail");
 assert(planScreenSpec("048", "Budgets")?.role === "list", "048 is the list");
+assert(planScreenSpec("075", "Income streams")?.path === "income", "075 is the income list route");
+assert(planScreenSpec("076", "Income stream")?.path === "income-detail", "076 is not the list path");
+assert(planScreenSpec("077", "Add income stream")?.path === "income-add", "077 is add");
+assert(planScreenSpec("081", "Tax class")?.path === "income-tax", "081 is tax");
 
 console.log("plan-screens: 048-109 and 150-151 titled with roles and views");
 

@@ -28,6 +28,7 @@ export interface ApiTransaction {
   accountId?: string;
   toAccountId?: string | null;
   categoryId?: string | null;
+  occurredAt?: string;
 }
 
 export function parseNaira(value?: string | number | null): number | null {

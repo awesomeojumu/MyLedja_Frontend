@@ -1,16 +1,5 @@
-import { PlanModuleScreen } from "@/lib/plan-module-screen";
+import { GoalsListScreen } from "@/features/plans-goals/screens/goal-screens";
 
-export function HubScreen({ onBack }: { onBack?: () => void } = {}) {
-  return (
-    <PlanModuleScreen
-      title="Goals"
-      onBack={onBack}
-      path="goals"
-      empty="No goals yet"
-      fields={[
-        { key: "name", label: "Name", value: "Emergency" },
-        { key: "target", label: "Target", value: "10000.00" },
-      ]}
-    />
-  );
+export function HubScreen({ onBack: _onBack }: { onBack?: () => void } = {}) {
+  return <GoalsListScreen />;
 }

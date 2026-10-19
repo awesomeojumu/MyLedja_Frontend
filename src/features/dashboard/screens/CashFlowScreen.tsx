@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { Amount, Card, EmptyState, Txt, useTheme } from "@/design";
 import { DashboardScreen } from "@/features/dashboard/components/DashboardScreen";
-import { cacheKey, getSnapshot, putSnapshot, type DashboardSnapshot } from "@/features/dashboard/services/range-cache";
+import { cacheKey, dashboardBounds, getSnapshot, putSnapshot, type DashboardSnapshot } from "@/features/dashboard/services/range-cache";
 import { useSession } from "@/state";
 
 export function CashFlowScreen() {
@@ -17,7 +17,8 @@ export function CashFlowScreen() {
       queueMicrotask(() => setLoading(false));
       return;
     }
-    const key = cacheKey(workspaceId, "cash", "flow");
+    const range = dashboardBounds("month");
+    const key = cacheKey(workspaceId, range.from, range.to);
     const cached = getSnapshot(key);
     if (cached) {
       queueMicrotask(() => {
@@ -26,7 +27,7 @@ export function CashFlowScreen() {
       });
       return;
     }
-    void session.dashboard(workspaceId).then((res) => {
+    void session.dashboard(workspaceId, range.from, range.to).then((res) => {
       setSnapshot(putSnapshot(key, res.data as unknown as DashboardSnapshot));
       setLoading(false);
     }).catch(() => setLoading(false));

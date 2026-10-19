@@ -1,6 +1,5 @@
-import { FeatureScreen } from "@/lib/feature-screen";
+import { GoalFormScreen } from "@/features/plans-goals/screens/goal-screens";
 
 export function Screen070() {
-  return <FeatureScreen id="070" />;
+  return <GoalFormScreen mode="edit" />;
 }
-

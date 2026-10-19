@@ -6,6 +6,28 @@ export interface PlanScreenSpec {
   empty: string;
 }
 
+const INCOME: Record<string, PlanRole> = {
+  "075": "list",
+  "076": "detail",
+  "077": "create",
+  "078": "edit",
+  "079": "insights",
+  "080": "action",
+  "081": "accounts",
+};
+
+const DEBT: Record<string, PlanRole> = {
+  "082": "list",
+  "083": "detail",
+  "084": "create",
+  "085": "create",
+  "086": "action",
+  "087": "action",
+  "088": "action",
+  "089": "action",
+  "151": "history",
+};
+
 const BUDGET: Record<string, PlanRole> = {
   "048": "list",
   "049": "detail",
@@ -22,7 +44,7 @@ const BUDGET: Record<string, PlanRole> = {
 export function planScreenSpec(id: string, title: string): PlanScreenSpec | null {
   const path = pathFor(id);
   if (!path) return null;
-  const role = BUDGET[id] ?? roleFromTitle(title);
+  const role = BUDGET[id] ?? INCOME[id] ?? DEBT[id] ?? roleFromTitle(title);
   return { path, role, empty: `No ${title.toLowerCase()} yet` };
 }
 
@@ -37,7 +59,13 @@ function pathFor(id: string): string | null {
   if (n >= 48 && n <= 57) return "budgets";
   if (n >= 58 && n <= 66) return "bills";
   if (n >= 67 && n <= 74) return "goals";
-  if (n >= 75 && n <= 81) return "income-streams";
+  if (id === "075") return "income";
+  if (id === "076") return "income-detail";
+  if (id === "077") return "income-add";
+  if (id === "078") return "income-edit";
+  if (id === "079") return "income-expected";
+  if (id === "080") return "income-match";
+  if (id === "081") return "income-tax";
   if (n >= 82 && n <= 89) return "debts";
   return null;
 }

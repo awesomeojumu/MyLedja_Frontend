@@ -1,5 +1,5 @@
-import { SettingsLiveScreen } from "@/lib/settings-live-screen";
+import { SecurityScreen } from "@/features/settings-privacy/screens/SecurityScreen";
 
 export function Screen124() {
-  return <SettingsLiveScreen id="124" />;
+  return <SecurityScreen />;
 }

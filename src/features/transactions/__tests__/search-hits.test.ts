@@ -1,4 +1,4 @@
-import { flattenSearch, searchGroups } from "@/features/transactions/services/search-hits";
+import { flattenSearch, searchGroups, searchHref } from "@/features/transactions/services/search-hits";
 import { unsyncedSignOutFooter } from "@/features/transactions/services/sync-queue-copy";
 import { nairaAmount } from "@/lib/money-map";
 
@@ -30,5 +30,8 @@ assert(debtOnly.filter((row) => row.label === "Tunde").length === 1, "Tunde is o
 assert(debtOnly[0].kind === "debt", "shadow liability accounts stay out of search");
 assert(unsyncedSignOutFooter(0) === false, "empty queue has no unsynced footer");
 assert(unsyncedSignOutFooter(1) === true, "queued rows show the footer");
+
+assert(searchHref({ id: "g1", label: "Rent", kind: "goal" }).includes("goal-detail?id=g1"), "search opens the goal");
+assert(searchHref({ id: "b1", label: "NEPA", kind: "bill" }).includes("bill-detail?id=b1"), "search opens the bill");
 
 console.log("search-hits: five groups and transaction amount");

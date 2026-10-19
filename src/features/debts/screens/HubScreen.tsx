@@ -1,17 +1,5 @@
-import { PlanModuleScreen } from "@/lib/plan-module-screen";
+import { DebtsListScreen } from "@/features/debts/screens/debt-screens";
 
-export function HubScreen({ onBack }: { onBack?: () => void } = {}) {
-  return (
-    <PlanModuleScreen
-      title="Debts"
-      onBack={onBack}
-      path="debts"
-      empty="No debts yet"
-      fields={[
-        { key: "counterparty", label: "Who", value: "Ada" },
-        { key: "principal", label: "Principal", value: "0.00" },
-      ]}
-      extra={{ direction: "i_owe" }}
-    />
-  );
+export function HubScreen({ onBack: _onBack }: { onBack?: () => void } = {}) {
+  return <DebtsListScreen />;
 }

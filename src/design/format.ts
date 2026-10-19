@@ -41,7 +41,7 @@ export const CATEGORIES: Record<string, [string, CategoryTone]> = {
 };
 
 export const EXPENSE_CATEGORIES = ['Food & groceries', 'Transport', 'Data & airtime', 'Electricity', 'Rent', 'Fuel & generator', 'Eating out', 'Family support', 'School fees', 'Health & medical', 'Giving & donations', 'Clothing', 'Personal care', 'Household items', 'Subscriptions (DSTV, Netflix)', 'Phone & gadgets', 'Repairs & maintenance', 'Bank charges', 'Loan repayments', 'Travel', 'Events & celebrations', 'Gifts', 'Entertainment', 'Business expenses', 'Other'];
-export const INCOME_CATEGORIES = ['Salary', 'Business income', 'Side hustle', 'Gift received', 'Interest & returns', 'Refund', 'Other'];
+export const INCOME_CATEGORIES = ['Salary', 'Business income', 'Side hustle', 'Gift received', 'Interest & returns', 'Refund', 'Repayment received', 'Other'];
 
 export function categoryInfo(name?: string): [string, CategoryTone] {
   return (name && CATEGORIES[name]) || ['ellipsis', 'slate'];

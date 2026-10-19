@@ -1,15 +1,5 @@
-import { PlanModuleScreen } from "@/lib/plan-module-screen";
+import { BudgetsListScreen } from "@/features/budgets/screens/budget-screens";
 
-export function HubScreen({ onBack }: { onBack?: () => void } = {}) {
-  return (
-    <PlanModuleScreen
-      title="Budgets"
-      onBack={onBack}
-      path="budgets"
-      empty="No budgets yet"
-      pickAccount
-      fields={[{ key: "amount", label: "Monthly amount", value: "1000.00" }]}
-      extra={{ primaryPeriod: "month" }}
-    />
-  );
+export function HubScreen({ onBack: _onBack }: { onBack?: () => void } = {}) {
+  return <BudgetsListScreen />;
 }

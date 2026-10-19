@@ -48,8 +48,8 @@ export function searchGroups(hits: SearchHit[]): { kind: SearchKind; rows: Searc
 
 export function searchHref(hit: SearchHit): string {
   if (hit.kind === "account") return `/(tabs)/accounts/${hit.id}`;
-  if (hit.kind === "bill") return `/(tabs)/plan/bills`;
-  if (hit.kind === "goal") return `/(tabs)/plan/goals`;
-  if (hit.kind === "debt") return `/(tabs)/plan/debts`;
+  if (hit.kind === "bill") return `/(tabs)/plan/bill-detail?id=${hit.id}`;
+  if (hit.kind === "goal") return `/(tabs)/plan/goal-detail?id=${hit.id}`;
+  if (hit.kind === "debt") return `/(tabs)/plan/debt-detail?id=${hit.id}`;
   return `/(tabs)/transactions/${hit.id}`;
 }

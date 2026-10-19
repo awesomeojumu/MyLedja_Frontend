@@ -1,6 +1,1 @@
-import { GatedScreen } from "@/lib/feature-screen";
-
-export function Screen104() {
-  return <GatedScreen id="104" />;
-}
-
+export { HoldingLotsScreen as Screen104 } from "@/features/investments/screens/investment-screens";

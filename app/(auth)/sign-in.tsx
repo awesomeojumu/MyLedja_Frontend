@@ -1,4 +1,5 @@
 import { Redirect, useRouter } from "expo-router";
+import { MfaRequiredError } from "@/api/client";
 import { afterSignIn, AUTH_ROUTES, SignInScreen } from "@/features/auth-onboarding";
 import { UnverifiedEmailError } from "@/lib/session-core";
 import { useSession } from "@/state";
@@ -17,6 +18,10 @@ export default function SignInRoute() {
         } catch (error) {
           if (error instanceof UnverifiedEmailError) {
             router.push(AUTH_ROUTES.verify);
+            return;
+          }
+          if (error instanceof MfaRequiredError) {
+            router.push({ pathname: AUTH_ROUTES.mfa, params: { challengeId: error.challengeId } });
             return;
           }
           throw error;

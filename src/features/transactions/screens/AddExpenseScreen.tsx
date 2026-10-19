@@ -1,12 +1,13 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { AmountInput, Banner, Button, CategoryPicker, Dialog, EXPENSE_CATEGORIES, INCOME_CATEGORIES, TextField, Toast, Txt } from "@/design";
+import { AmountInput, Banner, Button, CategoryPicker, Dialog, EXPENSE_CATEGORIES, INCOME_CATEGORIES, SegmentedControl, TextField, Toast, Txt } from "@/design";
 import { WidePane } from "@/lib";
 import { rememberAccountOptions } from "@/features/accounts/services/account-options";
 import { afterMoneyWrite } from "@/lib/after-money";
 import { fetchScoped, readScoped } from "@/lib/cached-fetch";
 import { useSession } from "@/state";
 import { outboxForUser } from "@/sync/user-outbox";
+import { newId } from "@/lib/ids";
 import { TxScreen } from "@/features/transactions/components/TxScreen";
 import { draftIssues, quickExpenseDraft, type DraftIssue } from "@/features/transactions/services/add-draft";
 import { commitAdd } from "@/features/transactions/services/commit-add";
@@ -33,10 +34,19 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
     return kind === "income" ? { ...next, kind: "income" as const, description: "", category: INCOME_CATEGORIES[0] } : next;
   });
   const [toast, setToast] = useState<string | null>(null);
+  const [debts, setDebts] = useState<{ id: string; counterparty?: string; direction?: string }[]>([]);
+  const [debtId, setDebtId] = useState<string>("");
+  const [interest, setInterest] = useState("0.00");
+  const loanRepay = kind === "expense" && draft.category === "Loan repayments";
+  const repaymentIn = kind === "income" && draft.category === "Repayment received";
+  const people = debts.filter((row) => (loanRepay ? row.direction === "i_owe" : row.direction === "owed_to_me"));
   const [issues, setIssues] = useState<DraftIssue[]>([]);
   const [conflict, setConflict] = useState(false);
   const remoteNames = categories.filter((row) => row.kind === kind).map((row) => row.name);
-  const allowed = remoteNames.length > 0 ? remoteNames : kind === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  const allowed = [...new Set([
+    ...(kind === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES),
+    ...remoteNames,
+  ])];
   const mismatch = extras && !allowed.includes(draft.category);
   const fieldError = (field: DraftIssue["field"]) => issues.find((issue) => issue.field === field)?.message;
   const workspaceId = workspaces[0]?.id;
@@ -63,10 +73,33 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
         setAccountsKnown(true);
       }
     });
+    void session.listDebts(workspaceId).then((res) => {
+      setDebts((res.data ?? []) as { id: string; counterparty?: string; direction?: string }[]);
+    }).catch(() => setDebts([]));
   }, [session, user, workspaceId]);
 
   const postDraft = () => {
     if (!user || !workspaceId) return;
+    if ((loanRepay || repaymentIn) && !debtId) {
+      setToast(loanRepay ? "Add who you owe first" : "Add who owes you first");
+      return;
+    }
+    if (loanRepay || repaymentIn) {
+      setSaving(true);
+      const kindMove = loanRepay ? "repay" : "collect";
+      const body = loanRepay
+        ? { cashAccountId: accountId, principal: draft.amount, interest, operationId: newId() }
+        : { cashAccountId: accountId, amount: draft.amount, operationId: newId() };
+      void session
+        .debtMove(workspaceId, debtId, kindMove, body)
+        .then(() => {
+          afterMoneyWrite();
+          setToast(loanRepay ? "Paid this person." : "Collected.");
+        })
+        .catch((err: Error) => setToast(err.message))
+        .finally(() => setSaving(false));
+      return;
+    }
     const categoryId = categories.find((row) => row.name === draft.category)?.id;
     setSaving(true);
     void commitAdd(
@@ -100,6 +133,7 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
     const next = draftIssues(draft);
     setIssues(next);
     if (next.length > 0 || mismatch) return;
+    if ((loanRepay || repaymentIn) && people.length === 0) return;
     if (extras) {
       setConflict(true);
       return;
@@ -111,7 +145,7 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
       title={extras ? "Edit transaction" : kind === "income" ? "Add income" : "Add expense"}
       emptyTitle="Nothing to save yet"
       errorTitle="Could not save"
-      footer={<Button fullWidth loading={saving} onPress={save}>{kind === "income" ? "Save income" : extras ? "Save changes" : "Save expense"}</Button>}
+      footer={<Button fullWidth loading={saving} disabled={(loanRepay || repaymentIn) && (people.length === 0 || !debtId)} onPress={save}>{kind === "income" ? "Save income" : extras ? "Save changes" : "Save expense"}</Button>}
     >
       <Txt variant="titleMd" accessibilityRole="header">
         {kind === "income" ? "Add income" : "Add expense"}
@@ -139,6 +173,28 @@ export function AddExpenseScreen({ kind = "expense", extras = false }: { kind?: 
         />
         <AmountInput label="Amount" value={draft.amount} onChange={(amount) => setDraft((current) => ({ ...current, amount }))} error={fieldError("amount")} />
         <CategoryPicker categories={extras ? [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES] : allowed} value={draft.category} onChange={(category) => setDraft((current) => ({ ...current, category }))} />
+        {loanRepay || repaymentIn ? (
+          people.length === 0 ? (
+            <>
+              <Banner tone="warning" title={loanRepay ? "Add who you owe first" : "Add who owes you first"} />
+              <Button
+                onPress={() => router.push(loanRepay ? "/(tabs)/plan/debt-owe" : "/(tabs)/plan/debt-owed")}
+              >
+                {loanRepay ? "I owe someone" : "Someone owes me"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <SegmentedControl
+                label="Who"
+                value={debtId}
+                onChange={setDebtId}
+                options={people.map((row) => ({ value: row.id, label: String(row.counterparty) }))}
+              />
+              {loanRepay ? <AmountInput label="Interest" value={interest} onChange={setInterest} /> : null}
+            </>
+          )
+        ) : null}
       </WidePane>
       <Dialog
         title="Changed on another device"
