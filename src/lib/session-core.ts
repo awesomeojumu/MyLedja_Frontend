@@ -439,6 +439,14 @@ export class SessionCore {
     return this.authed((token) => this.api.patchMerchant(token, workspaceId, merchantId, body));
   }
 
+  getMonthBudget(workspaceId: string, month: string) {
+    return this.authed((token) => this.api.getMonthBudget(token, workspaceId, month));
+  }
+
+  setMonthLines(workspaceId: string, month: string, lines: { categoryId: string; amount: string }[]) {
+    return this.authed((token) => this.api.setMonthLines(token, workspaceId, month, lines));
+  }
+
   listBudgets(workspaceId: string) {
     return this.authed((token) => this.api.listBudgets(token, workspaceId));
   }

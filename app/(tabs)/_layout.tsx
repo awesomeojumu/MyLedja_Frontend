@@ -14,9 +14,10 @@ import { isWarmed } from "@/lib/session-warmup";
 import { UserScope, useSession } from "@/state";
 import { useOutboxSync } from "@/sync/use-outbox-sync";
 
-const HREFS: Record<Destination, "/(tabs)" | "/(tabs)/transactions" | "/(tabs)/plan" | "/(tabs)/accounts" | "/(tabs)/more"> = {
+const HREFS: Record<Destination, "/(tabs)" | "/(tabs)/transactions" | "/(tabs)/budget" | "/(tabs)/plan" | "/(tabs)/accounts" | "/(tabs)/more"> = {
   home: "/(tabs)",
   transactions: "/(tabs)/transactions",
+  budget: "/(tabs)/budget",
   plan: "/(tabs)/plan",
   accounts: "/(tabs)/accounts",
   more: "/(tabs)/more",
@@ -83,6 +84,7 @@ function TabsLayoutInner() {
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="transactions" />
+      <Tabs.Screen name="budget" />
       <Tabs.Screen name="plan" />
       <Tabs.Screen name="accounts" />
       <Tabs.Screen name="more" options={{ href: null }} />

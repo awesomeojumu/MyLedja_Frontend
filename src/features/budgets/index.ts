@@ -1,4 +1,5 @@
 export { HubScreen } from "@/features/budgets/screens/HubScreen";
+export { MonthlyBudgetScreen } from "@/features/budgets/screens/MonthlyBudgetScreen";
 export {
   BudgetsListScreen,
   BudgetCreateScreen,

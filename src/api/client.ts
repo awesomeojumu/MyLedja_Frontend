@@ -182,6 +182,10 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
       call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/merchants`, body, accessToken),
     patchMerchant: (accessToken: string, workspaceId: string, merchantId: string, body: unknown) =>
       call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/merchants/${merchantId}`, body, accessToken),
+    getMonthBudget: (accessToken: string, workspaceId: string, month: string) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>("GET", `/workspaces/${workspaceId}/month-budgets/${month}`, undefined, accessToken),
+    setMonthLines: (accessToken: string, workspaceId: string, month: string, lines: { categoryId: string; amount: string }[]) =>
+      call<{ status: "ok"; data: Record<string, unknown> }>("PUT", `/workspaces/${workspaceId}/month-budgets/${month}/lines`, { lines }, accessToken),
     listBudgets: (accessToken: string, workspaceId: string) =>
       call<{ status: "ok"; data: Record<string, unknown>[] }>("GET", `/workspaces/${workspaceId}/budgets`, undefined, accessToken),
     getBudget: (accessToken: string, workspaceId: string, budgetId: string) =>

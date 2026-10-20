@@ -11,6 +11,9 @@ assertEqual(activeFromPath("/transactions"), "transactions");
 assertEqual(activeFromPath("/plan"), "plan");
 assertEqual(activeFromPath("/plan/budgets"), "plan");
 assertEqual(activeFromPath("/accounts"), "accounts");
+assertEqual(activeFromPath("/budget"), "budget");
+assertEqual(activeFromPath("/plan/budgets"), "plan");
+assertEqual(isTabRoot("/budget", "budget"), true);
 assertEqual(activeFromPath("/more"), "more");
 assertEqual(activeFromPath("/more/settings"), "more");
 

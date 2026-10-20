@@ -20,8 +20,9 @@ export function navMode(widthClass: WidthClass, portrait = false): NavMode {
 }
 
 /** Phone bar: Home, Transactions, +, Plan, Accounts. */
-export function phoneBarDestinations(): readonly ["home", "transactions", "plan", "accounts"] {
-  return ["home", "transactions", "plan", "accounts"];
+/** Phones show four tabs around the add button; Accounts lives in More there. */
+export function phoneBarDestinations(): readonly ["home", "transactions", "budget", "plan"] {
+  return ["home", "transactions", "budget", "plan"];
 }
 
 export function twoColumn(widthClass: WidthClass, portrait = false): boolean {

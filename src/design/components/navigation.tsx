@@ -8,8 +8,8 @@ import { SpringPressable } from "@/design/motion";
 import { IconName } from "@/design/icons";
 import { Icon, Logo, Txt } from "@/design/components/foundations";
 
-export type Destination = 'home' | 'transactions' | 'plan' | 'accounts' | 'more';
-export const NAV: [Destination, string, IconName][] = [['home', 'Home', 'house'], ['transactions', 'Transactions', 'arrow-left-right'], ['plan', 'Plan', 'target'], ['accounts', 'Accounts', 'wallet']];
+export type Destination = 'home' | 'transactions' | 'budget' | 'plan' | 'accounts' | 'more';
+export const NAV: [Destination, string, IconName][] = [['home', 'Home', 'house'], ['transactions', 'Transactions', 'arrow-left-right'], ['budget', 'Budget', 'chart-pie'], ['plan', 'Plan', 'target'], ['accounts', 'Accounts', 'wallet']];
 
 export interface BottomNavProps { active?: string; onNavigate?: (id: string) => void; onAdd?: () => void; addLabel?: string; items?: [string, string, IconName][] }
 /** Floating bar with the raised + in the middle. Sits above the gesture bar / home indicator. */
@@ -77,7 +77,7 @@ export function NavRail({ active = 'home', onNavigate, fab }: NavRailProps) {
   );
 }
 
-export const SIDE: [string, string, IconName][] = [...NAV.slice(0, 4), ['more', 'More', 'ellipsis'], ['reports', 'Reports', 'chart-pie'], ['bills', 'Bills', 'receipt'], ['savings', 'Savings', 'piggy-bank'], ['settings', 'Settings', 'settings']];
+export const SIDE: [string, string, IconName][] = [...NAV, ['more', 'More', 'ellipsis'], ['reports', 'Reports', 'chart-pie'], ['bills', 'Bills', 'receipt'], ['savings', 'Savings', 'piggy-bank'], ['settings', 'Settings', 'settings']];
 export interface SidebarProps { active?: string; workspace?: string; items?: [string, string, IconName][]; onNavigate?: (id: string) => void; onWorkspace?: () => void; footer?: React.ReactNode }
 /** Large screens (1200+). */
 export function Sidebar({ active = 'home', workspace, items = SIDE, onNavigate, onWorkspace, footer }: SidebarProps) {
