@@ -127,7 +127,10 @@ export function Screen123WorkspaceSwitcher() {
                   </Txt>
                 </View>
                 {!isActive ? (
-                  <Button variant="secondary">
+                  <Button
+                    variant="secondary"
+                    onPress={() => activeWorkspace.setActiveWorkspaceId(ws.id)}
+                  >
                     Switch
                   </Button>
                 ) : null}

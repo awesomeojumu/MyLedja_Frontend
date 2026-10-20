@@ -209,12 +209,20 @@ export function BillsListScreen({ filter: initialFilter = "all", title }: { filt
                           )}
                         </View>
 
-                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                           <Amount value={nairaAmount(bill.amount)} kind="expense" />
-                          <Txt variant="caption" color={t.c.inkMuted}>
-                            Due {formatDateDMY(bill.nextDue ?? "") || bill.nextDue}
-                          </Txt>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon="check"
+                            onPress={() => router.push(`/(tabs)/plan/bill-paid?id=${bill.id}`)}
+                          >
+                            Mark paid
+                          </Button>
                         </View>
+                        <Txt variant="caption" color={t.c.inkMuted}>
+                          Due {formatDateDMY(bill.nextDue ?? "") || bill.nextDue}
+                        </Txt>
                       </View>
                     </Card>
                   </Pressable>

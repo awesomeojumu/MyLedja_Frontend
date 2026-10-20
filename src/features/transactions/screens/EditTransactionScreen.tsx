@@ -15,21 +15,23 @@ import {
 import { PageScaffold } from "@/lib/ui";
 import { toLedgerAccount, type ApiAccount, type ApiTransaction } from "@/lib/money-map";
 import { useLiveQuery } from "@/lib/use-live-query";
+import { useActiveWorkspace } from "@/lib/ui/use-active-workspace";
 import { useSession } from "@/state";
 import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
+import { newId } from "@/lib/ids";
 
 export function EditTransactionScreen() {
-  const t = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { session } = useSession();
+  const { workspaceId } = useActiveWorkspace();
 
   const load = useCallback(
-    async (workspaceId: string) => {
+    async (wsId: string) => {
       const [txRes, accountsRes, catRes] = await Promise.all([
-        session.listTransactions(workspaceId),
-        session.listAccounts(workspaceId),
-        session.listCategories(workspaceId),
+        session.listTransactions(wsId),
+        session.listAccounts(wsId),
+        session.listCategories(wsId),
       ]);
       const txns = (txRes.data.transactions ?? []).filter((row) => row.id);
       const accounts = (Array.isArray(accountsRes.data) ? accountsRes.data : []).map((row) =>
@@ -52,10 +54,50 @@ export function EditTransactionScreen() {
 
   const tx = data.txns.find((item) => item.id === id);
 
+  return (
+    <EditTransactionForm
+      key={tx?.id ?? (loading ? "loading" : "none")}
+      tx={tx}
+      loading={loading}
+      offline={offline}
+      error={error}
+      onRetry={refresh}
+      categories={data.categories}
+      accounts={data.accounts}
+      workspaceId={workspaceId}
+      onDone={() => router.back()}
+    />
+  );
+}
+
+function EditTransactionForm({
+  tx,
+  loading,
+  offline,
+  error,
+  onRetry,
+  categories,
+  accounts,
+  workspaceId,
+  onDone,
+}: {
+  tx?: ApiTransaction;
+  loading: boolean;
+  offline: boolean;
+  error?: string | null;
+  onRetry: () => void;
+  categories: { name: string; kind: string }[];
+  accounts: ReturnType<typeof toLedgerAccount>[];
+  workspaceId: string | null;
+  onDone: () => void;
+}) {
+  const t = useTheme();
+  const { session } = useSession();
+
   const [description, setDescription] = useState(tx?.description ?? "");
   const [amount, setAmount] = useState(tx?.amount ?? "0.00");
   const [category, setCategory] = useState(tx?.type ?? "Food & groceries");
-  const [accountId, setAccountId] = useState(tx?.accountId ?? "");
+  const [accountId, setAccountId] = useState(tx?.accountId ?? (accounts[0]?.id ?? ""));
   const [reason, setReason] = useState("");
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
 
@@ -63,14 +105,33 @@ export function EditTransactionScreen() {
 
   const handleSave = () => {
     run(async () => {
-      router.back();
+      if (workspaceId && tx?.id) {
+        try {
+          await session.setTransactionStatus(workspaceId, tx.id, "voided");
+        } catch {
+          // Proceed with posting replacement if already voided
+        }
+        await session.createTransaction(workspaceId, {
+          operationId: newId(),
+          type: tx.type ?? "expense",
+          amount: amount.includes(".") ? amount : `${amount}.00`,
+          accountId: accountId || tx.accountId,
+          categoryId: category,
+          description: reason ? `${description} (${reason})` : description,
+          status: "posted",
+        });
+      }
+      onDone();
     });
   };
 
   const handleVoid = () => {
     setVoidDialogOpen(false);
     run(async () => {
-      router.back();
+      if (workspaceId && tx?.id) {
+        await session.setTransactionStatus(workspaceId, tx.id, "voided");
+      }
+      onDone();
     });
   };
 
@@ -80,7 +141,7 @@ export function EditTransactionScreen() {
       loading={loading}
       offline={offline}
       error={error}
-      onRetry={refresh}
+      onRetry={onRetry}
       footer={
         <View style={{ gap: t.space.space2 }}>
           <Button fullWidth loading={busy} onPress={handleSave}>
@@ -113,14 +174,14 @@ export function EditTransactionScreen() {
       <CategoryPicker
         label="Category"
         value={category}
-        categories={data.categories.map((c) => c.name)}
+        categories={categories.map((c) => c.name)}
         onChange={setCategory}
       />
 
       <Select
         label="Account"
         value={accountId}
-        options={data.accounts.map((a) => ({ value: a.id, label: a.name }))}
+        options={accounts.map((a) => ({ value: a.id, label: a.name }))}
         onChange={setAccountId}
       />
 

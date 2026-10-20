@@ -309,6 +309,10 @@ export class SessionCore {
     return this.authed((token) => this.api.listTransactions(token, workspaceId));
   }
 
+  setTransactionStatus(workspaceId: string, transactionId: string, status: string) {
+    return this.authed((token) => this.api.setTransactionStatus(token, workspaceId, transactionId, status));
+  }
+
   listMerchants(workspaceId: string) {
     return this.authed((token) => this.api.listMerchants(token, workspaceId));
   }

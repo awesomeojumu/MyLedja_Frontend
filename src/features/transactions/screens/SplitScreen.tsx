@@ -14,8 +14,10 @@ import {
 import { PageScaffold } from "@/lib/ui";
 import { nairaAmount, type ApiTransaction } from "@/lib/money-map";
 import { useLiveQuery } from "@/lib/use-live-query";
+import { useActiveWorkspace } from "@/lib/ui/use-active-workspace";
 import { useSession } from "@/state";
 import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
+import { newId } from "@/lib/ids";
 
 interface SplitLine {
   id: string;
@@ -28,12 +30,13 @@ export function SplitScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { session } = useSession();
+  const { workspaceId } = useActiveWorkspace();
 
   const load = useCallback(
-    async (workspaceId: string) => {
+    async (wsId: string) => {
       const [txRes, catRes] = await Promise.all([
-        session.listTransactions(workspaceId),
-        session.listCategories(workspaceId),
+        session.listTransactions(wsId),
+        session.listCategories(wsId),
       ]);
       const txns = (txRes.data.transactions ?? []).filter((row) => row.id);
       const categories = (catRes.data ?? []).map((c) => c.name);
@@ -82,11 +85,37 @@ export function SplitScreen() {
     );
   };
 
+  const fillRemaining = (lineId: string) => {
+    const thisLine = lines.find((l) => l.id === lineId);
+    const thisLineKobo = thisLine ? Math.round(Number(thisLine.amount || "0") * 100) : 0;
+    const canFillKobo = Math.max(0, remainingKobo + (isNaN(thisLineKobo) ? 0 : thisLineKobo));
+    const filledStr = (canFillKobo / 100).toFixed(2);
+    updateLine(lineId, { amount: filledStr });
+  };
+
   const { busy, error: submitError, run } = useSubmit();
 
   const handleSave = () => {
-    if (!isExactMatch) return;
+    if (!isExactMatch || !tx) return;
     run(async () => {
+      if (workspaceId) {
+        try {
+          await session.setTransactionStatus(workspaceId, tx.id, "voided");
+        } catch {
+          // ignore
+        }
+        for (const line of lines) {
+          await session.createTransaction(workspaceId, {
+            operationId: newId(),
+            type: "expense",
+            amount: line.amount.includes(".") ? line.amount : `${line.amount}.00`,
+            accountId: tx.accountId,
+            categoryId: line.category,
+            description: `${tx.description || "Split expense"} (${line.category})`,
+            status: "posted",
+          });
+        }
+      }
       router.back();
     });
   };
@@ -151,49 +180,63 @@ export function SplitScreen() {
       </View>
 
       <View style={{ gap: t.space.space4 }}>
-        {lines.map((line, idx) => (
-          <View
-            key={line.id}
-            style={{
-              backgroundColor: t.c.surface,
-              borderWidth: 1,
-              borderColor: t.c.border,
-              borderRadius: t.radius.radiusMd,
-              padding: t.space.space3,
-              gap: t.space.space2,
-            }}
-          >
+        {lines.map((line, idx) => {
+          const lineValKobo = Math.round(Number(line.amount || "0") * 100);
+          const availableToFill = remainingKobo + (isNaN(lineValKobo) ? 0 : lineValKobo);
+          return (
             <View
+              key={line.id}
               style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
+                backgroundColor: t.c.surface,
+                borderWidth: 1,
+                borderColor: t.c.border,
+                borderRadius: t.radius.radiusMd,
+                padding: t.space.space3,
+                gap: t.space.space2,
               }}
             >
-              <Txt variant="label">Line {idx + 1}</Txt>
-              {lines.length > 2 ? (
-                <IconButton
-                  icon="trash-2"
-                  label="Remove"
-                  onPress={() => removeLine(line.id)}
-                />
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Txt variant="label">Line {idx + 1}</Txt>
+                {lines.length > 2 ? (
+                  <IconButton
+                    icon="trash-2"
+                    label="Remove"
+                    onPress={() => removeLine(line.id)}
+                  />
+                ) : null}
+              </View>
+
+              <CategoryPicker
+                label="Category"
+                value={line.category}
+                categories={data.categories.length ? data.categories : undefined}
+                onChange={(category) => updateLine(line.id, { category })}
+              />
+
+              <AmountInput
+                label="Line amount"
+                value={line.amount}
+                onChange={(val) => updateLine(line.id, { amount: val })}
+              />
+
+              {availableToFill > 0 && Math.abs(availableToFill - lineValKobo) > 0 ? (
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  onPress={() => fillRemaining(line.id)}
+                >
+                  {`Auto-fill remaining (₦${(availableToFill / 100).toFixed(2)})`}
+                </Button>
               ) : null}
             </View>
-
-            <CategoryPicker
-              label="Category"
-              value={line.category}
-              categories={data.categories.length ? data.categories : undefined}
-              onChange={(category) => updateLine(line.id, { category })}
-            />
-
-            <AmountInput
-              label="Line amount"
-              value={line.amount}
-              onChange={(val) => updateLine(line.id, { amount: val })}
-            />
-          </View>
-        ))}
+          );
+        })}
       </View>
     </PageScaffold>
   );

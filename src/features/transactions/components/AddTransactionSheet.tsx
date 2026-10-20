@@ -18,6 +18,7 @@ import { draftIssues, quickExpenseDraft, saveLabel, type AddDraft, type DraftIss
 import { commitAdd } from "@/features/transactions/services/commit-add";
 import { afterMoneyWrite } from "@/lib/after-money";
 import { fetchScoped, readScoped } from "@/lib/cached-fetch";
+import { useActiveWorkspace } from "@/lib/ui/use-active-workspace";
 import { useSession } from "@/state";
 import { outboxForUser } from "@/sync/user-outbox";
 
@@ -57,12 +58,13 @@ export function AddTransactionSheet({
   initialKind?: EntryKind;
 }) {
   const t = useTheme();
-  const { session, workspaces, user } = useSession();
+  const { session, user } = useSession();
+  const { workspaceId } = useActiveWorkspace();
   const [draft, setDraft] = useState<AddDraft>(() => draftFor(initialKind));
   const [issues, setIssues] = useState<DraftIssue[]>([]);
   const [more, setMore] = useState(false);
   const cacheUser = user?.userId;
-  const cacheWorkspace = workspaces[0]?.id;
+  const cacheWorkspace = workspaceId;
   const [initialAccounts] = useState(() =>
     cacheUser && cacheWorkspace ? readScoped<Option[]>(cacheUser, cacheWorkspace, "account-options") : null,
   );
@@ -76,7 +78,6 @@ export function AddTransactionSheet({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const workspaceId = workspaces[0]?.id;
     const userId = user?.userId;
     if (!workspaceId || !userId || !open) return;
     const applyAccounts = (rows: Option[] | null) => {
@@ -99,7 +100,7 @@ export function AddTransactionSheet({
     }).then(({ data }) => {
       if (data) setCategories(data);
     });
-  }, [open, session, user, workspaces]);
+  }, [open, session, user, workspaceId]);
 
   const setKind = (kind: EntryKind) => {
     const category = kind === "income" ? INCOME_CATEGORIES[0] : EXPENSE_CATEGORIES[0];
@@ -110,7 +111,6 @@ export function AddTransactionSheet({
     const next = draftIssues(draft);
     setIssues(next);
     if (next.length > 0) return;
-    const workspaceId = workspaces[0]?.id;
     const userId = user?.userId;
     if (!workspaceId || !userId) return;
     const categoryId = categories.find((row) => row.name === draft.category && row.kind === draft.kind)?.id;
@@ -159,13 +159,7 @@ export function AddTransactionSheet({
       }
     >
       <SegmentedControl label="Type" options={KINDS} value={draft.kind} onChange={(value) => setKind(value as EntryKind)} />
-      <TextField
-        label="What it was for"
-        placeholder={draft.kind === "transfer" ? "Optional" : `Optional, e.g. ${draft.category || "Jollof rice"}`}
-        value={draft.description}
-        onChangeText={(description) => setDraft((current) => ({ ...current, description }))}
-        error={messageFor(issues, "description")}
-      />
+
       <AmountDisplay
         label="Amount"
         value={draft.amount}
@@ -174,6 +168,7 @@ export function AddTransactionSheet({
         onChange={(amount) => setDraft((current) => ({ ...current, amount }))}
         error={messageFor(issues, "amount")}
       />
+
       {draft.kind === "transfer" ? null : (
         <View style={{ gap: t.space.space2 }}>
           <CategoryPicker
@@ -188,12 +183,22 @@ export function AddTransactionSheet({
           ) : null}
         </View>
       )}
+
+      <TextField
+        label="What it was for"
+        placeholder={draft.kind === "transfer" ? "Optional note" : `Optional, e.g. ${draft.category || "Jollof rice"}`}
+        value={draft.description}
+        onChangeText={(description) => setDraft((current) => ({ ...current, description }))}
+        error={messageFor(issues, "description")}
+      />
+
       {accountOptions.length > 0 ? (
         <SegmentedControl label={draft.kind === "transfer" ? "From" : "Account"} options={accountOptions} value={fromId} onChange={setFromId} />
       ) : null}
       {draft.kind === "transfer" && accountOptions.length > 1 ? (
         <SegmentedControl label="To" options={accountOptions} value={toId} onChange={setToId} />
       ) : null}
+
       <Pressable onPress={() => setMore((value) => !value)} accessibilityRole="button">
         <Txt variant="label" color={t.c.primary} style={{ fontWeight: "600" }}>
           {more ? "Hide details" : "More details"}

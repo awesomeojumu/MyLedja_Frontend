@@ -33,6 +33,7 @@ import { readCache, scopedKey, writeCache } from "@/lib/offline-cache";
 import { DefaultLoading } from "@/lib/screen-state";
 import { remainingText } from "@/lib/budget-text";
 import { goalNudge } from "@/features/plans-goals/services/goal-pace";
+import { useActiveWorkspace } from "@/lib/ui/use-active-workspace";
 import { useSession } from "@/state";
 
 type RecentRow = { row: ApiTransaction; account: string };
@@ -49,7 +50,8 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { openSearch, openQuickAdd } = useDashboardOverlays();
-  const { session, status, workspaces, user, offline: sessionOffline } = useSession();
+  const { session, status, user, offline: sessionOffline } = useSession();
+  const { workspaceId, workspace } = useActiveWorkspace();
   const signedIn = status === "signedIn";
   const [hidden, setHidden] = useState(false);
   const [period, setPeriod] = useState("today");
@@ -61,7 +63,7 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [nudge, setNudge] = useState<string | null>(null);
   const columns = twoColumn(t.widthClass, t.portrait);
-  const workspaceId = workspaces[0]?.id;
+
   const latest = useRef(createLatestGate()).current;
 
   const load = useCallback(() => {
@@ -244,7 +246,7 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
       >
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Txt variant="titleMd" accessibilityRole="header">
-            Home
+            {workspace ? `${workspace.name} · Home` : "Home"}
           </Txt>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <IconButton icon="plus" label="Quick add" onPress={openQuickAdd} />
@@ -257,19 +259,19 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
         <View style={{ gap: t.space.space2 }}>
           <SectionHeader title="Look closer" />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: t.space.space2 }}>
-            <Button variant="tertiary" size="sm" onPress={() => router.push("/(tabs)/cash-flow")}>
+            <Button variant="tertiary" size="sm" icon="trending-up" onPress={() => router.push("/(tabs)/cash-flow")}>
               Cash flow
             </Button>
-            <Button variant="tertiary" size="sm" onPress={() => router.push("/(tabs)/net-worth")}>
+            <Button variant="tertiary" size="sm" icon="chart-pie" onPress={() => router.push("/(tabs)/net-worth")}>
               Net worth
             </Button>
-            <Button variant="tertiary" size="sm" onPress={() => router.push("/(tabs)/upcoming")}>
+            <Button variant="tertiary" size="sm" icon="calendar" onPress={() => router.push("/(tabs)/upcoming")}>
               Upcoming
             </Button>
-            <Button variant="tertiary" size="sm" onPress={() => router.push("/(tabs)/goals-preview")}>
+            <Button variant="tertiary" size="sm" icon="target" onPress={() => router.push("/(tabs)/goals-preview")}>
               Goals
             </Button>
-            <Button variant="tertiary" size="sm" onPress={() => router.push("/(tabs)/insights")}>
+            <Button variant="tertiary" size="sm" icon="sparkles" onPress={() => router.push("/(tabs)/insights")}>
               Insights
             </Button>
           </View>

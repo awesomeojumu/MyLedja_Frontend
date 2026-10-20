@@ -361,6 +361,13 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
         undefined,
         accessToken,
       ),
+    setTransactionStatus: (accessToken: string, workspaceId: string, transactionId: string, status: string) =>
+      call<{ status: "ok"; data: unknown }>(
+        "PATCH",
+        `/workspaces/${workspaceId}/transactions/${transactionId}/status`,
+        { status },
+        accessToken,
+      ),
     listMerchants: (accessToken: string, workspaceId: string) =>
       call<{ status: "ok"; data: { id: string; name: string }[] }>(
         "GET",
