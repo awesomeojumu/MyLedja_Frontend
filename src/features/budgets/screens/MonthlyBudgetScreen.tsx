@@ -2,26 +2,84 @@ import { useCallback, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { AmountInput, Button, Icon, maxWidth, Sheet, Txt, useTheme } from "@/design";
+import { AmountInput, Button, Icon, type IconName, maxWidth, Sheet, Txt, useTheme } from "@/design";
+import { categoryInfo } from "@/design/format";
 import { useActiveWorkspace } from "@/lib/ui/use-active-workspace";
 import { useSession } from "@/state";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { nairaAmount } from "@/lib/money-map";
 
-interface SpendingCategory {
+interface MonthBudgetLine {
+  categoryId: string;
+  name: string;
+  planned: string;
+  spent: string;
+}
+
+interface MonthBudgetGroup {
+  kind: "bill" | "goal" | "debt";
+  count: number;
+  amount: string;
+  moved: string;
+  dueSoon: number;
+  noDeadline: number;
+  items: {
+    refId: string;
+    name: string;
+    amount: string;
+    total: string;
+    moved: string;
+    due: string | null;
+    monthsLeft: number | null;
+    noDeadline: boolean;
+  }[];
+}
+
+interface MonthBudgetData {
+  month: string;
+  daysInMonth: number;
+  today: number;
+  income: {
+    expected: string;
+    received: string;
+    streams: {
+      id: string;
+      name: string;
+      expected: string | null;
+      cadence: string;
+      payDay: number | null;
+      account: string | null;
+    }[];
+  };
+  setAside: {
+    amount: string;
+    groups: MonthBudgetGroup[];
+  };
+  spending: {
+    planned: string;
+    spent: string;
+    unplannedSpent: string;
+    lines: MonthBudgetLine[];
+  };
+  safeToSpend: string;
+  safeLeft: string;
+  free: string;
+}
+
+interface SpendingCategoryRow {
   id: string;
   name: string;
   spent: number;
   planned: number;
-  icon: "utensils" | "bus" | "fuel" | "shopping-cart" | "sparkles" | "credit-card" | "wallet";
+  icon: IconName;
   status?: "ahead" | "on-pace" | "under";
 }
 
-const DEFAULT_CATEGORIES: SpendingCategory[] = [
-  { id: "cat-1", name: "Food & groceries", spent: 48000, planned: 115000, icon: "shopping-cart", status: "on-pace" },
+const DEFAULT_FALLBACK_CATEGORIES: SpendingCategoryRow[] = [
+  { id: "cat-1", name: "Food & groceries", spent: 48000, planned: 115000, icon: "shopping-cart", status: "ahead" },
   { id: "cat-2", name: "Transport", spent: 36000, planned: 55000, icon: "bus", status: "ahead" },
   { id: "cat-3", name: "Eating out", spent: 14000, planned: 40000, icon: "utensils", status: "on-pace" },
-  { id: "cat-4", name: "Fuel", spent: 12000, planned: 25000, icon: "fuel", status: "on-pace" },
+  { id: "cat-4", name: "Fuel", spent: 12000, planned: 25000, icon: "fuel", status: "ahead" },
   { id: "cat-5", name: "Shopping", spent: 20000, planned: 50000, icon: "shopping-cart", status: "on-pace" },
   { id: "cat-6", name: "Entertainment", spent: 10000, planned: 30000, icon: "sparkles", status: "on-pace" },
   { id: "cat-7", name: "Health & medical", spent: 8000, planned: 25000, icon: "sparkles", status: "under" },
@@ -51,62 +109,100 @@ export function MonthlyBudgetScreen() {
 
   const [date, setDate] = useState(() => new Date(2027, 0, 12));
   const [showAllCategories, setShowAllCategories] = useState(false);
-  const [categories, setCategories] = useState<SpendingCategory[]>(DEFAULT_CATEGORIES);
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
 
+  const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
   const monthName = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const currentDay = 12;
-  const totalDays = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  const pacePercent = Math.min(100, Math.round((currentDay / totalDays) * 100));
+  const monthAbbrev = date.toLocaleDateString("en-US", { month: "short" });
 
   const load = useCallback(
     async (wsId: string) => {
-      const [budgetsRes, billsRes, goalsRes, debtsRes] = await Promise.all([
-        session.listBudgets(wsId).catch(() => ({ data: [] })),
-        session.listBills(wsId).catch(() => ({ data: [] })),
-        session.listGoals(wsId).catch(() => ({ data: [] })),
-        session.listDebts(wsId).catch(() => ({ data: [] })),
+      const [budgetRes, catRes] = await Promise.all([
+        session.getMonthBudget(wsId, monthKey).catch(() => null),
+        session.listCategories(wsId).catch(() => ({ data: [] })),
       ]);
 
-      const budgets = (budgetsRes.data ?? []) as { planned?: string; spent?: string }[];
-      const bills = (billsRes.data ?? []) as { amount?: string }[];
-      const goals = (goalsRes.data ?? []) as { target?: string; saved?: string }[];
-      const debts = (debtsRes.data ?? []) as { balance?: string; amount?: string }[];
+      const monthBudget = (budgetRes?.data ?? null) as MonthBudgetData | null;
+      const allCategories = (catRes?.data ?? []) as { id: string; name: string; kind: string }[];
 
-      return { budgets, bills, goals, debts };
+      return { monthBudget, allCategories };
     },
-    [session],
+    [session, monthKey],
   );
 
-  const { data } = useLiveQuery(
+  const { data, refresh } = useLiveQuery(
     load,
-    { budgets: [], bills: [], goals: [], debts: [] },
-    workspaceId ? `monthly-budget-${workspaceId}` : undefined,
+    { monthBudget: null as MonthBudgetData | null, allCategories: [] as { id: string; name: string; kind: string }[] },
+    workspaceId ? `month-budget-${workspaceId}-${monthKey}` : undefined,
   );
 
-  const plannedSpend = categories.reduce((acc, c) => acc + c.planned, 0);
-  const spentSoFar = categories.reduce((acc, c) => acc + c.spent, 0);
-  const safeToSpend = Math.max(0, plannedSpend - spentSoFar);
-  const remainingDays = Math.max(1, totalDays - currentDay);
+  const mb = data.monthBudget;
+
+  // Real backend calculations with design-matched fallbacks
+  const daysInMonth = mb?.daysInMonth ?? new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const currentDay = mb?.today && mb.today > 0 ? mb.today : 12;
+  const pacePercent = Math.min(100, Math.round((currentDay / daysInMonth) * 100));
+
+  const plannedSpend = mb ? nairaAmount(mb.spending?.planned) : 403000;
+  const spentSoFar = mb ? nairaAmount(mb.spending?.spent) : 179000;
+  const safeToSpend = mb ? nairaAmount(mb.safeLeft) : 224000;
+  const remainingDays = Math.max(1, daysInMonth - currentDay);
   const dailySafe = Math.round(safeToSpend / remainingDays);
 
-  const billsTotal = data.bills.length > 0
-    ? data.bills.reduce((acc, b) => acc + nairaAmount(b.amount), 0)
-    : 541700;
-  const billsPaid = Math.min(billsTotal, 500000);
+  const expectedSpendAtPace = (plannedSpend * currentDay) / daysInMonth;
+  const isOnPace = spentSoFar <= expectedSpendAtPace + 5000;
 
-  const goalsTotal = data.goals.length > 0
-    ? data.goals.reduce((acc, g) => acc + nairaAmount(g.target), 0)
-    : 500000;
-  const goalsSaved = data.goals.length > 0
-    ? data.goals.reduce((acc, g) => acc + nairaAmount(g.saved), 0)
-    : 100000;
+  // Income figures
+  const incomeExpected = mb ? nairaAmount(mb.income?.expected) : 1500000;
+  const incomeReceived = mb ? nairaAmount(mb.income?.received) : 500000;
+  const salaryStream = mb?.income?.streams?.find((s) => s.payDay != null);
+  const streamNote = salaryStream?.expected
+    ? `${formatNairaCompact(nairaAmount(salaryStream.expected))} on ${salaryStream.payDay} ${monthAbbrev}`
+    : `₦1m on 25 ${monthAbbrev}`;
 
-  const debtsTotal = data.debts.length > 0
-    ? data.debts.reduce((acc, d) => acc + nairaAmount(d.amount ?? d.balance), 0)
-    : 105000;
-  const debtsPaid = 0;
+  // Plan Groups (Bills, Goals, Debts)
+  const billsGroup = mb?.setAside?.groups?.find((g) => g.kind === "bill");
+  const goalsGroup = mb?.setAside?.groups?.find((g) => g.kind === "goal");
+  const debtsGroup = mb?.setAside?.groups?.find((g) => g.kind === "debt");
+
+  const billsTotal = billsGroup ? nairaAmount(billsGroup.amount) : 541700;
+  const billsPaid = billsGroup ? nairaAmount(billsGroup.moved) : 500000;
+  const billsCount = billsGroup?.count ?? 10;
+
+  const goalsTotal = goalsGroup ? nairaAmount(goalsGroup.amount) : 500000;
+  const goalsSaved = goalsGroup ? nairaAmount(goalsGroup.moved) : 100000;
+  const goalsCount = goalsGroup?.count ?? 4;
+
+  const debtsTotal = debtsGroup ? nairaAmount(debtsGroup.amount) : 105000;
+  const debtsPaid = debtsGroup ? nairaAmount(debtsGroup.moved) : 0;
+  const debtsCount = debtsGroup?.count ?? 3;
+  const debtsDueSoon = debtsGroup?.dueSoon ?? 1;
+
+  const totalPlanMoved = billsPaid + goalsSaved + debtsPaid;
+  const totalPlanAmount = billsTotal + goalsTotal + debtsTotal;
+
+  // Categories mapping
+  const categoryRows: SpendingCategoryRow[] =
+    mb && mb.spending?.lines?.length > 0
+      ? mb.spending.lines.map((l) => {
+          const planned = nairaAmount(l.planned);
+          const spent = nairaAmount(l.spent);
+          const expectedCatSpend = (planned * currentDay) / daysInMonth;
+          const isAhead = spent > expectedCatSpend;
+          const icon = (categoryInfo(l.name)?.[0] as IconName) ?? "shopping-cart";
+
+          return {
+            id: l.categoryId,
+            name: l.name,
+            planned,
+            spent,
+            icon,
+            status: isAhead ? "ahead" : "on-pace",
+          };
+        })
+      : DEFAULT_FALLBACK_CATEGORIES;
 
   const prevMonth = () => {
     setDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -118,24 +214,38 @@ export function MonthlyBudgetScreen() {
 
   const openEdit = () => {
     const draft: Record<string, string> = {};
-    for (const c of categories) {
-      draft[c.id] = String(c.planned);
+    if (mb && mb.spending?.lines?.length > 0) {
+      for (const line of mb.spending.lines) {
+        draft[line.categoryId] = line.planned;
+      }
+    } else {
+      for (const cat of categoryRows) {
+        draft[cat.id] = String(cat.planned);
+      }
     }
     setEditDraft(draft);
     setEditSheetOpen(true);
   };
 
-  const saveEdit = () => {
-    setCategories((prev) =>
-      prev.map((c) => {
-        const val = Number(editDraft[c.id]);
-        return isNaN(val) || val < 0 ? c : { ...c, planned: val };
-      }),
-    );
-    setEditSheetOpen(false);
+  const saveEdit = async () => {
+    if (!workspaceId) return;
+    setSavingEdit(true);
+    try {
+      const lines = Object.entries(editDraft).map(([categoryId, amount]) => ({
+        categoryId,
+        amount: amount.includes(".") ? amount : `${amount || "0"}.00`,
+      }));
+      await session.setMonthLines(workspaceId, monthKey, lines);
+      setEditSheetOpen(false);
+      await refresh();
+    } catch {
+      setEditSheetOpen(false);
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
-  const visibleCategories = showAllCategories ? categories : categories.slice(0, 4);
+  const visibleCategories = showAllCategories ? categoryRows : categoryRows.slice(0, 4);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
@@ -211,10 +321,10 @@ export function MonthlyBudgetScreen() {
                 Income
               </Txt>
               <Txt variant="titleLg" color={t.c.onHero} style={{ fontWeight: "700", fontSize: 24 }}>
-                ₦1.5m
+                {formatNairaCompact(incomeExpected)}
               </Txt>
               <Txt variant="caption" color={t.c.onHeroMuted} style={{ fontSize: 12, textAlign: "right" }}>
-                ₦500k in · ₦1m on 25 Jan
+                {formatNairaCompact(incomeReceived)} in · {streamNote}
               </Txt>
             </View>
           </View>
@@ -235,12 +345,17 @@ export function MonthlyBudgetScreen() {
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <Txt variant="body" color={t.c.ink} style={{ fontWeight: "600", fontSize: 15 }}>
-                Day {currentDay} of {totalDays}
+                Day {currentDay} of {daysInMonth}
               </Txt>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Icon name="check" size={14} color={t.c.positive} strokeWidth={2.5} />
-                <Txt variant="bodySm" color={t.c.positive} style={{ fontWeight: "600" }}>
-                  On pace
+                <Icon
+                  name={isOnPace ? "check" : "triangle-alert"}
+                  size={14}
+                  color={isOnPace ? t.c.positive : t.c.warning}
+                  strokeWidth={2.5}
+                />
+                <Txt variant="bodySm" color={isOnPace ? t.c.positive : t.c.warning} style={{ fontWeight: "600" }}>
+                  {isOnPace ? "On pace" : "Ahead of pace"}
                 </Txt>
               </View>
             </View>
@@ -259,7 +374,7 @@ export function MonthlyBudgetScreen() {
                 <View
                   style={{
                     height: 8,
-                    width: `${Math.min(100, Math.round((spentSoFar / plannedSpend) * 100))}%`,
+                    width: `${Math.min(100, Math.round((spentSoFar / Math.max(1, plannedSpend)) * 100))}%`,
                     backgroundColor: t.c.primary,
                     borderRadius: 4,
                   }}
@@ -312,7 +427,7 @@ export function MonthlyBudgetScreen() {
 
             <View style={{ gap: t.space.space4 }}>
               {visibleCategories.map((cat) => {
-                const percent = Math.min(100, Math.round((cat.spent / cat.planned) * 100));
+                const percent = Math.min(100, Math.round((cat.spent / Math.max(1, cat.planned)) * 100));
                 const isAhead = cat.status === "ahead" || percent > pacePercent;
                 const barColor = isAhead ? t.c.warning : t.c.primary;
 
@@ -365,17 +480,19 @@ export function MonthlyBudgetScreen() {
             </View>
 
             {/* Expand / Collapse Button */}
-            <Pressable
-              onPress={() => setShowAllCategories((prev) => !prev)}
-              style={{ alignItems: "center", paddingVertical: 6 }}
-              accessibilityRole="button"
-            >
-              <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
-                {showAllCategories
-                  ? "Show fewer categories"
-                  : `Show ${categories.length - 4} more categories`}
-              </Txt>
-            </Pressable>
+            {categoryRows.length > 4 ? (
+              <Pressable
+                onPress={() => setShowAllCategories((prev) => !prev)}
+                style={{ alignItems: "center", paddingVertical: 6 }}
+                accessibilityRole="button"
+              >
+                <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
+                  {showAllCategories
+                    ? "Show fewer categories"
+                    : `Show ${categoryRows.length - 4} more categories`}
+                </Txt>
+              </Pressable>
+            ) : null}
           </View>
 
           {/* 4. From your plan: Bills, Goals and Debts as three rolled-up lines, then Details live in Plan */}
@@ -394,7 +511,7 @@ export function MonthlyBudgetScreen() {
                 From your plan
               </Txt>
               <Txt variant="caption" color={t.c.inkMuted} style={{ fontSize: 12 }}>
-                ₦600k of ₦1.14m moved
+                {formatNairaCompact(totalPlanMoved)} of {formatNairaCompact(totalPlanAmount)} moved
               </Txt>
             </View>
 
@@ -402,7 +519,7 @@ export function MonthlyBudgetScreen() {
             <View style={{ gap: 8 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "500" }}>
-                  Bills · 10
+                  Bills · {billsCount}
                 </Txt>
                 <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "600" }}>
                   {formatNairaCompact(billsPaid)} / {formatNairaCompact(billsTotal)}
@@ -412,7 +529,7 @@ export function MonthlyBudgetScreen() {
                 <View
                   style={{
                     height: 6,
-                    width: `${Math.min(100, Math.round((billsPaid / billsTotal) * 100))}%`,
+                    width: `${Math.min(100, Math.round((billsPaid / Math.max(1, billsTotal)) * 100))}%`,
                     backgroundColor: t.c.catOrange,
                     borderRadius: 3,
                   }}
@@ -424,7 +541,7 @@ export function MonthlyBudgetScreen() {
             <View style={{ gap: 8 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "500" }}>
-                  Goals · 4
+                  Goals · {goalsCount}
                 </Txt>
                 <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "600" }}>
                   {formatNairaCompact(goalsSaved)} / {formatNairaCompact(goalsTotal)}
@@ -434,7 +551,7 @@ export function MonthlyBudgetScreen() {
                 <View
                   style={{
                     height: 6,
-                    width: `${Math.min(100, Math.round((goalsSaved / goalsTotal) * 100))}%`,
+                    width: `${Math.min(100, Math.round((goalsSaved / Math.max(1, goalsTotal)) * 100))}%`,
                     backgroundColor: t.c.positive,
                     borderRadius: 3,
                   }}
@@ -447,11 +564,13 @@ export function MonthlyBudgetScreen() {
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "500" }}>
-                    Debts · 3 ·
+                    Debts · {debtsCount} ·
                   </Txt>
-                  <Txt variant="caption" color={t.c.warning} style={{ fontWeight: "600" }}>
-                    1 due in 5 days
-                  </Txt>
+                  {debtsDueSoon > 0 ? (
+                    <Txt variant="caption" color={t.c.warning} style={{ fontWeight: "600" }}>
+                      {debtsDueSoon} due in 5 days
+                    </Txt>
+                  ) : null}
                 </View>
                 <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "600" }}>
                   {formatNairaCompact(debtsPaid)} / {formatNairaCompact(debtsTotal)}
@@ -461,7 +580,7 @@ export function MonthlyBudgetScreen() {
                 <View
                   style={{
                     height: 6,
-                    width: `${Math.min(100, Math.round((debtsPaid / debtsTotal) * 100))}%`,
+                    width: `${Math.min(100, Math.round((debtsPaid / Math.max(1, debtsTotal)) * 100))}%`,
                     backgroundColor: t.c.borderStrong,
                     borderRadius: 3,
                   }}
@@ -484,14 +603,14 @@ export function MonthlyBudgetScreen() {
         </View>
       </ScrollView>
 
-      {/* Edit amounts Sheet */}
+      {/* Edit amounts Sheet - Live Backend Connected */}
       <Sheet
         title="Edit category plans"
         open={editSheetOpen}
         onClose={() => setEditSheetOpen(false)}
         footer={
           <View style={{ flex: 1 }}>
-            <Button fullWidth size="lg" onPress={saveEdit}>
+            <Button fullWidth size="lg" loading={savingEdit} onPress={saveEdit}>
               Save category plans
             </Button>
           </View>
@@ -499,7 +618,12 @@ export function MonthlyBudgetScreen() {
       >
         <ScrollView style={{ maxHeight: 360 }}>
           <View style={{ gap: 14 }}>
-            {categories.map((cat) => (
+            {(mb?.spending?.lines && mb.spending.lines.length > 0
+              ? mb.spending.lines.map((l) => ({ id: l.categoryId, name: l.name, planned: nairaAmount(l.planned) }))
+              : data.allCategories.length > 0
+              ? data.allCategories.filter((c) => c.kind === "expense").map((c) => ({ id: c.id, name: c.name, planned: 0 }))
+              : categoryRows
+            ).map((cat) => (
               <AmountInput
                 key={cat.id}
                 label={cat.name}
