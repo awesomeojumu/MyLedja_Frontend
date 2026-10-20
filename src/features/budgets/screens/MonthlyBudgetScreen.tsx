@@ -200,14 +200,18 @@ export function MonthlyBudgetScreen() {
         })
       : data.allCategories
           .filter((c) => c.kind === "expense")
-          .map((c) => ({
-            id: c.id,
-            name: c.name,
-            planned: 0,
-            spent: 0,
-            icon: (categoryInfo(c.name)?.[0] as IconName) ?? "shopping-cart",
-            status: "on-pace" as const,
-          }));
+          .map((c) => {
+            const catItem = c as unknown as { monthlyBudget?: string | null };
+            const planned = catItem.monthlyBudget ? nairaAmount(catItem.monthlyBudget) : 0;
+            return {
+              id: c.id,
+              name: c.name,
+              planned,
+              spent: 0,
+              icon: (categoryInfo(c.name)?.[0] as IconName) ?? "shopping-cart",
+              status: "on-pace" as const,
+            };
+          });
 
   const prevMonth = () => {
     setDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -439,11 +443,11 @@ export function MonthlyBudgetScreen() {
             {categoryRows.length === 0 ? (
               <View style={{ paddingVertical: t.space.space3, gap: 6 }}>
                 <Txt variant="bodySm" color={t.c.inkMuted}>
-                  No spending categories planned for this month yet.
+                  No spending categories found. Set up your categories and reusable budgets on the Categories page.
                 </Txt>
-                <Pressable onPress={openEdit} hitSlop={8} accessibilityRole="button">
+                <Pressable onPress={() => router.push("/(tabs)/transactions/categories")} hitSlop={8} accessibilityRole="button">
                   <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
-                    Set category plans →
+                    Go to Categories page →
                   </Txt>
                 </Pressable>
               </View>
@@ -517,6 +521,18 @@ export function MonthlyBudgetScreen() {
                 </Txt>
               </Pressable>
             ) : null}
+
+            {/* Manage categories shortcut */}
+            <Pressable
+              onPress={() => router.push("/(tabs)/transactions/categories")}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 4 }}
+              accessibilityRole="link"
+            >
+              <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
+                Manage reusable category budgets →
+              </Txt>
+              <Icon name="arrow-right" size={14} color={t.c.primary} />
+            </Pressable>
           </View>
 
           {/* 4. From your plan: Bills, Goals and Debts as three rolled-up lines, then Details live in Plan */}

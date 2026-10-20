@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Banner, Button, SegmentedControl, Select, TextField } from "@/design";
+import { AmountInput, Banner, Button, SegmentedControl, Select, TextField } from "@/design";
 import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
 import { ScreenShell } from "@/lib/screen-shell";
 import { useLiveQuery } from "@/lib/use-live-query";
@@ -13,6 +13,7 @@ export function AddCategoryScreen() {
   const [name, setName] = useState("");
   const [kind, setKind] = useState("expense");
   const [parentId, setParentId] = useState("");
+  const [monthlyBudget, setMonthlyBudget] = useState("");
   const { busy, error, run } = useSubmit();
   const workspaceId = workspaces[0]?.id;
   const loadCats = useCallback(async (ws: string) => (await session.listCategories(ws)).data ?? [], [session]);
@@ -31,7 +32,12 @@ export function AddCategoryScreen() {
           onPress={() =>
             run(async () => {
               if (!workspaceId || !name.trim()) return;
-              await session.createCategory(workspaceId, { name: name.trim(), kind, parentId: parentId || undefined });
+              await session.createCategory(workspaceId, {
+                name: name.trim(),
+                kind,
+                parentId: parentId || undefined,
+                monthlyBudget: monthlyBudget.trim() ? monthlyBudget : undefined,
+              });
               if (from === "budget") router.back();
               else router.replace("/(tabs)/transactions/categories");
             })
@@ -44,6 +50,13 @@ export function AddCategoryScreen() {
       {error ? <Banner tone="danger" title={error} /> : null}
       <TextField label="Name" value={name} onChangeText={setName} />
       <SegmentedControl label="Type" value={kind} onChange={setKind} options={[{ value: "expense", label: "Expense" }, { value: "income", label: "Income" }]} />
+      {kind === "expense" ? (
+        <AmountInput
+          label="Monthly budget (reusable across months)"
+          value={monthlyBudget}
+          onChange={setMonthlyBudget}
+          />
+      ) : null}
       {parents.length > 0 ? (
         <Select label="Parent (optional)" value={parentId} options={[{ value: "", label: "None" }, ...parents]} onChange={setParentId} />
       ) : null}
@@ -58,6 +71,7 @@ export function EditCategoryScreen() {
   const [name, setName] = useState("");
   const [kind, setKind] = useState("expense");
   const [parentId, setParentId] = useState("");
+  const [monthlyBudget, setMonthlyBudget] = useState("");
   const { busy, error, run } = useSubmit();
   const workspaceId = workspaces[0]?.id;
   const loadCats = useCallback(async (ws: string) => (await session.listCategories(ws)).data ?? [], [session]);
@@ -72,6 +86,7 @@ export function EditCategoryScreen() {
       setName(String(res.data.name ?? ""));
       setKind(String(res.data.kind ?? "expense"));
       setParentId(res.data.parentId ? String(res.data.parentId) : "");
+      setMonthlyBudget((res.data as unknown as { monthlyBudget?: string | null }).monthlyBudget ? String((res.data as unknown as { monthlyBudget: string }).monthlyBudget) : "");
       return res.data;
     },
     [id, session],
@@ -92,6 +107,7 @@ export function EditCategoryScreen() {
                 name: name.trim(),
                 kind,
                 parentId: parentId || null,
+                monthlyBudget: monthlyBudget.trim() ? monthlyBudget : null,
               });
               router.back();
             })
@@ -104,6 +120,13 @@ export function EditCategoryScreen() {
       {error ? <Banner tone="danger" title={error} /> : null}
       <TextField label="Name" value={name} onChangeText={setName} />
       <SegmentedControl label="Type" value={kind} onChange={setKind} options={[{ value: "expense", label: "Expense" }, { value: "income", label: "Income" }]} />
+      {kind === "expense" ? (
+        <AmountInput
+          label="Monthly budget (reusable across months)"
+          value={monthlyBudget}
+          onChange={setMonthlyBudget}
+          />
+      ) : null}
       {parents.length > 0 ? (
         <Select label="Parent (optional)" value={parentId} options={[{ value: "", label: "None" }, ...parents]} onChange={setParentId} />
       ) : null}
