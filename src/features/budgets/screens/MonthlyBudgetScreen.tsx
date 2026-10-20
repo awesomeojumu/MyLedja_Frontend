@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { AmountInput, Button, Icon, maxWidth, Sheet, Txt } from "@/design";
+import { AmountInput, Button, Icon, maxWidth, Sheet, Txt, useTheme } from "@/design";
 import { useActiveWorkspace } from "@/lib/ui/use-active-workspace";
 import { useSession } from "@/state";
 import { useLiveQuery } from "@/lib/use-live-query";
@@ -43,6 +43,7 @@ function formatNairaCompact(amount: number): string {
 }
 
 export function MonthlyBudgetScreen() {
+  const t = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { session } = useSession();
@@ -137,7 +138,7 @@ export function MonthlyBudgetScreen() {
   const visibleCategories = showAllCategories ? categories : categories.slice(0, 4);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#090d14" }}>
+    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <ScrollView
         contentContainerStyle={{
           paddingBottom: insets.bottom + 84,
@@ -147,44 +148,44 @@ export function MonthlyBudgetScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Header: Safe to spend & income */}
+        {/* 1. Header: Safe to spend & income (Themed Hero container) */}
         <View
           style={{
-            backgroundColor: "#0d2137",
+            backgroundColor: t.c.hero,
             borderBottomLeftRadius: 28,
             borderBottomRightRadius: 28,
             paddingTop: insets.top + 16,
-            paddingHorizontal: 20,
-            paddingBottom: 24,
-            gap: 20,
+            paddingHorizontal: t.space.space5,
+            paddingBottom: t.space.space6,
+            gap: t.space.space5,
           }}
         >
           {/* Header Row: Title & Month Pill */}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Txt variant="titleLg" style={{ color: "#ffffff", fontWeight: "700", fontSize: 24 }}>
+            <Txt variant="titleLg" color={t.c.onHero} style={{ fontWeight: "700", fontSize: 24 }}>
               Budget
             </Txt>
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                backgroundColor: "rgba(255, 255, 255, 0.08)",
-                borderRadius: 999,
-                paddingHorizontal: 10,
-                paddingVertical: 5,
+                backgroundColor: "rgba(255, 255, 255, 0.12)",
+                borderRadius: t.radius.radiusFull,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
                 borderWidth: 1,
-                borderColor: "rgba(255, 255, 255, 0.12)",
+                borderColor: "rgba(255, 255, 255, 0.18)",
                 gap: 8,
               }}
             >
               <Pressable onPress={prevMonth} hitSlop={8} accessibilityLabel="Previous month">
-                <Icon name="chevron-left" size={14} color="#93c5fd" />
+                <Icon name="chevron-left" size={14} color={t.c.onHeroMuted} />
               </Pressable>
-              <Txt variant="caption" style={{ color: "#ffffff", fontWeight: "600", fontSize: 13 }}>
+              <Txt variant="caption" color={t.c.onHero} style={{ fontWeight: "600", fontSize: 13 }}>
                 {monthName}
               </Txt>
               <Pressable onPress={nextMonth} hitSlop={8} accessibilityLabel="Next month">
-                <Icon name="chevron-right" size={14} color="#93c5fd" />
+                <Icon name="chevron-right" size={14} color={t.c.onHeroMuted} />
               </Pressable>
             </View>
           </View>
@@ -193,26 +194,26 @@ export function MonthlyBudgetScreen() {
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
             {/* Safe to spend */}
             <View style={{ gap: 4 }}>
-              <Txt variant="bodySm" style={{ color: "rgba(255, 255, 255, 0.7)", fontWeight: "500" }}>
+              <Txt variant="bodySm" color={t.c.onHeroMuted} style={{ fontWeight: "500" }}>
                 Safe to spend
               </Txt>
-              <Txt variant="amountHero" style={{ color: "#ffffff", fontWeight: "700", fontSize: 34, letterSpacing: -0.5 }}>
+              <Txt variant="amountHero" color={t.c.onHero} style={{ fontWeight: "700", fontSize: 34, letterSpacing: -0.5 }}>
                 ₦{safeToSpend.toLocaleString()}
               </Txt>
-              <Txt variant="caption" style={{ color: "rgba(255, 255, 255, 0.65)", fontSize: 12 }}>
+              <Txt variant="caption" color={t.c.onHeroMuted} style={{ fontSize: 12 }}>
                 left of ₦{plannedSpend.toLocaleString()} · ₦{dailySafe.toLocaleString()} a day
               </Txt>
             </View>
 
             {/* Income */}
             <View style={{ alignItems: "flex-end", gap: 4 }}>
-              <Txt variant="bodySm" style={{ color: "rgba(255, 255, 255, 0.7)", fontWeight: "500" }}>
+              <Txt variant="bodySm" color={t.c.onHeroMuted} style={{ fontWeight: "500" }}>
                 Income
               </Txt>
-              <Txt variant="titleLg" style={{ color: "#ffffff", fontWeight: "700", fontSize: 24 }}>
+              <Txt variant="titleLg" color={t.c.onHero} style={{ fontWeight: "700", fontSize: 24 }}>
                 ₦1.5m
               </Txt>
-              <Txt variant="caption" style={{ color: "rgba(255, 255, 255, 0.65)", fontSize: 12, textAlign: "right" }}>
+              <Txt variant="caption" color={t.c.onHeroMuted} style={{ fontSize: 12, textAlign: "right" }}>
                 ₦500k in · ₦1m on 25 Jan
               </Txt>
             </View>
@@ -220,25 +221,25 @@ export function MonthlyBudgetScreen() {
         </View>
 
         {/* Content Container */}
-        <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 14 }}>
+        <View style={{ paddingHorizontal: t.space.space4, paddingTop: t.space.space4, gap: t.space.space4 }}>
           {/* 2. Month Pace Card: Day 12 of 31 · On pace */}
           <View
             style={{
-              backgroundColor: "#11161f",
-              borderRadius: 16,
+              backgroundColor: t.c.surface,
+              borderRadius: t.radius.radiusLg,
               borderWidth: 1,
-              borderColor: "#1e2633",
-              padding: 16,
-              gap: 12,
+              borderColor: t.c.border,
+              padding: t.space.space4,
+              gap: t.space.space3,
             }}
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Txt variant="body" style={{ color: "#ffffff", fontWeight: "600", fontSize: 15 }}>
+              <Txt variant="body" color={t.c.ink} style={{ fontWeight: "600", fontSize: 15 }}>
                 Day {currentDay} of {totalDays}
               </Txt>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Icon name="check" size={14} color="#22c55e" strokeWidth={2.5} />
-                <Txt variant="bodySm" style={{ color: "#22c55e", fontWeight: "600" }}>
+                <Icon name="check" size={14} color={t.c.positive} strokeWidth={2.5} />
+                <Txt variant="bodySm" color={t.c.positive} style={{ fontWeight: "600" }}>
                   On pace
                 </Txt>
               </View>
@@ -249,7 +250,7 @@ export function MonthlyBudgetScreen() {
               <View
                 style={{
                   height: 8,
-                  backgroundColor: "#1e2633",
+                  backgroundColor: t.c.surfaceAlt,
                   borderRadius: 4,
                   overflow: "hidden",
                   width: "100%",
@@ -259,7 +260,7 @@ export function MonthlyBudgetScreen() {
                   style={{
                     height: 8,
                     width: `${Math.min(100, Math.round((spentSoFar / plannedSpend) * 100))}%`,
-                    backgroundColor: "#2563eb",
+                    backgroundColor: t.c.primary,
                     borderRadius: 4,
                   }}
                 />
@@ -271,17 +272,17 @@ export function MonthlyBudgetScreen() {
                   left: `${pacePercent}%`,
                   width: 2,
                   height: 16,
-                  backgroundColor: "#ffffff",
+                  backgroundColor: t.c.ink,
                   borderRadius: 1,
                 }}
               />
             </View>
 
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Txt variant="caption" style={{ color: "#94a3b8", fontSize: 12 }}>
+              <Txt variant="caption" color={t.c.inkMuted} style={{ fontSize: 12 }}>
                 Spent ₦{spentSoFar.toLocaleString()}
               </Txt>
-              <Txt variant="caption" style={{ color: "#94a3b8", fontSize: 12 }}>
+              <Txt variant="caption" color={t.c.inkMuted} style={{ fontSize: 12 }}>
                 Planned ₦{plannedSpend.toLocaleString()}
               </Txt>
             </View>
@@ -290,53 +291,53 @@ export function MonthlyBudgetScreen() {
           {/* 3. Spending: Category bars with today marker, top categories then Show more, and Edit amounts */}
           <View
             style={{
-              backgroundColor: "#11161f",
-              borderRadius: 16,
+              backgroundColor: t.c.surface,
+              borderRadius: t.radius.radiusLg,
               borderWidth: 1,
-              borderColor: "#1e2633",
-              padding: 16,
-              gap: 16,
+              borderColor: t.c.border,
+              padding: t.space.space4,
+              gap: t.space.space4,
             }}
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Txt variant="body" style={{ color: "#ffffff", fontWeight: "600", fontSize: 15 }}>
+              <Txt variant="body" color={t.c.ink} style={{ fontWeight: "600", fontSize: 15 }}>
                 Spending
               </Txt>
               <Pressable onPress={openEdit} hitSlop={8} accessibilityRole="button">
-                <Txt variant="bodySm" style={{ color: "#38bdf8", fontWeight: "500" }}>
+                <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
                   Edit amounts
                 </Txt>
               </Pressable>
             </View>
 
-            <View style={{ gap: 14 }}>
+            <View style={{ gap: t.space.space4 }}>
               {visibleCategories.map((cat) => {
                 const percent = Math.min(100, Math.round((cat.spent / cat.planned) * 100));
                 const isAhead = cat.status === "ahead" || percent > pacePercent;
-                const barColor = isAhead ? "#f59e0b" : "#3b82f6";
+                const barColor = isAhead ? t.c.warning : t.c.primary;
 
                 return (
                   <View key={cat.id} style={{ gap: 8 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <Icon name={cat.icon} size={15} color="#94a3b8" />
-                        <Txt variant="bodySm" style={{ color: "#ffffff", fontWeight: "500" }}>
+                        <Icon name={cat.icon} size={16} color={t.c.inkMuted} />
+                        <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "500" }}>
                           {cat.name}
                         </Txt>
                         {isAhead ? (
-                          <Txt variant="caption" style={{ color: "#f59e0b", fontWeight: "600" }}>
+                          <Txt variant="caption" color={t.c.warning} style={{ fontWeight: "600" }}>
                             · ahead
                           </Txt>
                         ) : null}
                       </View>
-                      <Txt variant="bodySm" style={{ color: "#ffffff", fontWeight: "600" }}>
+                      <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "600" }}>
                         {formatNairaCompact(cat.spent)} / {formatNairaCompact(cat.planned)}
                       </Txt>
                     </View>
 
                     {/* Progress Bar with Tick */}
                     <View style={{ position: "relative", height: 6, justifyContent: "center" }}>
-                      <View style={{ height: 6, backgroundColor: "#1e2633", borderRadius: 3, overflow: "hidden" }}>
+                      <View style={{ height: 6, backgroundColor: t.c.surfaceAlt, borderRadius: 3, overflow: "hidden" }}>
                         <View
                           style={{
                             height: 6,
@@ -353,7 +354,7 @@ export function MonthlyBudgetScreen() {
                           left: `${pacePercent}%`,
                           width: 2,
                           height: 12,
-                          backgroundColor: "#ffffff",
+                          backgroundColor: t.c.ink,
                           borderRadius: 1,
                         }}
                       />
@@ -369,7 +370,7 @@ export function MonthlyBudgetScreen() {
               style={{ alignItems: "center", paddingVertical: 6 }}
               accessibilityRole="button"
             >
-              <Txt variant="bodySm" style={{ color: "#38bdf8", fontWeight: "600" }}>
+              <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
                 {showAllCategories
                   ? "Show fewer categories"
                   : `Show ${categories.length - 4} more categories`}
@@ -380,19 +381,19 @@ export function MonthlyBudgetScreen() {
           {/* 4. From your plan: Bills, Goals and Debts as three rolled-up lines, then Details live in Plan */}
           <View
             style={{
-              backgroundColor: "#11161f",
-              borderRadius: 16,
+              backgroundColor: t.c.surface,
+              borderRadius: t.radius.radiusLg,
               borderWidth: 1,
-              borderColor: "#1e2633",
-              padding: 16,
-              gap: 16,
+              borderColor: t.c.border,
+              padding: t.space.space4,
+              gap: t.space.space4,
             }}
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Txt variant="body" style={{ color: "#ffffff", fontWeight: "600", fontSize: 15 }}>
+              <Txt variant="body" color={t.c.ink} style={{ fontWeight: "600", fontSize: 15 }}>
                 From your plan
               </Txt>
-              <Txt variant="caption" style={{ color: "#94a3b8", fontSize: 12 }}>
+              <Txt variant="caption" color={t.c.inkMuted} style={{ fontSize: 12 }}>
                 ₦600k of ₦1.14m moved
               </Txt>
             </View>
@@ -400,19 +401,19 @@ export function MonthlyBudgetScreen() {
             {/* Row 1: Bills */}
             <View style={{ gap: 8 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Txt variant="bodySm" style={{ color: "#ffffff", fontWeight: "500" }}>
+                <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "500" }}>
                   Bills · 10
                 </Txt>
-                <Txt variant="bodySm" style={{ color: "#ffffff", fontWeight: "600" }}>
+                <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "600" }}>
                   {formatNairaCompact(billsPaid)} / {formatNairaCompact(billsTotal)}
                 </Txt>
               </View>
-              <View style={{ height: 6, backgroundColor: "#1e2633", borderRadius: 3, overflow: "hidden" }}>
+              <View style={{ height: 6, backgroundColor: t.c.surfaceAlt, borderRadius: 3, overflow: "hidden" }}>
                 <View
                   style={{
                     height: 6,
                     width: `${Math.min(100, Math.round((billsPaid / billsTotal) * 100))}%`,
-                    backgroundColor: "#f97316",
+                    backgroundColor: t.c.catOrange,
                     borderRadius: 3,
                   }}
                 />
@@ -422,19 +423,19 @@ export function MonthlyBudgetScreen() {
             {/* Row 2: Goals */}
             <View style={{ gap: 8 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Txt variant="bodySm" style={{ color: "#ffffff", fontWeight: "500" }}>
+                <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "500" }}>
                   Goals · 4
                 </Txt>
-                <Txt variant="bodySm" style={{ color: "#ffffff", fontWeight: "600" }}>
+                <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "600" }}>
                   {formatNairaCompact(goalsSaved)} / {formatNairaCompact(goalsTotal)}
                 </Txt>
               </View>
-              <View style={{ height: 6, backgroundColor: "#1e2633", borderRadius: 3, overflow: "hidden" }}>
+              <View style={{ height: 6, backgroundColor: t.c.surfaceAlt, borderRadius: 3, overflow: "hidden" }}>
                 <View
                   style={{
                     height: 6,
                     width: `${Math.min(100, Math.round((goalsSaved / goalsTotal) * 100))}%`,
-                    backgroundColor: "#10b981",
+                    backgroundColor: t.c.positive,
                     borderRadius: 3,
                   }}
                 />
@@ -445,23 +446,23 @@ export function MonthlyBudgetScreen() {
             <View style={{ gap: 8 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Txt variant="bodySm" style={{ color: "#ffffff", fontWeight: "500" }}>
+                  <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "500" }}>
                     Debts · 3 ·
                   </Txt>
-                  <Txt variant="caption" style={{ color: "#eab308", fontWeight: "600" }}>
+                  <Txt variant="caption" color={t.c.warning} style={{ fontWeight: "600" }}>
                     1 due in 5 days
                   </Txt>
                 </View>
-                <Txt variant="bodySm" style={{ color: "#ffffff", fontWeight: "600" }}>
+                <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "600" }}>
                   {formatNairaCompact(debtsPaid)} / {formatNairaCompact(debtsTotal)}
                 </Txt>
               </View>
-              <View style={{ height: 6, backgroundColor: "#1e2633", borderRadius: 3, overflow: "hidden" }}>
+              <View style={{ height: 6, backgroundColor: t.c.surfaceAlt, borderRadius: 3, overflow: "hidden" }}>
                 <View
                   style={{
                     height: 6,
                     width: `${Math.min(100, Math.round((debtsPaid / debtsTotal) * 100))}%`,
-                    backgroundColor: "#334155",
+                    backgroundColor: t.c.borderStrong,
                     borderRadius: 3,
                   }}
                 />
@@ -471,13 +472,13 @@ export function MonthlyBudgetScreen() {
             {/* Footer link to Plan */}
             <Pressable
               onPress={() => router.push("/(tabs)/plan")}
-              style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingTop: 4 }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 4 }}
               accessibilityRole="link"
             >
-              <Txt variant="bodySm" style={{ color: "#38bdf8", fontWeight: "600" }}>
+              <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
                 Details live in Plan
               </Txt>
-              <Icon name="arrow-right" size={14} color="#38bdf8" />
+              <Icon name="arrow-right" size={14} color={t.c.primary} />
             </Pressable>
           </View>
         </View>
