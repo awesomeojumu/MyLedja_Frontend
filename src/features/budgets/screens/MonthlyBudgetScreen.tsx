@@ -75,19 +75,6 @@ interface SpendingCategoryRow {
   status?: "ahead" | "on-pace" | "under";
 }
 
-const DEFAULT_FALLBACK_CATEGORIES: SpendingCategoryRow[] = [
-  { id: "cat-1", name: "Food & groceries", spent: 48000, planned: 115000, icon: "shopping-cart", status: "ahead" },
-  { id: "cat-2", name: "Transport", spent: 36000, planned: 55000, icon: "bus", status: "ahead" },
-  { id: "cat-3", name: "Eating out", spent: 14000, planned: 40000, icon: "utensils", status: "on-pace" },
-  { id: "cat-4", name: "Fuel", spent: 12000, planned: 25000, icon: "fuel", status: "ahead" },
-  { id: "cat-5", name: "Shopping", spent: 20000, planned: 50000, icon: "shopping-cart", status: "on-pace" },
-  { id: "cat-6", name: "Entertainment", spent: 10000, planned: 30000, icon: "sparkles", status: "on-pace" },
-  { id: "cat-7", name: "Health & medical", spent: 8000, planned: 25000, icon: "sparkles", status: "under" },
-  { id: "cat-8", name: "Utilities", spent: 15000, planned: 30000, icon: "credit-card", status: "on-pace" },
-  { id: "cat-9", name: "Personal care", spent: 7000, planned: 18000, icon: "sparkles", status: "on-pace" },
-  { id: "cat-10", name: "Subscriptions", spent: 9000, planned: 15000, icon: "credit-card", status: "on-pace" },
-];
-
 function formatNairaCompact(amount: number): string {
   if (amount >= 1_000_000) {
     const m = (amount / 1_000_000).toFixed(1).replace(/\.0$/, "");
@@ -107,7 +94,7 @@ export function MonthlyBudgetScreen() {
   const { session } = useSession();
   const { workspaceId } = useActiveWorkspace();
 
-  const [date, setDate] = useState(() => new Date(2027, 0, 12));
+  const [date, setDate] = useState(() => new Date());
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
@@ -140,57 +127,66 @@ export function MonthlyBudgetScreen() {
 
   const mb = data.monthBudget;
 
-  // Real backend calculations with design-matched fallbacks
+  // Real backend calculations with dynamic day/month pace
+  const now = new Date();
+  const isCurrentMonth = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+  const isPastMonth =
+    date.getFullYear() < now.getFullYear() ||
+    (date.getFullYear() === now.getFullYear() && date.getMonth() < now.getMonth());
   const daysInMonth = mb?.daysInMonth ?? new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  const currentDay = mb?.today && mb.today > 0 ? mb.today : 12;
+  const defaultDay = isCurrentMonth ? now.getDate() : isPastMonth ? daysInMonth : 1;
+  const currentDay = mb?.today && mb.today > 0 ? mb.today : defaultDay;
   const pacePercent = Math.min(100, Math.round((currentDay / daysInMonth) * 100));
 
-  const plannedSpend = mb ? nairaAmount(mb.spending?.planned) : 403000;
-  const spentSoFar = mb ? nairaAmount(mb.spending?.spent) : 179000;
-  const safeToSpend = mb ? nairaAmount(mb.safeLeft) : 224000;
+  const plannedSpend = mb?.spending?.planned ? nairaAmount(mb.spending.planned) : 0;
+  const spentSoFar = mb?.spending?.spent ? nairaAmount(mb.spending.spent) : 0;
+  const safeToSpend = mb?.safeLeft ? nairaAmount(mb.safeLeft) : 0;
   const remainingDays = Math.max(1, daysInMonth - currentDay);
-  const dailySafe = Math.round(safeToSpend / remainingDays);
+  const dailySafe = Math.max(0, Math.round(safeToSpend / remainingDays));
 
   const expectedSpendAtPace = (plannedSpend * currentDay) / daysInMonth;
-  const isOnPace = spentSoFar <= expectedSpendAtPace + 5000;
+  const isOnPace = plannedSpend > 0 ? spentSoFar <= expectedSpendAtPace + 5000 : true;
 
-  // Income figures
-  const incomeExpected = mb ? nairaAmount(mb.income?.expected) : 1500000;
-  const incomeReceived = mb ? nairaAmount(mb.income?.received) : 500000;
+  // Real user income figures
+  const incomeExpected = mb?.income?.expected ? nairaAmount(mb.income.expected) : 0;
+  const incomeReceived = mb?.income?.received ? nairaAmount(mb.income.received) : 0;
   const salaryStream = mb?.income?.streams?.find((s) => s.payDay != null);
-  const streamNote = salaryStream?.expected
-    ? `${formatNairaCompact(nairaAmount(salaryStream.expected))} on ${salaryStream.payDay} ${monthAbbrev}`
-    : `₦1m on 25 ${monthAbbrev}`;
+  let streamNote = "";
+  if (salaryStream?.expected && salaryStream.payDay) {
+    streamNote = `${formatNairaCompact(nairaAmount(salaryStream.expected))} on ${salaryStream.payDay} ${monthAbbrev}`;
+  } else if (salaryStream?.name) {
+    streamNote = salaryStream.name;
+  }
 
-  // Plan Groups (Bills, Goals, Debts)
+  // Real user Plan Groups (Bills, Goals, Debts)
   const billsGroup = mb?.setAside?.groups?.find((g) => g.kind === "bill");
   const goalsGroup = mb?.setAside?.groups?.find((g) => g.kind === "goal");
   const debtsGroup = mb?.setAside?.groups?.find((g) => g.kind === "debt");
 
-  const billsTotal = billsGroup ? nairaAmount(billsGroup.amount) : 541700;
-  const billsPaid = billsGroup ? nairaAmount(billsGroup.moved) : 500000;
-  const billsCount = billsGroup?.count ?? 10;
+  const billsTotal = billsGroup?.amount ? nairaAmount(billsGroup.amount) : 0;
+  const billsPaid = billsGroup?.moved ? nairaAmount(billsGroup.moved) : 0;
+  const billsCount = billsGroup?.count ?? 0;
 
-  const goalsTotal = goalsGroup ? nairaAmount(goalsGroup.amount) : 500000;
-  const goalsSaved = goalsGroup ? nairaAmount(goalsGroup.moved) : 100000;
-  const goalsCount = goalsGroup?.count ?? 4;
+  const goalsTotal = goalsGroup?.amount ? nairaAmount(goalsGroup.amount) : 0;
+  const goalsSaved = goalsGroup?.moved ? nairaAmount(goalsGroup.moved) : 0;
+  const goalsCount = goalsGroup?.count ?? 0;
 
-  const debtsTotal = debtsGroup ? nairaAmount(debtsGroup.amount) : 105000;
-  const debtsPaid = debtsGroup ? nairaAmount(debtsGroup.moved) : 0;
-  const debtsCount = debtsGroup?.count ?? 3;
-  const debtsDueSoon = debtsGroup?.dueSoon ?? 1;
+  const debtsTotal = debtsGroup?.amount ? nairaAmount(debtsGroup.amount) : 0;
+  const debtsPaid = debtsGroup?.moved ? nairaAmount(debtsGroup.moved) : 0;
+  const debtsCount = debtsGroup?.count ?? 0;
+  const debtsDueSoon = debtsGroup?.dueSoon ?? 0;
 
   const totalPlanMoved = billsPaid + goalsSaved + debtsPaid;
   const totalPlanAmount = billsTotal + goalsTotal + debtsTotal;
 
-  // Categories mapping
+  // Categories mapped strictly from user's live workspace data
   const categoryRows: SpendingCategoryRow[] =
-    mb && mb.spending?.lines?.length > 0
+    mb && mb.spending?.lines && mb.spending.lines.length > 0
       ? mb.spending.lines.map((l) => {
           const planned = nairaAmount(l.planned);
           const spent = nairaAmount(l.spent);
           const expectedCatSpend = (planned * currentDay) / daysInMonth;
-          const isAhead = spent > expectedCatSpend;
+          const isAhead = planned > 0 && spent > expectedCatSpend;
           const icon = (categoryInfo(l.name)?.[0] as IconName) ?? "shopping-cart";
 
           return {
@@ -202,7 +198,16 @@ export function MonthlyBudgetScreen() {
             status: isAhead ? "ahead" : "on-pace",
           };
         })
-      : DEFAULT_FALLBACK_CATEGORIES;
+      : data.allCategories
+          .filter((c) => c.kind === "expense")
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            planned: 0,
+            spent: 0,
+            icon: (categoryInfo(c.name)?.[0] as IconName) ?? "shopping-cart",
+            status: "on-pace" as const,
+          }));
 
   const prevMonth = () => {
     setDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -311,7 +316,11 @@ export function MonthlyBudgetScreen() {
                 ₦{safeToSpend.toLocaleString()}
               </Txt>
               <Txt variant="caption" color={t.c.onHeroMuted} style={{ fontSize: 12 }}>
-                left of ₦{plannedSpend.toLocaleString()} · ₦{dailySafe.toLocaleString()} a day
+                {plannedSpend > 0
+                  ? `left of ₦${plannedSpend.toLocaleString()} · ₦${dailySafe.toLocaleString()} a day`
+                  : safeToSpend > 0
+                  ? `₦${safeToSpend.toLocaleString()} unallocated · Tap Edit amounts to plan`
+                  : "No budget planned yet · Tap Edit amounts"}
               </Txt>
             </View>
 
@@ -324,7 +333,9 @@ export function MonthlyBudgetScreen() {
                 {formatNairaCompact(incomeExpected)}
               </Txt>
               <Txt variant="caption" color={t.c.onHeroMuted} style={{ fontSize: 12, textAlign: "right" }}>
-                {formatNairaCompact(incomeReceived)} in · {streamNote}
+                {incomeExpected > 0 || incomeReceived > 0
+                  ? `${formatNairaCompact(incomeReceived)} in${streamNote ? ` · ${streamNote}` : ""}`
+                  : "No income streams added"}
               </Txt>
             </View>
           </View>
@@ -425,59 +436,72 @@ export function MonthlyBudgetScreen() {
               </Pressable>
             </View>
 
-            <View style={{ gap: t.space.space4 }}>
-              {visibleCategories.map((cat) => {
-                const percent = Math.min(100, Math.round((cat.spent / Math.max(1, cat.planned)) * 100));
-                const isAhead = cat.status === "ahead" || percent > pacePercent;
-                const barColor = isAhead ? t.c.warning : t.c.primary;
+            {categoryRows.length === 0 ? (
+              <View style={{ paddingVertical: t.space.space3, gap: 6 }}>
+                <Txt variant="bodySm" color={t.c.inkMuted}>
+                  No spending categories planned for this month yet.
+                </Txt>
+                <Pressable onPress={openEdit} hitSlop={8} accessibilityRole="button">
+                  <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
+                    Set category plans →
+                  </Txt>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={{ gap: t.space.space4 }}>
+                {visibleCategories.map((cat) => {
+                  const percent = Math.min(100, Math.round((cat.spent / Math.max(1, cat.planned)) * 100));
+                  const isAhead = cat.status === "ahead" || percent > pacePercent;
+                  const barColor = isAhead ? t.c.warning : t.c.primary;
 
-                return (
-                  <View key={cat.id} style={{ gap: 8 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <Icon name={cat.icon} size={16} color={t.c.inkMuted} />
-                        <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "500" }}>
-                          {cat.name}
-                        </Txt>
-                        {isAhead ? (
-                          <Txt variant="caption" color={t.c.warning} style={{ fontWeight: "600" }}>
-                            · ahead
+                  return (
+                    <View key={cat.id} style={{ gap: 8 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Icon name={cat.icon} size={16} color={t.c.inkMuted} />
+                          <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "500" }}>
+                            {cat.name}
                           </Txt>
-                        ) : null}
+                          {isAhead ? (
+                            <Txt variant="caption" color={t.c.warning} style={{ fontWeight: "600" }}>
+                              · ahead
+                            </Txt>
+                          ) : null}
+                        </View>
+                        <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "600" }}>
+                          {formatNairaCompact(cat.spent)} / {formatNairaCompact(cat.planned)}
+                        </Txt>
                       </View>
-                      <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "600" }}>
-                        {formatNairaCompact(cat.spent)} / {formatNairaCompact(cat.planned)}
-                      </Txt>
-                    </View>
 
-                    {/* Progress Bar with Tick */}
-                    <View style={{ position: "relative", height: 6, justifyContent: "center" }}>
-                      <View style={{ height: 6, backgroundColor: t.c.surfaceAlt, borderRadius: 3, overflow: "hidden" }}>
+                      {/* Progress Bar with Tick */}
+                      <View style={{ position: "relative", height: 6, justifyContent: "center" }}>
+                        <View style={{ height: 6, backgroundColor: t.c.surfaceAlt, borderRadius: 3, overflow: "hidden" }}>
+                          <View
+                            style={{
+                              height: 6,
+                              width: `${percent}%`,
+                              backgroundColor: barColor,
+                              borderRadius: 3,
+                            }}
+                          />
+                        </View>
+                        {/* Expected pace line */}
                         <View
                           style={{
-                            height: 6,
-                            width: `${percent}%`,
-                            backgroundColor: barColor,
-                            borderRadius: 3,
+                            position: "absolute",
+                            left: `${pacePercent}%`,
+                            width: 2,
+                            height: 12,
+                            backgroundColor: t.c.ink,
+                            borderRadius: 1,
                           }}
                         />
                       </View>
-                      {/* Expected pace line */}
-                      <View
-                        style={{
-                          position: "absolute",
-                          left: `${pacePercent}%`,
-                          width: 2,
-                          height: 12,
-                          backgroundColor: t.c.ink,
-                          borderRadius: 1,
-                        }}
-                      />
                     </View>
-                  </View>
-                );
-              })}
-            </View>
+                  );
+                })}
+              </View>
+            )}
 
             {/* Expand / Collapse Button */}
             {categoryRows.length > 4 ? (
@@ -564,11 +588,11 @@ export function MonthlyBudgetScreen() {
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Txt variant="bodySm" color={t.c.ink} style={{ fontWeight: "500" }}>
-                    Debts · {debtsCount} ·
+                    Debts · {debtsCount}
                   </Txt>
                   {debtsDueSoon > 0 ? (
                     <Txt variant="caption" color={t.c.warning} style={{ fontWeight: "600" }}>
-                      {debtsDueSoon} due in 5 days
+                      · {debtsDueSoon} due soon
                     </Txt>
                   ) : null}
                 </View>
