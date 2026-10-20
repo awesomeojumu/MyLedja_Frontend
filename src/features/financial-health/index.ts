@@ -21,3 +21,4 @@ export {
   HealthReportScreen,
   HealthShareScreen,
 } from "@/features/financial-health/screens/health-screens";
+export { useHealthSummary } from "@/features/financial-health/screens/health-screens";

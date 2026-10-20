@@ -26,11 +26,11 @@ function ThemedStack() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
-  const { scheme } = useScheme();
+  const { scheme, haptics } = useScheme();
   useBillReminders();
 
   return (
-    <ThemeProvider font={ready ? "inter" : "system"} haptics scheme={scheme}>
+    <ThemeProvider font={ready ? "inter" : "system"} haptics={haptics} scheme={scheme}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />

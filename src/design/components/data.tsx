@@ -1,6 +1,6 @@
 /* Data: CategoryBreakdown, BarChart, LineChart, DataTable. Charts give the shape; exact figures sit in text nearby. */
 import React, { useState } from 'react';
-import { LayoutChangeEvent, Pressable, ScrollView, View } from 'react-native';
+import { LayoutChangeEvent, Platform, Pressable, ScrollView, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { useTheme } from "@/design/theme";
 import { compactNaira, formatMoney } from "@/design/format";
@@ -21,7 +21,7 @@ export function CategoryBreakdown({ items, total, onSelect }: CategoryBreakdownP
             <View style={{ flex: 1, gap: 6 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}><Txt style={{ fontWeight: '500', flexShrink: 1 }} numberOfLines={1}>{it.label}</Txt><Amount value={it.value} /></View>
               <View style={{ height: 6, borderRadius: 999, backgroundColor: t.c.surfaceAlt, overflow: 'hidden' }}><View style={{ width: `${pct}%`, height: '100%', backgroundColor: t.c.primary, borderRadius: 999 }} /></View>
-              <Txt variant="caption" color={t.c.inkMuted}>{pct > 0 && pct < 1 ? '<1' : Math.round(pct)}% of spending{it.count != null ? ` · ${it.count} transactions` : ''}</Txt>
+              <Txt variant="caption" color={t.c.inkMuted}>{pct > 0 && pct < 1 ? '<1' : Math.round(pct)}% of spending{it.count != null ? ` · ${it.count} ${it.count === 1 ? 'transaction' : 'transactions'}` : ''}</Txt>
             </View>
           </View>
         );
@@ -37,6 +37,11 @@ function niceMax(v: number) {
   for (const s of [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m <= s) return s * p;
   return 10 * p;
 }
+/** SVG text has no inherited font, so web would fall back to serif. Charts use the app font, or the same system stack. */
+function chartFont(t: ReturnType<typeof useTheme>): string | undefined {
+  return t.text("caption").fontFamily ?? (Platform.OS === "web" ? "ui-sans-serif, system-ui, Segoe UI, sans-serif" : undefined);
+}
+
 function useWidth(): [number, (e: LayoutChangeEvent) => void] {
   const [w, setW] = useState(320);
   return [w, (e) => setW(e.nativeEvent.layout.width)];
@@ -73,7 +78,7 @@ export function BarChart({ data, title, series, highlight, height = 200 }: BarCh
           {[0, max / 2, max].map((v, i) => (
             <React.Fragment key={i}>
               <Line x1={pl} x2={W} y1={y(v)} y2={y(v)} stroke={t.c.border} strokeWidth={1} />
-              <SvgText x={pl - 8} y={y(v) + 4} fontSize={11} fill={t.c.inkMuted} textAnchor="end">{compactNaira(v)}</SvgText>
+              <SvgText fontFamily={chartFont(t)} x={pl - 8} y={y(v) + 4} fontSize={11} fill={t.c.inkMuted} textAnchor="end">{compactNaira(v)}</SvgText>
             </React.Fragment>
           ))}
           {data.map((d, i) => {
@@ -82,7 +87,7 @@ export function BarChart({ data, title, series, highlight, height = 200 }: BarCh
               <React.Fragment key={d.label}>
                 <Rect x={x1} y={y(d.value)} width={inner} height={Math.max(0, y(0) - y(d.value))} rx={4} fill={t.c.chart1} />
                 {hasCmp && d.compare != null ? <Rect x={cx + 2} y={y(d.compare)} width={inner} height={Math.max(0, y(0) - y(d.compare))} rx={4} fill={t.c.chart2} /> : null}
-                <SvgText x={cx} y={height - 6} fontSize={11} fontWeight={highlight === d.label ? '700' : '400'} fill={highlight === d.label ? t.c.ink : t.c.inkMuted} textAnchor="middle">{d.label}</SvgText>
+                <SvgText fontFamily={chartFont(t)} x={cx} y={height - 6} fontSize={11} fontWeight={highlight === d.label ? '700' : '400'} fill={highlight === d.label ? t.c.ink : t.c.inkMuted} textAnchor="middle">{d.label}</SvgText>
               </React.Fragment>
             );
           })}
@@ -111,11 +116,11 @@ export function LineChart({ labels, series, title, height = 200 }: LineChartProp
           {[0, max / 2, max].map((v, i) => (
             <React.Fragment key={i}>
               <Line x1={pl} x2={W} y1={y(v)} y2={y(v)} stroke={t.c.border} strokeWidth={1} />
-              <SvgText x={pl - 8} y={y(v) + 4} fontSize={11} fill={t.c.inkMuted} textAnchor="end">{compactNaira(v)}</SvgText>
+              <SvgText fontFamily={chartFont(t)} x={pl - 8} y={y(v) + 4} fontSize={11} fill={t.c.inkMuted} textAnchor="end">{compactNaira(v)}</SvgText>
             </React.Fragment>
           ))}
           {labels.map((l, i) => (n <= 7 || i % Math.ceil(n / 6) === 0 || i === n - 1)
-            ? <SvgText key={l + i} x={x(i)} y={height - 6} fontSize={11} fill={t.c.inkMuted} textAnchor="middle">{l}</SvgText> : null)}
+            ? <SvgText fontFamily={chartFont(t)} key={l + i} x={x(i)} y={height - 6} fontSize={11} fill={t.c.inkMuted} textAnchor="middle">{l}</SvgText> : null)}
           {series.map((s, si) => {
             const d = s.values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
             const last = s.values.length - 1;

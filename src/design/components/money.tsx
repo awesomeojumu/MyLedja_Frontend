@@ -133,19 +133,23 @@ export function ProgressBar({ label, value, max, money, tone, currency }: Progre
   );
 }
 
-export interface ProgressRingProps { value: number; max: number; label?: string; size?: number; stroke?: number; tone?: 'primary' | 'positive' | 'warning' | 'danger' }
-export function ProgressRing({ value, max, label, size = 56, stroke = 6, tone }: ProgressRingProps) {
+export interface ProgressRingProps { value: number; max: number; label?: string; size?: number; stroke?: number; tone?: 'primary' | 'positive' | 'warning' | 'danger';
+  /** Replaces the percentage in the middle (for a score, say). */
+  center?: React.ReactNode;
+  /** Replaces the spoken "N% used". */
+  spoken?: string }
+export function ProgressRing({ value, max, label, size = 56, stroke = 6, tone, center, spoken }: ProgressRingProps) {
   const t = useTheme();
   const pct = Math.max(0, max ? (value / max) * 100 : 0), r = (size - stroke) / 2, C = 2 * Math.PI * r;
   const col = { primary: t.c.primary, positive: t.c.positive, warning: t.c.warning, danger: t.c.danger }[tone ?? toneOf(pct)];
   return (
-    <View accessible accessibilityRole="image" accessibilityLabel={`${label ? label + ': ' : ''}${Math.round(pct)}% used`} style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <View accessible accessibilityRole="image" accessibilityLabel={spoken ?? `${label ? label + ': ' : ''}${Math.round(pct)}% used`} style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute' }}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={t.c.surfaceAlt} strokeWidth={stroke} fill="none" />
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={col} strokeWidth={stroke} fill="none" strokeLinecap="round"
           strokeDasharray={`${C} ${C}`} strokeDashoffset={C * (1 - Math.min(pct, 100) / 100)} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
       </Svg>
-      <Text style={[t.text('caption'), { fontWeight: '600', color: t.c.ink, fontSize: size < 48 ? 10 : 12, fontVariant: ['tabular-nums'] }]}>{Math.round(pct)}%</Text>
+      {center !== undefined ? center : <Text style={[t.text('caption'), { fontWeight: '600', color: t.c.ink, fontSize: size < 48 ? 10 : 12, fontVariant: ['tabular-nums'] }]}>{Math.round(pct)}%</Text>}
     </View>
   );
 }

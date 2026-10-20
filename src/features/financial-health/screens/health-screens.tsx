@@ -104,6 +104,11 @@ function useHealthBundle() {
   return { ...query, model };
 }
 
+/** The health score and advice for other screens (More shows it as a card). */
+export function useHealthSummary() {
+  return useHealthBundle();
+}
+
 function useTwoMonths() {
   const { session } = useSession();
   const { settings } = useHealthSettings();

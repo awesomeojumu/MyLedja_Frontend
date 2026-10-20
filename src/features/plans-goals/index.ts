@@ -7,3 +7,4 @@ export {
   GoalScheduleScreen,
   GoalProgressScreen,
 } from "@/features/plans-goals/screens/goal-screens";
+export { PlanOverviewScreen } from "@/features/plans-goals/screens/PlanOverviewScreen";

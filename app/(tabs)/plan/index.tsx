@@ -1,6 +1,5 @@
-import { LinkHub } from "@/lib/link-hub";
-import { PLAN_LINKS } from "@/lib/plan-links";
+import { PlanOverviewScreen } from "@/features/plans-goals";
 
 export default function PlanTab() {
-  return <LinkHub title="Plan" links={PLAN_LINKS} />;
+  return <PlanOverviewScreen />;
 }

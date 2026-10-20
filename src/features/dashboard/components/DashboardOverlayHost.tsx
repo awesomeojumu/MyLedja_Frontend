@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { GlobalSearchOverlay } from "@/features/dashboard/components/GlobalSearchOverlay";
 import { QuickAddOverlay } from "@/features/dashboard/components/QuickAddOverlay";
 import { useDashboardOverlays } from "@/features/dashboard/overlay-context";
@@ -8,12 +9,18 @@ export function DashboardOverlayHost({
   onTransfer,
   onComingLater,
 }: {
-  onExpense: () => void;
-  onIncome: () => void;
+  onExpense: (date?: string) => void;
+  onIncome: (date?: string) => void;
   onTransfer: () => void;
   onComingLater: (message: string) => void;
 }) {
-  const { overlay, close } = useDashboardOverlays();
+  const { overlay, close, requested, clearRequest } = useDashboardOverlays();
+  useEffect(() => {
+    if (!requested) return;
+    clearRequest();
+    if (requested.kind === "income") onIncome(requested.date);
+    else onExpense(requested.date);
+  }, [requested, clearRequest, onExpense, onIncome]);
   return (
     <>
       <QuickAddOverlay

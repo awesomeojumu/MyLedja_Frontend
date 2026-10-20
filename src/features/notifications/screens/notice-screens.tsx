@@ -12,7 +12,8 @@ import { readReminders } from "@/features/notifications/services/prefs";
 
 const NONE: Notice[] = [];
 
-function useInbox() {
+/** The current in-app alerts, for badges elsewhere. */
+export function useInbox() {
   const { session, user } = useSession();
   const hideAmounts = user?.hideLockScreenAmounts !== false;
   const load = useCallback(

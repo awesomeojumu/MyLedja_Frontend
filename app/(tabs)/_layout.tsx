@@ -6,6 +6,7 @@ import { AUTH_ROUTES } from "@/features/auth-onboarding";
 import {
   DashboardOverlayHost,
   DashboardOverlayProvider,
+  useDashboardOverlays,
 } from "@/features/dashboard";
 import { AddTransactionSheet } from "@/features/transactions";
 import { activeFromPath, isTabRoot, navMode, phoneBarDestinations, showPhoneBar } from "@/lib";
@@ -42,10 +43,12 @@ function TabsLayoutInner() {
   const mode = navMode(t.widthClass, t.portrait);
   const active = activeFromPath(pathname);
   const { workspaces } = useSession();
+  const { navHidden } = useDashboardOverlays();
   useOutboxSync();
   const [addOpen, setAddOpen] = useState(false);
   const [addKind, setAddKind] = useState<"expense" | "income" | undefined>();
   const [addSession, setAddSession] = useState(0);
+  const [addDate, setAddDate] = useState<string | undefined>();
   const [toast, setToast] = useState<string | null>(null);
   const phoneIds = new Set<string>(phoneBarDestinations());
   const go = (id: string) => {
@@ -53,8 +56,9 @@ function TabsLayoutInner() {
     if (id === active && isTabRoot(pathname, id as Destination)) return;
     router.replace(href);
   };
-  const openSheet = (kind: "expense" | "income") => {
+  const openSheet = (kind: "expense" | "income", date?: string) => {
     setAddKind(kind);
+    setAddDate(date);
     setAddSession((session) => session + 1);
     setAddOpen(true);
   };
@@ -72,7 +76,7 @@ function TabsLayoutInner() {
         },
       }}
       tabBar={() =>
-        mode === "bottom" && !addOpen && showPhoneBar(pathname) ? (
+        mode === "bottom" && !addOpen && !navHidden && showPhoneBar(pathname) ? (
           <BottomNav key={t.scheme} active={active} items={NAV.filter(([id]) => phoneIds.has(id))} onNavigate={go} onAdd={() => openSheet("expense")} addLabel="Add money" />
         ) : null
       }
@@ -122,8 +126,8 @@ function TabsLayoutInner() {
         </View>
       ) : null}
       <DashboardOverlayHost
-        onExpense={() => openSheet("expense")}
-        onIncome={() => openSheet("income")}
+        onExpense={(date) => openSheet("expense", date)}
+        onIncome={(date) => openSheet("income", date)}
         onTransfer={() => router.push("/(tabs)/accounts/transfer")}
         onComingLater={(message) => setToast(message)}
       />
@@ -131,6 +135,7 @@ function TabsLayoutInner() {
         key={addSession}
         open={addOpen}
         initialKind={addKind}
+        initialDate={addDate}
         onClose={() => setAddOpen(false)}
         onSaved={(message) => {
           setAddOpen(false);

@@ -10,7 +10,7 @@ const home = readFileSync(join(root, "src/features/dashboard/screens/HomeScreen.
 const upcoming = readFileSync(join(root, "src/features/dashboard/screens/UpcomingScreen.tsx"), "utf8");
 const insights = readFileSync(join(root, "src/features/dashboard/screens/InsightsScreen.tsx"), "utf8");
 const preview = readFileSync(join(root, "src/features/dashboard/screens/GoalsPreviewScreen.tsx"), "utf8");
-assert(home.includes("openQuickAdd"), "011 opens quick add");
+assert(home.includes('requestAdd("expense")') && home.includes('requestAdd("income")'), "011 opens the add sheet from Home");
 assert(home.includes("/(tabs)/cash-flow"), "011 links to cash flow");
 assert(home.includes("/(tabs)/upcoming"), "011 links to upcoming");
 assert(home.includes("/(tabs)/insights"), "011 links to insights");

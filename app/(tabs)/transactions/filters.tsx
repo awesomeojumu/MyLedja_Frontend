@@ -1,5 +1,6 @@
-import { FiltersScreen } from "@/features/transactions";
+import { Redirect } from "expo-router";
 
+/** Filters now open as a sheet over the Transactions list. */
 export default function FiltersRoute() {
-  return <FiltersScreen />;
+  return <Redirect href="/(tabs)/transactions" />;
 }

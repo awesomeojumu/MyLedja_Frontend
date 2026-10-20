@@ -31,8 +31,9 @@ const KINDS = [
   { value: "transfer", label: "Transfer" },
 ];
 
-function draftFor(kind?: EntryKind): AddDraft {
-  const next = quickExpenseDraft();
+function draftFor(kind?: EntryKind, date?: string): AddDraft {
+  const base = quickExpenseDraft();
+  const next = date ? { ...base, date } : base;
   if (kind === "income") {
     return { ...next, kind: "income", description: "", category: INCOME_CATEGORIES[0] };
   }
@@ -51,16 +52,19 @@ export function AddTransactionSheet({
   onClose,
   onSaved,
   initialKind,
+  initialDate,
 }: {
   open: boolean;
   onClose: () => void;
   onSaved: (message: string) => void;
   initialKind?: EntryKind;
+  /** YYYY-MM-DD to start the entry on, instead of today. */
+  initialDate?: string;
 }) {
   const t = useTheme();
   const { session, user } = useSession();
   const { workspaceId } = useActiveWorkspace();
-  const [draft, setDraft] = useState<AddDraft>(() => draftFor(initialKind));
+  const [draft, setDraft] = useState<AddDraft>(() => draftFor(initialKind, initialDate));
   const [issues, setIssues] = useState<DraftIssue[]>([]);
   const [more, setMore] = useState(false);
   const cacheUser = user?.userId;

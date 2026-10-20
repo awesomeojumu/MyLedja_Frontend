@@ -19,3 +19,6 @@ export {
   Screen137AboutDiagnostics,
   Screen144SuspiciousSignins,
 } from "@/features/settings-privacy/screens/settings-screens";
+export { MoreScreen } from "@/features/settings-privacy/screens/MoreScreen";
+export { SettingsScreen } from "@/features/settings-privacy/screens/SettingsScreen";
+export { SecurityScreen } from "@/features/settings-privacy/screens/SecurityScreen";
