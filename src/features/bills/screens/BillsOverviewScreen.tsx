@@ -19,6 +19,7 @@ import { LiveNotice } from "@/lib/live-notice";
 import { DefaultLoading } from "@/lib/screen-state";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useSession } from "@/state";
+import { useScrollTopOnFocus } from "@/lib/ui";
 
 const EMPTY: { bills: ApiBill[]; accounts: Record<string, string> } = { bills: [], accounts: {} };
 
@@ -46,6 +47,7 @@ function monthName(year: number, month: number, withYear = false): string {
 /** Bills: what's left to pay this month, overdue first, then the next 30 days. Desktop adds the month calendar. */
 export function BillsOverviewScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const wide = (t.widthClass === "expanded" || t.widthClass === "large") && !t.portrait;
@@ -87,7 +89,7 @@ export function BillsOverviewScreen() {
     const monthPaid = occ.filter((x) => x.status === "paid").reduce((s, x) => s + x.amount, 0);
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 }}>
+        <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 }}>
           <NavyHeader topInset={insets.top} wide>
             <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space3, flexWrap: "wrap" }}>
               <HeroButton icon="chevron-left" label="Back" onPress={back} />
@@ -182,7 +184,7 @@ export function BillsOverviewScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
         <NavyHeader topInset={insets.top}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space2 }}>
             <HeroButton icon="chevron-left" label="Back" onPress={back} />

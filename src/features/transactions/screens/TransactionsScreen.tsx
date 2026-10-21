@@ -35,7 +35,7 @@ import { newId } from "@/lib/ids";
 import { LiveNotice } from "@/lib/live-notice";
 import { nairaAmount, rowKind, toLedgerAccount, type ApiAccount, type ApiTransaction } from "@/lib/money-map";
 import { DefaultLoading } from "@/lib/screen-state";
-import { LedgerDay, LedgerRow, useActiveWorkspace } from "@/lib/ui";
+import { LedgerDay, LedgerRow, useActiveWorkspace, useScrollTopOnFocus } from "@/lib/ui";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useSession } from "@/state";
 
@@ -50,6 +50,7 @@ type SheetName = "filters" | "category" | "account" | "date" | null;
 
 export function TransactionsScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session } = useSession();
@@ -293,7 +294,7 @@ export function TransactionsScreen() {
     };
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 }} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 }} keyboardShouldPersistTaps="handled">
           {selecting ? (
             <SelectBar topInset={insets.top} count={picked.size} total={pickedTotal} allSelected={allPicked} onCancel={stopSelecting} onToggleAll={toggleAll} />
           ) : (
@@ -406,7 +407,7 @@ export function TransactionsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }} keyboardShouldPersistTaps="handled">
         {selecting ? (
           <SelectBar topInset={insets.top} count={picked.size} total={pickedTotal} allSelected={allPicked} onCancel={stopSelecting} onToggleAll={toggleAll} />
         ) : (

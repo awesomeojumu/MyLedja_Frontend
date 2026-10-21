@@ -36,6 +36,7 @@ export function InitialPreferencesScreen({
       brand="setup"
       step={{ label: "Set up", current: 1, total: 3 }}
       onBack={onBack}
+      icon="settings"
       title="How money should look"
       subtitle="Change these any time in Settings."
       footer={

@@ -6,7 +6,7 @@ import { Button, Icon, Sheet, SpringPressable, TextField, Txt, maxWidth, useThem
 import { ApiError } from "@/api/client";
 import { LiveNotice } from "@/lib/live-notice";
 import { DefaultLoading } from "@/lib/screen-state";
-import { useActiveWorkspace } from "@/lib/ui";
+import { useActiveWorkspace, useScrollTopOnFocus } from "@/lib/ui";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useSession } from "@/state";
 
@@ -77,6 +77,7 @@ function errorText(caught: unknown, fallback: string): string {
 /** Categories by group: just names. Add, rename, regroup or delete; groups can be added, renamed or removed. */
 export function CategoryGroupsScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session } = useSession();
@@ -213,7 +214,7 @@ export function CategoryGroupsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 }}>
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 }}>
         <View style={{ backgroundColor: t.c.hero, paddingTop: insets.top + t.space.space3, paddingHorizontal: t.space.space4, paddingBottom: t.space.space4 }}>
           <View style={{ width: "100%", maxWidth: maxWidth.widthReading, alignSelf: "center", gap: t.space.space4 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space3 }}>

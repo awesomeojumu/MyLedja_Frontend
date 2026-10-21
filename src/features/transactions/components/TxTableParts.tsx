@@ -3,6 +3,7 @@ import { Pressable, View } from "react-native";
 import { Button, CategoryIcon, Icon, StatusBadge, Txt, formatMoney, maxWidth, useTheme } from "@/design";
 import { RoundButton } from "@/features/transactions/components/TxFeedParts";
 import type { MonthSummary, TableRow, TableSort } from "@/features/transactions/services/tx-feed";
+import { ProfileButton } from "@/lib/ui";
 
 const SPLIT_COLORS = ["#5DCAA5", "#F0997B", "#FAC775"];
 
@@ -65,6 +66,7 @@ export function TxWideHeader({
           <View style={{ flex: 1 }} />
           <RoundButton icon="calendar" label="Calendar" onPress={onCalendar} />
           <RoundButton icon="list-filter" label="Select and edit several" onPress={onSelect} />
+          <ProfileButton />
         </View>
         <View style={{ flexDirection: "row", alignItems: "flex-end", gap: t.space.space8 }}>
           <HeroStat label="Spent" value={summary ? formatMoney(summary.spent) : "—"} big />

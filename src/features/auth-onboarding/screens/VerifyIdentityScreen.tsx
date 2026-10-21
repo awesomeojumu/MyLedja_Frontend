@@ -46,6 +46,7 @@ export function VerifyIdentityScreen({
           <TextLink onPress={onSignIn}>Sign in</TextLink>
         </View>
       }
+      icon="mail"
       title="Check your email"
       subtitle={
         email

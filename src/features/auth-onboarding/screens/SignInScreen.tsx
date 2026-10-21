@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { View } from "react-native";
 import { Banner, Button, TextField, Txt, useTheme } from "@/design";
-import { splitLayout } from "@/lib";
 import { AuthShell } from "@/features/auth-onboarding/components/AuthShell";
 import { TextLink } from "@/features/auth-onboarding/components/TextLink";
 import { useSubmit } from "@/features/auth-onboarding/hooks/use-submit";
@@ -19,7 +18,6 @@ export function SignInScreen({
   onCreateAccount: () => void;
 }) {
   const t = useTheme();
-  const compact = !splitLayout(t.widthClass, t.portrait);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const { busy, error, run } = useSubmit();
@@ -44,6 +42,7 @@ export function SignInScreen({
       <View accessibilityLabel="Sign in" style={{ gap: t.space.space4 }}>
         <TextField
           label="Email"
+          icon="mail"
           placeholder="you@email.com"
           value={identifier}
           onChangeText={setIdentifier}
@@ -71,7 +70,6 @@ export function SignInScreen({
         >
           Sign in
         </Button>
-        {compact ? createAccount : null}
       </View>
     </AuthShell>
   );

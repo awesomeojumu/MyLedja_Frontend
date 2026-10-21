@@ -3,6 +3,7 @@ import { Pressable, View, type LayoutChangeEvent } from "react-native";
 import Svg, { Circle, Line, Polyline, Text as SvgText } from "react-native-svg";
 import { Button, Icon, ProgressRing, Sheet, SpringPressable, Txt, formatMoney, maxWidth, useTheme, type IconName } from "@/design";
 import type { MonthBill, Outlook, Payday, PlanOverview, Projection } from "@/features/plans-goals/services/plan-overview";
+import { ProfileButton } from "@/lib/ui";
 
 function whole(n: number): string {
   return `${n < 0 ? "−" : ""}${formatMoney(Math.abs(Math.round(n))).replace(/\.00$/, "")}`;
@@ -117,6 +118,8 @@ export function PlanHeader({
           >
             <Icon name="plus" size={18} color={t.c.onHero} />
           </SpringPressable>
+          <View style={{ width: t.space.space2 }} />
+          <ProfileButton />
         </View>
         <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: t.space.space3, marginTop: t.space.space4 }}>
           <View style={{ flex: 1 }}>{left}</View>

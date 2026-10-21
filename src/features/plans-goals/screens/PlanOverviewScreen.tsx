@@ -28,7 +28,7 @@ import {
 import { LiveNotice } from "@/lib/live-notice";
 import type { ApiAccount } from "@/lib/money-map";
 import { DefaultLoading } from "@/lib/screen-state";
-import { useActiveWorkspace } from "@/lib/ui";
+import { useActiveWorkspace, useScrollTopOnFocus } from "@/lib/ui";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useSession } from "@/state";
 
@@ -47,6 +47,7 @@ function list<T>(res: { data?: unknown } | undefined): T[] {
 
 export function PlanOverviewScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session } = useSession();
@@ -109,6 +110,9 @@ export function PlanOverviewScreen() {
       <PlanTile title="Debts" onPress={() => go("/(tabs)/plan/debts")}>
         {overview.debts.count ? <DebtsTileBody debts={overview.debts} /> : <Txt variant="bodySm" color={t.c.inkMuted}>No debts. Nice.</Txt>}
       </PlanTile>
+      <PlanTile title="Budget categories" onPress={() => go("/(tabs)/transactions/categories")}>
+        <Txt variant="bodySm" color={t.c.inkMuted}>Groups and categories for expenses and income</Txt>
+      </PlanTile>
       <PlanTile title="Income this month" onPress={() => go("/(tabs)/plan/income")} wide={!wide}>
         {overview.hasIncome ? <IncomeTileBody income={overview.income} /> : <TilePrompt text="Add your income" />}
       </PlanTile>
@@ -117,7 +121,7 @@ export function PlanOverviewScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
         <PlanHeader
           topInset={insets.top}
           overview={overview}

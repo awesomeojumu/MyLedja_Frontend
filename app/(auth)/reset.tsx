@@ -13,6 +13,9 @@ export default function ResetRoute() {
         await session.confirmRecovery(code, password);
         router.replace(afterReset());
       }}
+      onResend={async () => {
+        if (pendingEmail) await session.startRecovery(pendingEmail);
+      }}
       onCreateAccount={() => router.push(AUTH_ROUTES.signUp)}
     />
   );

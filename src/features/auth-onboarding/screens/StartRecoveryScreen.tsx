@@ -33,34 +33,33 @@ export function StartRecoveryScreen({
           <TextLink onPress={onCreateAccount}>Create account</TextLink>
         </View>
       }
+      icon="mail"
       title="Reset your password"
       subtitle="Enter the email on your account and we’ll send you a code."
-      footer={
-        <View style={{ gap: t.space.space3, alignItems: "stretch" }}>
-          <Button
-            fullWidth
-            size="lg"
-            loading={busy}
-            disabled={!looksLikeEmail}
-            onPress={() =>
-              run(async () => {
-                rememberSignup("", identifier);
-                await onSubmit(identifier);
-              })
-            }
-          >
-            Send code
-          </Button>
-          <View style={{ alignItems: "center" }}>
-            <TextLink onPress={onSignIn}>Back to sign in</TextLink>
-          </View>
-        </View>
-      }
     >
       {error ? <Banner tone="danger" title={error} /> : null}
-      <TextField label="Email address" value={identifier} onChangeText={setIdentifier} autoCapitalize="none" keyboardType="email-address" />
-      <Banner tone="primary" title="We never say whether an account exists">
-        If an account matches, a code is on its way. It can take a minute.
+      <TextField label="Email address" icon="mail" placeholder="you@email.com" value={identifier} onChangeText={setIdentifier} autoCapitalize="none" keyboardType="email-address" />
+      <View style={{ gap: t.space.space3, alignItems: "stretch" }}>
+        <Button
+          fullWidth
+          size="lg"
+          loading={busy}
+          disabled={!looksLikeEmail}
+          onPress={() =>
+            run(async () => {
+              rememberSignup("", identifier);
+              await onSubmit(identifier);
+            })
+          }
+        >
+          Send code
+        </Button>
+        <View style={{ alignItems: "center" }}>
+          <TextLink onPress={onSignIn}>Back to sign in</TextLink>
+        </View>
+      </View>
+      <Banner tone="primary" title="Codes can take a minute">
+        Check your spam folder if it doesn’t show up.
       </Banner>
     </AuthShell>
   );

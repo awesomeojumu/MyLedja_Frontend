@@ -9,6 +9,7 @@ import { useSession } from "@/state";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { nairaAmount } from "@/lib/money-map";
 import { overspend } from "@/features/budgets/services/month-lines";
+import { ProfileButton, useScrollTopOnFocus } from "@/lib/ui";
 
 interface MonthBudgetLine {
   categoryId: string;
@@ -93,6 +94,7 @@ const CATEGORIES_EMPTY: { id: string; name: string; kind: string }[] = [];
 
 export function MonthlyBudgetScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { session } = useSession();
@@ -272,6 +274,7 @@ export function MonthlyBudgetScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
       <ScrollView
+        ref={scrollTop}
         contentContainerStyle={{
           paddingBottom: insets.bottom + 84,
           maxWidth: maxWidth.widthContent,
@@ -294,7 +297,7 @@ export function MonthlyBudgetScreen() {
         >
           {/* Header Row: Title & Month Pill */}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Txt variant="titleLg" color={t.c.onHero} style={{ fontWeight: "700", fontSize: 24 }}>
+            <Txt variant="titleLg" color={t.c.onHero} style={{ fontWeight: "700", fontSize: 24, flex: 1 }}>
               Budget
             </Txt>
             <View
@@ -319,6 +322,18 @@ export function MonthlyBudgetScreen() {
               <Pressable onPress={nextMonth} hitSlop={8} accessibilityLabel="Next month">
                 <Icon name="chevron-right" size={14} color={t.c.onHeroMuted} />
               </Pressable>
+            </View>
+            <Pressable
+              onPress={openEdit}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Create budget for ${monthName}`}
+              style={{ width: 34, height: 34, borderRadius: 999, backgroundColor: "rgba(255, 255, 255, 0.12)", borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.18)", alignItems: "center", justifyContent: "center", marginLeft: 8 }}
+            >
+              <Icon name="plus" size={18} color={t.c.onHero} />
+            </Pressable>
+            <View style={{ marginLeft: 8 }}>
+              <ProfileButton size={34} />
             </View>
           </View>
 
@@ -466,14 +481,21 @@ export function MonthlyBudgetScreen() {
               </View>
             </View>
 
+            {plannedSpend === 0 && categoryRows.length > 0 ? (
+              <View style={{ gap: t.space.space2, paddingVertical: t.space.space2 }}>
+                <Txt variant="bodySm" color={t.c.inkMuted}>{`Nothing planned for ${monthName} yet.`}</Txt>
+                <Button fullWidth icon="plus" onPress={openEdit}>{`Create ${monthName} budget`}</Button>
+              </View>
+            ) : null}
+
             {categoryRows.length === 0 ? (
               <View style={{ paddingVertical: t.space.space3, gap: 6 }}>
                 <Txt variant="bodySm" color={t.c.inkMuted}>
-                  No spending categories found. Set up your categories and reusable budgets on the Categories page.
+                  No spending categories yet. Set them up first, then create the budget.
                 </Txt>
                 <Pressable onPress={() => router.push("/(tabs)/transactions/categories")} hitSlop={8} accessibilityRole="button">
                   <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
-                    Go to Categories page →
+                    Set up categories →
                   </Txt>
                 </Pressable>
               </View>
@@ -554,17 +576,6 @@ export function MonthlyBudgetScreen() {
               </Pressable>
             ) : null}
 
-            {/* Manage categories shortcut */}
-            <Pressable
-              onPress={() => router.push("/(tabs)/transactions/categories")}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 4 }}
-              accessibilityRole="link"
-            >
-              <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
-                Manage reusable category budgets →
-              </Txt>
-              <Icon name="arrow-right" size={14} color={t.c.primary} />
-            </Pressable>
           </View>
 
           {/* 4. From your plan: Bills, Goals and Debts as three rolled-up lines, then Details live in Plan */}

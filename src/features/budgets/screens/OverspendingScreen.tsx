@@ -8,6 +8,7 @@ import { overspend, type Line } from "@/features/budgets/services/month-lines";
 import { monthKeyOf, monthLabel } from "@/features/budgets/services/plan-amounts";
 import { LiveNotice } from "@/lib/live-notice";
 import { DefaultLoading } from "@/lib/screen-state";
+import { useScrollTopOnFocus } from "@/lib/ui";
 
 function PaceBar({ line, todayPct, color }: { line: Line; todayPct: number; color: string }) {
   const t = useTheme();
@@ -23,6 +24,7 @@ function PaceBar({ line, todayPct, color }: { line: Line; todayPct: number; colo
 /** This month's categories that are over budget, and those spending fast enough to get there. */
 export function OverspendingScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ month?: string }>();
@@ -43,7 +45,7 @@ export function OverspendingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 }}>
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 }}>
         <View style={{ backgroundColor: t.c.hero, paddingTop: insets.top + t.space.space3, paddingHorizontal: t.space.space4, paddingBottom: t.space.space5 }}>
           <View style={{ width: "100%", maxWidth: maxWidth.widthReading, alignSelf: "center", gap: t.space.space4 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space3 }}>

@@ -1,6 +1,7 @@
 import { Pressable, TextInput, View } from "react-native";
 import { Icon, SpringPressable, Txt, formatMoney, maxWidth, useTheme, type IconName } from "@/design";
 import type { FeedCounts, FeedFilter, MonthSummary } from "@/features/transactions/services/tx-feed";
+import { ProfileButton } from "@/lib/ui";
 
 export function RoundButton({ icon, label, onPress, disabled, size = 36 }: { icon: IconName; label: string; onPress: () => void; disabled?: boolean; size?: number }) {
   const t = useTheme();
@@ -57,6 +58,7 @@ export function TxHeader({
           <Txt variant="titleMd" color={t.c.onHero} accessibilityRole="header" style={{ flex: 1 }}>Transactions</Txt>
           <RoundButton icon="calendar" label="Calendar" onPress={onCalendar} />
           <RoundButton icon="list-filter" label="Select and edit several" onPress={onSelect} />
+          <ProfileButton />
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: t.space.space3, marginTop: t.space.space3 }}>

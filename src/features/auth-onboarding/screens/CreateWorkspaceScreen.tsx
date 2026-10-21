@@ -33,6 +33,7 @@ export function CreateWorkspaceScreen({ onBack, onSubmit }: { onBack: () => void
       brand="setup"
       step={{ label: "Set up", current: 2, total: 3 }}
       onBack={onBack}
+      icon="briefcase"
       title="Create your workspace"
       subtitle="A workspace holds your accounts, budgets and records."
       footer={

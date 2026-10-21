@@ -14,7 +14,6 @@ import {
   categorySpend,
   greeting,
   groupRecent,
-  initialsFromEmail,
   monthlyFlow,
   weekSpend,
   type AvailableBalance,
@@ -35,6 +34,7 @@ import { DefaultLoading } from "@/lib/screen-state";
 import { goalNudge } from "@/features/plans-goals/services/goal-pace";
 import { useActiveWorkspace } from "@/lib/ui/use-active-workspace";
 import { useSession } from "@/state";
+import { displayName, useScrollTopOnFocus } from "@/lib/ui";
 
 type RecentRow = { row: ApiTransaction; account: string };
 
@@ -52,13 +52,14 @@ function freshnessText(syncedAt: number | null, now = Date.now()): string | null
   return "Updated earlier";
 }
 
-export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
+export function HomeScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { openSearch, requestAdd } = useDashboardOverlays();
   const { session, status, user, offline: sessionOffline } = useSession();
-  const { workspaceId, workspace } = useActiveWorkspace();
+  const { workspaceId } = useActiveWorkspace();
   const signedIn = status === "signedIn";
   const [hidden, setHidden] = useState(false);
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(() => lastSnapshot() ?? null);
@@ -219,16 +220,14 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
       wide={wide}
       actions={quickActions}
       topInset={insets.top}
-      initials={initialsFromEmail(user?.email)}
       greeting={greeting()}
-      workspace={workspace?.name ?? "Home"}
+      name={displayName(user?.email)}
       balance={balance ? balance.total : null}
       freshness={offline || sessionOffline ? "Saved on this phone" : freshnessText(syncedAt)}
       moneyIn={snapshot ? nairaAmount(snapshot.income.value) : null}
       moneyOut={snapshot ? nairaAmount(snapshot.expense.value) : null}
       hidden={hidden}
       onToggleHidden={() => setHidden((prev) => !prev)}
-      onProfile={onMore}
       onSearch={openSearch}
       onUpcoming={() => router.push("/(tabs)/upcoming")}
       onCashFlow={() => router.push("/(tabs)/cash-flow")}
@@ -289,7 +288,7 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
       loading ? <DefaultLoading /> : hidden ? <EmptyChart text="Amounts hidden" /> : empty ? <EmptyChart text={emptyText} /> : chart;
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 }}>
+        <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 }}>
           <Rise delay={0}>{hero}</Rise>
           <View style={{ width: "100%", maxWidth: maxWidth.widthContent, alignSelf: "center", padding: t.space.space6, gap: t.space.space5 }}>
             <LiveNotice offline={offline || pending.offline} error={loadError} hasData={snapshot != null || recentKnown} onRetry={load} />
@@ -329,7 +328,7 @@ export function HomeScreen({ onMore }: { onMore?: () => void } = {}) {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
         <Rise delay={0}>{hero}</Rise>
         <View style={{ width: "100%", maxWidth: maxWidth.widthReading, alignSelf: "center" }}>
           <Rise delay={40}>

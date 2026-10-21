@@ -6,7 +6,7 @@ import Constants from "expo-constants";
 import { Button, Dialog, Icon, Sheet, TextField, Txt, maxWidth, useTheme, type IconName } from "@/design";
 import { ListCard, Toggle } from "@/features/settings-privacy/components/MoreParts";
 import type { ApiAccount } from "@/lib/money-map";
-import { useActiveWorkspace } from "@/lib/ui";
+import { useActiveWorkspace, useScrollTopOnFocus } from "@/lib/ui";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useScheme, useSession, useSignOut } from "@/state";
 
@@ -64,6 +64,7 @@ function SettingRow({ row, tone, last }: { row: Row; tone: Tone; last: boolean }
 /** Everything adjustable, grouped, with the current value on the right. Only settings that really work are listed. */
 export function SettingsScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session, user, workspaces } = useSession();
@@ -216,7 +217,7 @@ export function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 }} keyboardShouldPersistTaps="handled">
         <View style={{ backgroundColor: t.c.hero, paddingTop: insets.top + t.space.space3, paddingHorizontal: t.space.space4, paddingBottom: t.space.space4 }}>
           <View style={{ width: "100%", maxWidth: maxWidth.widthReading, alignSelf: "center", gap: t.space.space3 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space3 }}>

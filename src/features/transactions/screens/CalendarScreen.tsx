@@ -16,7 +16,7 @@ import {
 import { LiveNotice } from "@/lib/live-notice";
 import { toLedgerAccount, type ApiAccount, type ApiTransaction } from "@/lib/money-map";
 import { DefaultLoading } from "@/lib/screen-state";
-import { LedgerRow } from "@/lib/ui";
+import { LedgerRow, useScrollTopOnFocus } from "@/lib/ui";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useSession } from "@/state";
 
@@ -31,6 +31,7 @@ function dateOf(key: string): Date {
 
 export function CalendarScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session } = useSession();
@@ -92,7 +93,7 @@ export function CalendarScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
         <CalendarHeader
           topInset={insets.top}
           month={monthLabel(month)}

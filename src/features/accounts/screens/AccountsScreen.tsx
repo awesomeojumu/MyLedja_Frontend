@@ -31,6 +31,7 @@ import { DefaultLoading } from "@/lib/screen-state";
 import type { LedgerItem } from "@/lib/ui";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useSession } from "@/state";
+import { useScrollTopOnFocus } from "@/lib/ui";
 
 const EMPTY = { accounts: [] as ApiAccount[], archived: 0, txns: [] as ApiTransaction[] };
 /** More than this and the header slims down and search, grouping and sort appear. */
@@ -53,6 +54,7 @@ function useSavedSet(name: string): [Set<string>, (id: string) => void] {
 
 export function AccountsScreen({ empty: _empty = false }: { empty?: boolean } = {}) {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session, user } = useSession();
@@ -185,7 +187,7 @@ export function AccountsScreen({ empty: _empty = false }: { empty?: boolean } = 
       : [];
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 }}>
+        <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 }}>
           {header}
           <View style={{ width: "100%", maxWidth: maxWidth.widthContent, alignSelf: "center", padding: t.space.space6, gap: t.space.space4 }}>
             {notice}
@@ -225,7 +227,7 @@ export function AccountsScreen({ empty: _empty = false }: { empty?: boolean } = 
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }} keyboardShouldPersistTaps="handled">
         {header}
         <View style={{ width: "100%", maxWidth: maxWidth.widthReading, alignSelf: "center" }}>
           {views.length === 0 ? (

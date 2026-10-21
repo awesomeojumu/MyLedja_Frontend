@@ -8,6 +8,7 @@ import { useBills } from "@/features/bills/screens/BillsOverviewScreen";
 import { monthOccurrences } from "@/features/bills/services/bill-month";
 import { LiveNotice } from "@/lib/live-notice";
 import { DefaultLoading } from "@/lib/screen-state";
+import { useScrollTopOnFocus } from "@/lib/ui";
 
 /** "2026-10-23" (from the week strip) → that day; anything else → today. */
 function startDay(param: string | undefined): Date {
@@ -18,6 +19,7 @@ function startDay(param: string | undefined): Date {
 /** The month as a bill calendar: each day's amount and status, and the chosen day's bills below. */
 export function BillsCalendarScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ day?: string }>();
@@ -45,7 +47,7 @@ export function BillsCalendarScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
         <NavyHeader topInset={insets.top}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space2 }}>
             <HeroButton icon="chevron-left" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/plan/bills" as never))} />

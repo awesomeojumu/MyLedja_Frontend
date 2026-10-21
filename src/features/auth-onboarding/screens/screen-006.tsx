@@ -6,6 +6,7 @@ export function Screen006() {
       email={null}
       onBack={() => undefined}
       onSubmit={async () => undefined}
+      onResend={async () => undefined}
       onCreateAccount={() => undefined}
     />
   );

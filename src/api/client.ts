@@ -73,6 +73,7 @@ export class MfaRequiredError extends Error {
 const FRIENDLY: Record<string, string> = {
   "invalid credentials": "That email and password don’t match.",
   "email not verified": "Verify your email to finish setting up your account.",
+  "no account": "No MyLedja account uses this email. Check the spelling, or create an account.",
   "too many attempts": "Too many attempts. Wait a few minutes and try again.",
   "invalid code": "That code is wrong or has expired. Request a new one.",
   "invalid refresh token": "Your session has ended. Sign in again.",

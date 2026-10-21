@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Icon, SpringPressable, Txt, formatMoney, maxWidth, useRollingNumber, useTheme, type IconName } from "@/design";
 import type { BudgetSummary, RecentGroup } from "@/features/dashboard/services/home-model";
-import { LedgerDay, LedgerRow } from "@/lib/ui";
+import { LedgerDay, LedgerRow, ProfileButton } from "@/lib/ui";
 
 const HIDDEN = "₦ ••••••";
 
@@ -48,16 +48,15 @@ function FlowChip({ label, value, kind, hidden, onPress }: { label: string; valu
 
 export interface HomeHeroProps {
   topInset: number;
-  initials: string;
   greeting: string;
-  workspace: string;
+  /** The signed-in person's name, shown under the greeting. */
+  name: string;
   balance: number | null;
   freshness: string | null;
   moneyIn: number | null;
   moneyOut: number | null;
   hidden: boolean;
   onToggleHidden: () => void;
-  onProfile?: () => void;
   onSearch: () => void;
   onUpcoming: () => void;
   onCashFlow: () => void;
@@ -90,11 +89,6 @@ export function HomeHero(p: HomeHeroProps) {
   const negative = (p.balance ?? 0) < 0;
   const rolled = useRollingNumber(Math.abs(p.balance ?? 0), t.reduceMotion);
   const [whole, kobo] = formatMoney(rolled, "NGN", { sign: negative ? "minus" : null }).split(".");
-  const avatar = (
-    <View style={{ width: 40, height: 40, borderRadius: 999, backgroundColor: t.c.heroDeco, alignItems: "center", justifyContent: "center" }}>
-      <Txt variant="label" color={t.c.onHero} style={{ fontWeight: "700" }}>{p.initials}</Txt>
-    </View>
-  );
   const balanceText = (
     <Text
       accessibilityLabel={p.balance == null ? "Balance loading" : p.hidden ? "Balance hidden" : `Available balance ${formatMoney(p.balance, "NGN", { sign: negative ? "minus" : null })}`}
@@ -129,16 +123,10 @@ export function HomeHero(p: HomeHeroProps) {
     <View style={{ backgroundColor: t.c.hero, paddingTop: p.topInset + t.space.space4, paddingHorizontal: t.space.space5, paddingBottom: p.wide ? t.space.space8 : 64 }}>
       <View style={{ width: "100%", maxWidth: p.wide ? maxWidth.widthContent : undefined, alignSelf: "center" }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space3 }}>
-          {p.onProfile ? (
-            <Pressable onPress={p.onProfile} accessibilityRole="button" accessibilityLabel="Profile and settings" hitSlop={4}>
-              {avatar}
-            </Pressable>
-          ) : (
-            avatar
-          )}
+          <ProfileButton size={40} />
           <View style={{ flex: 1 }}>
             <Txt variant="caption" color={t.c.onHeroMuted}>{p.greeting}</Txt>
-            <Txt variant="titleSm" color={t.c.onHero} accessibilityRole="header" numberOfLines={1}>{p.workspace}</Txt>
+            <Txt variant="titleSm" color={t.c.onHero} accessibilityRole="header" numberOfLines={1}>{p.name}</Txt>
           </View>
           <HeroIconButton icon="search" label="Search" onPress={p.onSearch} />
           <HeroIconButton icon="calendar" label="Upcoming" onPress={p.onUpcoming} />

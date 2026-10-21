@@ -16,6 +16,7 @@ export function TermsPrivacyScreen({ onBack, onSubmit }: { onBack: () => void; o
     <AuthShell
       step={{ label: "Create account", current: 3, total: 4 }}
       onBack={onBack}
+      icon="shield-check"
       title="Before you start"
       subtitle="The short version of how we treat your money and your data."
       hint={ready ? undefined : "Tick the first box to continue"}

@@ -11,7 +11,7 @@ import { alertCount, displayName, healthLabel, holdingsValue, savingsTotal, type
 import type { ApiAccount } from "@/lib/money-map";
 import { pendingBadge } from "@/sync/outbox";
 import { outboxForUser } from "@/sync/user-outbox";
-import { useActiveWorkspace } from "@/lib/ui";
+import { useActiveWorkspace, useScrollTopOnFocus } from "@/lib/ui";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useScheme, useSession, useSignOut } from "@/state";
 
@@ -23,6 +23,7 @@ function short(n: number): string {
 
 export function MoreScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session, user, workspaces } = useSession();
@@ -86,7 +87,7 @@ export function MoreScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 + t.space.space8 }}>
         <MoreHeader
           topInset={insets.top}
           initials={initials || "?"}

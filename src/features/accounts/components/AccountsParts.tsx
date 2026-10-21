@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Pressable, TextInput, View } from "react-native";
 import { Button, Icon, SpringPressable, Txt, formatMoney, maxWidth, toneColors, useTheme, type CategoryTone, type IconName } from "@/design";
-import { LedgerRow, type LedgerItem } from "@/lib/ui";
+import { LedgerRow, type LedgerItem, ProfileButton } from "@/lib/ui";
 import {
   initials,
   subLine,
@@ -138,6 +138,7 @@ export function AccountsHeader({
           {wide ? actions.map((a) => <HeroPill key={a.label} action={a} />) : null}
           <HeroButton icon="archive" label="Archived accounts" onPress={onArchived} />
           <HeroButton icon="plus" label={addLabel} onPress={onAdd} />
+          <ProfileButton />
         </View>
         {wide ? (
           <View style={{ flexDirection: "row", alignItems: "flex-end", gap: t.space.space8, marginTop: t.space.space5 }}>

@@ -79,7 +79,7 @@ export function CreateAccountScreen({
           Use your email address for now.
         </Banner>
       ) : (
-        <TextField label="Email address" autoComplete="email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+        <TextField label="Email address" icon="mail" placeholder="you@email.com" autoComplete="email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
       )}
       <TextField label="Password" autoComplete="new-password" value={password} onChangeText={setPassword} autoCapitalize="none" secureTextEntry />
       <PasswordRules rules={rules} />

@@ -9,6 +9,7 @@ import { nairaAmount } from "@/lib/money-map";
 import { DefaultLoading } from "@/lib/screen-state";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { useSession } from "@/state";
+import { useScrollTopOnFocus } from "@/lib/ui";
 
 interface MonthRow {
   month: string;
@@ -28,6 +29,7 @@ function k(n: number): string {
 /** Past months against their budgets: how much was planned, spent, and whether it held. */
 export function BudgetHistoryScreen() {
   const t = useTheme();
+  const scrollTop = useScrollTopOnFocus();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session } = useSession();
@@ -41,7 +43,7 @@ export function BudgetHistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: t.space.space12 }}>
+      <ScrollView ref={scrollTop} contentContainerStyle={{ paddingBottom: t.space.space12 }}>
         <View style={{ backgroundColor: t.c.hero, paddingTop: insets.top + t.space.space3, paddingHorizontal: t.space.space4, paddingBottom: t.space.space5 }}>
           <View style={{ width: "100%", maxWidth: maxWidth.widthReading, alignSelf: "center", gap: t.space.space4 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space3 }}>

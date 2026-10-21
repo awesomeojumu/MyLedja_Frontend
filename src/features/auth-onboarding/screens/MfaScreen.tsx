@@ -34,6 +34,7 @@ export function MfaScreen({
           <TextLink onPress={onCreateAccount}>Create account</TextLink>
         </View>
       }
+      icon="smartphone"
       title="Enter your security code"
       subtitle={
         backup
