@@ -13,3 +13,5 @@ export {
   SubscriptionManagementScreen,
   BillCalendarScreen,
 } from "@/features/bills/screens/bill-screens";
+export { BillsOverviewScreen } from "@/features/bills/screens/BillsOverviewScreen";
+export { BillsCalendarScreen } from "@/features/bills/screens/BillsCalendarScreen";

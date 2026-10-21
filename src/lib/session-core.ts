@@ -423,6 +423,30 @@ export class SessionCore {
     return this.authed((token) => this.api.createCategory(token, workspaceId, body));
   }
 
+  listCategoryGroups(workspaceId: string) {
+    return this.authed((token) => this.api.listCategoryGroups(token, workspaceId));
+  }
+
+  createCategoryGroup(workspaceId: string, body: { name: string; kind?: string }) {
+    return this.authed((token) => this.api.createCategoryGroup(token, workspaceId, body));
+  }
+
+  renameCategoryGroup(workspaceId: string, groupId: string, name: string) {
+    return this.authed((token) => this.api.renameCategoryGroup(token, workspaceId, groupId, name));
+  }
+
+  deleteCategoryGroup(workspaceId: string, groupId: string) {
+    return this.authed((token) => this.api.deleteCategoryGroup(token, workspaceId, groupId));
+  }
+
+  deleteCategory(workspaceId: string, categoryId: string, moveTo: string | null) {
+    return this.authed((token) => this.api.deleteCategory(token, workspaceId, categoryId, moveTo));
+  }
+
+  listMonthHistory(workspaceId: string, limit = 6) {
+    return this.authed((token) => this.api.listMonthHistory(token, workspaceId, limit));
+  }
+
   patchCategory(workspaceId: string, categoryId: string, body: unknown) {
     return this.authed((token) => this.api.patchCategory(token, workspaceId, categoryId, body));
   }

@@ -1,7 +1,6 @@
-import { useRouter } from "expo-router";
-import { HubScreen } from "@/features/budgets";
+import { BudgetHistoryScreen } from "@/features/budgets";
 
+/** Plan → Budgets is the record of past months; this month lives in the Budget tab. */
 export default function BudgetsRoute() {
-  const router = useRouter();
-  return <HubScreen onBack={() => router.back()} />;
+  return <BudgetHistoryScreen />;
 }

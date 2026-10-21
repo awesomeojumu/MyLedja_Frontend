@@ -1,5 +1,5 @@
-import { CategoriesScreen } from "@/features/categories-merchants";
+import { CategoryGroupsScreen } from "@/features/categories-merchants";
 
 export default function CategoriesRoute() {
-  return <CategoriesScreen />;
+  return <CategoryGroupsScreen />;
 }

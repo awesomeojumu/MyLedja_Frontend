@@ -1,2 +1,5 @@
-import { BillsListScreen } from "@/features/bills";
-export default function Route() { return <BillsListScreen filter="upcoming" />; }
+import { BillsOverviewScreen } from "@/features/bills";
+
+export default function Route() {
+  return <BillsOverviewScreen />;
+}

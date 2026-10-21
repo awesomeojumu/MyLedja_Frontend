@@ -169,6 +169,18 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike) {
       ),
     createCategory: (accessToken: string, workspaceId: string, body: unknown) =>
       call<{ status: "ok"; data: { id: string } }>("POST", `/workspaces/${workspaceId}/categories`, body, accessToken),
+    listCategoryGroups: (accessToken: string, workspaceId: string) =>
+      call<{ status: "ok"; data: { id: string; name: string; kind: string }[] }>("GET", `/workspaces/${workspaceId}/category-groups`, undefined, accessToken),
+    createCategoryGroup: (accessToken: string, workspaceId: string, body: { name: string; kind?: string }) =>
+      call<{ status: "ok"; data: { id: string; name: string; kind: string } }>("POST", `/workspaces/${workspaceId}/category-groups`, body, accessToken),
+    renameCategoryGroup: (accessToken: string, workspaceId: string, groupId: string, name: string) =>
+      call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/category-groups/${groupId}`, { name }, accessToken),
+    deleteCategoryGroup: (accessToken: string, workspaceId: string, groupId: string) =>
+      call<{ status: "ok"; data: unknown }>("DELETE", `/workspaces/${workspaceId}/category-groups/${groupId}`, undefined, accessToken),
+    deleteCategory: (accessToken: string, workspaceId: string, categoryId: string, moveTo: string | null) =>
+      call<{ status: "ok"; data: unknown }>("POST", `/workspaces/${workspaceId}/categories/${categoryId}/delete`, moveTo ? { moveTo } : {}, accessToken),
+    listMonthHistory: (accessToken: string, workspaceId: string, limit: number) =>
+      call<{ status: "ok"; data: Record<string, unknown>[] }>("GET", `/workspaces/${workspaceId}/month-budgets?limit=${limit}`, undefined, accessToken),
     patchCategory: (accessToken: string, workspaceId: string, categoryId: string, body: unknown) =>
       call<{ status: "ok"; data: unknown }>("PATCH", `/workspaces/${workspaceId}/categories/${categoryId}`, body, accessToken),
     getMerchant: (accessToken: string, workspaceId: string, merchantId: string) =>

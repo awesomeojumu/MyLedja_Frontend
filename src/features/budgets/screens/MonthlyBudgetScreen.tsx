@@ -1,13 +1,14 @@
 import { useCallback, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { AmountInput, Button, Icon, type IconName, maxWidth, Sheet, Txt, useTheme } from "@/design";
 import { categoryInfo } from "@/design/format";
 import { useActiveWorkspace } from "@/lib/ui/use-active-workspace";
 import { useSession } from "@/state";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { nairaAmount } from "@/lib/money-map";
+import { overspend } from "@/features/budgets/services/month-lines";
 
 interface MonthBudgetLine {
   categoryId: string;
@@ -87,6 +88,9 @@ function formatNairaCompact(amount: number): string {
   return `₦${amount.toLocaleString()}`;
 }
 
+const MONTH_EMPTY: { monthBudget: MonthBudgetData | null } = { monthBudget: null };
+const CATEGORIES_EMPTY: { id: string; name: string; kind: string }[] = [];
+
 export function MonthlyBudgetScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -94,7 +98,11 @@ export function MonthlyBudgetScreen() {
   const { session } = useSession();
   const { workspaceId } = useActiveWorkspace();
 
-  const [date, setDate] = useState(() => new Date());
+  const params = useLocalSearchParams<{ month?: string }>();
+  const [date, setDate] = useState(() => {
+    const m = params.month && /^(d{4})-(d{2})$/.exec(params.month);
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, 1) : new Date();
+  });
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
@@ -104,26 +112,34 @@ export function MonthlyBudgetScreen() {
   const monthName = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const monthAbbrev = date.toLocaleDateString("en-US", { month: "short" });
 
-  const load = useCallback(
+  // The month's figures change with the switcher; categories don't, so they're loaded on their own and stay on
+  // screen while another month loads (otherwise the Spending card empties and refills on every switch).
+  const loadMonth = useCallback(
     async (wsId: string) => {
-      const [budgetRes, catRes] = await Promise.all([
-        session.getMonthBudget(wsId, monthKey).catch(() => null),
-        session.listCategories(wsId).catch(() => ({ data: [] })),
-      ]);
-
-      const monthBudget = (budgetRes?.data ?? null) as MonthBudgetData | null;
-      const allCategories = (catRes?.data ?? []) as { id: string; name: string; kind: string }[];
-
-      return { monthBudget, allCategories };
+      const budgetRes = await session.getMonthBudget(wsId, monthKey).catch(() => null);
+      return { monthBudget: (budgetRes?.data ?? null) as MonthBudgetData | null };
     },
     [session, monthKey],
   );
+  const loadCategories = useCallback(
+    async (wsId: string) => {
+      const catRes = await session.listCategories(wsId).catch(() => ({ data: [] }));
+      return (catRes?.data ?? []) as { id: string; name: string; kind: string }[];
+    },
+    [session],
+  );
 
-  const { data, refresh } = useLiveQuery(
-    load,
-    { monthBudget: null as MonthBudgetData | null, allCategories: [] as { id: string; name: string; kind: string }[] },
+  const { data: monthData, refresh: refreshMonth } = useLiveQuery(
+    loadMonth,
+    MONTH_EMPTY,
     workspaceId ? `month-budget-${workspaceId}-${monthKey}` : undefined,
   );
+  const { data: allCategories, refresh: refreshCategories } = useLiveQuery(loadCategories, CATEGORIES_EMPTY, "budget-categories");
+  const data = { monthBudget: monthData.monthBudget, allCategories };
+  const refresh = () => {
+    refreshMonth();
+    refreshCategories();
+  };
 
   const mb = data.monthBudget;
 
@@ -213,6 +229,14 @@ export function MonthlyBudgetScreen() {
             };
           });
 
+  // Categories over their plan or spending fast enough to get there (same rules as the Overspending screen).
+  const attention = overspend(
+    categoryRows.filter((c) => c.planned > 0 || c.spent > 0).map((c) => ({ categoryId: c.id, name: c.name, planned: c.planned, spent: c.spent })),
+    mb?.today && mb.today > 0 ? mb.today : 0,
+    daysInMonth,
+  );
+  const needsAttention = attention.over.length + attention.fast.length;
+
   const prevMonth = () => {
     setDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   };
@@ -222,18 +246,7 @@ export function MonthlyBudgetScreen() {
   };
 
   const openEdit = () => {
-    const draft: Record<string, string> = {};
-    if (mb && mb.spending?.lines?.length > 0) {
-      for (const line of mb.spending.lines) {
-        draft[line.categoryId] = line.planned;
-      }
-    } else {
-      for (const cat of categoryRows) {
-        draft[cat.id] = String(cat.planned);
-      }
-    }
-    setEditDraft(draft);
-    setEditSheetOpen(true);
+    router.push(`/(tabs)/budget/create?month=${monthKey}` as never);
   };
 
   const saveEdit = async () => {
@@ -314,13 +327,17 @@ export function MonthlyBudgetScreen() {
             {/* Safe to spend */}
             <View style={{ gap: 4 }}>
               <Txt variant="bodySm" color={t.c.onHeroMuted} style={{ fontWeight: "500" }}>
-                Safe to spend
+                {safeToSpend < 0 ? "Over by" : "Safe to spend"}
               </Txt>
-              <Txt variant="amountHero" color={t.c.onHero} style={{ fontWeight: "700", fontSize: 34, letterSpacing: -0.5 }}>
-                ₦{safeToSpend.toLocaleString()}
+              <Txt variant="amountHero" color={safeToSpend < 0 ? "#F0997B" : t.c.onHero} style={{ fontWeight: "700", fontSize: 34, letterSpacing: -0.5 }}>
+                {safeToSpend < 0 ? `−₦${Math.abs(safeToSpend).toLocaleString()}` : `₦${safeToSpend.toLocaleString()}`}
               </Txt>
               <Txt variant="caption" color={t.c.onHeroMuted} style={{ fontSize: 12 }}>
-                {plannedSpend > 0
+                {safeToSpend < 0 && incomeExpected === 0
+                  ? "Spending with no income set for this month"
+                  : safeToSpend < 0
+                  ? "More spent than this month's income allows"
+                  : plannedSpend > 0
                   ? `left of ₦${plannedSpend.toLocaleString()} · ₦${dailySafe.toLocaleString()} a day`
                   : safeToSpend > 0
                   ? `₦${safeToSpend.toLocaleString()} unallocated · Tap Edit amounts to plan`
@@ -433,11 +450,20 @@ export function MonthlyBudgetScreen() {
               <Txt variant="body" color={t.c.ink} style={{ fontWeight: "600", fontSize: 15 }}>
                 Spending
               </Txt>
-              <Pressable onPress={openEdit} hitSlop={8} accessibilityRole="button">
-                <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
-                  Edit amounts
-                </Txt>
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: t.space.space4 }}>
+                {needsAttention > 0 ? (
+                  <Pressable onPress={() => router.push(`/(tabs)/budget/overspending?month=${monthKey}` as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`${needsAttention} over or running fast. Open overspending`}>
+                    <Txt variant="bodySm" color={t.c.warning} style={{ fontWeight: "600" }}>
+                      {`${needsAttention} need attention`}
+                    </Txt>
+                  </Pressable>
+                ) : null}
+                <Pressable onPress={openEdit} hitSlop={8} accessibilityRole="button">
+                  <Txt variant="bodySm" color={t.c.primary} style={{ fontWeight: "600" }}>
+                    Edit amounts
+                  </Txt>
+                </Pressable>
+              </View>
             </View>
 
             {categoryRows.length === 0 ? (
@@ -459,7 +485,13 @@ export function MonthlyBudgetScreen() {
                   const barColor = isAhead ? t.c.warning : t.c.primary;
 
                   return (
-                    <View key={cat.id} style={{ gap: 8 }}>
+                    <Pressable
+                      key={cat.id}
+                      onPress={() => router.push(`/(tabs)/budget/category?id=${encodeURIComponent(cat.id)}&month=${monthKey}` as never)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${cat.name}. Open`}
+                      style={{ gap: 8 }}
+                    >
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                           <Icon name={cat.icon} size={16} color={t.c.inkMuted} />
@@ -501,7 +533,7 @@ export function MonthlyBudgetScreen() {
                           }}
                         />
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </View>

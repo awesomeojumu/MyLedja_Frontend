@@ -1,2 +1,5 @@
-import { BillCalendarScreen } from "@/features/bills";
-export default function Route() { return <BillCalendarScreen />; }
+import { BillsCalendarScreen } from "@/features/bills";
+
+export default function Route() {
+  return <BillsCalendarScreen />;
+}

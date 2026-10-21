@@ -1,7 +1,5 @@
-import { useRouter } from "expo-router";
-import { HubScreen } from "@/features/bills";
+import { BillsOverviewScreen } from "@/features/bills";
 
-export default function BillsRoute() {
-  const router = useRouter();
-  return <HubScreen onBack={() => router.back()} />;
+export default function Route() {
+  return <BillsOverviewScreen />;
 }
