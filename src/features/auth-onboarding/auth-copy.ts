@@ -43,8 +43,8 @@ export const PASSKEY_POINTS = [
 ];
 
 export const WELCOME_PREVIEW = [
-  { title: "Jollof rice and c…", category: "Eating out", method: "Cash", amount: -4500, time: "12:40" },
-  { title: "October salary", category: "Salary", method: "Main ac…", amount: 350000, time: "09:00" },
+  { title: "Jollof rice and chicken", category: "Eating out", method: "Cash", amount: -4500, time: "12:40" },
+  { title: "October salary", category: "Salary", method: "Main account", amount: 350000, time: "09:00" },
   { title: "Data bundle", category: "Data & airtime", method: "Cash", amount: -2000, time: "Yesterday" },
 ] as const;
 
