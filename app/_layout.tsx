@@ -10,10 +10,12 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "@/design";
 import { installDurableCache } from "@/lib/durable-kv";
+import { stopIosInputZoom } from "@/lib/web-viewport";
 import { useBillReminders } from "@/notifications/use-bill-reminders";
 import { SchemeProvider, SessionProvider, useScheme } from "@/state";
 
 installDurableCache();
+stopIosInputZoom();
 
 export const unstable_settings = {
   initialRouteName: "(auth)",
