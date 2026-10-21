@@ -5,6 +5,7 @@ export * from "@/design/theme";
 export * from "@/design/format";
 export * from "@/design/haptics";
 export * from "@/design/motion";
+export * from "@/design/keyboard";
 export { ICONS, ICON_NAMES } from "@/design/icons";
 export type { IconName } from "@/design/icons";
 export * from "@/design/components/foundations";

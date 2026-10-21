@@ -1,7 +1,7 @@
 import { Redirect, Tabs, usePathname, useRouter } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
-import { BottomNav, Button, NAV, NavRail, Sidebar, Toast, useTheme, type Destination } from "@/design";
+import { BottomNav, Button, NAV, NavRail, Sidebar, Toast, useKeyboard, useTheme, type Destination } from "@/design";
 import { AUTH_ROUTES } from "@/features/auth-onboarding";
 import {
   DashboardOverlayHost,
@@ -45,6 +45,8 @@ function TabsLayoutInner() {
   const active = activeFromPath(pathname);
   const { workspaces } = useSession();
   const { navHidden } = useDashboardOverlays();
+  // The phone bar would ride up on top of the keyboard; hide it while typing.
+  const keyboard = useKeyboard();
   useOutboxSync();
   const [addOpen, setAddOpen] = useState(false);
   const [addKind, setAddKind] = useState<"expense" | "income" | undefined>();
@@ -77,7 +79,7 @@ function TabsLayoutInner() {
         },
       }}
       tabBar={() =>
-        mode === "bottom" && !addOpen && !navHidden && showPhoneBar(pathname) ? (
+        mode === "bottom" && !addOpen && !navHidden && !keyboard.open && showPhoneBar(pathname) ? (
           <BottomNav key={t.scheme} active={active} items={NAV.filter(([id]) => phoneIds.has(id))} onNavigate={go} onAdd={() => openSheet("expense")} addLabel="Add money" />
         ) : null
       }

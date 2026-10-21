@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { ScrollView, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Icon, SpringPressable, Txt, useTheme, type IconName } from "@/design";
+import { Icon, SpringPressable, Txt, useKeyboard, useTheme, type IconName } from "@/design";
 import { splitLayout } from "@/lib";
 import { BrandPane, type BrandKind } from "@/features/auth-onboarding/components/BrandPane";
 import { StepHeader } from "@/features/auth-onboarding/components/StepHeader";
@@ -38,6 +38,9 @@ export function AuthShell({
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const compact = !splitLayout(t.widthClass, t.portrait);
+  // In iPhone browsers the keyboard covers the page instead of shrinking it; leave room to scroll the buttons above it.
+  const kb = useKeyboard();
+  const keyboardRoom = Platform.OS === "web" ? kb.inset : 0;
   const hintRow = hint ? (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
       <Icon name="info" size={14} color={t.c.inkMuted} />
@@ -101,7 +104,7 @@ export function AuthShell({
             flexGrow: 1,
             paddingHorizontal: t.space.space5,
             paddingTop: t.space.space6,
-            paddingBottom: Math.max(insets.bottom, t.space.space4) + t.space.space4,
+            paddingBottom: Math.max(insets.bottom, t.space.space4) + t.space.space4 + keyboardRoom,
             gap: t.space.space4,
           }}
         >

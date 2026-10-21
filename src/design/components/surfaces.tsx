@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, BackHandler, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View, ViewStyle, StyleProp } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from "@/design/theme";
+import { useGlide, useKeyboard } from "@/design/keyboard";
 import { nativeDriver, Rise } from "@/design/motion";
 import { spring } from "@/design/tokens";
 import { IconName } from "@/design/icons";
@@ -44,6 +45,11 @@ export function Sheet({ title, open, onClose, footer, children }: SheetProps) {
   const insets = useSafeAreaInsets();
   const centred = t.widthClass !== 'compact' && !t.portrait;
   const v = useRef(new Animated.Value(0)).current;
+  // Browsers don't move the page for the keyboard on iPhone, so lift the sheet by the part the keyboard hides.
+  const kb = useKeyboard();
+  const web = Platform.OS === 'web';
+  const edge = centred ? 24 : 0;
+  const lift = useGlide(web ? kb.inset : 0, t.reduceMotion);
   useEffect(() => {
     if (!open) { v.setValue(0); return; }
     if (t.reduceMotion) { v.setValue(1); return; }
@@ -54,13 +60,14 @@ export function Sheet({ title, open, onClose, footer, children }: SheetProps) {
     : { transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [48, 0] }) }], opacity: v };
   return (
     <Modal visible={open} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: centred ? 'center' : 'flex-end', alignItems: 'center', padding: centred ? 24 : 0 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <Animated.View style={{ flex: 1, justifyContent: centred ? 'center' : 'flex-end', alignItems: 'center', padding: edge, paddingTop: edge + (web ? kb.top : 0), paddingBottom: Animated.add(lift, edge) }}>
         <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: t.c.scrim, opacity: v }}>
           <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Close" />
         </Animated.View>
         <Animated.View accessibilityViewIsModal style={[{ width: '100%', maxWidth: centred ? 480 : undefined, maxHeight: centred ? '85%' : '90%', alignSelf: 'stretch', overflow: 'hidden', backgroundColor: t.c.surface,
           borderRadius: t.radius.radiusLg, borderBottomLeftRadius: centred ? t.radius.radiusLg : 0, borderBottomRightRadius: centred ? t.radius.radiusLg : 0,
-          paddingBottom: centred ? 0 : insets.bottom }, panel]}>
+          paddingBottom: centred || kb.open ? 0 : insets.bottom }, panel]}>
           {centred ? null : <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 999, backgroundColor: t.c.borderStrong, marginTop: 8 }} />}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 16, paddingRight: 8, paddingVertical: 8 }}>
             <Txt variant="titleMd" accessibilityRole="header" style={{ flex: 1, minWidth: 0 }}>
@@ -71,6 +78,7 @@ export function Sheet({ title, open, onClose, footer, children }: SheetProps) {
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 16 }}>{children}</ScrollView>
           {footer ? <View style={{ flexDirection: 'row', gap: 12, padding: 16, borderTopWidth: 1, borderTopColor: t.c.border }}>{footer}</View> : null}
         </Animated.View>
+      </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
