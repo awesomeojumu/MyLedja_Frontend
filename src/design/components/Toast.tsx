@@ -68,6 +68,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             {item.onUndo ? (
               <Button
                 kind="link"
+                accessibilityRole="button"
                 label={t('common.undo')}
                 onPress={() => {
                   item.onUndo?.();

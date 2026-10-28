@@ -27,7 +27,10 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
   useEffect(() => {
     if (!waitUntil) return;
     const id = setInterval(() => {
-      if (now() >= waitUntil) setWaitUntil(null);
+      if (now() >= waitUntil) {
+        setWaitUntil(null);
+        setError(null);
+      }
       setTick((x) => x + 1);
     }, 1000);
     return () => clearInterval(id);
@@ -96,7 +99,12 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
       {Platform.OS === 'web' ? (
         <Checkbox testID="stay" label={t('signIn.stay')} checked={stay} onChange={setStay} caption={t('signIn.stayCaption')} />
       ) : null}
-      {error ? <InlineError testID="sign-in-error" message={secondsLeft > 0 ? t('signIn.waitCountdown', { seconds: secondsLeft }) : error} /> : null}
+      {error ? <InlineError testID="sign-in-error" message={error} /> : null}
+      {secondsLeft > 0 ? (
+        <Text variant="caption" tone="textSecondary" accessibilityLiveRegion="polite">
+          {t('signIn.waitCountdown', { seconds: secondsLeft })}
+        </Text>
+      ) : null}
       <Button testID="sign-in" kind="gradient" label={t('signIn.submit')} onPress={submit} disabled={disabled} fullWidth />
       <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: tokens.spacing['spacing-xs'] }}>
         <Text tone="textSecondary">{t('signIn.newPrompt')}</Text>

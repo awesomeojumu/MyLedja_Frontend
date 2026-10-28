@@ -1,8 +1,8 @@
 import * as SecureStore from 'expo-secure-store';
-import type { SessionStore } from './session';
+import type { SessionStore } from './session.shared';
 
-export type { SessionStore } from './session';
-export { createMemorySessionStore } from './session';
+export type { SessionStore } from './session.shared';
+export { createMemorySessionStore } from './session.shared';
 
 const KEY = 'myledja.refreshToken';
 

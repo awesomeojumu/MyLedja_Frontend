@@ -44,6 +44,7 @@ export function createAuthMock() {
         const u = users.get(b.email!);
         if (!u || u.password !== b.password) {
           failures.set(b.email!, tries + 1);
+          if (tries + 1 >= 5) return error(429, 'too_many_attempts', en['signIn.wait'], undefined, { retryAfterSeconds: 60 });
           return error(401, 'credentials_wrong', en['signIn.wrong']);
         }
         failures.delete(b.email!);

@@ -34,6 +34,7 @@ export function Banner({ message, testID }: { message: string; testID?: string }
   return (
     <View
       testID={testID}
+      accessible
       accessibilityRole="alert"
       style={{
         backgroundColor: theme.tagFill,
@@ -52,7 +53,8 @@ export function Banner({ message, testID }: { message: string; testID?: string }
 export function InlineError({ message, testID }: { message: string; testID?: string }) {
   const theme = useTheme();
   return (
-    <View testID={testID} accessibilityRole="alert" style={{ flexDirection: 'row', gap: s['spacing-sm'], alignItems: 'center' }}>
+    <View testID={testID} accessible
+      accessibilityRole="alert" style={{ flexDirection: 'row', gap: s['spacing-sm'], alignItems: 'center' }}>
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.error }} />
       <Text variant="caption" style={{ flexShrink: 1 }}>
         {message}

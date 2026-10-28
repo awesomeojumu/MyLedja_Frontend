@@ -15,4 +15,8 @@ module.exports = defineConfig([
       'no-restricted-globals': ['error', { name: 'parseFloat', message: 'Use src/money for amounts.' }],
     },
   },
+  {
+    files: ['**/__tests__/**', 'test/**'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
 ]);
