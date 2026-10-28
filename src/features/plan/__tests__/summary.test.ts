@@ -11,6 +11,7 @@ function stubSnapshot(): Snapshot {
     events: [],
     reconciles: [],
     assigns: new Map(),
+    assignNotes: new Map(),
     goals: [],
     allocations: [],
     recurring: [

@@ -36,6 +36,7 @@ function snapshotStub(): Snapshot {
     ],
     reconciles: [],
     assigns: new Map(),
+    assignNotes: new Map(),
     goals: [],
     allocations: [],
     recurring: [],

@@ -41,6 +41,7 @@ import {
   type Account,
   type AccountKind,
   type BudgetTemplate,
+  type BudgetAssign,
   DEFAULT_NOTIFICATION_PREFS,
   type Category,
   type EventMeta,
@@ -73,6 +74,8 @@ export type Snapshot = {
   reconciles: Reconcile[];
   /** categoryId:month → assigned kobo */
   assigns: Map<string, bigint>;
+  /** categoryId:month → optional plan note (DESIGN #7). */
+  assignNotes: Map<string, string>;
   goals: Goal[];
   allocations: GoalAllocation[];
   recurring: Recurring[];
@@ -187,9 +190,11 @@ export class WorkspaceRepository {
       deviceSync: raw?.deviceSync,
     };
     const assigns = new Map<string, bigint>();
+    const assignNotes = new Map<string, string>();
     for (const r of assignRows) {
-      const d = r.data as { categoryId: string; month: string; amountMinor: string };
+      const d = r.data as BudgetAssign;
       assigns.set(budgetAssignId(d.categoryId, d.month), BigInt(d.amountMinor));
+      if (d.note?.trim()) assignNotes.set(budgetAssignId(d.categoryId, d.month), d.note.trim());
     }
     return {
       workspaceId: this.workspaceId,
@@ -202,6 +207,7 @@ export class WorkspaceRepository {
       events: eventList,
       reconciles: reconciles.map((r) => ({ ...(r.data as Omit<Reconcile, 'id'>), id: r.id })).sort((a, b) => b.statementDate.localeCompare(a.statementDate)),
       assigns,
+      assignNotes,
       goals: goalRows.map((r) => ({ ...(r.data as Omit<Goal, 'id'>), id: r.id })),
       allocations: allocationRows.map((r) => ({ ...(r.data as Omit<GoalAllocation, 'id'>), id: r.id })),
       recurring: recurringRows.map((r) => ({ ...(r.data as Omit<Recurring, 'id'>), id: r.id })),
@@ -616,9 +622,20 @@ export class WorkspaceRepository {
     return snapshot.assigns.get(budgetAssignId(categoryId, month)) ?? 0n;
   }
 
-  async setAssigned(categoryId: string, month: string, amount: bigint): Promise<void> {
+  async setAssigned(categoryId: string, month: string, amount: bigint, opts?: { note?: string }): Promise<void> {
     const id = budgetAssignId(categoryId, month);
-    await this.put('budget_assigns', id, { categoryId, month, amountMinor: amount.toString() }, 'budget.assign');
+    const snapshot = await this.load();
+    const note =
+      opts?.note !== undefined
+        ? opts.note.trim() || undefined
+        : snapshot.assignNotes.get(id);
+    const payload: BudgetAssign = {
+      categoryId,
+      month,
+      amountMinor: amount.toString(),
+      ...(note ? { note } : {}),
+    };
+    await this.put('budget_assigns', id, payload, 'budget.assign');
   }
 
   /** P06-06: move planned money between categories in the same month. */
@@ -663,8 +680,10 @@ export class WorkspaceRepository {
     const snapshot = await this.load();
     const template = snapshot.budgetTemplates.find((t) => t.id === templateId);
     if (!template) return;
+    const { resolveTemplateLineAmount } = require('@/features/budget/helpers') as typeof import('@/features/budget/helpers');
     for (const line of template.lines) {
-      await this.setAssigned(line.categoryId, month, BigInt(line.amountMinor));
+      const amount = resolveTemplateLineAmount(snapshot, month, line);
+      if (amount > 0n) await this.setAssigned(line.categoryId, month, amount);
     }
   }
 

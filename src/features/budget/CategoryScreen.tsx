@@ -20,7 +20,7 @@ import {
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
-import { BUDGET_TYPES, type BudgetType, type Category } from '@/data/workspace/model';
+import { BUDGET_TYPES, budgetAssignId, type BudgetType, type Category } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { ledgerMessage, rowsFor, today } from '@/features/transactions/helpers';
@@ -31,11 +31,13 @@ import { monthOf } from '@/ledger';
 import {
   assignedOf,
   categoryActivity,
+  categoryTemplateLines,
   monthsEndingAt,
   periodTotals,
   rowFor,
   shortMonth,
   sixMonthAverage,
+  templateLineLabel,
 } from './helpers';
 
 const sp = tokens.spacing;
@@ -86,7 +88,10 @@ export function CategoryScreen() {
         r.event.type !== 'transfer' &&
         r.event.type !== 'opening_balance',
     );
-    return { row, avg, chartRows, txs, highlight: months.length - 1 };
+    const bills = snapshot.recurring.filter((r) => r.categoryId === category.id);
+    const templates = categoryTemplateLines(snapshot, category.id);
+    const note = snapshot.assignNotes.get(budgetAssignId(category.id, month)) ?? '';
+    return { row, avg, chartRows, txs, highlight: months.length - 1, bills, templates, note };
   }, [snapshot, category, month]);
 
   if (!snapshot) {
@@ -191,6 +196,43 @@ export function CategoryScreen() {
                 label={t('category.seeAll')}
                 onPress={() => router.push({ pathname: '/transactions', params: { category: category.id, month } })}
               />
+            </Card>
+
+            <Card testID="category-connected" style={{ gap: sp['spacing-sm'] }}>
+              <Text variant="heading-sm">{t('category.connected')}</Text>
+              {model.bills.length === 0 && model.templates.length === 0 && !model.note ? (
+                <Text tone="textSecondary">{t('category.connectedEmpty')}</Text>
+              ) : null}
+              {model.bills.map((bill) => (
+                <Pressable
+                  key={bill.id}
+                  testID={`category-bill-${bill.id}`}
+                  accessibilityRole="button"
+                  onPress={() => router.push('/plan')}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text>{t('category.connectedBill', { name: bill.name })}</Text>
+                </Pressable>
+              ))}
+              {model.templates.map(({ templateName, line }) => (
+                <Pressable
+                  key={`${templateName}-${line.categoryId}`}
+                  testID="category-template-row"
+                  accessibilityRole="button"
+                  onPress={() => router.push('/budget')}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text>{t('category.connectedTemplate', { name: templateName, rule: templateLineLabel(snapshot, line) })}</Text>
+                </Pressable>
+              ))}
+              {model.note ? (
+                <View testID="category-plan-note">
+                  <Text variant="caption" tone="textSecondary">
+                    {t('category.planNote')}
+                  </Text>
+                  <Text>{model.note}</Text>
+                </View>
+              ) : null}
             </Card>
           </>
         )}

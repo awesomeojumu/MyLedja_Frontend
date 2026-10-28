@@ -203,4 +203,30 @@ describe('Category page', () => {
     await fireEvent.press(screen.getByTestId('budget-more-menu'));
     expect(screen.getByTestId('budget-menu-popover')).toBeTruthy();
   });
+
+  it('P07-04: Connected lists templates and plan note', async () => {
+    const { sync, repo, id } = await seeded();
+    await repo.saveBudgetTemplate('Basics', [{ categoryId: id('Market'), amountMinor: '50000000', ruleKind: 'monthly' }]);
+    await repo.setAssigned(id('Market'), '2026-10', 90_000_000n, { note: 'Keep weekly shop under control' });
+    setParams({ id: id('Market') });
+    await renderWithProviders(wrap(<CategoryScreen />), { sync });
+    expect(await screen.findByTestId('category-connected')).toBeTruthy();
+    expect(screen.getByTestId('category-template-row')).toBeTruthy();
+    expect(screen.getByTestId('category-plan-note')).toHaveTextContent('Keep weekly shop under control', { exact: false });
+  });
+
+  it('P06-12: Edit amount carry-over and template quick pick', async () => {
+    const { sync, repo, id } = await seeded();
+    await repo.saveBudgetTemplate('Basics', [{ categoryId: id('Market'), amountMinor: '40000000', ruleKind: 'monthly' }]);
+    await renderWithProviders(wrap(<BudgetScreen />), { sync });
+    await fireEvent.press(await screen.findByTestId(`budget-planned-${id('Market')}`));
+    await fireEvent.press(await screen.findByTestId('budget-edit-template-pick'));
+    await fireEvent.press(screen.getByTestId('budget-edit-carry'));
+    await fireEvent.press(screen.getByTestId('budget-edit-save'));
+    await waitFor(async () => {
+      const after = await repo.load();
+      expect(repo.assigned(id('Market'), '2026-10', after)).toBe(40_000_000n);
+      expect(after.categories.find((c) => c.id === id('Market'))?.carryOver).toBe(true);
+    });
+  });
 });

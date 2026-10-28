@@ -1,7 +1,9 @@
+import type { BudgetTemplateLine } from '@/data/workspace/model';
 import type { TextKey } from '@/i18n';
 import { t } from '@/i18n';
 import type { Snapshot } from '@/data/workspace/repository';
 import { budgetAssignId } from '@/data/workspace/model';
+import { formatNaira } from '@/money';
 import {
   barState,
   categoryActivity,
@@ -104,6 +106,96 @@ export function threeMonthAverage(snapshot: Snapshot, categoryId: string, endMon
   let sum = 0n;
   for (const m of months) sum += categoryActivity(totals, m, categoryId);
   return sum / 3n;
+}
+
+export function assignNoteOf(snapshot: Snapshot, categoryId: string, month: string): string {
+  return snapshot.assignNotes.get(budgetAssignId(categoryId, month)) ?? '';
+}
+
+/** Plain-words label for a template line (DESIGN #9). */
+export function templateLineLabel(snapshot: Snapshot, line: BudgetTemplateLine): string {
+  const kind = line.ruleKind ?? 'monthly';
+  const meta = line.ruleMeta ?? {};
+  if (kind === 'saveBy') {
+    const target = meta.targetMinor ? formatNaira(BigInt(meta.targetMinor)) : '—';
+    const when = meta.targetMonth ? shortMonth(meta.targetMonth) : '—';
+    return t('budget.templatesRuleSaveBy', { amount: target, month: when });
+  }
+  if (kind === 'coverBill') {
+    const bill = snapshot.recurring.find((r) => r.id === meta.recurringId);
+    return t('budget.templatesRuleCoverBill', { name: bill?.name ?? '—' });
+  }
+  if (kind === 'average') {
+    const n = meta.months ?? '3';
+    return t('budget.templatesRuleAverage', { count: n });
+  }
+  if (kind === 'cap') {
+    return t('budget.templatesRuleCap', { amount: meta.maxMinor ? formatNaira(BigInt(meta.maxMinor)) : '—' });
+  }
+  const amount = line.amountMinor ? BigInt(line.amountMinor) : 0n;
+  return t('budget.templatesRuleMonthly', { amount: formatNaira(amount) });
+}
+
+/** Amount this template line would assign for the given month. */
+export function resolveTemplateLineAmount(snapshot: Snapshot, month: string, line: BudgetTemplateLine): bigint {
+  const kind = line.ruleKind ?? 'monthly';
+  const meta = line.ruleMeta ?? {};
+  if (kind === 'monthly' && line.amountMinor) return BigInt(line.amountMinor);
+  if (kind === 'average') {
+    const n = Number(meta.months ?? '3');
+    const months = monthsEndingAt(month, Math.max(1, n));
+    const totals = periodTotals(snapshot.events);
+    let sum = 0n;
+    for (const m of months) sum += categoryActivity(totals, m, line.categoryId);
+    return sum / BigInt(months.length);
+  }
+  if (kind === 'cap') {
+    const max = meta.maxMinor ? BigInt(meta.maxMinor) : 0n;
+    const avg = threeMonthAverage(snapshot, line.categoryId, month);
+    return avg > max && max > 0n ? max : avg;
+  }
+  if (kind === 'coverBill') {
+    const bill = snapshot.recurring.find((r) => r.id === meta.recurringId);
+    return bill ? BigInt(bill.amountMinor) : 0n;
+  }
+  if (kind === 'saveBy') {
+    const target = meta.targetMinor ? BigInt(meta.targetMinor) : 0n;
+    const targetMonth = meta.targetMonth;
+    if (!target || target <= month || target === month) return target;
+    const monthsLeft = monthsBetween(month, target);
+    if (monthsLeft <= 0) return 0n;
+    return target / BigInt(monthsLeft);
+  }
+  if (line.amountMinor) return BigInt(line.amountMinor);
+  return 0n;
+}
+
+function monthsBetween(from: string, to: string): number {
+  const [y1, m1] = from.split('-').map(Number) as [number, number];
+  const [y2, m2] = to.split('-').map(Number) as [number, number];
+  return (y2 - y1) * 12 + (m2 - m1);
+}
+
+/** Suggested template amount for edit-amount quick pick (#7). */
+export function templateAmountForCategory(snapshot: Snapshot, categoryId: string, month: string): bigint | null {
+  for (const tpl of snapshot.budgetTemplates) {
+    for (const line of tpl.lines) {
+      if (line.categoryId !== categoryId) continue;
+      const amount = resolveTemplateLineAmount(snapshot, month, line);
+      if (amount > 0n) return amount;
+    }
+  }
+  return null;
+}
+
+export function categoryTemplateLines(snapshot: Snapshot, categoryId: string) {
+  const out: { templateName: string; line: BudgetTemplateLine }[] = [];
+  for (const tpl of snapshot.budgetTemplates) {
+    for (const line of tpl.lines) {
+      if (line.categoryId === categoryId) out.push({ templateName: tpl.name, line });
+    }
+  }
+  return out;
 }
 
 export { monthOf, nextMonth, prevMonth, monthsEndingAt, periodTotals, categoryActivity };
