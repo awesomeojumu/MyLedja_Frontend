@@ -34,7 +34,7 @@ export function billsForMonth(snapshot: Snapshot, month: string, today: string, 
   const dueSoonEnd = addDays(today, dueSoonDays);
   const rows: BillRow[] = [];
   for (const recurring of snapshot.recurring) {
-    if (recurring.kind === 'income') continue;
+    if (recurring.cancelled || recurring.kind === 'income') continue;
     const dueDate = dueDateInMonth(recurring.rule, month);
     if (!dueDate || dueDate < recurring.startDate) continue;
     if (recurring.endDate && dueDate > recurring.endDate) continue;
@@ -49,6 +49,40 @@ export function billsForMonth(snapshot: Snapshot, month: string, today: string, 
   return rows.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 
+/** Expected income due this month (DESIGN page 12 list). */
+export function incomeDueRows(snapshot: Snapshot, month: string, today: string, dueSoonDays = 7): BillRow[] {
+  const dueSoonEnd = addDays(today, dueSoonDays);
+  const rows: BillRow[] = [];
+  for (const stream of snapshot.incomeStreams) {
+    const dueDate = dueDateInMonth(stream.rule, month);
+    if (!dueDate) continue;
+    const pseudo: Recurring = {
+      id: `stream:${stream.id}`,
+      kind: 'income',
+      name: stream.name,
+      amountMinor: stream.expectedMinor,
+      accountId: stream.accountId,
+      categoryId: stream.categoryId,
+      rule: stream.rule,
+      startDate: dueDate,
+    };
+    let group: BillRow['group'] = 'later';
+    const occId = `${pseudo.id}:${dueDate}`;
+    const occurrence = snapshot.occurrences.find((o) => o.id === occId);
+    if (occurrence?.status === 'paid') group = 'paid';
+    else if (dueDate < today) group = 'overdue';
+    else if (dueDate <= dueSoonEnd) group = 'dueSoon';
+    rows.push({ recurring: pseudo, dueDate, occurrence, group });
+  }
+  return rows;
+}
+
+export function planRowsForMonth(snapshot: Snapshot, month: string, today: string, dueSoonDays = 7): BillRow[] {
+  return [...billsForMonth(snapshot, month, today, dueSoonDays), ...incomeDueRows(snapshot, month, today, dueSoonDays)].sort((a, b) =>
+    a.dueDate.localeCompare(b.dueDate),
+  );
+}
+
 /** DESIGN.md page 12 summary strip. */
 export function planSummaryStrip(snapshot: Snapshot, month: string, billRows: BillRow[]) {
   let comingIn = 0n;
@@ -56,9 +90,9 @@ export function planSummaryStrip(snapshot: Snapshot, month: string, billRows: Bi
     const due = dueDateInMonth(stream.rule, month);
     if (due) comingIn += BigInt(stream.expectedMinor);
   }
-  const unpaid = billRows.filter((r) => r.group !== 'paid');
+  const unpaid = billRows.filter((r) => r.group !== 'paid' && r.recurring.kind !== 'income');
   const goingOut = unpaid.reduce((s, r) => s + BigInt(r.recurring.amountMinor), 0n);
-  const missed = billRows.filter((r) => r.group === 'overdue').length;
+  const missed = billRows.filter((r) => r.group === 'overdue' && r.recurring.kind !== 'income').length;
   const leftAfter = comingIn >= goingOut ? comingIn - goingOut : 0n;
   return { comingIn, goingOut, leftAfter, missed };
 }
@@ -127,7 +161,7 @@ export function findRecurringSuggestions(snapshot: Snapshot, month: string): Fin
 export type ScheduleRow = {
   recurring: Recurring;
   nextDate: string | null;
-  status: 'missed' | 'due' | 'upcoming' | 'scheduled';
+  status: 'missed' | 'due' | 'upcoming' | 'scheduled' | 'cancelled';
 };
 
 function ruleLabel(rule: RecurrenceRule): string {
@@ -149,11 +183,21 @@ function nextDueOnOrAfter(recurring: Recurring, from: string, horizonMonths = 14
 }
 
 /** DESIGN page 12 tab "All schedules". */
-export function allScheduleRows(snapshot: Snapshot, today: string, search = ''): ScheduleRow[] {
+export function allScheduleRows(snapshot: Snapshot, today: string, search = '', includeCancelled = false): ScheduleRow[] {
   const q = search.trim().toLowerCase();
   const rows: ScheduleRow[] = [];
   for (const recurring of snapshot.recurring) {
-    if (q && !recurring.name.toLowerCase().includes(q)) continue;
+    if (recurring.cancelled && !includeCancelled) continue;
+    const payee = recurring.payeeId ? snapshot.payees.find((p) => p.id === recurring.payeeId)?.name : '';
+    const account = snapshot.accounts.find((a) => a.id === recurring.accountId)?.name ?? '';
+    if (q) {
+      const hay = `${recurring.name} ${payee} ${account}`.toLowerCase();
+      if (!hay.includes(q)) continue;
+    }
+    if (recurring.cancelled) {
+      rows.push({ recurring, nextDate: null, status: 'cancelled' });
+      continue;
+    }
     const nextDate = nextDueOnOrAfter(recurring, today);
     let status: ScheduleRow['status'] = 'scheduled';
     if (nextDate) {
@@ -164,7 +208,7 @@ export function allScheduleRows(snapshot: Snapshot, today: string, search = ''):
     }
     rows.push({ recurring, nextDate, status });
   }
-  const order: Record<ScheduleRow['status'], number> = { missed: 0, due: 1, upcoming: 2, scheduled: 3 };
+  const order: Record<ScheduleRow['status'], number> = { missed: 0, due: 1, upcoming: 2, scheduled: 3, cancelled: 4 };
   return rows.sort((a, b) => {
     const sa = order[a.status] - order[b.status];
     if (sa !== 0) return sa;

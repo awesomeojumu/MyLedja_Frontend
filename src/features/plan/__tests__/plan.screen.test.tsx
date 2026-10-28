@@ -80,4 +80,38 @@ describe('Plan page (DESIGN.md page 12)', () => {
     expect(screen.getByTestId('plan-all-schedules')).toBeTruthy();
     expect(screen.getAllByText('Rent').length).toBeGreaterThan(0);
   });
+
+  it('P12-07: mark paid opens match sheet (#26)', async () => {
+    const { sync, repo } = await seeded();
+    const s = await repo.load();
+    const bill = s.recurring[0]!;
+    await repo.addTransaction({
+      kind: 'expense',
+      accountId: s.accounts[0]!.id,
+      parts: [{ categoryId: s.categories.find((c) => c.kind === 'expense')!.id, amount: 250_000_00n }],
+      date: '2026-10-01',
+      payeeName: 'Rent',
+    });
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <PlanScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId(`bill-mark-${bill.id}`));
+    expect(screen.getByTestId('plan-match-sheet')).toBeTruthy();
+  });
+
+  it('P12-08: add recurring sheet (#25)', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <PlanScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('plan-add-menu'));
+    await fireEvent.press(screen.getByTestId('plan-add-bill'));
+    expect(screen.getByTestId('plan-recurring-sheet')).toBeTruthy();
+  });
 });
