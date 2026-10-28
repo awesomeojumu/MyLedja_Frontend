@@ -21,7 +21,7 @@ export function DevMenu() {
       accessibilityLabel={t('dev.menuTitle')}
       style={{
         position: 'absolute',
-        left: tokens.spacing['spacing-sm'],
+        right: tokens.spacing['spacing-sm'],
         bottom: tokens.spacing['spacing-sm'],
         flexDirection: 'row',
         alignItems: 'center',

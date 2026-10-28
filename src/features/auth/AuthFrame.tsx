@@ -37,7 +37,7 @@ export function AuthFrame({ children, offlineMessage = true }: { children: React
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={{ flex: 1, flexDirection: 'row' }}>
             {showHero ? (
-              <View testID="auth-hero" style={{ flex: 1, padding: tokens.spacing['spacing-huge'], justifyContent: 'center', gap: tokens.spacing['spacing-xl'] }}>
+              <View testID="auth-hero" style={{ flex: 1, backgroundColor: c.primary, experimental_backgroundImage: `linear-gradient(120deg, ${c.primary}, ${c['primary-deep']})`, padding: tokens.spacing['spacing-huge'], justifyContent: 'center', gap: tokens.spacing['spacing-xl'] }}>
                 <Text variant="heading-sm" tone="onPrimaryFill" style={{ fontFamily: 'Inter_400Regular', color: c['on-primary'] }}>
                   {t('app.name')}
                 </Text>
