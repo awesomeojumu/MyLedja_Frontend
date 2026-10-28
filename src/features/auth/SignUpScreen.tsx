@@ -161,17 +161,18 @@ export function SignUpScreen() {
           testID="terms"
           checked={terms}
           onChange={setTerms}
-          label={
+          label={t('signUp.terms', { terms: t('signUp.termsLink'), privacy: t('signUp.privacyLink') })}
+          richLabel={
             <Text style={{ flexShrink: 1 }}>
               {t('signUp.terms', { terms: '\u0000', privacy: '\u0001' })
                 .split(/(\u0000|\u0001)/)
                 .map((part, i) =>
                   part === '\u0000' ? (
-                    <Text key={i} tone="link" accessibilityRole="link" onPress={() => setReading('terms')}>
+                    <Text key={i} tone="link" accessibilityRole="link" style={{ textDecorationLine: 'underline' }} onPress={() => setReading('terms')}>
                       {t('signUp.termsLink')}
                     </Text>
                   ) : part === '\u0001' ? (
-                    <Text key={i} tone="link" accessibilityRole="link" onPress={() => setReading('privacy')}>
+                    <Text key={i} tone="link" accessibilityRole="link" style={{ textDecorationLine: 'underline' }} onPress={() => setReading('privacy')}>
                       {t('signUp.privacyLink')}
                     </Text>
                   ) : (

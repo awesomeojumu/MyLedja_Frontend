@@ -35,6 +35,7 @@ export function Switch({
       accessibilityRole="switch"
       accessibilityLabel={label}
       accessibilityState={{ checked: value, disabled: !!disabled }}
+      aria-checked={value}
       disabled={disabled}
       onPress={() => onChange(!value)}
       style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp['spacing-md'], minHeight: 48, opacity: disabled ? 0.45 : 1 }}
@@ -111,6 +112,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
             key={o.value}
             accessibilityRole="radio"
             accessibilityState={{ checked: selected }}
+            aria-checked={selected}
             accessibilityLabel={o.label}
             onPress={() => onChange(o.value)}
             style={{ minHeight: 40, paddingHorizontal: sp['spacing-lg'], justifyContent: 'center', borderRadius: r['rounded-pill'], backgroundColor: selected ? theme.card : 'transparent' }}

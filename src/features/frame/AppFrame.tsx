@@ -39,6 +39,7 @@ function PrivacyToggle({ color }: { color: string }) {
       testID="privacy-toggle"
       accessibilityRole="switch"
       accessibilityState={{ checked: privacy }}
+      aria-checked={privacy}
       accessibilityLabel={privacy ? t('nav.privacyOff') : t('nav.privacyOn')}
       onPress={() => setPrivacy(!privacy)}
       style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}

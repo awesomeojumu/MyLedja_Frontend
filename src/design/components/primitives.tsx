@@ -150,6 +150,7 @@ export function PillTag({
       disabled={!onPress}
       accessibilityRole={onPress ? 'checkbox' : 'text'}
       accessibilityState={onPress ? { checked: !!selected } : undefined}
+      aria-checked={onPress ? !!selected : undefined}
       accessibilityLabel={label}
       style={{
         minHeight: 44,
@@ -174,22 +175,28 @@ export function Checkbox({
   onChange,
   caption,
   testID,
+  richLabel,
 }: {
-  label: ReactNode;
+  label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   caption?: string;
   testID?: string;
+  /** Shown instead of the plain label when it holds links; kept outside the tick-box so controls don't nest. */
+  richLabel?: ReactNode;
 }) {
   const theme = useTheme();
   return (
     <View style={{ gap: s['spacing-xs'] }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: s['spacing-sm'] }}>
       <Pressable
         testID={testID}
         accessibilityRole="checkbox"
+        accessibilityLabel={label}
         accessibilityState={{ checked }}
+        aria-checked={checked}
         onPress={() => onChange(!checked)}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: s['spacing-sm'], minHeight: 44 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: s['spacing-sm'], minHeight: 44, flexShrink: 1 }}
       >
         <View
           style={{
@@ -205,8 +212,10 @@ export function Checkbox({
         >
           {checked ? <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: theme.onPrimaryFill }} /> : null}
         </View>
-        {typeof label === 'string' ? <Text style={{ flexShrink: 1 }}>{label}</Text> : label}
+        {richLabel ? null : <Text style={{ flexShrink: 1 }}>{label}</Text>}
       </Pressable>
+      {richLabel}
+      </View>
       {caption ? (
         <Text variant="caption" tone="textHelper">
           {caption}
