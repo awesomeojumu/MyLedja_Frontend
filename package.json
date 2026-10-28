@@ -16,7 +16,8 @@
     "api:sync": "node scripts/api-sync.mjs",
     "api:check": "node scripts/api-sync.mjs --check",
     "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run cases:check && npm run api:check",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:real": "playwright test -c playwright.real.config.ts"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "0.4.2",
