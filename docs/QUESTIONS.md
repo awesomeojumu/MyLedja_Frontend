@@ -128,3 +128,15 @@ Format and rules: build plan section 14. Each open question stops only the task 
 - Answer:
 - Status: open
 
+## Q-15: Phase 1 decisions for Add transaction, Transactions and Accounts
+- Task: F1.3, F1.4, F1.5
+- Raised by: frontend agent
+- Documents: DESIGN.md pages 8 and 11, 2.12
+- Decisions taken so as not to block:
+  - Income categories: Welcome only offers expense starters, so every workspace also gets Salary, Business income, Gifts received (not counted in the budget, per 9.4 one-off income) and Other income.
+  - Account group names use "and" instead of "&" ("Cash and bank"), because the copy rules forbid "&".
+  - Add transaction ships Expense, Income and Transfer. "More", "Repeats" and "Receipt" arrive with their phases (A-10, A-11; receipts need the signed upload, T0.8).
+  - Undo of a delete posts the original movement again as a new event, because a reversal can't itself be reversed (TECH-SPEC 6.11 check 8).
+  - The phone bottom bar is a navigation landmark with links, so the + button can sit in the middle of it.
+- Answer:
+- Status: open
