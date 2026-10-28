@@ -43,6 +43,16 @@ beforeEach(() => {
 });
 
 describe('Reconcile', () => {
+  it('never shows a fake ₦0.00 while the statement amount is unknown', async () => {
+    const { sync, id } = await seeded();
+    setParams({ id: id('GTBank') });
+    await renderWithProviders(wrap(<ReconcileScreen />), { sync });
+    await waitFor(() => expect(screen.getByTestId('reconcile-says-pending')).toBeTruthy());
+    expect(screen.getByTestId('reconcile-difference-pending')).toBeTruthy();
+    expect(screen.queryByTestId('reconcile-says')).toBeNull();
+    expect(screen.queryByTestId('reconcile-difference')).toBeNull();
+  });
+
   it('P10-01: statement date and balance show Cleared, Statement and Difference', async () => {
     const { sync, repo, id } = await seeded();
     const opening = (await repo.load()).events.find((e) => e.type === 'opening_balance')!;

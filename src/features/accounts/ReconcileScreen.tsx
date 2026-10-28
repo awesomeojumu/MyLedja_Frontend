@@ -165,7 +165,7 @@ export function ReconcileScreen() {
           }}
         >
           <Total label={t('reconcile.cleared')} minor={cleared} testID="reconcile-cleared" />
-          <Total label={t('reconcile.statementSays')} minor={statementMinor ?? 0n} testID="reconcile-says" />
+          <Total label={t('reconcile.statementSays')} minor={statementMinor} testID="reconcile-says" />
           <View style={{ flexGrow: 1, minWidth: 120, gap: sp['spacing-xxs'] }}>
             <Text variant="caption" tone="textSecondary">
               {t('reconcile.difference')}
@@ -174,8 +174,12 @@ export function ReconcileScreen() {
               <View testID="reconcile-balanced">
                 <StatusPill label={t('reconcile.balanced')} kind="done" />
               </View>
+            ) : statementMinor === null ? (
+              <Text testID="reconcile-difference-pending" tone="textSecondary">
+                {t('reconcile.amountUnknown')}
+              </Text>
             ) : (
-              <Amount testID="reconcile-difference" minor={statementMinor === null ? 0n : difference} signed />
+              <Amount testID="reconcile-difference" minor={difference} signed />
             )}
           </View>
         </View>
@@ -259,13 +263,19 @@ export function ReconcileScreen() {
   );
 }
 
-function Total({ label, minor, testID }: { label: string; minor: bigint; testID: string }) {
+function Total({ label, minor, testID }: { label: string; minor: bigint | null; testID: string }) {
   return (
     <View style={{ flexGrow: 1, minWidth: 120, gap: sp['spacing-xxs'] }}>
       <Text variant="caption" tone="textSecondary">
         {label}
       </Text>
-      <Amount testID={testID} minor={minor} />
+      {minor === null ? (
+        <Text testID={`${testID}-pending`} tone="textSecondary">
+          {t('reconcile.amountUnknown')}
+        </Text>
+      ) : (
+        <Amount testID={testID} minor={minor} />
+      )}
     </View>
   );
 }

@@ -34,7 +34,7 @@ import { bulkSetAccount } from './bulkActions';
 import { ExportTransactionsSheet } from './ExportTransactionsSheet';
 import { ImportHintSheet } from './ImportHintSheet';
 import { TransferMatchSheet } from './TransferMatchSheet';
-import { duplicateTransferPairs } from './transferMatch';
+import { transferMatchCandidates } from './transferMatch';
 import { rowIndicators } from './panelConnected';
 import { FiltersSheet } from './FiltersSheet';
 import { TransactionPanel } from './TransactionPanel';
@@ -95,7 +95,7 @@ export function TransactionsScreen() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const transferDupes = useMemo(() => (snapshot ? duplicateTransferPairs(snapshot).length : 0), [snapshot]);
+  const transferMatches = useMemo(() => (snapshot ? transferMatchCandidates(snapshot).length : 0), [snapshot]);
 
   const filteredRows = useMemo(() => {
     if (!snapshot) return [];
@@ -212,10 +212,10 @@ export function TransactionsScreen() {
         </View>
       ) : null}
       {error ? <InlineError message={error} /> : null}
-      {transferDupes > 0 ? (
+      {transferMatches > 0 ? (
         <Pressable testID="tx-transfer-banner" accessibilityRole="button" onPress={() => setTransferMatchOpen(true)} style={{ marginBottom: sp['spacing-md'] }}>
           <Card style={{ padding: sp['spacing-md'] }}>
-            <Text>{t('tx.transferBanner', { count: transferDupes })}</Text>
+            <Text>{t('tx.transferBanner', { count: transferMatches })}</Text>
           </Card>
         </Pressable>
       ) : null}

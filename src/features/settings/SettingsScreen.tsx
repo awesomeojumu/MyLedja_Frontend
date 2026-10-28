@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   Checkbox,
+  Confirm,
   Select,
   Switch,
   Text,
@@ -16,6 +17,7 @@ import {
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useDesign, useTheme } from '@/design/ThemeProvider';
+import { useSync } from '@/data/sync/SyncProvider';
 import { DEFAULT_NOTIFICATION_PREFS, type Category, type NotificationPrefs } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
@@ -182,9 +184,11 @@ function GeneralTab() {
   const { user, setUser, signOut } = useAuth();
   const { choice, setChoice } = useDesign();
   const { snapshot, repo } = useWorkspace();
+  const { store } = useSync();
   const toast = useToast();
   const router = useRouter();
   const [name, setName] = useState(user?.name ?? '');
+  const [signOutWarn, setSignOutWarn] = useState<{ count: number } | null>(null);
 
   const savePrefs = async () => {
     if (!snapshot) return;
@@ -193,6 +197,21 @@ function GeneralTab() {
     }
     await repo.updateSettings({ ...snapshot.settings });
     toast.show(t('common.saved'));
+  };
+
+  const doSignOut = async () => {
+    setSignOutWarn(null);
+    await signOut();
+    router.replace('/sign-in');
+  };
+
+  const requestSignOut = async () => {
+    const waiting = (await store.outbox()).filter((o) => o.state === 'queued').length;
+    if (waiting > 0) {
+      setSignOutWarn({ count: waiting });
+      return;
+    }
+    await doSignOut();
   };
 
   return (
@@ -241,14 +260,14 @@ function GeneralTab() {
         <Switch testID="settings-haptics" label={t('settings.general.hapticsPhone')} value={false} onChange={() => {}} disabled />
       </View>
       <Button testID="settings-save-general" label={t('panel.save')} onPress={() => void savePrefs()} />
-      <Button
-        testID="settings-sign-out"
-        kind="secondary"
-        label={t('nav.signOut')}
-        onPress={async () => {
-          await signOut();
-          router.replace('/sign-in');
-        }}
+      <Button testID="settings-sign-out" kind="secondary" label={t('nav.signOut')} onPress={() => void requestSignOut()} />
+      <Confirm
+        visible={signOutWarn !== null}
+        title={t('sync.signOutWarnTitle')}
+        body={t('sync.signOutWarnBody', { count: signOutWarn?.count ?? 0 })}
+        confirmLabel={t('sync.signOutAnyway')}
+        onCancel={() => setSignOutWarn(null)}
+        onConfirm={() => void doSignOut()}
       />
     </ScrollView>
   );

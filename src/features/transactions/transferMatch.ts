@@ -1,21 +1,57 @@
+import { ACCOUNT_KIND_INFO, type Account } from '@/data/workspace/model';
 import type { Snapshot, TxEvent } from '@/data/workspace/repository';
 
-function transferAmount(snapshot: Snapshot, e: TxEvent): bigint {
-  const accounts = new Set(snapshot.accounts.map((a) => a.id));
-  return e.lines.find((l) => accounts.has(l.ledgerAccountId) && l.amountMinor > 0n)?.amountMinor ?? 0n;
+export type TransferMatchPair = {
+  out: TxEvent;
+  in: TxEvent;
+  amount: bigint;
+  daysApart: number;
+};
+
+export function pairKey(outId: string, inId: string): string {
+  return `${outId}:${inId}`;
 }
 
-export function duplicateTransferPairs(snapshot: Snapshot): { a: TxEvent; b: TxEvent; amount: bigint }[] {
-  const transfers = snapshot.events.filter((e) => e.status === 'posted' && e.type === 'transfer');
-  const pairs: { a: TxEvent; b: TxEvent; amount: bigint }[] = [];
-  for (let i = 0; i < transfers.length; i += 1) {
-    for (let j = i + 1; j < transfers.length; j += 1) {
-      const a = transfers[i]!;
-      const b = transfers[j]!;
-      if (a.date !== b.date) continue;
-      const amtA = transferAmount(snapshot, a);
-      const amtB = transferAmount(snapshot, b);
-      if (amtA > 0n && amtA === amtB) pairs.push({ a, b, amount: amtA });
+function daysApart(a: string, b: string): number {
+  const ms = Math.abs(Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`));
+  return Math.round(ms / (24 * 60 * 60 * 1000));
+}
+
+/** Effect on a real account as shown (liabilities flip sign). */
+function shownOnAccount(account: Account, amountMinor: bigint): bigint {
+  return ACCOUNT_KIND_INFO[account.type].ledger === 'liability' ? -amountMinor : amountMinor;
+}
+
+/**
+ * Opposite legs that look like a transfer: money left one of my accounts and the same
+ * amount arrived in another within 3 days (DESIGN Transfer match / P11-09 / BE suggestions).
+ */
+export function transferMatchCandidates(snapshot: Snapshot, dismissed: Set<string> = new Set()): TransferMatchPair[] {
+  const accounts = new Map(snapshot.accounts.map((a) => [a.id, a]));
+  const live = snapshot.events.filter((e) => e.status === 'posted' && e.type !== 'reversal' && e.type !== 'transfer');
+  type Leg = { event: TxEvent; accountId: string; amount: bigint };
+  const outs: Leg[] = [];
+  const inns: Leg[] = [];
+
+  for (const event of live) {
+    const real = event.lines.filter((l) => accounts.has(l.ledgerAccountId));
+    if (real.length !== 1) continue;
+    const line = real[0]!;
+    const account = accounts.get(line.ledgerAccountId)!;
+    const shown = shownOnAccount(account, line.amountMinor);
+    if (shown < 0n) outs.push({ event, accountId: account.id, amount: -shown });
+    if (shown > 0n) inns.push({ event, accountId: account.id, amount: shown });
+  }
+
+  const pairs: TransferMatchPair[] = [];
+  for (const out of outs) {
+    for (const inn of inns) {
+      if (out.accountId === inn.accountId) continue;
+      if (out.amount !== inn.amount) continue;
+      if (dismissed.has(pairKey(out.event.id, inn.event.id))) continue;
+      const days = daysApart(out.event.date, inn.event.date);
+      if (days > 3) continue;
+      pairs.push({ out: out.event, in: inn.event, amount: out.amount, daysApart: days });
     }
   }
   return pairs;
