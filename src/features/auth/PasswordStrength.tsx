@@ -43,7 +43,7 @@ export function PasswordStrength({ password }: { password: string }) {
         </Text>
       ) : null}
       {ruleRows.map(([met, key]) => (
-        <View key={key} style={{ flexDirection: 'row', gap: tokens.spacing['spacing-sm'], alignItems: 'center' }} accessibilityState={{ checked: met }} accessibilityRole="checkbox">
+        <View key={key} style={{ flexDirection: 'row', gap: tokens.spacing['spacing-sm'], alignItems: 'center' }}>
           <View
             style={{
               width: 12,
