@@ -9,7 +9,7 @@ async function addAccount(page: Page, name: string, opening: string, isMobile: b
     await page.getByRole('dialog').getByRole('link', { name: en['nav.accounts'], exact: true }).click();
   } else await page.getByRole('link', { name: en['nav.accounts'], exact: true }).locator('visible=true').first().click();
   await expect(page).toHaveURL(/\/accounts$/);
-  await page.getByTestId('add-account').click();
+  await page.getByTestId('accounts-add').click();
   await page.getByTestId('account-name').fill(name);
   await page.getByTestId('account-opening').fill(opening);
   await page.getByTestId('save-account').click();

@@ -9,6 +9,7 @@ import {
   DatePicker,
   Footer,
   InlineError,
+  Menu,
   PillTag,
   Select,
   Sheet,
@@ -25,6 +26,7 @@ import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
 import { addDays, lastUsedAccount, ledgerMessage, today } from './helpers';
+import { AddMovementDoorSheet, type MovementDoor } from './AddMovementDoors';
 
 const sp = tokens.spacing;
 
@@ -90,6 +92,7 @@ type Part = { categoryId: string | null; text: string; minor: bigint | null };
 function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind; prefill: Prefill; onKind: (k: AddKind) => void; onClose: () => void }) {
   const { repo, snapshot } = useWorkspace();
   const toast = useToast();
+  const [movementDoor, setMovementDoor] = useState<MovementDoor | null>(null);
   const accounts = useMemo(() => (snapshot?.accounts ?? []).filter((a) => !a.archived), [snapshot]);
   const [amount, setAmount] = useState<{ text: string; minor: bigint | null }>({ text: '', minor: null });
   const [payee, setPayee] = useState('');
@@ -99,6 +102,9 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
   const [date, setDate] = useState(prefill.date ?? today());
   const [notes, setNotes] = useState('');
   const [split, setSplit] = useState(false);
+  const [repeats, setRepeats] = useState(false);
+  const [attachReceipt, setAttachReceipt] = useState(false);
+  const [receiptLink, setReceiptLink] = useState('');
   const [parts, setParts] = useState<Part[]>([
     { categoryId: null, text: '', minor: null },
     { categoryId: null, text: '', minor: null },
@@ -140,17 +146,18 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
     if (!valid || !accountId || amount.minor === null) return;
     setBusy(true);
     setError(null);
+    const notesCombined = [attachReceipt && receiptLink.trim() ? `receipt:${receiptLink.trim()}` : '', notes.trim()].filter(Boolean).join('\n');
     const input: TransactionInput =
       kind === 'transfer'
-        ? { kind, fromId: accountId, toId: toId!, amount: amount.minor, date, notes }
+        ? { kind, fromId: accountId, toId: toId!, amount: amount.minor, date, notes: notesCombined || undefined }
         : kind === 'income'
-          ? { kind, accountId, categoryId: categoryId!, amount: amount.minor, date, payeeName: payee, notes }
+          ? { kind, accountId, categoryId: categoryId!, amount: amount.minor, date, payeeName: payee, notes: notesCombined || undefined }
           : {
               kind,
               accountId,
               date,
               payeeName: payee,
-              notes,
+              notes: notesCombined || undefined,
               parts: split ? parts.map((p) => ({ categoryId: p.categoryId!, amount: p.minor! })) : [{ categoryId: categoryId!, amount: amount.minor }],
             };
     const result = await repo.addTransaction(input);
@@ -160,6 +167,28 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
       return;
     }
     const saved = result.value;
+    if (repeats && kind === 'expense' && categoryId && accountId && amount.minor) {
+      await repo.addRecurring({
+        kind: 'bill',
+        name: payee.trim() || t('plan.name'),
+        amountMinor: amount.minor.toString(),
+        accountId,
+        categoryId,
+        rule: { every: 'month', on: Number(date.slice(8, 10)) || 1 },
+        startDate: date,
+      });
+    }
+    if (repeats && kind === 'income' && categoryId && accountId && amount.minor) {
+      await repo.addIncomeStream({
+        name: payee.trim() || t('income.name'),
+        kind: 'regular',
+        expectedMinor: amount.minor.toString(),
+        accountId,
+        categoryId,
+        rule: { every: 'month', on: Number(date.slice(8, 10)) || 1 },
+        countInBudget: true,
+      });
+    }
     toast.show(t('add.saved'), () => void repo.deleteTransaction(saved.id, saved.date));
     if (another) reset();
     else onClose();
@@ -184,7 +213,22 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
         }
       >
         <View style={{ gap: sp['spacing-lg'] }}>
-          <Tabs testID="add-kind" options={KINDS.map((k) => ({ value: k, label: t(`add.kind.${k}`) }))} value={kind} onChange={onKind} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
+          <View style={{ flex: 1, minWidth: 200 }}>
+            <Tabs testID="add-kind" options={KINDS.map((k) => ({ value: k, label: t(`add.kind.${k}`) }))} value={kind} onChange={onKind} />
+          </View>
+          <Menu
+            testID="add-more-menu"
+            trigger={(open) => <Button kind="secondary" size="sm" testID="add-more" label={t('add.more')} onPress={open} />}
+            items={[
+              { key: 'lend', label: t('add.door.lend'), onPress: () => setMovementDoor('lend') },
+              { key: 'payment', label: t('add.door.payment'), onPress: () => setMovementDoor('debtPayment') },
+              { key: 'allocate', label: t('add.door.allocate'), onPress: () => setMovementDoor('allocate') },
+              { key: 'spend', label: t('add.door.spend'), onPress: () => setMovementDoor('spend') },
+              { key: 'investment', label: t('add.door.investment'), onPress: () => setMovementDoor('investment') },
+            ]}
+          />
+        </View>
           {accounts.length === 0 ? <InlineError message={t('add.noAccounts')} /> : null}
           <AmountInput testID="add-amount" label={t('add.amount')} value={amount.text} onChange={(text, minor) => setAmount({ text, minor })} />
 
@@ -263,6 +307,17 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
           </View>
           <TextInput testID="add-notes" label={t('add.notes')} value={notes} onChangeText={setNotes} />
           {kind === 'expense' ? <Switch testID="add-split" label={t('add.split')} value={split} onChange={setSplit} /> : null}
+          {(kind === 'expense' || kind === 'income') && (
+            <Switch testID="add-repeats" label={t('add.repeats')} value={repeats} onChange={setRepeats} />
+          )}
+          {kind !== 'transfer' ? (
+            <>
+              <Switch testID="add-receipt" label={t('add.receipt')} value={attachReceipt} onChange={setAttachReceipt} />
+              {attachReceipt ? (
+                <TextInput testID="add-receipt-link" label={t('add.receiptLink')} value={receiptLink} onChangeText={setReceiptLink} />
+              ) : null}
+            </>
+          ) : null}
           {error ? <InlineError testID="add-error" message={error} /> : null}
         </View>
       </Sheet>
@@ -277,6 +332,7 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
           onClose();
         }}
       />
+      {movementDoor ? <AddMovementDoorSheet door={movementDoor} onClose={() => setMovementDoor(null)} /> : null}
     </>
   );
 }

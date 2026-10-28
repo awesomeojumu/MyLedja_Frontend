@@ -14,7 +14,7 @@ import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { NotificationsBell } from '@/features/notifications/NotificationsBell';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
-import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, type NavItem } from './navigation';
+import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, PHONE_BOTTOM_PAGES, type NavItem } from './navigation';
 
 const c = tokens.color;
 const sp = tokens.spacing;
@@ -254,7 +254,7 @@ function BottomBar() {
   const pathname = usePathname();
   const theme = useTheme();
   const add = useOptionalAddTransaction();
-  const items = SHIPPED_PAGES.map((item) => {
+  const items = PHONE_BOTTOM_PAGES.map((item) => {
     const active = isActive(pathname, item);
     const Icon = ICONS[item.icon];
     const label = t(item.phoneLabel ?? item.label);

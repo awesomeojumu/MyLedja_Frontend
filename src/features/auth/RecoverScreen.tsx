@@ -5,6 +5,7 @@ import { Banner, Button, CodeInput, InlineError, Text, TextInput } from '@/desig
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { AuthFrame } from './AuthFrame';
+import { AuthStepPanel } from './AuthStepPanel';
 import { useAuth } from './AuthProvider';
 import { checkPassword, EMAIL_PATTERN } from './password';
 import { PasswordStrength } from './PasswordStrength';
@@ -57,67 +58,71 @@ export function RecoverScreen() {
     }
   };
 
-  if (step === 'done') {
-    return (
-      <AuthFrame>
-        <Text variant="heading-md" accessibilityRole="header" testID="recover-done">
-          {t('recover.doneTitle')}
-        </Text>
-        <Button kind="gradient" label={t('recover.toSignIn')} fullWidth onPress={() => router.replace('/sign-in')} />
-      </AuthFrame>
-    );
-  }
-
   return (
     <AuthFrame>
-      <Text variant="display-md" accessibilityRole="header">
-        {t('recover.title')}
-      </Text>
-      {step === 'email' ? (
-        <>
-          <TextInput
-            testID="email"
-            label={t('auth.email')}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            error={errors.email}
-            autoFocus
-          />
-          {errors.form ? <InlineError message={errors.form} /> : null}
-          <Button testID="send-code" kind="gradient" label={t('recover.submit')} onPress={send} disabled={busy || !online} fullWidth />
-        </>
-      ) : (
-        <>
-          <Banner testID="recover-sent" message={t('recover.sent')} />
-          <CodeInput value={code} onChange={setCode} error={errors.code} />
-          <TextInput
-            testID="new-password"
-            label={t('recover.newPassword')}
-            value={password}
-            onChangeText={setPassword}
-            secure
-            autoComplete="new-password"
-            textContentType="newPassword"
-            error={errors.password}
-          />
-          <PasswordStrength password={password} />
-          <TextInput
-            testID="confirm-password"
-            label={t('recover.confirmPassword')}
-            value={confirm}
-            onChangeText={setConfirm}
-            secure
-            autoComplete="new-password"
-            error={errors.confirm}
-          />
-          {errors.form ? <InlineError message={errors.form} /> : null}
-          <Button testID="save-password" kind="gradient" label={t('recover.save')} onPress={save} disabled={busy || !online} fullWidth />
-        </>
-      )}
-      <Button kind="link" label={t('recover.backToSignIn')} onPress={() => router.replace('/sign-in')} />
+      <AuthStepPanel step={step}>
+        {step === 'done' ? (
+          <>
+            <Text variant="display-md" accessibilityRole="header" testID="recover-done">
+              {t('recover.doneTitle')}
+            </Text>
+            <Button kind="gradient" label={t('recover.toSignIn')} fullWidth onPress={() => router.replace('/sign-in')} />
+          </>
+        ) : (
+          <>
+            <Text variant="display-md" accessibilityRole="header">
+              {t('recover.title')}
+            </Text>
+            {step === 'email' ? (
+              <>
+                <TextInput
+                  testID="email"
+                  label={t('auth.email')}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  error={errors.email}
+                  autoFocus
+                />
+                {errors.form ? <InlineError message={errors.form} /> : null}
+                <Button testID="send-code" kind="gradient" label={t('recover.submit')} onPress={send} disabled={busy || !online} fullWidth />
+              </>
+            ) : (
+              <>
+                <Banner testID="recover-sent" message={t('recover.sent')} />
+                <CodeInput value={code} onChange={setCode} error={errors.code} />
+                <TextInput
+                  testID="new-password"
+                  label={t('recover.newPassword')}
+                  value={password}
+                  onChangeText={setPassword}
+                  secure
+                  autoComplete="new-password"
+                  textContentType="newPassword"
+                  error={errors.password}
+                />
+                <PasswordStrength password={password} />
+                <TextInput
+                  testID="confirm-password"
+                  label={t('recover.confirmPassword')}
+                  value={confirm}
+                  onChangeText={setConfirm}
+                  secure
+                  autoComplete="new-password"
+                  error={errors.confirm}
+                />
+                {errors.form ? <InlineError message={errors.form} /> : null}
+                <Button testID="save-password" kind="gradient" label={t('recover.save')} onPress={save} disabled={busy || !online} fullWidth />
+              </>
+            )}
+            {step !== 'done' ? (
+              <Button kind="link" label={t('recover.backToSignIn')} onPress={() => router.replace('/sign-in')} />
+            ) : null}
+          </>
+        )}
+      </AuthStepPanel>
     </AuthFrame>
   );
 }

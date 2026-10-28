@@ -4,10 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Banner, Text } from '@/design/components';
 import { GradientBand, GradientMesh } from '@/design/components/GradientMesh';
 import tokens from '@/design/tokens.json';
-import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
+import { AuthHeroDashboard } from './AuthHeroDashboard';
+import { useShowAuthHero } from './authHero';
 
 const c = tokens.color;
 export function GradientMeshBackdrop({ children }: { children: ReactNode }) {
@@ -22,9 +23,8 @@ export function GradientMeshBackdrop({ children }: { children: ReactNode }) {
 
 export function AuthFrame({ children, offlineMessage = true }: { children: ReactNode; offlineMessage?: boolean }) {
   const theme = useTheme();
-  const size = useSizeClass();
   const online = useOnline();
-  const showHero = size === 'desktop' || size === 'wide';
+  const showHero = useShowAuthHero();
   return (
     <GradientMeshBackdrop>
       <SafeAreaView style={{ flex: 1 }}>
@@ -39,6 +39,7 @@ export function AuthFrame({ children, offlineMessage = true }: { children: React
                 <Text variant="display-xl" style={{ color: c['on-primary'], maxWidth: 520 }}>
                   {t('app.brandLine')}
                 </Text>
+                <AuthHeroDashboard />
               </View>
             ) : null}
             <ScrollView
@@ -48,7 +49,7 @@ export function AuthFrame({ children, offlineMessage = true }: { children: React
                 flexGrow: 1,
                 justifyContent: 'center',
                 alignItems: 'center',
-                padding: size === 'phone' ? tokens.spacing['spacing-lg'] : tokens.spacing['spacing-xl'],
+                padding: showHero ? tokens.spacing['spacing-xl'] : tokens.spacing['spacing-lg'],
                 gap: tokens.spacing['spacing-lg'],
               }}
             >
@@ -71,7 +72,7 @@ export function AuthFrame({ children, offlineMessage = true }: { children: React
                 {offlineMessage && !online ? <Banner testID="auth-offline" message={t('auth.offline')} /> : null}
                 {children}
               </View>
-              <Text variant="caption" tone="textHelper">
+              <Text variant="caption" tone="textHelper" accessibilityRole="text">
                 {t('app.byPlanexi')}
               </Text>
             </ScrollView>

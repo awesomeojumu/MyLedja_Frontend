@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   Checkbox,
-  SegmentedControl,
   Select,
   Switch,
   Text,
@@ -23,19 +22,20 @@ import { AppFrame } from '@/features/frame/AppFrame';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { t, type TextKey } from '@/i18n';
 
-import { exportTransactionsCsv } from './export';
 import {
-  ApiKeySheet,
-  BackupCodesSheet,
-  EditCategorySheet,
-  DeleteCategorySheet,
-  ExchangeRateSheet,
-  InviteMemberSheet,
-  PasskeySheet,
-  PlaceholderTab,
-  RestoreBackupSheet,
-  TwoFactorSheet,
-} from './SettingsSheets';
+  AdvancedTabDeep,
+  AiTab,
+  BanksTab,
+  BudgetTabDeep,
+  CurrenciesTabDeep,
+  DevicesTab,
+  HelpTab,
+  ImportExportTabDeep,
+  SecurityTabDeep,
+  TagsSection,
+  WorkspaceTabDeep,
+} from './SettingsTabs';
+import { DeleteCategorySheet, EditCategorySheet } from './SettingsSheets';
 
 const sp = tokens.spacing;
 
@@ -160,18 +160,18 @@ export function SettingsScreen() {
         )}
         <View style={{ flex: 1, maxWidth: phone ? undefined : 720 }}>
           {tab === 'general' ? <GeneralTab /> : null}
-          {tab === 'ai' ? <PlaceholderTab bodyKey="settings.ai.body" /> : null}
-          {tab === 'budget' ? <BudgetTab /> : null}
+          {tab === 'ai' ? <AiTab /> : null}
+          {tab === 'budget' ? <BudgetTabDeep /> : null}
           {tab === 'categories' ? <CategoriesTab /> : null}
-          {tab === 'currencies' ? <CurrenciesTab /> : null}
-          {tab === 'banks' ? <PlaceholderTab bodyKey="settings.banks.body" /> : null}
-          {tab === 'importExport' ? <ImportExportTab /> : null}
-          {tab === 'workspace' ? <WorkspaceTab /> : null}
-          {tab === 'security' ? <SecurityTab /> : null}
+          {tab === 'currencies' ? <CurrenciesTabDeep /> : null}
+          {tab === 'banks' ? <BanksTab /> : null}
+          {tab === 'importExport' ? <ImportExportTabDeep /> : null}
+          {tab === 'workspace' ? <WorkspaceTabDeep /> : null}
+          {tab === 'security' ? <SecurityTabDeep /> : null}
           {tab === 'notifications' ? <NotificationsTab /> : null}
-          {tab === 'devices' ? <PlaceholderTab bodyKey="settings.devices.body" /> : null}
-          {tab === 'advanced' ? <AdvancedTab /> : null}
-          {tab === 'help' ? <PlaceholderTab bodyKey="settings.help.body" /> : null}
+          {tab === 'devices' ? <DevicesTab /> : null}
+          {tab === 'advanced' ? <AdvancedTabDeep /> : null}
+          {tab === 'help' ? <HelpTab /> : null}
         </View>
       </View>
     </AppFrame>
@@ -254,31 +254,6 @@ function GeneralTab() {
   );
 }
 
-function BudgetTab() {
-  const { snapshot, repo } = useWorkspace();
-  const toast = useToast();
-  const style = snapshot?.settings.budgetStyle ?? 'tracking';
-
-  return (
-    <View style={{ gap: sp['spacing-md'] }}>
-      <Text tone="textSecondary">{t('settings.budget.body')}</Text>
-      <SegmentedControl
-        testID="settings-budget-style"
-        label={t('settings.budget.styleLabel')}
-        value={style}
-        onChange={(budgetStyle) => {
-          if (!snapshot) return;
-          void repo.updateSettings({ ...snapshot.settings, budgetStyle }).then(() => toast.show(t('common.saved')));
-        }}
-        options={[
-          { value: 'tracking', label: t('settings.budget.tracking') },
-          { value: 'envelope', label: t('settings.budget.envelope') },
-        ]}
-      />
-    </View>
-  );
-}
-
 function CategoriesTab() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
@@ -320,9 +295,7 @@ function CategoriesTab() {
           toast.show(t('common.saved'));
         }}
       />
-      <Text variant="caption" tone="textSecondary">
-        {t('settings.categories.tagsLater')}
-      </Text>
+      <TagsSection />
       <EditCategorySheet category={editCat} visible={editCat !== null} onClose={() => setEditCat(null)} onSave={saveCategory} />
       <DeleteCategorySheet
         category={deleteCat}
@@ -344,105 +317,12 @@ function today(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(new Date());
 }
 
-function CurrenciesTab() {
-  const [rateOpen, setRateOpen] = useState(false);
-  return (
-    <View style={{ gap: sp['spacing-md'] }}>
-      <PlaceholderTab bodyKey="settings.currencies.body" />
-      <Button testID="settings-add-rate" kind="secondary" label={t('settings.currencies.addRate')} onPress={() => setRateOpen(true)} />
-      <ExchangeRateSheet visible={rateOpen} onClose={() => setRateOpen(false)} />
-    </View>
-  );
-}
-
-function WorkspaceTab() {
-  const [inviteOpen, setInviteOpen] = useState(false);
-  return (
-    <View style={{ gap: sp['spacing-md'] }}>
-      <PlaceholderTab bodyKey="settings.workspace.body" />
-      <Button testID="settings-invite" label={t('settings.workspace.invite')} onPress={() => setInviteOpen(true)} />
-      <InviteMemberSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} />
-    </View>
-  );
-}
-
-function SecurityTab() {
-  const [twoFa, setTwoFa] = useState(false);
-  const [codes, setCodes] = useState(false);
-  const [passkey, setPasskey] = useState(false);
-  return (
-    <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }}>
-      <PlaceholderTab bodyKey="settings.security.body" />
-      <Button testID="settings-2fa" kind="secondary" label={t('settings.security.twoFactor')} onPress={() => setTwoFa(true)} />
-      <Button testID="settings-backup-codes" kind="secondary" label={t('settings.security.backupCodes')} onPress={() => setCodes(true)} />
-      <Button testID="settings-passkey" kind="secondary" label={t('settings.security.passkey')} onPress={() => setPasskey(true)} />
-      <TwoFactorSheet visible={twoFa} onClose={() => setTwoFa(false)} />
-      <BackupCodesSheet visible={codes} onClose={() => setCodes(false)} />
-      <PasskeySheet visible={passkey} onClose={() => setPasskey(false)} />
-    </ScrollView>
-  );
-}
-
-function AdvancedTab() {
-  const [apiOpen, setApiOpen] = useState(false);
-  return (
-    <View style={{ gap: sp['spacing-md'] }}>
-      <PlaceholderTab bodyKey="settings.advanced.body" />
-      <Button testID="settings-api-key" kind="secondary" label={t('settings.advanced.apiKey')} onPress={() => setApiOpen(true)} />
-      <ApiKeySheet visible={apiOpen} onClose={() => setApiOpen(false)} />
-    </View>
-  );
-}
-
-function ImportExportTab() {
-  const { snapshot } = useWorkspace();
-  const router = useRouter();
-  const toast = useToast();
-
-  return (
-    <View style={{ gap: sp['spacing-md'] }}>
-      <Text tone="textSecondary">{t('settings.importExport.importBody')}</Text>
-      <Button testID="settings-go-accounts" kind="secondary" label={t('settings.importExport.goAccounts')} onPress={() => router.push('/accounts')} />
-      <Text tone="textSecondary">{t('settings.importExport.exportBody')}</Text>
-      <Button
-        testID="settings-export-csv"
-        label={t('settings.importExport.exportCsv')}
-        onPress={() => {
-          if (!snapshot) return;
-          const csv = exportTransactionsCsv(snapshot);
-          if (typeof document !== 'undefined') {
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'myledja-transactions.csv';
-            a.click();
-            URL.revokeObjectURL(url);
-          }
-          toast.show(t('settings.importExport.exportDone'));
-        }}
-      />
-      <RestoreBackupButton />
-    </View>
-  );
-}
-
-function RestoreBackupButton() {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <Button testID="settings-restore-backup" kind="secondary" label={t('settings.importExport.restore')} onPress={() => setOpen(true)} />
-      <RestoreBackupSheet visible={open} onClose={() => setOpen(false)} />
-    </>
-  );
-}
-
 function NotificationsTab() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const prefs = snapshot?.settings.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS;
 
-  const save = async (next: NotificationPrefs) => {
+  const save = async (next: typeof prefs) => {
     if (!snapshot) return;
     await repo.updateSettings({ ...snapshot.settings, notificationPrefs: next });
     toast.show(t('common.saved'));

@@ -11,6 +11,7 @@ import {
   DatePicker,
   Footer,
   Placeholder,
+  Sheet,
   StatusPill,
   Text,
   useToast,
@@ -240,14 +241,20 @@ export function ReconcileScreen() {
           leave();
         }}
       />
-      <Confirm
+      <Sheet
         visible={adjustOpen}
+        testID="reconcile-adjust-sheet"
         title={t('reconcile.adjustTitle', { amount: formatNaira(absDiff) })}
-        body={t('reconcile.adjustBody', { amount: formatNaira(absDiff) })}
-        confirmLabel={t('reconcile.adjustConfirm')}
-        onCancel={() => setAdjustOpen(false)}
-        onConfirm={() => void finish(true)}
-      />
+        onClose={() => setAdjustOpen(false)}
+        footer={
+          <Footer>
+            <Button testID="reconcile-keep-going" kind="secondary" label={t('reconcile.keepGoing')} onPress={() => setAdjustOpen(false)} />
+            <Button testID="reconcile-adjust" label={t('reconcile.adjustConfirm')} onPress={() => void finish(true)} />
+          </Footer>
+        }
+      >
+        <Text tone="textSecondary">{t('reconcile.adjustBody', { amount: formatNaira(absDiff) })}</Text>
+      </Sheet>
     </AppFrame>
   );
 }

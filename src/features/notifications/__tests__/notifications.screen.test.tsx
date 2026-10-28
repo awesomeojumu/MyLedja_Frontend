@@ -55,4 +55,16 @@ describe('Notifications page (F2.5)', () => {
     await fireEvent.press(screen.getByTestId('notifications-settings'));
     expect(router.push).toHaveBeenCalledWith('/settings/notifications');
   });
+
+  it('P27-03: filter chips include Account and security', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <NotificationsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(screen.getByTestId('notifications-filter-security')).toBeTruthy();
+    expect(screen.getByText(t('notifications.filter.security'))).toBeTruthy();
+  });
 });

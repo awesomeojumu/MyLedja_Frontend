@@ -147,7 +147,7 @@ describe('Import file', () => {
     expect(preview).toHaveTextContent('+₦640,000.00', { exact: false });
     expect(screen.getByTestId('import-broken')).toHaveTextContent(t('import.broken', { lines: '4' }));
     await fireEvent.press(screen.getByTestId('import-next'));
-    expect(screen.getByTestId('import-counts')).toHaveTextContent(t('import.counts', { fresh: 1, duplicates: 1 }));
+    expect(screen.getByTestId('import-counts')).toHaveTextContent(t('import.countsFull', { fresh: 1, duplicates: 1, rules: 0 }));
     expect(screen.getByTestId('review-tick-2')).not.toBeChecked();
     expect(screen.getByTestId('review-tick-3')).toBeChecked();
     await fireEvent.press(screen.getByTestId('import-post'));

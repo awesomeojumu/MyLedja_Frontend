@@ -5,31 +5,35 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import {
   Amount,
-  AmountInput,
   Button,
   Card,
-  DatePicker,
   EmptyState,
-  Footer,
-  InlineError,
+  Menu,
   PillTag,
   Placeholder,
-  Sheet,
+  Popover,
   StatusPill,
-  Switch,
   Text,
-  TextInput,
   useToast,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
-import { ACCOUNT_GROUPS, ACCOUNT_KIND_INFO, ACCOUNT_KINDS, type Account, type AccountKind } from '@/data/workspace/model';
+import { ACCOUNT_GROUPS, ACCOUNT_KIND_INFO, type Account } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
-import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 import { ledgerBalance, netWorth } from '@/ledger';
+
+import {
+  AccountAvatar,
+  AddAccountSheet,
+  ArchiveSheet,
+  ConnectBankSheet,
+  EditAccountSheet,
+  UpdateValueSheetForAccount,
+} from './accountSheets';
+import { sortAccountRows, type AccountSort } from './helpers';
 
 const sp = tokens.spacing;
 
@@ -44,12 +48,24 @@ export function accountRows(snapshot: Snapshot): AccountRow[] {
   });
 }
 
+const SORT_OPTIONS: { value: AccountSort; label: string }[] = [
+  { value: 'custom', label: t('accounts.sort.custom') },
+  { value: 'balance', label: t('accounts.sort.balance') },
+  { value: 'name', label: t('accounts.sort.name') },
+  { value: 'type', label: t('accounts.sort.type') },
+];
+
 export function AccountsScreen() {
   const { snapshot } = useWorkspace();
   const theme = useTheme();
+  const toast = useToast();
   const [adding, setAdding] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [reordering, setReordering] = useState(false);
+  const [sort, setSort] = useState<AccountSort>('custom');
+  const [sortOpen, setSortOpen] = useState(false);
+  const [rowSheet, setRowSheet] = useState<{ id: string; kind: 'edit' | 'value' | 'archive' } | null>(null);
   const { repo } = useWorkspace();
   const move = (id: string, by: -1 | 1) => {
     if (!snapshot) return;
@@ -68,11 +84,17 @@ export function AccountsScreen() {
     const assets = live.filter((r) => r.balance > 0n).reduce((s, r) => s + r.balance, 0n);
     const debts = live.filter((r) => r.balance < 0n).reduce((s, r) => s - r.balance, 0n);
     const groups = ACCOUNT_GROUPS.map((group) => {
-      const members = live.filter((r) => ACCOUNT_KIND_INFO[r.account.type].group === group);
+      const members = sortAccountRows(
+        live.filter((r) => ACCOUNT_KIND_INFO[r.account.type].group === group),
+        sort === 'custom' ? 'custom' : sort,
+      );
       return { group, rows: members, total: members.reduce((s, r) => s + r.balance, 0n) };
     }).filter((g) => g.rows.length > 0);
     return { assets, debts, groups, archived: rows.filter((r) => r.account.archived), worth: netWorth(snapshot.chart, snapshot.events, '9999-12-31').total };
-  }, [snapshot]);
+  }, [snapshot, sort]);
+
+  const rowAccount = rowSheet && snapshot ? snapshot.accounts.find((a) => a.id === rowSheet.id) : undefined;
+  const rowBalance = rowAccount && snapshot ? ledgerBalance(rowAccount.id, snapshot.events) : 0n;
 
   return (
     <AppFrame title={t('accounts.title')}>
@@ -84,14 +106,21 @@ export function AccountsScreen() {
             </Text>
             {summary ? <Amount testID="net-worth" minor={summary.worth} variant="display-md" /> : <Placeholder width={180} height={36} />}
           </View>
-          <View style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
+            <Button testID="connect-bank" kind="secondary" label={t('accounts.connect')} onPress={() => setConnectOpen(true)} />
+            <Button
+              testID="accounts-sort"
+              kind="secondary"
+              label={t('accounts.sort.label', { mode: SORT_OPTIONS.find((o) => o.value === sort)?.label ?? '' })}
+              onPress={() => setSortOpen(true)}
+            />
             <Button
               testID="reorder-accounts"
               kind="secondary"
               label={reordering ? t('accounts.reorderDone') : t('accounts.reorder')}
               onPress={() => setReordering(!reordering)}
             />
-            <Button testID="add-account" label={t('accounts.add')} onPress={() => setAdding(true)} />
+            <Button testID="accounts-add" label={t('accounts.add')} onPress={() => setAdding(true)} />
           </View>
         </View>
 
@@ -104,14 +133,31 @@ export function AccountsScreen() {
             <AssetsDebtsBar assets={summary.assets} debts={summary.debts} />
             {summary.groups.map((g) => (
               <Card key={g.group} testID={`group-${g.group}`} style={{ padding: 0 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: sp['spacing-md'] }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: sp['spacing-md'], gap: sp['spacing-sm'] }}>
                   <Text variant="heading-sm" accessibilityRole="header">
                     {t(`accounts.group.${g.group}`)}
                   </Text>
-                  <Amount minor={g.total} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'] }}>
+                    {g.group === 'investments' ? (
+                      <Pressable
+                        accessibilityRole="link"
+                        testID="see-portfolio"
+                        onPress={() => toast.show(t('accounts.portfolioLater'))}
+                      >
+                        <Text tone="link">{t('accounts.seePortfolio')}</Text>
+                      </Pressable>
+                    ) : null}
+                    <Amount minor={g.total} />
+                  </View>
                 </View>
                 {g.rows.map((r) => (
-                  <AccountLine key={r.account.id} row={r} borderColor={theme.border} onMove={reordering ? (by) => move(r.account.id, by) : undefined} />
+                  <AccountLine
+                    key={r.account.id}
+                    row={r}
+                    borderColor={theme.border}
+                    onMove={reordering ? (by) => move(r.account.id, by) : undefined}
+                    onMenu={(kind) => setRowSheet({ id: r.account.id, kind })}
+                  />
                 ))}
               </Card>
             ))}
@@ -132,6 +178,30 @@ export function AccountsScreen() {
         )}
       </ScrollView>
       {adding ? <AddAccountSheet onClose={() => setAdding(false)} /> : null}
+      {connectOpen ? <ConnectBankSheet onClose={() => setConnectOpen(false)} /> : null}
+      {rowSheet?.kind === 'edit' && rowAccount ? <EditAccountSheet account={rowAccount} onClose={() => setRowSheet(null)} /> : null}
+      {rowSheet?.kind === 'value' && rowSheet.id ? <UpdateValueSheetForAccount accountId={rowSheet.id} onClose={() => setRowSheet(null)} /> : null}
+      {rowSheet?.kind === 'archive' && rowAccount && snapshot ? (
+        <ArchiveSheet account={rowAccount} balance={rowBalance} snapshot={snapshot} onClose={() => setRowSheet(null)} />
+      ) : null}
+      <Popover visible={sortOpen} onClose={() => setSortOpen(false)} testID="accounts-sort-menu">
+        <View style={{ gap: sp['spacing-xs'], minWidth: 200 }}>
+          {SORT_OPTIONS.map((o) => (
+            <Pressable
+              key={o.value}
+              accessibilityRole="button"
+              testID={`sort-${o.value}`}
+              onPress={() => {
+                setSort(o.value);
+                setSortOpen(false);
+              }}
+              style={{ paddingVertical: sp['spacing-sm'], paddingHorizontal: sp['spacing-md'] }}
+            >
+              <Text tone={sort === o.value ? 'primary' : undefined}>{o.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </Popover>
     </AppFrame>
   );
 }
@@ -157,11 +227,27 @@ function AssetsDebtsBar({ assets, debts }: { assets: bigint; debts: bigint }) {
   );
 }
 
-function AccountLine({ row, borderColor, onMove }: { row: AccountRow; borderColor: string; onMove?: (by: -1 | 1) => void }) {
+function AccountLine({
+  row,
+  borderColor,
+  onMove,
+  onMenu,
+}: {
+  row: AccountRow;
+  borderColor: string;
+  onMove?: (by: -1 | 1) => void;
+  onMenu?: (kind: 'edit' | 'value' | 'archive') => void;
+}) {
   const { account, balance } = row;
   const owes = ACCOUNT_KIND_INFO[account.type].ledger === 'liability';
   const router = useRouter();
   const theme = useTheme();
+  const showValue = account.type === 'property' || account.type === 'investment';
+  const menuItems = [
+    { key: 'edit', label: t('account.edit'), onPress: () => onMenu?.('edit') },
+    ...(showValue ? [{ key: 'value', label: t('account.updateValue'), onPress: () => onMenu?.('value') }] : []),
+    { key: 'archive', label: t('account.archive'), onPress: () => onMenu?.('archive') },
+  ];
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: borderColor }}>
       {onMove ? (
@@ -192,10 +278,13 @@ function AccountLine({ row, borderColor, onMove }: { row: AccountRow; borderColo
         onPress={() => router.push(`/accounts/${account.id}`)}
         style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'], padding: sp['spacing-md'] }}
       >
+        <AccountAvatar name={account.name} institution={account.institution} />
         <View style={{ flex: 1, gap: sp['spacing-xxs'] }}>
           <Text>{account.name}</Text>
           <Text variant="caption" tone="textSecondary">
-            {[account.institution, account.last4 ? t('accounts.masked', { last4: account.last4 }) : null].filter(Boolean).join(' · ')}
+            {[account.institution, account.last4 ? t('accounts.masked', { last4: account.last4 }) : null, t('accounts.syncedNow')]
+              .filter(Boolean)
+              .join(' · ')}
           </Text>
         </View>
         {!account.countInBudget ? <PillTag label={t('accounts.tracking')} /> : null}
@@ -208,103 +297,17 @@ function AccountLine({ row, borderColor, onMove }: { row: AccountRow; borderColo
           <Amount minor={balance} />
         )}
       </Pressable>
+      {onMenu ? (
+        <Menu
+          testID={`account-row-menu-${account.id}`}
+          trigger={(open) => (
+            <Pressable accessibilityRole="button" onPress={open} onLongPress={open} style={{ padding: sp['spacing-md'] }}>
+              <Text tone="textSecondary">⋯</Text>
+            </Pressable>
+          )}
+          items={menuItems}
+        />
+      ) : null}
     </View>
-  );
-}
-
-function AddAccountSheet({ onClose }: { onClose: () => void }) {
-  const { repo } = useWorkspace();
-  const toast = useToast();
-  const [type, setType] = useState<AccountKind>('bank');
-  const [name, setName] = useState('');
-  const [institution, setInstitution] = useState('');
-  const [last4, setLast4] = useState('');
-  const [opening, setOpening] = useState<{ text: string; minor: bigint | null }>({ text: '', minor: null });
-  const [date, setDate] = useState(today());
-  const [countInBudget, setCountInBudget] = useState(ACCOUNT_KIND_INFO.bank.countInBudget);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const last4Ok = last4 === '' || /^\d{4}$/.test(last4);
-  const valid = name.trim() !== '' && last4Ok && (opening.text === '' || opening.minor !== null);
-
-  const save = async () => {
-    setBusy(true);
-    const result = await repo.addAccount({
-      name: name.trim(),
-      type,
-      institution: institution.trim() || undefined,
-      last4: last4 || undefined,
-      countInBudget,
-      openingBalance: opening.minor ?? 0n,
-      openingDate: date,
-    });
-    setBusy(false);
-    if (!result.ok) {
-      setError(ledgerMessage(result.error));
-      return;
-    }
-    toast.show(t('accounts.added'));
-    onClose();
-  };
-
-  const owes = ACCOUNT_KIND_INFO[type].ledger === 'liability';
-  return (
-    <Sheet
-      visible
-      testID="add-account-sheet"
-      title={t('accounts.addTitle')}
-      onClose={onClose}
-      footer={
-        <Footer>
-          <Button kind="secondary" label={t('common.cancel')} onPress={onClose} />
-          <Button testID="save-account" label={t('accounts.save')} disabled={!valid || busy} onPress={() => void save()} />
-        </Footer>
-      }
-    >
-      <View style={{ gap: sp['spacing-lg'] }}>
-        <View accessibilityLabel={t('accounts.type')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'] }}>
-          {ACCOUNT_KINDS.map((k) => (
-            <PillTag
-              key={k}
-              testID={`type-${k}`}
-              label={t(`accounts.kind.${k}`)}
-              selected={type === k}
-              onPress={() => {
-                setType(k);
-                setCountInBudget(ACCOUNT_KIND_INFO[k].countInBudget);
-              }}
-            />
-          ))}
-        </View>
-        <TextInput testID="account-name" label={t('accounts.name')} value={name} onChangeText={setName} />
-        <TextInput
-          testID="account-institution"
-          label={`${t('accounts.institution')} ${t('common.optional')}`}
-          value={institution}
-          onChangeText={setInstitution}
-        />
-        <TextInput
-          testID="account-last4"
-          label={`${t('accounts.last4')} ${t('common.optional')}`}
-          value={last4}
-          onChangeText={(v) => setLast4(v.replace(/\D/g, '').slice(0, 4))}
-          keyboardType="number-pad"
-          error={last4Ok ? null : t('accounts.last4Invalid')}
-        />
-        <AmountInput
-          testID="account-opening"
-          label={owes ? t('accounts.openingOwed') : t('accounts.opening')}
-          value={opening.text}
-          onChange={(text, minor) => setOpening({ text, minor })}
-        />
-        <Text variant="caption" tone="textSecondary">
-          {t('welcome.step3.openingNote')}
-        </Text>
-        <DatePicker testID="account-date" label={t('accounts.openingDate')} value={date} onChange={setDate} />
-        <Switch testID="account-budget" label={t('accounts.countInBudget')} value={countInBudget} onChange={setCountInBudget} />
-        {error ? <InlineError message={error} /> : null}
-      </View>
-    </Sheet>
   );
 }

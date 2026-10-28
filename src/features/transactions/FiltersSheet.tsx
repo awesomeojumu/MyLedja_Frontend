@@ -1,16 +1,24 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, Select, Sheet, Switch, TextInput } from '@/design/components';
+import { Button, PillTag, Select, Sheet, Switch, TextInput } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { Snapshot } from '@/data/workspace/repository';
 import { t } from '@/i18n';
 import { parseAmount } from '@/money';
 
-import { emptyFilters, type TxFilters } from './filters';
+import { applyDatePreset, emptyFilters, type DatePreset, type TxFilters } from './filters';
+import { today } from './helpers';
 
 const sp = tokens.spacing;
 
+const PRESETS: { value: DatePreset; labelKey: 'tx.filter.presetThisMonth' | 'tx.filter.presetLastMonth' | 'tx.filter.presetLast30' }[] = [
+  { value: 'thisMonth', labelKey: 'tx.filter.presetThisMonth' },
+  { value: 'lastMonth', labelKey: 'tx.filter.presetLastMonth' },
+  { value: 'last30', labelKey: 'tx.filter.presetLast30' },
+];
+
+/** Popup #19 — filters (DESIGN page 11). */
 export function FiltersSheet({
   snapshot,
   filters,
@@ -58,6 +66,16 @@ export function FiltersSheet({
         </View>
       }
     >
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'], marginBottom: sp['spacing-sm'] }}>
+        {PRESETS.map((p) => (
+          <PillTag
+            key={p.value}
+            testID={`tx-filter-preset-${p.value}`}
+            label={t(p.labelKey)}
+            onPress={() => setDraft({ ...draft, ...applyDatePreset(p.value, today()) })}
+          />
+        ))}
+      </View>
       <TextInput testID="tx-filter-from" label={t('tx.filter.from')} value={draft.dateFrom ?? ''} onChangeText={(dateFrom) => setDraft({ ...draft, dateFrom: dateFrom || undefined })} />
       <TextInput testID="tx-filter-to" label={t('tx.filter.to')} value={draft.dateTo ?? ''} onChangeText={(dateTo) => setDraft({ ...draft, dateTo: dateTo || undefined })} />
       <Select testID="tx-filter-account" label={t('add.account')} options={accounts} value={draft.accountId ?? ''} onChange={(accountId) => setDraft({ ...draft, accountId: accountId || undefined })} />
@@ -73,6 +91,7 @@ export function FiltersSheet({
       <TextInput testID="tx-filter-min" label={t('tx.filter.amountMin')} value={minText} onChangeText={setMinText} />
       <TextInput testID="tx-filter-max" label={t('tx.filter.amountMax')} value={maxText} onChangeText={setMaxText} />
       <Switch testID="tx-filter-uncategorized" label={t('tx.filter.uncategorized')} value={!!draft.uncategorized} onChange={(uncategorized) => setDraft({ ...draft, uncategorized: uncategorized || undefined })} />
+      <Switch testID="tx-filter-receipt" label={t('tx.filter.hasReceipt')} value={!!draft.hasReceipt} onChange={(hasReceipt) => setDraft({ ...draft, hasReceipt: hasReceipt || undefined })} />
     </Sheet>
   );
 }

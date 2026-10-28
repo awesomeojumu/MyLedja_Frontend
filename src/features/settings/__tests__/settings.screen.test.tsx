@@ -125,4 +125,36 @@ describe('Settings (F1.10)', () => {
       expect(prefs?.quietHoursStart).toBe('21:30');
     });
   });
+
+  it('P26-07: AI feature toggles persist', async () => {
+    const { sync, repo } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-ai'));
+    await fireEvent(screen.getByTestId('settings-ai-statements'), 'onChange', true);
+    await waitFor(async () => {
+      expect((await repo.load()).settings.aiPrefs?.readStatements).toBe(true);
+    });
+  });
+
+  it('P26-08: exchange rate sheet saves a row', async () => {
+    const { sync, repo } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-currencies'));
+    await fireEvent.press(screen.getByTestId('settings-add-rate'));
+    await fireEvent.changeText(screen.getByTestId('settings-exchange-rate'), '1650');
+    await fireEvent.press(screen.getByText(t('panel.save')));
+    await waitFor(async () => {
+      expect((await repo.load()).settings.exchangeRates?.length).toBe(1);
+    });
+  });
 });

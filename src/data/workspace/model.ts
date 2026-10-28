@@ -89,6 +89,52 @@ export type DashboardLayout = {
   hidden: string[];
 };
 
+/** Settings › AI features (DESIGN page 26). */
+export type AiFeaturePrefs = {
+  suggestCategories: boolean;
+  readStatements: boolean;
+};
+
+export const DEFAULT_AI_PREFS: AiFeaturePrefs = {
+  suggestCategories: true,
+  readStatements: false,
+};
+
+/** Manual or downloaded FX row (Settings › Currencies). */
+export type ExchangeRateEntry = {
+  id: string;
+  currency: string;
+  date: string;
+  rate: string;
+  source: 'manual' | 'download';
+};
+
+/** Which budget category types appear in the budget UI (Settings › Budget). */
+export type BudgetTypesShown = {
+  fixed: boolean;
+  flexible: boolean;
+  nonMonthly: boolean;
+  savings: boolean;
+};
+
+export const DEFAULT_BUDGET_TYPES_SHOWN: BudgetTypesShown = {
+  fixed: true,
+  flexible: true,
+  nonMonthly: true,
+  savings: true,
+};
+
+/** Settings › Devices & sync. */
+export type DeviceSyncPrefs = {
+  useLessData: boolean;
+  lastSyncedLabel?: string;
+};
+
+export const DEFAULT_DEVICE_SYNC: DeviceSyncPrefs = {
+  useLessData: false,
+  lastSyncedLabel: undefined,
+};
+
 /** Workspace preferences chosen in Welcome and Settings (Phase 1 subset). */
 export type WorkspaceSettings = {
   budgetStyle: BudgetStyle;
@@ -97,6 +143,12 @@ export type WorkspaceSettings = {
   checklistHidden?: boolean;
   dashboardLayout?: DashboardLayout;
   notificationPrefs?: NotificationPrefs;
+  aiPrefs?: AiFeaturePrefs;
+  carryOverDefault?: boolean;
+  budgetTypesShown?: BudgetTypesShown;
+  exchangeRates?: ExchangeRateEntry[];
+  downloadDailyRates?: boolean;
+  deviceSync?: DeviceSyncPrefs;
 };
 
 /** Settings › Notifications (P26-05). */
@@ -193,6 +245,13 @@ export type Recurring = {
   startDate: string;
   endDate?: string;
   autoCreate?: boolean;
+  /** DESIGN #25 — stop after this many occurrences (optional; endDate also ends the series). */
+  endAfterCount?: number;
+  /** Days before due: 0 = on the day, 1, 3, or 7. */
+  reminderDays?: number;
+  /** DESIGN #25 — hide amount on lock screen (default on). */
+  hideAmountOnLock?: boolean;
+  cancelled?: boolean;
 };
 
 export type RecurringOccurrence = {
@@ -206,6 +265,32 @@ export type RecurringOccurrence = {
 
 export type IncomeStreamKind = 'regular' | 'variable' | 'irregular' | 'passive';
 
+export type IncomeAmountKind = 'exact' | 'approximate' | 'range';
+
+export type IncomeRecordMode = 'takeHome' | 'gross';
+
+export type IncomeDeductionKind = 'paye' | 'pension' | 'nhf' | 'other';
+
+/** PAYE → Taxes, pension/NHF → accounts (DESIGN §9.4). */
+export type IncomeDeduction = {
+  kind: IncomeDeductionKind;
+  amountMinor?: string;
+  percent?: number;
+  label?: string;
+  targetAccountId?: string;
+  targetCategoryId?: string;
+};
+
+export type IncomeRouting = {
+  goalId?: string;
+  categoryId?: string;
+  amountMinor?: string;
+  percent?: number;
+  restToBudget?: boolean;
+};
+
+export type IncomeReminder = 'none' | 'sameDay' | '1' | '3' | '7';
+
 export type IncomeStream = {
   id: string;
   name: string;
@@ -217,6 +302,14 @@ export type IncomeStream = {
   countInBudget: boolean;
   /** For tax-class report (P13-08). */
   taxClass?: string;
+  amountKind?: IncomeAmountKind;
+  rangeMinMinor?: string;
+  rangeMaxMinor?: string;
+  recordMode?: IncomeRecordMode;
+  grossMinor?: string;
+  deductions?: IncomeDeduction[];
+  routing?: IncomeRouting[];
+  reminder?: IncomeReminder;
 };
 
 export type DebtDirection = 'owedToMe' | 'iOwe';
@@ -247,7 +340,15 @@ export type DebtEntry = {
 
 export type NotificationCategory = 'bills' | 'budget' | 'goals' | 'debts' | 'income' | 'security';
 
-export type NotificationAction = 'mark_paid' | 'remind_tomorrow' | 'record_payment' | 'open_plan' | 'open_debt';
+export type NotificationAction =
+  | 'mark_paid'
+  | 'match'
+  | 'remind_tomorrow'
+  | 'record_payment'
+  | 'see_budget'
+  | 'open_plan'
+  | 'open_debt'
+  | 'security_review';
 
 /** In-app notification (DESIGN.md page 27). */
 export type AppNotification = {

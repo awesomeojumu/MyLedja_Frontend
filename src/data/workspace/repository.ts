@@ -1,6 +1,7 @@
 import { v7 as uuidv7 } from 'uuid';
 
 import type { SetupBody } from '@/api/auth';
+import { formatDay } from '@/design/components/overlays';
 import { t, type TextKey } from '@/i18n';
 import {
   buildAdjustment,
@@ -178,6 +179,12 @@ export class WorkspaceRepository {
         ...raw?.notificationPrefs,
         billReminderDays: raw?.notificationPrefs?.billReminderDays ?? DEFAULT_NOTIFICATION_PREFS.billReminderDays,
       },
+      aiPrefs: raw?.aiPrefs,
+      carryOverDefault: raw?.carryOverDefault,
+      budgetTypesShown: raw?.budgetTypesShown,
+      exchangeRates: raw?.exchangeRates,
+      downloadDailyRates: raw?.downloadDailyRates,
+      deviceSync: raw?.deviceSync,
     };
     const assigns = new Map<string, bigint>();
     for (const r of assignRows) {
@@ -967,6 +974,35 @@ export class WorkspaceRepository {
     return recurring;
   }
 
+  async updateRecurring(recurring: Recurring): Promise<void> {
+    const { id, ...data } = recurring;
+    await this.put('recurring', id, data, 'recurring.update');
+  }
+
+  /** Link an existing expense to a bill occurrence (DESIGN #26). */
+  async matchBillToEvent(recurringId: string, dueDate: string, eventId: string): Promise<Result<RecurringOccurrence>> {
+    const snapshot = await this.load();
+    const bill = snapshot.recurring.find((r) => r.id === recurringId);
+    if (!bill) return { ok: false, error: 'missing_lines' };
+    const occId = `${recurringId}:${dueDate}`;
+    const existing = snapshot.occurrences.find((o) => o.id === occId);
+    if (existing?.status === 'paid') return { ok: false, error: 'already_reversed' };
+    const event = snapshot.events.find((e) => e.id === eventId && e.status === 'posted');
+    if (!event || event.type !== 'expense') return { ok: false, error: 'missing_lines' };
+    const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+    const amount = event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + (l.amountMinor < 0n ? -l.amountMinor : l.amountMinor), 0n);
+    const occurrence: RecurringOccurrence = {
+      id: occId,
+      recurringId,
+      dueDate,
+      amountMinor: amount.toString(),
+      status: 'paid',
+      eventId,
+    };
+    await this.put('occurrences', occId, { recurringId, dueDate, amountMinor: amount.toString(), status: 'paid', eventId }, 'occurrence.paid');
+    return { ok: true, value: occurrence };
+  }
+
   async markBillPaid(
     recurringId: string,
     dueDate: string,
@@ -997,6 +1033,35 @@ export class WorkspaceRepository {
       eventId: posted.value.id,
     };
     await this.put('occurrences', occId, { recurringId, dueDate, amountMinor: input.amount.toString(), status: 'paid', eventId: posted.value.id }, 'occurrence.paid');
+    return { ok: true, value: occurrence };
+  }
+
+  /** Link an existing expense to a bill occurrence (DESIGN popup #26 from page 27). */
+  async matchBillToEvent(recurringId: string, dueDate: string, eventId: string): Promise<Result<RecurringOccurrence>> {
+    const snapshot = await this.load();
+    const bill = snapshot.recurring.find((r) => r.id === recurringId);
+    if (!bill) return { ok: false, error: 'missing_lines' };
+    const event = snapshot.events.find((e) => e.id === eventId && e.status === 'posted');
+    if (!event || event.type !== 'expense') return { ok: false, error: 'missing_lines' };
+    const occId = `${recurringId}:${dueDate}`;
+    if (snapshot.occurrences.some((o) => o.id === occId && o.status === 'paid')) return { ok: false, error: 'already_reversed' };
+    const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+    const amountMinor = event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + l.amountMinor, 0n);
+    if (amountMinor <= 0n) return { ok: false, error: 'not_positive' };
+    const occurrence: RecurringOccurrence = {
+      id: occId,
+      recurringId,
+      dueDate,
+      amountMinor: amountMinor.toString(),
+      status: 'paid',
+      eventId,
+    };
+    await this.put('occurrences', occId, { recurringId, dueDate, amountMinor: amountMinor.toString(), status: 'paid', eventId }, 'occurrence.matched');
+    const billNotificationId = `bill:${occId}`;
+    const note = await this.store.read('notifications', billNotificationId);
+    if (note) {
+      await this.put('notifications', billNotificationId, { ...(note.data as object), read: true }, 'notification.read', note.version);
+    }
     return { ok: true, value: occurrence };
   }
 
@@ -1152,10 +1217,12 @@ export class WorkspaceRepository {
       const notification: AppNotification = {
         id,
         createdAt: new Date().toISOString(),
-        title: overdue ? t('notifications.billOverdue', { name: bill.name }) : t('notifications.billDue', { name: bill.name }),
+        title: overdue
+          ? t('notifications.billMissed', { name: bill.name, dueDate: formatDay(dueDate) })
+          : t('notifications.billDue', { name: bill.name }),
         category: 'bills',
         read: false,
-        action: 'mark_paid',
+        action: overdue ? 'match' : 'mark_paid',
         recurringId: bill.id,
         dueDate,
         amountMinor: bill.amountMinor,
