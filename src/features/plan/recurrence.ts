@@ -1,5 +1,7 @@
 import type { RecurrenceRule, Recurring, RecurringOccurrence } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
+import { t } from '@/i18n';
+import { monthOf, nextMonth } from '@/ledger';
 
 /** Last calendar day of a month (handles 31st → last day). */
 export function lastDayOfMonth(year: number, monthIndex: number): number {
@@ -120,4 +122,56 @@ export function findRecurringSuggestions(snapshot: Snapshot, month: string): Fin
     });
   }
   return out.sort((a, b) => b.count - a.count);
+}
+
+export type ScheduleRow = {
+  recurring: Recurring;
+  nextDate: string | null;
+  status: 'missed' | 'due' | 'upcoming' | 'scheduled';
+};
+
+function ruleLabel(rule: RecurrenceRule): string {
+  if (rule.every === 'week') return t('plan.freqWeekly', { day: String(rule.on) });
+  if (rule.on === 31) return t('plan.freqMonthlyLast');
+  return t('plan.freqMonthly', { day: String(rule.on) });
+}
+
+function nextDueOnOrAfter(recurring: Recurring, from: string, horizonMonths = 14): string | null {
+  let month = monthOf(from);
+  for (let i = 0; i < horizonMonths; i++) {
+    const due = dueDateInMonth(recurring.rule, month);
+    if (due && due >= recurring.startDate && due >= from && (!recurring.endDate || due <= recurring.endDate)) {
+      return due;
+    }
+    month = nextMonth(month);
+  }
+  return null;
+}
+
+/** DESIGN page 12 tab "All schedules". */
+export function allScheduleRows(snapshot: Snapshot, today: string, search = ''): ScheduleRow[] {
+  const q = search.trim().toLowerCase();
+  const rows: ScheduleRow[] = [];
+  for (const recurring of snapshot.recurring) {
+    if (q && !recurring.name.toLowerCase().includes(q)) continue;
+    const nextDate = nextDueOnOrAfter(recurring, today);
+    let status: ScheduleRow['status'] = 'scheduled';
+    if (nextDate) {
+      const occ = snapshot.occurrences.find((o) => o.id === `${recurring.id}:${nextDate}`);
+      if (occ?.status === 'missed' || (nextDate < today && occ?.status !== 'paid')) status = 'missed';
+      else if (nextDate === today) status = 'due';
+      else if (nextDate <= addDays(today, 7)) status = 'upcoming';
+    }
+    rows.push({ recurring, nextDate, status });
+  }
+  const order: Record<ScheduleRow['status'], number> = { missed: 0, due: 1, upcoming: 2, scheduled: 3 };
+  return rows.sort((a, b) => {
+    const sa = order[a.status] - order[b.status];
+    if (sa !== 0) return sa;
+    return (a.nextDate ?? '').localeCompare(b.nextDate ?? '');
+  });
+}
+
+export function scheduleFrequency(recurring: Recurring): string {
+  return ruleLabel(recurring.rule);
 }

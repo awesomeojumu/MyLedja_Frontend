@@ -67,4 +67,17 @@ describe('Plan page (DESIGN.md page 12)', () => {
     await fireEvent.press(screen.getByText(t('plan.viewCalendar')));
     expect(screen.getByTestId('plan-calendar')).toBeTruthy();
   });
+
+  it('P12-06: All schedules tab (DESIGN page 12)', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <PlanScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByText(t('plan.tabAllSchedules')));
+    expect(screen.getByTestId('plan-all-schedules')).toBeTruthy();
+    expect(screen.getAllByText('Rent').length).toBeGreaterThan(0);
+  });
 });

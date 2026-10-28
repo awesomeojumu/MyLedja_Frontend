@@ -24,23 +24,70 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { t, type TextKey } from '@/i18n';
 
 import { exportTransactionsCsv } from './export';
+import {
+  ApiKeySheet,
+  BackupCodesSheet,
+  EditCategorySheet,
+  DeleteCategorySheet,
+  ExchangeRateSheet,
+  InviteMemberSheet,
+  PasskeySheet,
+  PlaceholderTab,
+  RestoreBackupSheet,
+  TwoFactorSheet,
+} from './SettingsSheets';
 
 const sp = tokens.spacing;
 
-export type SettingsTab = 'general' | 'budget' | 'categories' | 'importExport' | 'notifications';
+export type SettingsTab =
+  | 'general'
+  | 'ai'
+  | 'budget'
+  | 'categories'
+  | 'currencies'
+  | 'banks'
+  | 'importExport'
+  | 'workspace'
+  | 'security'
+  | 'notifications'
+  | 'devices'
+  | 'advanced'
+  | 'help';
 
 const TABS: { id: SettingsTab; label: TextKey }[] = [
   { id: 'general', label: 'settings.tab.general' },
+  { id: 'ai', label: 'settings.tab.ai' },
   { id: 'budget', label: 'settings.tab.budget' },
   { id: 'categories', label: 'settings.tab.categories' },
+  { id: 'currencies', label: 'settings.tab.currencies' },
+  { id: 'banks', label: 'settings.tab.banks' },
   { id: 'importExport', label: 'settings.tab.importExport' },
+  { id: 'workspace', label: 'settings.tab.workspace' },
+  { id: 'security', label: 'settings.tab.security' },
   { id: 'notifications', label: 'settings.tab.notifications' },
+  { id: 'devices', label: 'settings.tab.devices' },
+  { id: 'advanced', label: 'settings.tab.advanced' },
+  { id: 'help', label: 'settings.tab.help' },
 ];
 
 function tabFromParam(raw: string | string[] | undefined): SettingsTab | null {
   const v = Array.isArray(raw) ? raw[0] : raw;
-  if (v === 'general' || v === 'budget' || v === 'categories' || v === 'importExport' || v === 'notifications') return v;
-  return null;
+  const ids: SettingsTab[] = [
+    'general',
+    'ai',
+    'budget',
+    'categories',
+    'currencies',
+    'banks',
+    'importExport',
+    'workspace',
+    'security',
+    'notifications',
+    'devices',
+    'advanced',
+    'help',
+  ];
+  return ids.includes(v as SettingsTab) ? (v as SettingsTab) : null;
 }
 
 export function SettingsScreen() {
@@ -113,10 +160,18 @@ export function SettingsScreen() {
         )}
         <View style={{ flex: 1, maxWidth: phone ? undefined : 720 }}>
           {tab === 'general' ? <GeneralTab /> : null}
+          {tab === 'ai' ? <PlaceholderTab bodyKey="settings.ai.body" /> : null}
           {tab === 'budget' ? <BudgetTab /> : null}
           {tab === 'categories' ? <CategoriesTab /> : null}
+          {tab === 'currencies' ? <CurrenciesTab /> : null}
+          {tab === 'banks' ? <PlaceholderTab bodyKey="settings.banks.body" /> : null}
           {tab === 'importExport' ? <ImportExportTab /> : null}
+          {tab === 'workspace' ? <WorkspaceTab /> : null}
+          {tab === 'security' ? <SecurityTab /> : null}
           {tab === 'notifications' ? <NotificationsTab /> : null}
+          {tab === 'devices' ? <PlaceholderTab bodyKey="settings.devices.body" /> : null}
+          {tab === 'advanced' ? <AdvancedTab /> : null}
+          {tab === 'help' ? <PlaceholderTab bodyKey="settings.help.body" /> : null}
         </View>
       </View>
     </AppFrame>
@@ -228,6 +283,8 @@ function CategoriesTab() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const [newName, setNewName] = useState('');
+  const [editCat, setEditCat] = useState<Category | null>(null);
+  const [deleteCat, setDeleteCat] = useState<Category | null>(null);
   const expense = useMemo(() => snapshot?.categories.filter((c) => c.kind === 'expense') ?? [], [snapshot]);
 
   const saveCategory = async (category: Category) => {
@@ -239,19 +296,16 @@ function CategoriesTab() {
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }}>
       {expense.map((c) => (
         <Card key={c.id} style={{ gap: sp['spacing-sm'] }} testID={`settings-cat-${c.id}`}>
-          <TextInput
-            testID={`settings-cat-name-${c.id}`}
-            label={t('settings.categories.name')}
-            value={c.name}
-            onChangeText={(name) => void saveCategory({ ...c, name })}
-          />
+          <Text variant="heading-sm">{c.name}</Text>
+          <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
+            <Button testID={`settings-cat-edit-${c.id}`} kind="secondary" label={t('settings.categories.edit')} onPress={() => setEditCat(c)} />
+            <Button testID={`settings-cat-delete-${c.id}`} kind="secondary" label={t('settings.categories.delete')} onPress={() => setDeleteCat(c)} />
+            <Button testID={`settings-cat-up-${c.id}`} kind="secondary" label={t('settings.categories.moveUp')} onPress={() => void repo.reorderCategory(c.id, 'up')} />
+            <Button testID={`settings-cat-down-${c.id}`} kind="secondary" label={t('settings.categories.moveDown')} onPress={() => void repo.reorderCategory(c.id, 'down')} />
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text>{t('settings.categories.hidden')}</Text>
             <Switch testID={`settings-cat-hidden-${c.id}`} label={t('settings.categories.hidden')} value={c.hidden} onChange={(hidden) => void saveCategory({ ...c, hidden })} />
-          </View>
-          <View style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
-            <Button testID={`settings-cat-up-${c.id}`} kind="secondary" label={t('settings.categories.moveUp')} onPress={() => void repo.reorderCategory(c.id, 'up')} />
-            <Button testID={`settings-cat-down-${c.id}`} kind="secondary" label={t('settings.categories.moveDown')} onPress={() => void repo.reorderCategory(c.id, 'down')} />
           </View>
         </Card>
       ))}
@@ -269,7 +323,74 @@ function CategoriesTab() {
       <Text variant="caption" tone="textSecondary">
         {t('settings.categories.tagsLater')}
       </Text>
+      <EditCategorySheet category={editCat} visible={editCat !== null} onClose={() => setEditCat(null)} onSave={saveCategory} />
+      <DeleteCategorySheet
+        category={deleteCat}
+        visible={deleteCat !== null}
+        onClose={() => setDeleteCat(null)}
+        onConfirm={async () => {
+          if (!deleteCat || !snapshot) return;
+          const fallback = snapshot.categories.find((c) => c.kind === 'expense' && c.id !== deleteCat.id);
+          if (!fallback) return;
+          await repo.deleteCategory(deleteCat.id, fallback.id, today());
+          toast.show(t('common.saved'));
+        }}
+      />
     </ScrollView>
+  );
+}
+
+function today(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(new Date());
+}
+
+function CurrenciesTab() {
+  const [rateOpen, setRateOpen] = useState(false);
+  return (
+    <View style={{ gap: sp['spacing-md'] }}>
+      <PlaceholderTab bodyKey="settings.currencies.body" />
+      <Button testID="settings-add-rate" kind="secondary" label={t('settings.currencies.addRate')} onPress={() => setRateOpen(true)} />
+      <ExchangeRateSheet visible={rateOpen} onClose={() => setRateOpen(false)} />
+    </View>
+  );
+}
+
+function WorkspaceTab() {
+  const [inviteOpen, setInviteOpen] = useState(false);
+  return (
+    <View style={{ gap: sp['spacing-md'] }}>
+      <PlaceholderTab bodyKey="settings.workspace.body" />
+      <Button testID="settings-invite" label={t('settings.workspace.invite')} onPress={() => setInviteOpen(true)} />
+      <InviteMemberSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} />
+    </View>
+  );
+}
+
+function SecurityTab() {
+  const [twoFa, setTwoFa] = useState(false);
+  const [codes, setCodes] = useState(false);
+  const [passkey, setPasskey] = useState(false);
+  return (
+    <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }}>
+      <PlaceholderTab bodyKey="settings.security.body" />
+      <Button testID="settings-2fa" kind="secondary" label={t('settings.security.twoFactor')} onPress={() => setTwoFa(true)} />
+      <Button testID="settings-backup-codes" kind="secondary" label={t('settings.security.backupCodes')} onPress={() => setCodes(true)} />
+      <Button testID="settings-passkey" kind="secondary" label={t('settings.security.passkey')} onPress={() => setPasskey(true)} />
+      <TwoFactorSheet visible={twoFa} onClose={() => setTwoFa(false)} />
+      <BackupCodesSheet visible={codes} onClose={() => setCodes(false)} />
+      <PasskeySheet visible={passkey} onClose={() => setPasskey(false)} />
+    </ScrollView>
+  );
+}
+
+function AdvancedTab() {
+  const [apiOpen, setApiOpen] = useState(false);
+  return (
+    <View style={{ gap: sp['spacing-md'] }}>
+      <PlaceholderTab bodyKey="settings.advanced.body" />
+      <Button testID="settings-api-key" kind="secondary" label={t('settings.advanced.apiKey')} onPress={() => setApiOpen(true)} />
+      <ApiKeySheet visible={apiOpen} onClose={() => setApiOpen(false)} />
+    </View>
   );
 }
 
@@ -301,7 +422,18 @@ function ImportExportTab() {
           toast.show(t('settings.importExport.exportDone'));
         }}
       />
+      <RestoreBackupButton />
     </View>
+  );
+}
+
+function RestoreBackupButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button testID="settings-restore-backup" kind="secondary" label={t('settings.importExport.restore')} onPress={() => setOpen(true)} />
+      <RestoreBackupSheet visible={open} onClose={() => setOpen(false)} />
+    </>
   );
 }
 
