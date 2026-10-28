@@ -2,7 +2,9 @@ import cases from '../../../test/fixtures/ledger-cases.json';
 import {
   barState,
   buildAdjustment,
+  buildBuy,
   buildCollect,
+  buildDividend,
   buildExpense,
   buildIncome,
   buildLend,
@@ -11,7 +13,11 @@ import {
   buildOpeningBalance,
   buildRefund,
   buildSalaryGross,
+  buildSell,
   buildTransfer,
+  converterOf,
+  lotsFrom,
+  position,
   buildWriteOff,
   categoryActivity,
   Chart,
@@ -28,7 +34,9 @@ import {
   type LedgerKind,
   type LedgerResult,
   type Line,
+  type InvestmentMeta,
   type NewEvent,
+  type Price,
 } from '..';
 
 type LineSpec = { account: string; amount: string };
@@ -37,6 +45,7 @@ type CaseStep = {
   operation?: string;
   post?: Record<string, unknown>;
   correct?: string;
+  price?: { holdingId: string; price: string; date: string };
   input?: Record<string, unknown>;
   expectLines?: LineSpec[];
   expectReversalLines?: LineSpec[];
@@ -47,11 +56,14 @@ type LedgerCase = {
   id: number;
   title: string;
   steps: CaseStep[];
+  rates?: Record<string, string>;
   budget?: { style: string; months: string[]; assigned: Record<string, Record<string, string>> };
   expect: {
     balances?: Record<string, string>;
     months?: Record<string, { income: string; spent: string; spentByCategory: Record<string, string> }>;
     netWorth?: string;
+    unrealised?: Record<string, string>;
+    withoutRates?: { netWorth: string; partial: string[] };
     eventCount?: number;
     statuses?: Record<string, string>;
     budget?: Record<
@@ -64,7 +76,7 @@ type LedgerCase = {
 const WS = 'ws';
 const file = cases as unknown as {
   currency: string;
-  accounts: { key: string; kind: string; accountType?: string; personDebt?: string }[];
+  accounts: { key: string; kind: string; accountType?: string; personDebt?: string; currency?: string; holdingOf?: string }[];
   categories: { key: string; kind: string; budgetable?: boolean; system?: string }[];
   cases: LedgerCase[];
 };
@@ -84,7 +96,8 @@ function makeChart(): { chart: Chart; resolve: (token: string) => string } {
       id: a.key,
       kind: a.kind as LedgerKind,
       name: a.key,
-      currency: file.currency,
+      currency: a.currency ?? file.currency,
+      holding: a.holdingOf ? true : undefined,
     });
   }
   for (const c of file.categories) {
@@ -130,6 +143,68 @@ function bindPost(raw: Record<string, unknown>, resolve: (t: string) => string, 
 }
 
 function linesFor(
+  chart: Chart,
+  journal: Journal,
+  resolve: (t: string) => string,
+  events: Map<string, string>,
+  post: Record<string, unknown>,
+): LedgerResult<Line[]> {
+  const built = buildFor(chart, journal, resolve, events, post);
+  return built.ok ? { ok: true, value: built.value.lines } : built;
+}
+
+type Built = { lines: Line[]; type?: NewEvent['type']; investment?: InvestmentMeta; holdingId?: string };
+
+const lotsOfJournal = (journal: Journal) =>
+  lotsFrom(journal.list().map((e) => ({ ...e, holdingId: e.holdingId ?? null, investment: e.investment ?? null })));
+
+function buildFor(
+  chart: Chart,
+  journal: Journal,
+  resolve: (t: string) => string,
+  events: Map<string, string>,
+  post: Record<string, unknown>,
+): LedgerResult<Built> {
+  const input = bindPost(post, resolve, events);
+  const type = input.type as string;
+  const wrap = (r: LedgerResult<Line[]>): LedgerResult<Built> => (r.ok ? { ok: true, value: { lines: r.value } } : r);
+  switch (type) {
+    case 'investment_buy': {
+      const r = buildBuy(chart, {
+        holdingId: input.holdingId as string,
+        accountId: input.accountId as string,
+        units: input.units as string,
+        price: big(input.price),
+        fees: input.fees !== undefined ? big(input.fees) : 0n,
+      });
+      return r.ok ? { ok: true, value: { ...r.value, holdingId: input.holdingId as string } } : r;
+    }
+    case 'investment_sell': {
+      const open = (lotsOfJournal(journal).get(input.holdingId as string) ?? []).filter((l) => l.units > 0n);
+      const r = buildSell(chart, {
+        holdingId: input.holdingId as string,
+        accountId: input.accountId as string,
+        units: input.units as string,
+        price: big(input.price),
+        fees: input.fees !== undefined ? big(input.fees) : 0n,
+        open,
+      });
+      return r.ok ? { ok: true, value: { ...r.value, holdingId: input.holdingId as string } } : r;
+    }
+    case 'dividend': {
+      const r = buildDividend(chart, {
+        holdingId: input.holdingId as string,
+        amount: big(input.amount),
+        accountId: input.accountId as string | undefined,
+        reinvestedUnits: input.reinvestedUnits as string | undefined,
+      });
+      return r.ok ? { ok: true, value: { ...r.value, holdingId: input.holdingId as string } } : r;
+    }
+  }
+  return wrap(linesForBasic(chart, journal, resolve, events, post));
+}
+
+function linesForBasic(
   chart: Chart,
   journal: Journal,
   resolve: (t: string) => string,
@@ -228,6 +303,7 @@ function run(c: LedgerCase) {
   let n = 0;
   const journal = new Journal(chart, [], () => `id-${++n}`);
   const events = new Map<string, string>();
+  const prices: Price[] = [];
   for (const step of c.steps) {
     const operationId = step.operation ? `case-${c.id}-${step.operation}` : `op-${c.id}-${step.ref ?? n + 1}`;
     if (step.correct) {
@@ -260,14 +336,20 @@ function run(c: LedgerCase) {
       if (step.ref) events.set(step.ref, result.value.event.id);
       continue;
     }
+    if (step.price) {
+      prices.push({ holdingId: resolve(step.price.holdingId), date: step.price.date, priceMinor: big(step.price.price) });
+      continue;
+    }
     if (!step.post) throw new Error(`case ${c.id}: step needs post or correct`);
-    const built = linesFor(chart, journal, resolve, events, step.post);
+    const built = buildFor(chart, journal, resolve, events, step.post);
     const posted = built.ok
       ? journal.post({
           operationId,
-          type: (bindPost(step.post, resolve, events).type as NewEvent['type']),
+          type: built.value.type ?? (bindPost(step.post, resolve, events).type as NewEvent['type']),
           date: bindPost(step.post, resolve, events).date as string,
-          lines: built.value,
+          lines: built.value.lines,
+          holdingId: built.value.holdingId,
+          investment: built.value.investment,
           refundOf: step.post.type === 'refund' ? (bindPost(step.post, resolve, events).refundOf as string) : undefined,
           splitTotal:
             Array.isArray(step.post.splits) && step.post.amount !== undefined ? big(step.post.amount) : undefined,
@@ -297,12 +379,12 @@ function run(c: LedgerCase) {
     }
     if (step.ref) events.set(step.ref, posted.value.event.id);
   }
-  return { chart, journal, events, resolve };
+  return { chart, journal, events, resolve, prices };
 }
 
 describe('ledger-cases.json (TECH-SPEC 6.14)', () => {
   it.each(file.cases.map((c) => [c.id, c.title, c] as const))('case %s: %s', (_n, _title, c) => {
-    const { chart, journal, events, resolve } = run(c);
+    const { chart, journal, events, resolve, prices } = run(c);
     const all = journal.list();
     const totals = periodTotals(all);
     const e = c.expect;
@@ -323,7 +405,24 @@ describe('ledger-cases.json (TECH-SPEC 6.14)', () => {
         spentByCategory,
       }).toEqual(want);
     }
-    if (e.netWorth !== undefined) expect(netWorth(chart, all, '2026-12-31').total.toString()).toBe(e.netWorth);
+    const lots = lotsOfJournal(journal);
+    let unrealised = 0n;
+    for (const a of file.accounts.filter((x) => x.holdingOf)) {
+      const p = position(lots.get(a.key) ?? [], prices, a.key, '9999-12-31');
+      unrealised += p.unrealised;
+      if (e.unrealised?.[a.key] !== undefined) expect([a.key, p.unrealised.toString()]).toEqual([a.key, e.unrealised[a.key]]);
+    }
+    const convert = converterOf(
+      Object.entries(c.rates ?? {}).map(([currency, rate]) => ({ currency, rate, date: '0000-01-01' })),
+      file.currency,
+    );
+    if (e.netWorth !== undefined) {
+      expect((netWorth(chart, all, '2026-12-31', convert).total + unrealised).toString()).toBe(e.netWorth);
+    }
+    if (e.withoutRates) {
+      const w = netWorth(chart, all, '2026-12-31');
+      expect({ netWorth: (w.total + unrealised).toString(), partial: w.partial }).toEqual(e.withoutRates);
+    }
     if (e.eventCount !== undefined) expect(all).toHaveLength(e.eventCount);
     for (const [ref, status] of Object.entries(e.statuses ?? {})) {
       expect(journal.get(events.get(ref)!)!.status).toBe(status);

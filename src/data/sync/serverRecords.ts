@@ -82,7 +82,32 @@ function eventFromServer(doc: Doc, workspaceId: string): StoredEvent & { operati
     goalId: str(links.goalId),
     debtId: str(links.debtId),
     recurringId: str(links.scheduleId),
+    holdingId: str(links.holdingId),
+    investment: investmentFromServer(doc.investment),
   };
+}
+
+function investmentFromServer(v: unknown): StoredEvent['investment'] {
+  if (!v || typeof v !== 'object') return undefined;
+  const m = v as Doc;
+  switch (m.kind) {
+    case 'buy':
+      return { kind: 'buy', units: String(m.units), price: String(m.price), fees: String(m.fees ?? '0') };
+    case 'sell':
+      return {
+        kind: 'sell',
+        units: String(m.units),
+        price: String(m.price),
+        fees: String(m.fees ?? '0'),
+        lots: Array.isArray(m.lots) ? (m.lots as Doc[]).map((l) => ({ lotId: String(l.lotId), units: String(l.units), cost: String(l.cost) })) : [],
+      };
+    case 'reinvest':
+      return { kind: 'reinvest', units: String(m.units) };
+    case 'dividend':
+      return { kind: 'dividend' };
+    default:
+      return undefined;
+  }
 }
 
 /** One server change → the local record it stands for, or null when the app keeps no copy of it. */
@@ -119,6 +144,7 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         order: num(d.sortOrder) ?? 0,
         budgetType: d.type === 'non_monthly' ? 'nonMonthly' : (d.type ?? 'flexible'),
         carryOver: d.carryOver === true,
+        essential: d.essential === true ? true : undefined,
       });
     case 'category_groups':
       return rec('category_groups', id, { name: d.name, kind: d.kind, order: num(d.sortOrder) ?? 0 });
@@ -251,6 +277,24 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         matchedCount: num(d.matchedCount) ?? 0,
         lastUsedAt: str(d.lastUsedAt),
       });
+    case 'holdings':
+      return rec('holdings', id, {
+        name: d.name,
+        symbol: str(d.symbol),
+        type: d.type,
+        accountId: d.accountId,
+        currency: d.currency ?? 'NGN',
+        archived: d.archived === true,
+      });
+    case 'prices':
+      // The feed names a price by its own id; the device keeps that id.
+      return rec('prices', id, { holdingId: d.holdingId, date: d.date, priceMinor: String(d.price) });
+    case 'exchange_rates':
+      return rec('exchange_rates', id, { currency: d.currency, date: d.date, rate: String(d.rate) });
+    case 'report_dashboards':
+      return rec('report_dashboards', id, { name: d.name, sortOrder: num(d.sortOrder) ?? 0, cards: Array.isArray(d.cards) ? d.cards : [] });
+    case 'saved_reports':
+      return rec('saved_reports', id, { name: d.name, spec: d.spec });
     default:
       return null;
   }

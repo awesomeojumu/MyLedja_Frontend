@@ -12,6 +12,7 @@ import {
   monthIncome,
   monthSpent,
   netWorth,
+  converterOf,
   nextMonth,
   periodTotals,
   systemAccounts,
@@ -163,7 +164,8 @@ describe('read formulas', () => {
     ];
     const usdChart = new Chart([...accounts.filter((a) => !a.system), ...systemAccounts('ws').map((a) => (a.system === 'opening_balances' ? { ...a, currency: 'USD' } : a))]);
     const events: MoneyEvent[] = [{ id: '1', operationId: '1', type: 'opening_balance', date: '2026-10-01', status: 'posted', lines }];
-    expect(netWorth(usdChart, events, '2026-10-01', { USD: { numerator: 1550n, denominator: 1n } })).toEqual({ total: 18600000n, partial: [] });
+    const convert = converterOf([{ currency: 'USD', date: '2026-10-01', rate: '1550' }], 'NGN');
+    expect(netWorth(usdChart, events, '2026-10-01', convert)).toEqual({ total: 18600000n, partial: [] });
     expect(netWorth(usdChart, events, '2026-10-01')).toEqual({ total: 0n, partial: ['USD'] });
   });
 

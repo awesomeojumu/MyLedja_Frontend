@@ -33,6 +33,11 @@ function stubSnapshot(): Snapshot {
     notifications: [],
     budgetTemplates: [],
     rules: [],
+    holdings: [],
+    prices: [],
+    rates: [],
+    reportDashboards: [],
+    savedReports: [],
     waiting: new Set(),
     chart: {} as unknown as Snapshot['chart'],
   };

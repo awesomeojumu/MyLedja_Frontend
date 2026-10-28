@@ -5,3 +5,5 @@ export * from './journal';
 export * from './formulas';
 export * from './budget';
 export * from './seed';
+export * from './investments';
+export * from './rates';

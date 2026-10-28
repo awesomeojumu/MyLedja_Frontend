@@ -81,13 +81,18 @@ export function AccountTypeGrid({ value, onChange }: { value: AccountKind; onCha
 }
 
 /** Popup #13 — Add account (Accounts page 8). */
+/** Currencies an account may use; other currencies need an exchange rate for net worth (TECH-SPEC 6.5). */
+const ACCOUNT_CURRENCIES = ['NGN', 'USD', 'GBP', 'EUR'];
+
 export function AddAccountSheet({ onClose }: { onClose: () => void }) {
-  const { repo } = useWorkspace();
+  const { repo, snapshot } = useWorkspace();
   const toast = useToast();
   const [type, setType] = useState<AccountKind>('bank');
   const [name, setName] = useState('');
   const [institution, setInstitution] = useState('');
   const [last4, setLast4] = useState('');
+  const home = snapshot?.settings.currency ?? 'NGN';
+  const [currency, setCurrency] = useState(home);
   const [opening, setOpening] = useState<{ text: string; minor: bigint | null }>({ text: '', minor: null });
   const [date, setDate] = useState(today());
   const [countInBudget, setCountInBudget] = useState(ACCOUNT_KIND_INFO.bank.countInBudget);
@@ -105,6 +110,7 @@ export function AddAccountSheet({ onClose }: { onClose: () => void }) {
       institution: institution.trim() || undefined,
       last4: last4 || undefined,
       countInBudget,
+      currency,
       openingBalance: opening.minor ?? 0n,
       openingDate: date,
     });
@@ -140,6 +146,13 @@ export function AddAccountSheet({ onClose }: { onClose: () => void }) {
           }}
         />
         <TextInput testID="account-name" label={t('accounts.name')} value={name} onChangeText={setName} />
+        <Select
+          testID="account-currency"
+          label={t('accounts.currency')}
+          value={currency}
+          onChange={setCurrency}
+          options={[...new Set([home, ...ACCOUNT_CURRENCIES])].map((c) => ({ value: c, label: c }))}
+        />
         <TextInput
           testID="account-institution"
           label={`${t('accounts.institution')} ${t('common.optional')}`}
