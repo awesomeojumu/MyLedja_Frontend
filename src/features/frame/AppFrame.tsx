@@ -9,6 +9,7 @@ import { useSizeClass } from '@/design/size';
 import { useDesign, useTheme } from '@/design/ThemeProvider';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
+import { useSyncStatus } from '@/data/sync/SyncProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { SHIPPED_PAGES, type NavItem } from './navigation';
 
@@ -24,7 +25,10 @@ function isActive(pathname: string, item: NavItem) {
 
 function ConnectionPill() {
   const online = useOnline();
-  return <StatusPill label={online ? t('status.synced') : t('status.offline')} kind={online ? 'done' : 'pending'} />;
+  const sync = useSyncStatus();
+  if (!online || sync?.state === 'offline') return <StatusPill label={t('status.offline')} kind="pending" />;
+  if (sync && sync.waiting > 0) return <StatusPill label={t('status.waiting', { count: sync.waiting })} kind="pending" />;
+  return <StatusPill label={t('status.synced')} kind="done" />;
 }
 
 function PrivacyToggle({ color }: { color: string }) {

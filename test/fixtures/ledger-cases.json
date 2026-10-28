@@ -1,0 +1,134 @@
+{
+  "about": "TECH-SPEC 6.14 worked cases shared by both repos. Amounts are strings of kobo. Balances are as people see them: what you have, or what you owe.",
+  "version": 1,
+  "accounts": [
+    { "key": "gtbank", "kind": "asset", "currency": "NGN" },
+    { "key": "opay", "kind": "asset", "currency": "NGN" },
+    { "key": "card", "kind": "liability", "currency": "NGN" },
+    { "key": "salary", "kind": "income", "currency": "NGN" },
+    { "key": "food", "kind": "expense", "currency": "NGN" },
+    { "key": "household", "kind": "expense", "currency": "NGN" },
+    { "key": "clothing", "kind": "expense", "currency": "NGN" },
+    { "key": "electronics", "kind": "expense", "currency": "NGN" }
+  ],
+  "cases": [
+    {
+      "case": 1,
+      "title": "Salary into GTBank",
+      "steps": [{ "key": "e1", "type": "income", "date": "2026-10-25", "input": { "account": "gtbank", "category": "salary", "amount": "64000000" } }],
+      "expect": { "balances": { "gtbank": "64000000" }, "income": { "2026-10": "64000000" }, "spent": { "2026-10": "0" }, "netWorth": "64000000" }
+    },
+    {
+      "case": 2,
+      "title": "Groceries from GTBank",
+      "steps": [{ "key": "e1", "type": "expense", "date": "2026-10-28", "input": { "account": "gtbank", "parts": [{ "category": "food", "amount": "1845000" }] } }],
+      "expect": { "balances": { "gtbank": "-1845000" }, "spent": { "2026-10": "1845000" }, "spentIn": { "2026-10": { "food": "1845000" } } }
+    },
+    {
+      "case": 3,
+      "title": "GTBank to OPay",
+      "steps": [{ "key": "e1", "type": "transfer", "date": "2026-10-28", "input": { "from": "gtbank", "to": "opay", "amount": "5000000" } }],
+      "expect": { "balances": { "gtbank": "-5000000", "opay": "5000000" }, "income": { "2026-10": "0" }, "spent": { "2026-10": "0" }, "netWorth": "0" }
+    },
+    {
+      "case": 4,
+      "title": "Laptop on a credit card",
+      "steps": [{ "key": "e1", "type": "expense", "date": "2026-10-20", "input": { "account": "card", "parts": [{ "category": "electronics", "amount": "30000000" }] } }],
+      "expect": { "balances": { "card": "30000000" }, "spent": { "2026-10": "30000000" }, "spentIn": { "2026-10": { "electronics": "30000000" } } }
+    },
+    {
+      "case": 5,
+      "title": "Pay the card next month",
+      "steps": [
+        { "key": "e1", "type": "expense", "date": "2026-10-20", "input": { "account": "card", "parts": [{ "category": "electronics", "amount": "30000000" }] } },
+        { "key": "e2", "type": "transfer", "date": "2026-11-05", "input": { "from": "gtbank", "to": "card", "amount": "30000000" } }
+      ],
+      "expect": { "balances": { "gtbank": "-30000000", "card": "0" }, "spent": { "2026-11": "0" } }
+    },
+    {
+      "case": 6,
+      "title": "Card interest",
+      "steps": [{ "key": "e1", "type": "expense", "date": "2026-10-28", "input": { "account": "card", "parts": [{ "category": "system:interest_and_charges", "amount": "450000" }] } }],
+      "expect": { "balances": { "card": "450000" }, "spent": { "2026-10": "450000" }, "spentIn": { "2026-10": { "system:interest_and_charges": "450000" } } }
+    },
+    {
+      "case": 12,
+      "title": "Split between Food and Household",
+      "steps": [
+        {
+          "key": "e1",
+          "type": "expense",
+          "date": "2026-10-28",
+          "input": { "account": "gtbank", "split": "900000", "parts": [{ "category": "food", "amount": "300000" }, { "category": "household", "amount": "600000" }] }
+        }
+      ],
+      "expect": { "balances": { "gtbank": "-900000" }, "spent": { "2026-10": "900000" }, "spentIn": { "2026-10": { "food": "300000", "household": "600000" } } }
+    },
+    {
+      "case": 13,
+      "title": "Shoes refunded the next month",
+      "steps": [
+        { "key": "e1", "type": "expense", "date": "2026-10-28", "input": { "account": "gtbank", "parts": [{ "category": "clothing", "amount": "3000000" }] } },
+        { "key": "e2", "type": "refund", "date": "2026-11-03", "input": { "account": "gtbank", "of": "e1", "amount": "3000000" } }
+      ],
+      "expect": { "balances": { "gtbank": "0" }, "spentIn": { "2026-10": { "clothing": "3000000" }, "2026-11": { "clothing": "-3000000" } } }
+    },
+    {
+      "case": 14,
+      "title": "A refund larger than the purchase",
+      "steps": [
+        { "key": "e1", "type": "expense", "date": "2026-10-28", "input": { "account": "gtbank", "parts": [{ "category": "clothing", "amount": "3000000" }] } },
+        { "key": "e2", "type": "refund", "date": "2026-11-03", "input": { "account": "gtbank", "of": "e1", "amount": "3500000" }, "refused": "refund_too_large" }
+      ],
+      "expect": { "balances": { "gtbank": "-3000000" }, "events": 1 }
+    },
+    {
+      "case": 19,
+      "title": "Opening balance",
+      "steps": [{ "key": "e1", "type": "opening_balance", "date": "2026-10-01", "input": { "account": "gtbank", "amount": "81230000" } }],
+      "expect": { "balances": { "gtbank": "81230000" }, "income": { "2026-10": "0" } }
+    },
+    {
+      "case": 20,
+      "title": "Reconcile with an adjustment",
+      "steps": [
+        { "key": "e1", "type": "opening_balance", "date": "2026-10-01", "input": { "account": "gtbank", "amount": "79010000" } },
+        { "key": "e2", "type": "reconcile", "date": "2026-10-31", "input": { "account": "gtbank", "statement": "81230000" } }
+      ],
+      "expect": { "balances": { "gtbank": "81230000", "system:adjustments": "-2220000" }, "income": { "2026-10": "0" }, "spent": { "2026-10": "0" } }
+    },
+    {
+      "case": 21,
+      "title": "Correct the groceries amount",
+      "steps": [
+        { "key": "e1", "type": "expense", "date": "2026-10-28", "input": { "account": "gtbank", "parts": [{ "category": "food", "amount": "1845000" }] } },
+        { "key": "e2", "type": "correct", "date": "2026-10-28", "input": { "of": "e1", "type": "expense", "account": "gtbank", "parts": [{ "category": "food", "amount": "1854000" }] } }
+      ],
+      "expect": { "balances": { "gtbank": "-1854000" }, "spent": { "2026-10": "1854000" }, "events": 3, "reversed": ["e1"] }
+    },
+    {
+      "case": 22,
+      "title": "The same expense sent twice",
+      "steps": [
+        { "key": "e1", "operationId": "op-22", "type": "expense", "date": "2026-10-28", "input": { "account": "gtbank", "parts": [{ "category": "food", "amount": "1845000" }] } },
+        { "key": "e2", "operationId": "op-22", "type": "expense", "date": "2026-10-28", "input": { "account": "gtbank", "parts": [{ "category": "food", "amount": "1845000" }] }, "duplicateOf": "e1" }
+      ],
+      "expect": { "balances": { "gtbank": "-1845000" }, "events": 1 }
+    },
+    {
+      "case": 23,
+      "title": "Envelope overspending",
+      "budget": { "style": "envelope", "months": ["2026-10", "2026-11"], "assigned": { "2026-10": { "food": "9000000" } } },
+      "steps": [
+        { "key": "e1", "type": "income", "date": "2026-10-01", "input": { "account": "gtbank", "category": "salary", "amount": "10000000" } },
+        { "key": "e2", "type": "expense", "date": "2026-10-20", "input": { "account": "gtbank", "parts": [{ "category": "food", "amount": "9300000" }] } }
+      ],
+      "expect": {
+        "budget": {
+          "2026-10": { "leftToPlan": "1000000", "rows": { "food": { "available": "-300000" } } },
+          "2026-11": { "leftToPlan": "700000", "rows": { "food": { "carried": "0", "available": "0" } } }
+        }
+      }
+    }
+  ]
+}

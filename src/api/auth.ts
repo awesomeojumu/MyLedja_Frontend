@@ -1,37 +1,40 @@
-import type { ApiClient, Tokens } from './client';
+import type { ApiClient } from './client';
 
-// Provisional shapes until the backend publishes openapi.json (see docs/QUESTIONS.md Q-3).
-export type User = { id: string; name: string; email: string; setupComplete: boolean; workspaceId: string; workspaceName: string };
-export type SessionResponse = Tokens & { user: User };
+import type { components, operations } from './types';
 
-export type SignInBody = { email: string; password: string; staySignedIn: boolean };
-export type SignUpBody = { name: string; email: string; password: string; termsAccepted: true };
-export type VerifyEmailBody = { email: string; code: string };
-export type RecoverBody = { email: string };
-export type NewPasswordBody = { email: string; code: string; newPassword: string };
-export type SetupBody = {
-  workspaceName: string;
-  currency: 'NGN';
-  weekStart: 'monday' | 'sunday' | 'saturday';
-  accounts: { name: string; type: string; openingBalance: string; openingDate: string }[];
-  categories: { key: string; group: string; name: string }[];
-  budgetStyle: 'tracking' | 'envelope';
-  monthlyTakeHome: string | null;
-  /** Steps left for the Dashboard's "Get started" checklist (P04-02). */
-  skippedSteps: number[];
-};
+// Shapes come from the backend's openapi.json (backend QUESTIONS Q-B2); run `npm run api:sync` when it changes.
+type Schemas = components['schemas'];
+type Body<K extends keyof operations> = operations[K] extends { requestBody?: { content: { 'application/json': infer B } } } ? B : never;
+
+export type User = Schemas['User'];
+export type Workspace = Schemas['Workspace'];
+export type PublicConfig = Schemas['PublicConfig'];
+export type SessionResponse = Schemas['SessionResponse'];
+export type CodeSent = Schemas['CodeSent'];
+
+export type SignInBody = Body<'signIn'>;
+export type SignUpBody = Body<'signUp'>;
+export type VerifyEmailBody = Body<'verifyEmail'>;
+export type ResendCodeBody = Body<'resendCode'>;
+export type RecoverBody = Body<'recover'>;
+export type NewPasswordBody = Body<'newPassword'>;
+/** Opening balances and take-home are strings of kobo. */
+export type SetupBody = Body<'finishSetup'>;
 
 export function authApi(client: ApiClient) {
   return {
     signIn: (body: SignInBody) => client.request<SessionResponse>('POST', '/v1/auth/sign-in', body, { auth: false }),
-    signUp: (body: SignUpBody) => client.request<null>('POST', '/v1/auth/sign-up', body, { auth: false }),
+    signUp: (body: SignUpBody) => client.request<CodeSent>('POST', '/v1/auth/sign-up', body, { auth: false }),
     verifyEmail: (body: VerifyEmailBody) =>
       client.request<SessionResponse>('POST', '/v1/auth/verify-email', body, { auth: false }),
-    resendCode: (body: RecoverBody) => client.request<null>('POST', '/v1/auth/resend-code', body, { auth: false }),
-    recover: (body: RecoverBody) => client.request<null>('POST', '/v1/auth/recover', body, { auth: false }),
+    resendCode: (body: ResendCodeBody) => client.request<CodeSent>('POST', '/v1/auth/resend-code', body, { auth: false }),
+    recover: (body: RecoverBody) => client.request<CodeSent>('POST', '/v1/auth/recover', body, { auth: false }),
     newPassword: (body: NewPasswordBody) =>
       client.request<null>('POST', '/v1/auth/new-password', body, { auth: false }),
     signOut: () => client.request<null>('POST', '/v1/auth/sign-out'),
+    signOutOthers: () => client.request<null>('POST', '/v1/auth/sign-out-others'),
+    workspace: (workspaceId: string) => client.request<Workspace>('GET', `/v1/workspaces/${workspaceId}`),
+    publicConfig: () => client.request<PublicConfig>('GET', '/v1/public-config', undefined, { auth: false }),
     me: () => client.request<User>('GET', '/v1/me'),
     finishSetup: (workspaceId: string, body: SetupBody) =>
       client.request<User>('POST', `/v1/workspaces/${workspaceId}/setup`, body),
