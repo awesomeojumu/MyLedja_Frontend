@@ -91,7 +91,7 @@ export function AccountsScreen() {
               label={reordering ? t('accounts.reorderDone') : t('accounts.reorder')}
               onPress={() => setReordering(!reordering)}
             />
-            <Button testID="add-account" label={t('accounts.add')} onPress={() => setAdding(true)} />
+            <Button testID="accounts-add" label={t('accounts.add')} onPress={() => setAdding(true)} />
           </View>
         </View>
 
