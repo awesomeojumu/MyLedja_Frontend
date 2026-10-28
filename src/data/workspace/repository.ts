@@ -39,6 +39,8 @@ import {
   toStored,
   type Account,
   type AccountKind,
+  type BudgetTemplate,
+  DEFAULT_NOTIFICATION_PREFS,
   type Category,
   type EventMeta,
   type ImportMapping,
@@ -78,6 +80,7 @@ export type Snapshot = {
   debts: PersonDebt[];
   debtEntries: DebtEntry[];
   notifications: AppNotification[];
+  budgetTemplates: BudgetTemplate[];
   /** Events made on this device that haven't synced yet. */
   waiting: Set<string>;
   chart: Chart;
@@ -121,7 +124,7 @@ export class WorkspaceRepository {
   ) {}
 
   async load(): Promise<Snapshot> {
-    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows] =
+    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows] =
       await Promise.all([
       this.store.list('accounts'),
       this.store.list('categories'),
@@ -139,6 +142,7 @@ export class WorkspaceRepository {
       this.store.list('debts'),
       this.store.list('debt_entries'),
       this.store.list('notifications'),
+      this.store.list('budget_templates'),
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
     const accountList = accounts.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id })).sort((a, b) => a.order - b.order);
@@ -162,9 +166,14 @@ export class WorkspaceRepository {
       outbox.filter((o) => (o.payload as { collection?: string }).collection === 'events').map((o) => String((o.payload as { id: string }).id)),
     );
     const settingsRow = settingsRows.find((r) => r.id === 'workspace');
-    const settings: WorkspaceSettings = settingsRow
-      ? (settingsRow.data as WorkspaceSettings)
-      : { budgetStyle: 'tracking', currency: 'NGN', weekStart: 'monday' };
+    const raw = settingsRow?.data as WorkspaceSettings | undefined;
+    const settings: WorkspaceSettings = {
+      budgetStyle: raw?.budgetStyle ?? 'tracking',
+      currency: raw?.currency ?? 'NGN',
+      weekStart: raw?.weekStart ?? 'monday',
+      checklistHidden: raw?.checklistHidden,
+      notificationPrefs: { ...DEFAULT_NOTIFICATION_PREFS, ...raw?.notificationPrefs },
+    };
     const assigns = new Map<string, bigint>();
     for (const r of assignRows) {
       const d = r.data as { categoryId: string; month: string; amountMinor: string };
@@ -191,6 +200,7 @@ export class WorkspaceRepository {
       notifications: notificationRows
         .map((r) => ({ ...(r.data as Omit<AppNotification, 'id'>), id: r.id }))
         .filter((n) => !n.snoozedUntil || n.snoozedUntil <= workspaceToday()),
+      budgetTemplates: templateRows.map((r) => ({ ...(r.data as Omit<BudgetTemplate, 'id'>), id: r.id })),
       waiting,
       chart: this.chartFor(accountList, categoryList, debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id }))),
     };
@@ -627,6 +637,23 @@ export class WorkspaceRepository {
 
   async updateSettings(settings: WorkspaceSettings): Promise<void> {
     await this.put('settings', 'workspace', settings, 'settings.update');
+  }
+
+  async saveBudgetTemplate(name: string, lines: BudgetTemplate['lines']): Promise<BudgetTemplate> {
+    const id = this.newId();
+    const template: BudgetTemplate = { id, name: name.trim(), lines };
+    const { id: _id, ...data } = template;
+    await this.put('budget_templates', id, data, 'budget.template.save');
+    return template;
+  }
+
+  async applyBudgetTemplate(templateId: string, month: string): Promise<void> {
+    const snapshot = await this.load();
+    const template = snapshot.budgetTemplates.find((t) => t.id === templateId);
+    if (!template) return;
+    for (const line of template.lines) {
+      await this.setAssigned(line.categoryId, month, BigInt(line.amountMinor));
+    }
   }
 
   async addCategory(input: { name: string; kind: 'income' | 'expense'; group: string }): Promise<Category> {

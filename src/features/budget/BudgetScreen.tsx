@@ -36,6 +36,7 @@ import {
   prevMonth,
   rowFor,
 } from './helpers';
+import { TemplatesSheet } from './TemplatesSheet';
 
 function groupLabel(group: string): string {
   return group in catalogue ? t(group as TextKey) : group;
@@ -61,6 +62,7 @@ export function BudgetScreen() {
   const [editMinor, setEditMinor] = useState<bigint | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const model = useMemo(() => {
@@ -132,6 +134,9 @@ export function BudgetScreen() {
             />
             <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
               <Button testID="budget-move" kind="secondary" label={t('budget.moveMoney')} onPress={() => setMoveOpen(true)} />
+              {snapshot && snapshot.assigns.size > 0 ? (
+                <Button testID="budget-templates" kind="secondary" label={t('budget.templates')} onPress={() => setTemplatesOpen(true)} />
+              ) : null}
               {model.overspent.length > 0 ? (
                 <Button
                   testID="budget-cover"
@@ -290,6 +295,8 @@ export function BudgetScreen() {
           }}
         />
       ) : null}
+
+      <TemplatesSheet visible={templatesOpen} month={month} onClose={() => setTemplatesOpen(false)} />
     </AppFrame>
   );
 }

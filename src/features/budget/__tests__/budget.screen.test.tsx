@@ -178,4 +178,21 @@ describe('Category page', () => {
       expect(cat?.hidden).toBe(true);
     });
   });
+
+  it('P06-10: templates preview and apply', async () => {
+    const { sync, repo, id } = await seeded();
+    const tpl = await repo.saveBudgetTemplate('Monthly basics', [
+      { categoryId: id('Market'), amountMinor: '40000000' },
+      { categoryId: id('Fuel'), amountMinor: '30000000' },
+    ]);
+    await renderWithProviders(wrap(<BudgetScreen />), { sync });
+    await fireEvent.press(await screen.findByTestId('budget-templates'));
+    expect(screen.getByTestId('budget-templates-sheet')).toBeTruthy();
+    await fireEvent(screen.getByTestId('budget-templates-pick'), 'onChange', tpl.id);
+    expect(await screen.findByTestId('budget-templates-preview')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('budget-templates-apply'));
+    await waitFor(async () => {
+      expect((await repo.load()).assigns.get(`${id('Market')}:2026-10`)).toBe(40_000_000n);
+    });
+  });
 });
