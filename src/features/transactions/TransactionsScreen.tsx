@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useMemo, useState, useEffect } from 'react';
+import { Pressable, ScrollView, View, Platform } from 'react-native';
 import { MoreHorizontal } from 'lucide-react-native';
 
 import {
@@ -29,8 +29,12 @@ import { useGlobalSearchParams, useRouter } from 'expo-router';
 
 import { useAddTransaction } from './AddTransaction';
 import { BulkEditSheet } from './BulkEditSheet';
+import { bulkSetAccount } from './bulkActions';
 import { ExportTransactionsSheet } from './ExportTransactionsSheet';
+import { ImportHintSheet } from './ImportHintSheet';
 import { TransferMatchSheet } from './TransferMatchSheet';
+import { duplicateTransferPairs } from './transferMatch';
+import { rowIndicators } from './panelConnected';
 import { FiltersSheet } from './FiltersSheet';
 import { TransactionPanel } from './TransactionPanel';
 import { applyFilters, countActive, emptyFilters, filterChips, removeChip, type TxFilters } from './filters';
@@ -67,11 +71,30 @@ export function TransactionsScreen() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [transferMatchOpen, setTransferMatchOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const params = useGlobalSearchParams<{ tx?: string }>();
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        const el = document.querySelector('[data-testid="tx-search"]') as HTMLElement | null;
+        el?.focus?.();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const transferDupes = useMemo(() => (snapshot ? duplicateTransferPairs(snapshot).length : 0), [snapshot]);
 
   const filteredRows = useMemo(() => {
     if (!snapshot) return [];
@@ -114,7 +137,7 @@ export function TransactionsScreen() {
     toast.show(t('tx.deleted'), () => void repo.restore(row.event));
   };
 
-  const runBulk = async (field: 'category' | 'payee' | 'delete', value?: string) => {
+  const runBulk = async (field: 'category' | 'payee' | 'account' | 'delete', value?: string) => {
     setError(null);
     const ids = [...selected];
     if (field === 'delete') {
@@ -128,6 +151,10 @@ export function TransactionsScreen() {
     } else if (field === 'payee' && value) {
       const r = await repo.bulkSetPayee(ids, value);
       if (!r.ok) setError(ledgerMessage(r.error));
+      else toast.show(t('tx.bulk.done'));
+    } else if (field === 'account' && value) {
+      const r = await bulkSetAccount(repo, ids, value);
+      if (!r.ok) setError(ledgerMessage(r.error as import('@/ledger').LedgerErrorCode));
       else toast.show(t('tx.bulk.done'));
     }
     setSelected(new Set());
@@ -154,6 +181,7 @@ export function TransactionsScreen() {
           label={activeFilterCount > 0 ? t('tx.filtersCount', { count: activeFilterCount }) : t('tx.filters')}
           onPress={() => setFiltersOpen(true)}
         />
+        <Button testID="tx-import" kind="secondary" label={t('tx.import')} onPress={() => setImportOpen(true)} />
         <Button testID="tx-select" kind="secondary" label={t('tx.select')} onPress={() => setSelectMode((v) => !v)} />
         <Button testID="tx-export" kind="secondary" label={t('tx.export')} onPress={() => setExportOpen(true)} />
         <Button testID="tx-transfer-match" kind="secondary" label={t('tx.transferMatch')} onPress={() => setTransferMatchOpen(true)} />
@@ -175,6 +203,13 @@ export function TransactionsScreen() {
         </View>
       ) : null}
       {error ? <InlineError message={error} /> : null}
+      {transferDupes > 0 ? (
+        <Pressable testID="tx-transfer-banner" accessibilityRole="button" onPress={() => setTransferMatchOpen(true)} style={{ marginBottom: sp['spacing-md'] }}>
+          <Card style={{ padding: sp['spacing-md'] }}>
+            <Text>{t('tx.transferBanner', { count: transferDupes })}</Text>
+          </Card>
+        </Pressable>
+      ) : null}
       {!snapshot ? (
         <View style={{ gap: sp['spacing-md'] }}>
           <Placeholder height={20} />
@@ -232,6 +267,13 @@ export function TransactionsScreen() {
                           {row.event.notes}
                         </Text>
                       ) : null}
+                      {rowIndicators(row.event).length > 0 ? (
+                        <Text variant="micro" tone="textSecondary" testID={`tx-marks-${row.event.id}`}>
+                          {rowIndicators(row.event)
+                            .map((m) => t(`tx.mark.${m}` as 'tx.mark.split'))
+                            .join(' · ')}
+                        </Text>
+                      ) : null}
                     </Pressable>
                     {row.waiting ? <StatusPill label={t('tx.waiting')} kind="pending" /> : null}
                     <Amount minor={row.amount} signed={row.event.type !== 'transfer'} />
@@ -265,6 +307,7 @@ export function TransactionsScreen() {
       ) : null}
       {exportOpen && snapshot ? <ExportTransactionsSheet snapshot={snapshot} onClose={() => setExportOpen(false)} /> : null}
       {transferMatchOpen && snapshot ? <TransferMatchSheet snapshot={snapshot} onClose={() => setTransferMatchOpen(false)} /> : null}
+      {importOpen ? <ImportHintSheet onClose={() => setImportOpen(false)} /> : null}
     </AppFrame>
   );
 }

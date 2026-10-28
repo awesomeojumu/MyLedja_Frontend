@@ -4,8 +4,9 @@ import { Button, Select, Sheet, Text } from '@/design/components';
 import type { Snapshot } from '@/data/workspace/repository';
 import { t } from '@/i18n';
 
-type BulkField = 'category' | 'payee' | 'delete';
+type BulkField = 'category' | 'payee' | 'account' | 'delete';
 
+/** Popup #20 — bulk edit (DESIGN page 11). */
 export function BulkEditSheet({
   snapshot,
   count,
@@ -20,9 +21,17 @@ export function BulkEditSheet({
   const [field, setField] = useState<BulkField>('category');
   const [value, setValue] = useState('');
   const categories = snapshot.categories.filter((c) => c.kind === 'expense').map((c) => ({ value: c.id, label: c.name }));
+  const incomeCategories = snapshot.categories.filter((c) => c.kind === 'income').map((c) => ({ value: c.id, label: c.name }));
   const payees = snapshot.payees.map((p) => ({ value: p.id, label: p.name }));
+  const accounts = snapshot.accounts.filter((a) => !a.archived).map((a) => ({ value: a.id, label: a.name }));
   const options =
-    field === 'category' ? categories : field === 'payee' ? payees : [{ value: 'delete', label: t('tx.delete') }];
+    field === 'category'
+      ? [...categories, ...incomeCategories]
+      : field === 'payee'
+        ? payees
+        : field === 'account'
+          ? accounts
+          : [{ value: 'delete', label: t('tx.delete') }];
 
   return (
     <Sheet
@@ -46,6 +55,7 @@ export function BulkEditSheet({
         options={[
           { value: 'category', label: t('add.category') },
           { value: 'payee', label: t('add.payee') },
+          { value: 'account', label: t('add.account') },
           { value: 'delete', label: t('tx.delete') },
         ]}
         value={field}

@@ -102,6 +102,9 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
   const [date, setDate] = useState(prefill.date ?? today());
   const [notes, setNotes] = useState('');
   const [split, setSplit] = useState(false);
+  const [repeats, setRepeats] = useState(false);
+  const [attachReceipt, setAttachReceipt] = useState(false);
+  const [receiptLink, setReceiptLink] = useState('');
   const [parts, setParts] = useState<Part[]>([
     { categoryId: null, text: '', minor: null },
     { categoryId: null, text: '', minor: null },
@@ -143,17 +146,18 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
     if (!valid || !accountId || amount.minor === null) return;
     setBusy(true);
     setError(null);
+    const notesCombined = [attachReceipt && receiptLink.trim() ? `receipt:${receiptLink.trim()}` : '', notes.trim()].filter(Boolean).join('\n');
     const input: TransactionInput =
       kind === 'transfer'
-        ? { kind, fromId: accountId, toId: toId!, amount: amount.minor, date, notes }
+        ? { kind, fromId: accountId, toId: toId!, amount: amount.minor, date, notes: notesCombined || undefined }
         : kind === 'income'
-          ? { kind, accountId, categoryId: categoryId!, amount: amount.minor, date, payeeName: payee, notes }
+          ? { kind, accountId, categoryId: categoryId!, amount: amount.minor, date, payeeName: payee, notes: notesCombined || undefined }
           : {
               kind,
               accountId,
               date,
               payeeName: payee,
-              notes,
+              notes: notesCombined || undefined,
               parts: split ? parts.map((p) => ({ categoryId: p.categoryId!, amount: p.minor! })) : [{ categoryId: categoryId!, amount: amount.minor }],
             };
     const result = await repo.addTransaction(input);
@@ -163,6 +167,28 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
       return;
     }
     const saved = result.value;
+    if (repeats && kind === 'expense' && categoryId && accountId && amount.minor) {
+      await repo.addRecurring({
+        kind: 'bill',
+        name: payee.trim() || t('plan.name'),
+        amountMinor: amount.minor.toString(),
+        accountId,
+        categoryId,
+        rule: { every: 'month', on: Number(date.slice(8, 10)) || 1 },
+        startDate: date,
+      });
+    }
+    if (repeats && kind === 'income' && categoryId && accountId && amount.minor) {
+      await repo.addIncomeStream({
+        name: payee.trim() || t('income.name'),
+        kind: 'regular',
+        expectedMinor: amount.minor.toString(),
+        accountId,
+        categoryId,
+        rule: { every: 'month', on: Number(date.slice(8, 10)) || 1 },
+        countInBudget: true,
+      });
+    }
     toast.show(t('add.saved'), () => void repo.deleteTransaction(saved.id, saved.date));
     if (another) reset();
     else onClose();
@@ -281,6 +307,17 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
           </View>
           <TextInput testID="add-notes" label={t('add.notes')} value={notes} onChangeText={setNotes} />
           {kind === 'expense' ? <Switch testID="add-split" label={t('add.split')} value={split} onChange={setSplit} /> : null}
+          {(kind === 'expense' || kind === 'income') && (
+            <Switch testID="add-repeats" label={t('add.repeats')} value={repeats} onChange={setRepeats} />
+          )}
+          {kind !== 'transfer' ? (
+            <>
+              <Switch testID="add-receipt" label={t('add.receipt')} value={attachReceipt} onChange={setAttachReceipt} />
+              {attachReceipt ? (
+                <TextInput testID="add-receipt-link" label={t('add.receiptLink')} value={receiptLink} onChangeText={setReceiptLink} />
+              ) : null}
+            </>
+          ) : null}
           {error ? <InlineError testID="add-error" message={error} /> : null}
         </View>
       </Sheet>
