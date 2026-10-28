@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
-import { Amount, Button, Card, EmptyState, InlineError, Placeholder, Select, Sheet, Text, AmountInput } from '@/design/components';
+import { Amount, Button, Card, EmptyState, InlineError, Placeholder, Select, Sheet, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { IncomeStream } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
@@ -27,6 +27,8 @@ import {
   unmatchedIncome,
 } from './helpers';
 import { IncomeTwelveMonthChart } from './IncomeTwelveMonthChart';
+import { MarkReceivedSheet } from './MarkReceivedSheet';
+import type { MarkReceivedPayload } from './markReceived';
 
 const sp = tokens.spacing;
 
@@ -37,7 +39,7 @@ export function IncomeScreen() {
   const year = month.slice(0, 4);
   const [addOpen, setAddOpen] = useState(false);
   const [editStream, setEditStream] = useState<IncomeStream | null>(null);
-  const [recordStream, setRecordStream] = useState<IncomeStream | null>(null);
+  const [recordStream, setRecordStream] = useState<{ stream: IncomeStream; expected: bigint; received: bigint } | null>(null);
   const [linkEventId, setLinkEventId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,7 +100,7 @@ export function IncomeScreen() {
                     month={month}
                     expected={expected}
                     received={received}
-                    onRecord={() => setRecordStream(stream)}
+                    onRecord={() => setRecordStream({ stream, expected, received })}
                     onEdit={() => setEditStream(stream)}
                   />
                 ))}
@@ -196,14 +198,36 @@ export function IncomeScreen() {
         />
       ) : null}
       {recordStream && snapshot ? (
-        <RecordIncomeSheet
-          stream={recordStream}
+        <MarkReceivedSheet
+          stream={recordStream.stream}
+          snapshot={snapshot}
+          month={month}
+          expected={recordStream.expected}
+          received={recordStream.received}
           onClose={() => setRecordStream(null)}
-          onSave={async (amount) => {
+          onConfirm={async (payload: MarkReceivedPayload) => {
             setError(null);
-            const r = await repo.recordIncomeReceived(recordStream.id, { accountId: recordStream.accountId, amount, date: today() });
-            if (!r.ok) setError(ledgerMessage(r.error));
-            else setRecordStream(null);
+            const { stream } = recordStream;
+            const date = payload.date;
+            if (payload.kind === 'match') {
+              await repo.linkEventToStream(payload.eventId, stream.id);
+            } else {
+              const r = await repo.recordIncomeReceived(stream.id, {
+                accountId: stream.accountId,
+                amount: payload.amount,
+                date,
+              });
+              if (!r.ok) {
+                setError(ledgerMessage(r.error));
+                return;
+              }
+            }
+            for (const row of payload.routing) {
+              if (!row.apply) continue;
+              const alloc = await repo.allocateToGoal(row.goalId, { amount: row.amount, date, fromAccountId: stream.accountId });
+              if (!alloc.ok) setError(ledgerMessage(alloc.error));
+            }
+            setRecordStream(null);
           }}
         />
       ) : null}
@@ -311,41 +335,6 @@ function StreamCard({
         </Text>
       )}
     </Card>
-  );
-}
-
-function RecordIncomeSheet({
-  stream,
-  onClose,
-  onSave,
-}: {
-  stream: IncomeStream;
-  onClose: () => void;
-  onSave: (amount: bigint) => Promise<void>;
-}) {
-  const [amountText, setAmountText] = useState('');
-  const [amountMinor, setAmountMinor] = useState<bigint | null>(null);
-  return (
-    <Sheet
-      visible
-      title={t('income.recordTitle')}
-      onClose={onClose}
-      testID="income-record-sheet"
-      footer={
-        <Button
-          testID="income-record-save"
-          label={t('panel.save')}
-          disabled={amountMinor === null || amountMinor <= 0n}
-          onPress={() => void onSave(amountMinor!)}
-        />
-      }
-    >
-      <Text tone="textSecondary">{stream.name}</Text>
-      <Text variant="caption" tone="textSecondary">
-        {t('income.recordHint')}
-      </Text>
-      <AmountInput testID="income-record-amount" label={t('income.receivedAmount')} value={amountText} onChange={(text, minor) => { setAmountText(text); setAmountMinor(minor); }} />
-    </Sheet>
   );
 }
 
