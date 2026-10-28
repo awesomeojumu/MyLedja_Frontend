@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeftRight, Bell, CalendarClock, CircleDollarSign, Eye, EyeOff, HandCoins, LayoutDashboard, Menu, PieChart, Plus, Settings, Target, Users, Wallet } from 'lucide-react-native';
+import { ArrowLeftRight, Bell, CalendarClock, CircleDollarSign, Eye, EyeOff, HandCoins, LayoutDashboard, Menu, PieChart, Plus, Settings, Target, Users, Wallet, Zap } from 'lucide-react-native';
 import { Banner, Button, StatusPill, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
@@ -24,6 +24,7 @@ const ICONS = {
   budget: PieChart,
   accounts: Wallet,
   payees: Users,
+  rules: Zap,
   settings: Settings,
   goals: Target,
   plan: CalendarClock,

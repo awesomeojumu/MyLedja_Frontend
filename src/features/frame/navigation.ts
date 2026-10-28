@@ -6,7 +6,7 @@ export type NavItem = {
   label: TextKey;
   phoneLabel?: TextKey;
   href: Href;
-  icon: 'dashboard' | 'accounts' | 'transactions' | 'budget' | 'payees' | 'settings' | 'goals' | 'plan' | 'income' | 'debts' | 'notifications';
+  icon: 'dashboard' | 'accounts' | 'transactions' | 'budget' | 'payees' | 'rules' | 'settings' | 'goals' | 'plan' | 'income' | 'debts' | 'notifications';
 };
 
 /**
@@ -24,6 +24,7 @@ export const SHIPPED_PAGES: NavItem[] = [
 export const MANAGE_PAGES: NavItem[] = [
   { key: 'notifications', label: 'nav.notifications', href: '/notifications', icon: 'notifications' },
   { key: 'payees', label: 'nav.payees', href: '/payees', icon: 'payees' },
+  { key: 'rules', label: 'nav.rules', href: '/rules', icon: 'rules' },
   { key: 'settings', label: 'nav.settings', href: '/settings', icon: 'settings' },
 ];
 
