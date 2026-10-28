@@ -694,6 +694,71 @@ export class WorkspaceRepository {
     return { ok: true, value: undefined };
   }
 
+  async setEventPayee(eventId: string, payeeId: string): Promise<Result> {
+    const snapshot = await this.load();
+    const event = snapshot.events.find((e) => e.id === eventId);
+    if (!event || event.status !== 'posted') return { ok: false, error: 'missing_lines' };
+    if (event.reconciledBy) return { ok: false, error: 'reconciled' };
+    if (!snapshot.payees.some((p) => p.id === payeeId)) return { ok: false, error: 'missing_lines' };
+    const rec = await this.store.read('events', eventId);
+    if (!rec) return { ok: false, error: 'missing_lines' };
+    const data = { ...(rec.data as StoredEvent), payeeId };
+    await this.engine.save({ ...rec, data }, 'event.payee', { collection: 'events', id: eventId, data }, rec.version);
+    return { ok: true, value: undefined };
+  }
+
+  /** Bulk categorize uses corrections (TECH-SPEC 8). */
+  async bulkSetCategory(eventIds: string[], categoryId: string): Promise<Result> {
+    for (const id of eventIds) {
+      const snapshot = await this.load();
+      const event = snapshot.events.find((e) => e.id === id);
+      if (!event || event.status !== 'posted' || (event.type !== 'expense' && event.type !== 'income')) continue;
+      if (event.reconciledBy) return { ok: false, error: 'reconciled' };
+      const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+      const money = event.lines.find((l) => accountIds.has(l.ledgerAccountId));
+      if (!money) continue;
+      const amount = event.lines
+        .filter((l) => !accountIds.has(l.ledgerAccountId))
+        .reduce((s, l) => s + (l.amountMinor < 0n ? -l.amountMinor : l.amountMinor), 0n);
+      const input: TransactionInput =
+        event.type === 'expense'
+          ? {
+              kind: 'expense',
+              accountId: money.ledgerAccountId,
+              parts: [{ categoryId, amount }],
+              date: event.date,
+              notes: event.notes,
+            }
+          : {
+              kind: 'income',
+              accountId: money.ledgerAccountId,
+              categoryId,
+              amount,
+              date: event.date,
+              notes: event.notes,
+            };
+      const corrected = await this.correctTransaction(id, input);
+      if (!corrected.ok) return corrected;
+    }
+    return { ok: true, value: undefined };
+  }
+
+  async bulkDelete(eventIds: string[], date: string): Promise<Result> {
+    for (const id of eventIds) {
+      const deleted = await this.deleteTransaction(id, date);
+      if (!deleted.ok) return deleted;
+    }
+    return { ok: true, value: undefined };
+  }
+
+  async bulkSetPayee(eventIds: string[], payeeId: string): Promise<Result> {
+    for (const id of eventIds) {
+      const moved = await this.setEventPayee(id, payeeId);
+      if (!moved.ok) return moved;
+    }
+    return { ok: true, value: undefined };
+  }
+
   private linesFor(chart: Chart, input: TransactionInput): Result<{ lines: Line[]; splitTotal?: bigint }> {
     if (input.kind === 'expense') {
       const r = buildExpense(chart, { accountId: input.accountId, parts: input.parts });

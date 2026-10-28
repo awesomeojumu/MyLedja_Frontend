@@ -2,7 +2,22 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { MoreHorizontal } from 'lucide-react-native';
 
-import { Amount, Button, Card, EmptyState, formatDay, InlineError, Menu, Placeholder, StatusPill, Text, TextInput, useToast } from '@/design/components';
+import {
+  Amount,
+  Button,
+  Card,
+  Checkbox,
+  EmptyState,
+  formatDay,
+  InlineError,
+  Menu,
+  PillTag,
+  Placeholder,
+  StatusPill,
+  Text,
+  TextInput,
+  useToast,
+} from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
@@ -13,13 +28,16 @@ import { formatNaira } from '@/money';
 import { useGlobalSearchParams, useRouter } from 'expo-router';
 
 import { useAddTransaction } from './AddTransaction';
+import { BulkEditSheet } from './BulkEditSheet';
+import { FiltersSheet } from './FiltersSheet';
 import { TransactionPanel } from './TransactionPanel';
+import { applyFilters, countActive, emptyFilters, filterChips, removeChip, type TxFilters } from './filters';
 import { ledgerMessage, rowsFor, today, type Row } from './helpers';
 
 const sp = tokens.spacing;
 
 /** Search matches payee, note, category or amount (P11-02). */
-export function matches(row: Row, query: string): boolean {
+export function matchesSearch(row: Row, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   const digits = q.replace(/[₦,\s]/g, '');
@@ -33,20 +51,32 @@ export function matches(row: Row, query: string): boolean {
   );
 }
 
+// Re-export for tests that import `matches` from TransactionsScreen.
+export { matchesSearch as matches };
+
 export function TransactionsScreen() {
   const { repo, snapshot } = useWorkspace();
   const add = useAddTransaction();
   const toast = useToast();
   const theme = useTheme();
   const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<TxFilters>(emptyFilters());
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const params = useGlobalSearchParams<{ tx?: string }>();
 
-  const days = useMemo(() => {
+  const filteredRows = useMemo(() => {
     if (!snapshot) return [];
+    return rowsFor(snapshot).filter((r) => matchesSearch(r, query) && applyFilters(r, filters, snapshot));
+  }, [snapshot, query, filters]);
+
+  const days = useMemo(() => {
     const groups = new Map<string, Row[]>();
-    for (const row of rowsFor(snapshot).filter((r) => matches(r, query))) {
+    for (const row of filteredRows) {
       const list = groups.get(row.event.date) ?? [];
       list.push(row);
       groups.set(row.event.date, list);
@@ -56,7 +86,19 @@ export function TransactionsScreen() {
       rows,
       net: rows.filter((r) => r.event.type !== 'transfer').reduce((s, r) => s + r.amount, 0n),
     }));
-  }, [snapshot, query]);
+  }, [filteredRows]);
+
+  const chips = snapshot ? filterChips(filters, snapshot) : [];
+  const activeFilterCount = countActive(filters);
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const remove = async (row: Row) => {
     setError(null);
@@ -68,6 +110,26 @@ export function TransactionsScreen() {
     toast.show(t('tx.deleted'), () => void repo.restore(row.event));
   };
 
+  const runBulk = async (field: 'category' | 'payee' | 'delete', value?: string) => {
+    setError(null);
+    const ids = [...selected];
+    if (field === 'delete') {
+      const r = await repo.bulkDelete(ids, today());
+      if (!r.ok) setError(ledgerMessage(r.error));
+      else toast.show(t('tx.bulk.done'));
+    } else if (field === 'category' && value) {
+      const r = await repo.bulkSetCategory(ids, value);
+      if (!r.ok) setError(ledgerMessage(r.error));
+      else toast.show(t('tx.bulk.done'));
+    } else if (field === 'payee' && value) {
+      const r = await repo.bulkSetPayee(ids, value);
+      if (!r.ok) setError(ledgerMessage(r.error));
+      else toast.show(t('tx.bulk.done'));
+    }
+    setSelected(new Set());
+    setSelectMode(false);
+  };
+
   return (
     <AppFrame title={t('tx.title')}>
       <View
@@ -75,14 +137,37 @@ export function TransactionsScreen() {
           flexDirection: 'row',
           gap: sp['spacing-md'],
           alignItems: 'flex-end',
-          marginBottom: sp['spacing-lg'],
+          marginBottom: sp['spacing-md'],
+          flexWrap: 'wrap',
         }}
       >
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 160 }}>
           <TextInput testID="tx-search" label={t('tx.search')} value={query} onChangeText={setQuery} />
         </View>
+        <Button
+          testID="tx-filters"
+          kind="secondary"
+          label={activeFilterCount > 0 ? t('tx.filtersCount', { count: activeFilterCount }) : t('tx.filters')}
+          onPress={() => setFiltersOpen(true)}
+        />
+        <Button testID="tx-select" kind="secondary" label={t('tx.select')} onPress={() => setSelectMode((v) => !v)} />
         <Button testID="tx-add" label={t('tx.add')} onPress={() => add.open('expense')} />
       </View>
+      {chips.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'], marginBottom: sp['spacing-md'] }}>
+          {chips.map((chip) => (
+            <Pressable key={chip.key} testID={`tx-chip-${chip.key}`} accessibilityRole="button" onPress={() => setFilters(removeChip(filters, chip.key))}>
+              <PillTag label={`${chip.label} ✕`} />
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {selectMode && selected.size > 0 ? (
+        <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'], flexWrap: 'wrap' }}>
+          <Text>{t('tx.selected', { count: selected.size })}</Text>
+          <Button testID="tx-bulk" label={t('tx.bulk.edit')} onPress={() => setBulkOpen(true)} />
+        </View>
+      ) : null}
       {error ? <InlineError message={error} /> : null}
       {!snapshot ? (
         <View style={{ gap: sp['spacing-md'] }}>
@@ -90,7 +175,7 @@ export function TransactionsScreen() {
           <Placeholder height={56} />
           <Placeholder height={56} />
         </View>
-      ) : days.length === 0 && !query ? (
+      ) : days.length === 0 && !query && activeFilterCount === 0 ? (
         <EmptyState title={t('tx.emptyTitle')} body={t('tx.emptyBody')} actionLabel={t('tx.add')} onAction={() => add.open('expense')} />
       ) : days.length === 0 ? (
         <Text tone="textSecondary">{t('tx.noMatches')}</Text>
@@ -98,12 +183,7 @@ export function TransactionsScreen() {
         <ScrollView contentContainerStyle={{ gap: sp['spacing-lg'] }}>
           {days.map((day) => (
             <View key={day.date} testID={`day-${day.date}`} style={{ gap: sp['spacing-xs'] }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                }}
-              >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text variant="caption" tone="textSecondary" accessibilityRole="header">
                   {formatDay(day.date)}
                 </Text>
@@ -123,16 +203,17 @@ export function TransactionsScreen() {
                       borderTopColor: theme.border,
                     }}
                   >
+                    {selectMode ? (
+                      <Checkbox testID={`select-${row.event.id}`} checked={selected.has(row.event.id)} onChange={() => toggleSelect(row.event.id)} label="" />
+                    ) : null}
                     <Pressable
                       testID={`open-${row.event.id}`}
                       accessibilityRole="button"
-                      onPress={() => router.setParams({ tx: row.event.id })}
+                      onPress={() => (selectMode ? toggleSelect(row.event.id) : router.setParams({ tx: row.event.id }))}
                       accessibilityLabel={t('tx.rowLabel', {
                         title: row.title,
                         category: row.category,
-                        amount: formatNaira(row.amount, {
-                          signed: row.event.type !== 'transfer',
-                        }),
+                        amount: formatNaira(row.amount, { signed: row.event.type !== 'transfer' }),
                       })}
                       style={{ flex: 1, gap: sp['spacing-xxs'] }}
                     >
@@ -145,39 +226,20 @@ export function TransactionsScreen() {
                           {row.event.notes}
                         </Text>
                       ) : null}
-                      {row.event.correctionOf ? (
-                        <Text variant="caption" tone="textSecondary">
-                          {t('panel.edited')}
-                        </Text>
-                      ) : null}
                     </Pressable>
                     {row.waiting ? <StatusPill label={t('tx.waiting')} kind="pending" /> : null}
                     <Amount minor={row.amount} signed={row.event.type !== 'transfer'} />
-                    <Menu
-                      testID={`tx-menu-${row.event.id}`}
-                      trigger={(open) => (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={t('tx.actions')}
-                          onPress={open}
-                          style={{
-                            minWidth: 44,
-                            minHeight: 44,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <MoreHorizontal size={18} color={theme.textSecondary} />
-                        </Pressable>
-                      )}
-                      items={[
-                        {
-                          key: 'delete',
-                          label: t('tx.delete'),
-                          onPress: () => void remove(row),
-                        },
-                      ]}
-                    />
+                    {!selectMode ? (
+                      <Menu
+                        testID={`tx-menu-${row.event.id}`}
+                        trigger={(open) => (
+                          <Pressable accessibilityRole="button" accessibilityLabel={t('tx.actions')} onPress={open} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                            <MoreHorizontal size={18} color={theme.textSecondary} />
+                          </Pressable>
+                        )}
+                        items={[{ key: 'delete', label: t('tx.delete'), onPress: () => void remove(row) }]}
+                      />
+                    ) : null}
                   </View>
                 ))}
               </Card>
@@ -186,6 +248,12 @@ export function TransactionsScreen() {
         </ScrollView>
       )}
       {params.tx ? <TransactionPanel id={params.tx} onClose={() => router.setParams({ tx: undefined })} /> : null}
+      {filtersOpen && snapshot ? (
+        <FiltersSheet snapshot={snapshot} filters={filters} onClose={() => setFiltersOpen(false)} onApply={(f) => { setFilters(f); setFiltersOpen(false); }} />
+      ) : null}
+      {bulkOpen && snapshot ? (
+        <BulkEditSheet snapshot={snapshot} count={selected.size} onClose={() => setBulkOpen(false)} onApply={runBulk} />
+      ) : null}
     </AppFrame>
   );
 }
