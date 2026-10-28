@@ -3,12 +3,15 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ApiError } from '@/api/client';
 import type { SessionResponse } from '@/api/auth';
-import { Button, Checkbox, CodeInput, InlineError, Sheet, Text, TextInput, useToast } from '@/design/components';
+import { Button, Checkbox, CodeInput, Divider, InlineError, Sheet, Text, TextInput, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { AuthFrame } from './AuthFrame';
+import { AuthStepPanel } from './AuthStepPanel';
 import { useAuth } from './AuthProvider';
+import { GoogleSignInButton } from './GoogleSignInButton';
+import { googleSignInEnabled, runGoogleSignIn } from './googleSignIn';
 import { checkPassword, EMAIL_PATTERN } from './password';
 import { PasswordStrength } from './PasswordStrength';
 
@@ -31,6 +34,7 @@ export function SignUpScreen() {
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
   const [session, setSession] = useState<SessionResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const showGoogle = googleSignInEnabled();
 
   useEffect(() => {
     if (step !== 'code' || resendIn <= 0) return;
@@ -85,111 +89,130 @@ export function SignUpScreen() {
     }
   };
 
-  if (step === 'done') {
-    return (
-      <AuthFrame>
-        <Text variant="display-md" accessibilityRole="header">
-          {t('signUp.readyTitle')}
-        </Text>
-        <Button
-          testID="ready-continue"
-          kind="gradient"
-          label={t('signUp.readyContinue')}
-          fullWidth
-          onPress={async () => {
-            if (session) await completeSignIn(session, false);
-            router.replace('/welcome');
-          }}
-        />
-      </AuthFrame>
-    );
-  }
-
-  if (step === 'code') {
-    return (
-      <AuthFrame>
-        <Text variant="display-md" accessibilityRole="header">
-          {t('signUp.checkTitle')}
-        </Text>
-        <Text tone="textSecondary">{t('signUp.checkBody', { email: email.trim() })}</Text>
-        <CodeInput value={code} onChange={(v) => { setCode(v); setCodeError(null); }} error={codeError} />
-        <Button testID="verify" kind="gradient" label={t('signUp.verify')} onPress={verify} disabled={busy || !online} fullWidth />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          {resendIn > 0 ? (
-            <Text variant="caption" tone="textHelper" testID="resend-countdown">
-              {t('signUp.resendIn', { seconds: String(resendIn).padStart(2, '0') })}
-            </Text>
-          ) : (
-            <Button kind="link" label={t('signUp.resend')} onPress={resend} />
-          )}
-          <Button kind="link" label={t('signUp.changeEmail')} onPress={() => { setStep('create'); setCode(''); }} />
-        </View>
-      </AuthFrame>
-    );
-  }
+  const google = async () => {
+    if (!online || busy) return;
+    setBusy(true);
+    setErrors({});
+    try {
+      const res = await runGoogleSignIn(api);
+      if (res.ok) {
+        await completeSignIn(res.session, false);
+        router.replace('/welcome');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <AuthFrame>
-      <Text variant="display-md" accessibilityRole="header">
-        {t('signUp.title')}
-      </Text>
-      <TextInput testID="name" label={t('signUp.name')} value={name} onChangeText={setName} autoComplete="name" textContentType="name" error={errors.name} autoFocus />
-      <TextInput
-        testID="email"
-        label={t('auth.email')}
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        autoComplete="email"
-        textContentType="username"
-        keyboardType="email-address"
-        error={errors.email}
-      />
-      <TextInput
-        testID="password"
-        label={t('auth.password')}
-        value={password}
-        onChangeText={setPassword}
-        secure
-        autoComplete="new-password"
-        textContentType="newPassword"
-        error={errors.password}
-      />
-      <PasswordStrength password={password} />
-      <View style={{ gap: tokens.spacing['spacing-xs'] }}>
-        <Checkbox
-          testID="terms"
-          checked={terms}
-          onChange={setTerms}
-          label={t('signUp.terms', { terms: t('signUp.termsLink'), privacy: t('signUp.privacyLink') })}
-          richLabel={
-            <Text style={{ flexShrink: 1 }}>
-              {t('signUp.terms', { terms: '\u0000', privacy: '\u0001' })
-                .split(/(\u0000|\u0001)/)
-                .map((part, i) =>
-                  part === '\u0000' ? (
-                    <Text key={i} tone="link" accessibilityRole="link" style={{ textDecorationLine: 'underline' }} onPress={() => setReading('terms')}>
-                      {t('signUp.termsLink')}
-                    </Text>
-                  ) : part === '\u0001' ? (
-                    <Text key={i} tone="link" accessibilityRole="link" style={{ textDecorationLine: 'underline' }} onPress={() => setReading('privacy')}>
-                      {t('signUp.privacyLink')}
-                    </Text>
-                  ) : (
-                    part
-                  ),
-                )}
+      <AuthStepPanel step={step}>
+        {step === 'done' ? (
+          <>
+            <Text variant="display-md" accessibilityRole="header">
+              {t('signUp.readyTitle')}
             </Text>
-          }
-        />
-        {errors.terms ? <InlineError testID="terms-error" message={errors.terms} /> : null}
-      </View>
-      {errors.form ? <InlineError message={errors.form} /> : null}
-      <Button testID="create" kind="gradient" label={t('signUp.submit')} onPress={create} disabled={busy || !online} fullWidth />
-      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: tokens.spacing['spacing-xs'] }}>
-        <Text tone="textSecondary">{t('signUp.haveAccount')}</Text>
-        <Button kind="link" label={t('signUp.signIn')} onPress={() => router.push('/sign-in')} />
-      </View>
+            <Button
+              testID="ready-continue"
+              kind="gradient"
+              label={t('signUp.readyContinue')}
+              fullWidth
+              onPress={async () => {
+                if (session) await completeSignIn(session, false);
+                router.replace('/welcome');
+              }}
+            />
+          </>
+        ) : step === 'code' ? (
+          <>
+            <Text variant="display-md" accessibilityRole="header">
+              {t('signUp.checkTitle')}
+            </Text>
+            <Text tone="textSecondary">{t('signUp.checkBody', { email: email.trim() })}</Text>
+            <CodeInput value={code} onChange={(v) => { setCode(v); setCodeError(null); }} error={codeError} />
+            <Button testID="verify" kind="gradient" label={t('signUp.verify')} onPress={verify} disabled={busy || !online} fullWidth />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              {resendIn > 0 ? (
+                <Text variant="caption" tone="textHelper" testID="resend-countdown">
+                  {t('signUp.resendIn', { seconds: String(resendIn).padStart(2, '0') })}
+                </Text>
+              ) : (
+                <Button kind="link" label={t('signUp.resend')} onPress={resend} />
+              )}
+              <Button kind="link" label={t('signUp.changeEmail')} onPress={() => { setStep('create'); setCode(''); }} />
+            </View>
+          </>
+        ) : (
+          <>
+            <Text variant="display-md" accessibilityRole="header">
+              {t('signUp.title')}
+            </Text>
+            {showGoogle ? (
+              <>
+                <GoogleSignInButton onPress={google} disabled={busy || !online} />
+                <Divider label={t('auth.or')} />
+              </>
+            ) : null}
+            <TextInput testID="name" label={t('signUp.name')} value={name} onChangeText={setName} autoComplete="name" textContentType="name" error={errors.name} autoFocus />
+            <TextInput
+              testID="email"
+              label={t('auth.email')}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoComplete="email"
+              textContentType="username"
+              keyboardType="email-address"
+              error={errors.email}
+            />
+            <TextInput
+              testID="password"
+              label={t('auth.password')}
+              value={password}
+              onChangeText={setPassword}
+              secure
+              autoComplete="new-password"
+              textContentType="newPassword"
+              error={errors.password}
+            />
+            <PasswordStrength password={password} />
+            <View style={{ gap: tokens.spacing['spacing-xs'] }}>
+              <Checkbox
+                testID="terms"
+                checked={terms}
+                onChange={setTerms}
+                label={t('signUp.terms', { terms: t('signUp.termsLink'), privacy: t('signUp.privacyLink') })}
+                richLabel={
+                  <Text style={{ flexShrink: 1 }}>
+                    {t('signUp.terms', { terms: '\u0000', privacy: '\u0001' })
+                      .split(/(\u0000|\u0001)/)
+                      .map((part, i) =>
+                        part === '\u0000' ? (
+                          <Text key={i} tone="link" accessibilityRole="link" style={{ textDecorationLine: 'underline' }} onPress={() => setReading('terms')}>
+                            {t('signUp.termsLink')}
+                          </Text>
+                        ) : part === '\u0001' ? (
+                          <Text key={i} tone="link" accessibilityRole="link" style={{ textDecorationLine: 'underline' }} onPress={() => setReading('privacy')}>
+                            {t('signUp.privacyLink')}
+                          </Text>
+                        ) : (
+                          part
+                        ),
+                      )}
+                  </Text>
+                }
+              />
+              {errors.terms ? <InlineError testID="terms-error" message={errors.terms} /> : null}
+            </View>
+            {errors.form ? <InlineError message={errors.form} /> : null}
+            <Button testID="create" kind="gradient" label={t('signUp.submit')} onPress={create} disabled={busy || !online} fullWidth />
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: tokens.spacing['spacing-xs'] }}>
+              <Text tone="textSecondary">{t('signUp.haveAccount')}</Text>
+              <Button kind="link" label={t('signUp.signIn')} onPress={() => router.push('/sign-in')} />
+            </View>
+          </>
+        )}
+      </AuthStepPanel>
       <Sheet
         visible={reading !== null}
         title={reading === 'privacy' ? t('signUp.privacyTitle') : t('signUp.termsTitle')}
