@@ -31,12 +31,14 @@ type Options = {
 export class SyncEngine {
   private readonly now: () => number;
   private readonly newId: () => string;
+  private transport: SyncTransport;
   private running: Promise<void> | null = null;
   online = true;
 
   constructor(private readonly options: Options) {
     this.now = options.now ?? Date.now;
     this.newId = options.newId ?? uuidv7;
+    this.transport = options.transport;
   }
 
   /** Saves the record and its operation together. The screen may show it as saved once this resolves. */
@@ -110,7 +112,7 @@ export class SyncEngine {
 
   /** Returns false when the network failed, so the pull is skipped. */
   private async send(force: boolean): Promise<boolean> {
-    const { store, transport } = this.options;
+    const { store } = this.options;
     const all = (await store.outbox()).filter((o) => o.state === 'queued');
     const due = all.findIndex((o) => !force && o.nextAttemptAt > this.now());
     const ready = due === -1 ? all : all.slice(0, due);
@@ -119,7 +121,7 @@ export class SyncEngine {
       const batch = ready.slice(i, i + BATCH_SIZE);
       let results;
       try {
-        results = await transport.postOperations(batch.map(toOperation));
+        results = await this.transport.postOperations(batch.map(toOperation));
       } catch {
         for (const op of batch) {
           const attempts = op.attempts + 1;
@@ -149,19 +151,29 @@ export class SyncEngine {
   }
 
   private async pull(): Promise<void> {
-    const { store, transport } = this.options;
+    const { store } = this.options;
     let since = await store.lastSeq();
     for (;;) {
       let page;
       try {
-        page = await transport.getChanges(since);
+        page = await this.transport.getChanges(since);
       } catch {
         return;
+      }
+      if (page.reset) {
+        await store.clearRecords();
+        since = 0;
+        continue;
       }
       await store.apply(page.changes, page.lastSeq);
       since = page.lastSeq;
       if (!page.hasMore) return;
     }
+  }
+
+  /** Swap the live transport (mock ↔ HTTP) without dropping the outbox. */
+  setTransport(transport: SyncTransport) {
+    this.transport = transport;
   }
 }
 

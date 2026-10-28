@@ -12,6 +12,7 @@ type AuthState = {
   status: 'loading' | 'signed-out' | 'signed-in';
   user: User | null;
   api: AuthApi;
+  client: ApiClient;
   source: ApiSource;
   setSource: (s: ApiSource) => void;
   completeSignIn: (res: SessionResponse, staySignedIn: boolean) => Promise<void>;
@@ -101,8 +102,8 @@ export function AuthProvider({
   }, [api, client]);
 
   const value = useMemo(
-    () => ({ status, user, api, source, setSource, completeSignIn, setUser, signOut }),
-    [status, user, api, source, setSource, completeSignIn, signOut],
+    () => ({ status, user, api, client, source, setSource, completeSignIn, setUser, signOut }),
+    [status, user, api, client, source, setSource, completeSignIn, signOut],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

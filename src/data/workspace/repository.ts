@@ -402,6 +402,54 @@ export class WorkspaceRepository {
     return this.postEvent(snapshot.chart, snapshot.events, { type: 'reversal', date, lines: buildReversal(original), reversalOf: id });
   }
 
+  /** P11-09: reverse opposite legs and post one transfer (mirrors BE linkTransfer). */
+  async linkAsTransfer(outId: string, inId: string): Promise<Result<TxEvent>> {
+    const snapshot = await this.load();
+    const out = snapshot.events.find((e) => e.id === outId);
+    const inn = snapshot.events.find((e) => e.id === inId);
+    if (!out || !inn) return { ok: false, error: 'missing_lines' };
+    if (out.reconciledBy || inn.reconciledBy) return { ok: false, error: 'reconciled' };
+    const accounts = new Map(snapshot.accounts.map((a) => [a.id, a]));
+    const outReal = out.lines.filter((l) => accounts.has(l.ledgerAccountId));
+    const inReal = inn.lines.filter((l) => accounts.has(l.ledgerAccountId));
+    if (outReal.length !== 1 || inReal.length !== 1) return { ok: false, error: 'missing_lines' };
+    const fromId = outReal[0]!.ledgerAccountId;
+    const toId = inReal[0]!.ledgerAccountId;
+    if (fromId === toId) return { ok: false, error: 'missing_lines' };
+    const fromAccount = accounts.get(fromId)!;
+    const outShown =
+      ACCOUNT_KIND_INFO[fromAccount.type].ledger === 'liability' ? -outReal[0]!.amountMinor : outReal[0]!.amountMinor;
+    const amount = outShown < 0n ? -outShown : outShown;
+    if (amount <= 0n) return { ok: false, error: 'not_positive' };
+    const date = out.date;
+    const notes = out.notes ?? inn.notes;
+    const payeeId = out.payeeId ?? inn.payeeId;
+    const reversedOut = await this.deleteTransaction(outId, date);
+    if (!reversedOut.ok) return reversedOut;
+    const reversedIn = await this.deleteTransaction(inId, date);
+    if (!reversedIn.ok) return reversedIn;
+    const after = await this.load();
+    const lines = buildTransfer(after.chart, { fromId, toId, amount });
+    if (!lines.ok) return lines;
+    return this.postEvent(after.chart, after.events, {
+      type: 'transfer',
+      date,
+      lines: lines.value,
+      notes,
+      payeeId,
+    });
+  }
+
+  async transferDismissals(): Promise<Set<string>> {
+    const rows = await this.store.list('transfer_dismissals');
+    return new Set(rows.map((r) => r.id));
+  }
+
+  async dismissTransferMatch(outId: string, inId: string): Promise<void> {
+    const id = `${outId}:${inId}`;
+    await this.put('transfer_dismissals', id, { outId, inId }, 'transfer.dismiss');
+  }
+
   /** Undo of a delete: the original movement again, as a new event. */
   async restore(original: TxEvent): Promise<Result<TxEvent>> {
     const snapshot = await this.load();

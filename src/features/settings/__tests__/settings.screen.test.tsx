@@ -141,6 +141,29 @@ describe('Settings (F1.10)', () => {
     });
   });
 
+  it('TECH-SPEC 9.9: sign-out warns when unsent outbox ops exist', async () => {
+    const { sync, repo } = await seeded();
+    const before = (await sync.store.outbox()).length;
+    const s = await repo.load();
+    await repo.addTransaction({
+      kind: 'expense',
+      accountId: s.accounts[0]!.id,
+      parts: [{ categoryId: s.categories.find((c) => c.name === 'Market')!.id, amount: 1_000_000n }],
+      date: '2026-10-20',
+    });
+    const waiting = (await sync.store.outbox()).filter((o) => o.state === 'queued').length;
+    expect(waiting).toBeGreaterThan(before);
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(await screen.findByTestId('settings-sign-out'));
+    expect(await screen.findByText(t('sync.signOutWarnTitle'))).toBeTruthy();
+    expect(screen.getByText(t('sync.signOutWarnBody', { count: waiting }))).toBeTruthy();
+  });
+
   it('P26-08: exchange rate sheet saves a row', async () => {
     const { sync, repo } = await seeded();
     await renderWithProviders(

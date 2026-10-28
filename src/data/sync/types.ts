@@ -33,7 +33,7 @@ export type Change =
   | { seq: number; op: 'upsert'; record: LocalRecord }
   | { seq: number; op: 'tombstone'; collection: string; id: string };
 
-export type ChangesPage = { changes: Change[]; lastSeq: number; hasMore: boolean };
+export type ChangesPage = { changes: Change[]; lastSeq: number; hasMore: boolean; reset?: boolean };
 
 /** What the engine needs from the server; the real one is `/sync/operations` and `/changes`. */
 export interface SyncTransport {

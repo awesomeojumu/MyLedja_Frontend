@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { parseAmount } from '@/money';
+import { formatNaira, parseAmount } from '@/money';
 import { t } from '@/i18n';
 import { TextInput } from './TextInput';
 
-/** Opens the number keypad on phones; reports kobo or null while the text can't be read. */
+/** Opens the number keypad on phones; live-formats to ₦18,450.00 while typing (A-02). */
 export function AmountInput({
   label,
   value,
@@ -27,11 +27,25 @@ export function AmountInput({
       inputMode="decimal"
       placeholder={t('money.placeholder')}
       error={error}
-      onBlur={() => setTouched(true)}
+      onBlur={() => {
+        setTouched(true);
+        if (value.trim() === '') return;
+        const p = parseAmount(value);
+        if (p.ok) onChange(formatNaira(p.minor), p.minor);
+      }}
       onChangeText={(text) => {
         setTouched(true);
-        const p = text.trim() === '' ? null : parseAmount(text);
-        onChange(text, p && p.ok ? p.minor : null);
+        if (text.trim() === '') {
+          onChange('', null);
+          return;
+        }
+        const p = parseAmount(text);
+        if (p.ok) {
+          onChange(formatNaira(p.minor), p.minor);
+          return;
+        }
+        // Keep the typed text so the person can finish (or see why it was refused).
+        onChange(text, null);
       }}
     />
   );

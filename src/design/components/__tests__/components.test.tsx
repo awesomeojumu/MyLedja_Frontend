@@ -21,11 +21,11 @@ describe('Amount', () => {
 });
 
 describe('AmountInput (A-02, G-09)', () => {
-  it('reads 18450 as kobo', async () => {
+  it('live-formats 18450 as ₦18,450.00', async () => {
     const onChange = jest.fn();
     await renderWithProviders(<AmountInput label={t('welcome.step3.opening')} value="" onChange={onChange} testID="amount" />);
     await fireEvent.changeText(screen.getByTestId('amount'), '18450');
-    expect(onChange).toHaveBeenCalledWith('18450', 1845000n);
+    expect(onChange).toHaveBeenCalledWith('₦18,450.00', 1845000n);
   });
   it('refuses 1,2,3 and says why under the field', async () => {
     const onChange = jest.fn();

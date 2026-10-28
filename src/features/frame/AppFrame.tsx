@@ -13,6 +13,7 @@ import { useSyncStatus } from '@/data/sync/SyncProvider';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { NotificationsBell } from '@/features/notifications/NotificationsBell';
+import { SyncIssuesBanner } from '@/features/sync/SyncIssues';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
 import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, PHONE_BOTTOM_PAGES, type NavItem } from './navigation';
 
@@ -43,6 +44,7 @@ function ConnectionPill() {
   const online = useOnline();
   const sync = useSyncStatus();
   if (!online || sync?.state === 'offline') return <StatusPill label={t('status.offline')} kind="pending" />;
+  if (sync && sync.rejected > 0) return <StatusPill label={t('status.rejected', { count: sync.rejected })} kind="problem" />;
   if (sync && sync.waiting > 0) return <StatusPill label={t('status.waiting', { count: sync.waiting })} kind="pending" />;
   return <StatusPill label={t('status.synced')} kind="done" />;
 }
@@ -333,6 +335,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
           <Banner testID="offline-banner" message={t('common.offline')} />
         </View>
       ) : null}
+      <SyncIssuesBanner />
       <View
         nativeID="main"
         style={{
