@@ -6,7 +6,7 @@ export type NavItem = {
   label: TextKey;
   phoneLabel?: TextKey;
   href: Href;
-  icon: 'dashboard' | 'accounts' | 'transactions' | 'budget' | 'payees' | 'settings' | 'goals';
+  icon: 'dashboard' | 'accounts' | 'transactions' | 'budget' | 'payees' | 'settings' | 'goals' | 'plan' | 'income' | 'debts';
 };
 
 /**
@@ -27,4 +27,9 @@ export const MANAGE_PAGES: NavItem[] = [
 ];
 
 /** Plan section in the drawer (DESIGN.md 3.2). */
-export const PLAN_PAGES: NavItem[] = [{ key: 'goals', label: 'nav.goals', href: '/goals', icon: 'goals' }];
+export const PLAN_PAGES: NavItem[] = [
+  { key: 'plan', label: 'nav.planBills', href: '/plan', icon: 'plan' },
+  { key: 'income', label: 'nav.income', href: '/income', icon: 'income' },
+  { key: 'goals', label: 'nav.goals', href: '/goals', icon: 'goals' },
+  { key: 'debts', label: 'nav.debts', href: '/debts', icon: 'debts' },
+];

@@ -4,12 +4,17 @@ import type { SetupBody } from '@/api/auth';
 import { t, type TextKey } from '@/i18n';
 import {
   buildAdjustment,
+  buildCollect,
   buildExpense,
   buildIncome,
+  buildLend,
+  buildLoanProceeds,
+  buildLoanRepayment,
   buildOpeningBalance,
   buildRefund,
   buildReversal,
   buildTransfer,
+  buildWriteOff,
   Chart,
   checkEvent,
   ledgerBalance,
@@ -38,6 +43,11 @@ import {
   type ImportMapping,
   type Goal,
   type GoalAllocation,
+  type PersonDebt,
+  type DebtEntry,
+  type Recurring,
+  type RecurringOccurrence,
+  type IncomeStream,
   type Payee,
   type Reconcile,
   type StoredEvent,
@@ -59,6 +69,11 @@ export type Snapshot = {
   assigns: Map<string, bigint>;
   goals: Goal[];
   allocations: GoalAllocation[];
+  recurring: Recurring[];
+  occurrences: RecurringOccurrence[];
+  incomeStreams: IncomeStream[];
+  debts: PersonDebt[];
+  debtEntries: DebtEntry[];
   /** Events made on this device that haven't synced yet. */
   waiting: Set<string>;
   chart: Chart;
@@ -90,7 +105,8 @@ export class WorkspaceRepository {
   ) {}
 
   async load(): Promise<Snapshot> {
-    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows] = await Promise.all([
+    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows] =
+      await Promise.all([
       this.store.list('accounts'),
       this.store.list('categories'),
       this.store.list('payees'),
@@ -101,6 +117,11 @@ export class WorkspaceRepository {
       this.store.list('budget_assigns'),
       this.store.list('goals'),
       this.store.list('allocations'),
+      this.store.list('recurring'),
+      this.store.list('occurrences'),
+      this.store.list('income_streams'),
+      this.store.list('debts'),
+      this.store.list('debt_entries'),
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
     const accountList = accounts.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id })).sort((a, b) => a.order - b.order);
@@ -145,15 +166,26 @@ export class WorkspaceRepository {
       assigns,
       goals: goalRows.map((r) => ({ ...(r.data as Omit<Goal, 'id'>), id: r.id })),
       allocations: allocationRows.map((r) => ({ ...(r.data as Omit<GoalAllocation, 'id'>), id: r.id })),
+      recurring: recurringRows.map((r) => ({ ...(r.data as Omit<Recurring, 'id'>), id: r.id })),
+      occurrences: occurrenceRows.map((r) => ({ ...(r.data as Omit<RecurringOccurrence, 'id'>), id: r.id })),
+      incomeStreams: streamRows.map((r) => ({ ...(r.data as Omit<IncomeStream, 'id'>), id: r.id })),
+      debts: debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id })),
+      debtEntries: debtEntryRows.map((r) => ({ ...(r.data as Omit<DebtEntry, 'id'>), id: r.id })),
       waiting,
-      chart: this.chartFor(accountList, categoryList),
+      chart: this.chartFor(accountList, categoryList, debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id }))),
     };
   }
 
-  chartFor(accounts: Account[], categories: Category[]): Chart {
+  chartFor(accounts: Account[], categories: Category[], debts: PersonDebt[] = []): Chart {
     const ledger: LedgerAccount[] = [
       ...accounts.map((a) => ({ id: a.id, kind: ACCOUNT_KIND_INFO[a.type].ledger, name: a.name, currency: a.currency })),
       ...categories.map((c) => ({ id: c.id, kind: c.kind, name: c.name, currency: 'NGN', categoryId: c.id, countInBudget: c.countInBudget })),
+      ...debts.map((d) => ({
+        id: d.ledgerAccountId,
+        kind: d.direction === 'owedToMe' ? ('asset' as const) : ('liability' as const),
+        name: d.name,
+        currency: 'NGN',
+      })),
       ...systemAccounts(this.workspaceId),
     ];
     return new Chart(ledger);
@@ -768,7 +800,12 @@ export class WorkspaceRepository {
   }
 
   savedForGoal(goalId: string, snapshot: Snapshot): bigint {
-    return snapshot.allocations.filter((a) => a.goalId === goalId).reduce((s, a) => s + BigInt(a.amountMinor), 0n);
+    return snapshot.allocations
+      .filter((a) => a.goalId === goalId)
+      .reduce((s, a) => {
+        const amount = BigInt(a.amountMinor);
+        return a.kind === 'spend' ? s - amount : s + amount;
+      }, 0n);
   }
 
   async addGoal(input: { name: string; targetMinor: bigint; accountId: string; targetDate?: string; categoryId?: string }): Promise<Result<Goal>> {
@@ -832,6 +869,221 @@ export class WorkspaceRepository {
       await this.updateGoal({ ...goal, status: 'completed' });
     }
     return { ok: true, value: { allocation, completed } };
+  }
+
+  debtBalance(debt: PersonDebt, snapshot: Snapshot, onDate?: string): bigint {
+    const account = snapshot.chart.get(debt.ledgerAccountId);
+    if (!account) return 0n;
+    const ledger = ledgerBalance(debt.ledgerAccountId, snapshot.events, onDate);
+    return shownBalance(account, ledger);
+  }
+
+  async addRecurring(input: Omit<Recurring, 'id'>): Promise<Recurring> {
+    const id = this.newId();
+    const recurring: Recurring = { ...input, id };
+    const { id: _id, ...data } = recurring;
+    await this.put('recurring', id, data, 'recurring.create');
+    return recurring;
+  }
+
+  async markBillPaid(
+    recurringId: string,
+    dueDate: string,
+    input: { accountId: string; categoryId: string; amount: bigint; date: string; payeeId?: string },
+  ): Promise<Result<RecurringOccurrence>> {
+    const snapshot = await this.load();
+    const bill = snapshot.recurring.find((r) => r.id === recurringId);
+    if (!bill) return { ok: false, error: 'missing_lines' };
+    const occId = `${recurringId}:${dueDate}`;
+    const existing = snapshot.occurrences.find((o) => o.id === occId);
+    if (existing?.status === 'paid') return { ok: false, error: 'already_reversed' };
+    const lines = buildExpense(snapshot.chart, { accountId: input.accountId, parts: [{ categoryId: input.categoryId, amount: input.amount }] });
+    if (!lines.ok) return lines;
+    const posted = await this.postEvent(snapshot.chart, snapshot.events, {
+      type: 'expense',
+      date: input.date,
+      lines: lines.value,
+      payeeId: input.payeeId ?? bill.payeeId,
+      recurringId,
+    });
+    if (!posted.ok) return posted;
+    const occurrence: RecurringOccurrence = {
+      id: occId,
+      recurringId,
+      dueDate,
+      amountMinor: input.amount.toString(),
+      status: 'paid',
+      eventId: posted.value.id,
+    };
+    await this.put('occurrences', occId, { recurringId, dueDate, amountMinor: input.amount.toString(), status: 'paid', eventId: posted.value.id }, 'occurrence.paid');
+    return { ok: true, value: occurrence };
+  }
+
+  async addIncomeStream(input: Omit<IncomeStream, 'id'>): Promise<IncomeStream> {
+    const id = this.newId();
+    const stream: IncomeStream = { ...input, id };
+    const { id: _id, ...data } = stream;
+    await this.put('income_streams', id, data, 'income_stream.create');
+    return stream;
+  }
+
+  async recordIncomeReceived(
+    streamId: string,
+    input: { accountId: string; amount: bigint; date: string },
+  ): Promise<Result<TxEvent>> {
+    const snapshot = await this.load();
+    const stream = snapshot.incomeStreams.find((s) => s.id === streamId);
+    if (!stream) return { ok: false, error: 'missing_lines' };
+    const lines = buildIncome(snapshot.chart, { accountId: input.accountId, categoryId: stream.categoryId, amount: input.amount });
+    if (!lines.ok) return lines;
+    return this.postEvent(snapshot.chart, snapshot.events, {
+      type: 'income',
+      date: input.date,
+      lines: lines.value,
+      incomeStreamId: streamId,
+    });
+  }
+
+  async openPersonDebt(input: {
+    name: string;
+    direction: PersonDebt['direction'];
+    accountId: string;
+    amount: bigint;
+    date: string;
+    payeeName?: string;
+  }): Promise<Result<PersonDebt>> {
+    const snapshot = await this.load();
+    const id = this.newId();
+    const ledgerAccountId = `${this.workspaceId}:debt:${id}`;
+    let payeeId: string | undefined;
+    if (input.payeeName?.trim()) {
+      payeeId = await this.payeeFor(snapshot.payees, input.payeeName.trim());
+    }
+    const debt: PersonDebt = {
+      id,
+      name: input.name.trim() || input.payeeName?.trim() || t('debts.unnamed'),
+      direction: input.direction,
+      ledgerAccountId,
+      payeeId,
+      status: 'open',
+    };
+    const chart = this.chartFor(snapshot.accounts, snapshot.categories, [...snapshot.debts, debt]);
+    const lines =
+      input.direction === 'owedToMe'
+        ? buildLend(chart, { receivableId: ledgerAccountId, accountId: input.accountId, amount: input.amount })
+        : buildLoanProceeds(chart, { payableId: ledgerAccountId, accountId: input.accountId, amount: input.amount });
+    if (!lines.ok) return lines;
+    const posted = await this.postEvent(chart, snapshot.events, {
+      type: input.direction === 'owedToMe' ? 'lend' : 'loan_proceeds',
+      date: input.date,
+      lines: lines.value,
+      debtId: id,
+      payeeId,
+    });
+    if (!posted.ok) return posted;
+    await this.put('debts', id, { name: debt.name, direction: debt.direction, ledgerAccountId, payeeId, status: 'open' }, 'debt.open');
+    const entry: DebtEntry = {
+      id: this.newId(),
+      debtId: id,
+      date: input.date,
+      eventId: posted.value.id,
+      kind: input.direction === 'owedToMe' ? 'lend' : 'borrow',
+      amountMinor: input.amount.toString(),
+    };
+    await this.put('debt_entries', entry.id, entry, 'debt.entry');
+    return { ok: true, value: debt };
+  }
+
+  async recordDebtPayment(
+    debtId: string,
+    input: { accountId: string; amount: bigint; date: string; interest?: bigint },
+  ): Promise<Result<TxEvent>> {
+    const snapshot = await this.load();
+    const debt = snapshot.debts.find((d) => d.id === debtId);
+    if (!debt || debt.status !== 'open') return { ok: false, error: 'missing_lines' };
+    const balance = this.debtBalance(debt, snapshot, input.date);
+    const principal = input.amount > balance ? balance : input.amount;
+    if (principal <= 0n && (input.interest ?? 0n) <= 0n) return { ok: false, error: 'not_positive' };
+    const lines =
+      debt.direction === 'owedToMe'
+        ? buildCollect(snapshot.chart, { receivableId: debt.ledgerAccountId, accountId: input.accountId, principal, interest: input.interest })
+        : buildLoanRepayment(snapshot.chart, { payableId: debt.ledgerAccountId, accountId: input.accountId, principal, interest: input.interest });
+    if (!lines.ok) return lines;
+    const posted = await this.postEvent(snapshot.chart, snapshot.events, {
+      type: debt.direction === 'owedToMe' ? 'collect' : 'loan_repayment',
+      date: input.date,
+      lines: lines.value,
+      debtId,
+    });
+    if (!posted.ok) return posted;
+    const entry: DebtEntry = {
+      id: this.newId(),
+      debtId,
+      date: input.date,
+      eventId: posted.value.id,
+      kind: 'payment',
+      amountMinor: principal.toString(),
+    };
+    await this.put('debt_entries', entry.id, entry, 'debt.entry');
+    const after = await this.load();
+    const left = this.debtBalance(debt, after, input.date);
+    if (left <= 0n) await this.put('debts', debtId, { ...debt, status: 'settled' }, 'debt.settle');
+    return { ok: true, value: posted.value };
+  }
+
+  async writeOffDebt(debtId: string, input: { amount: bigint; date: string; reason: string }): Promise<Result<TxEvent>> {
+    const snapshot = await this.load();
+    const debt = snapshot.debts.find((d) => d.id === debtId);
+    if (!debt || debt.direction !== 'owedToMe' || debt.status !== 'open') return { ok: false, error: 'missing_lines' };
+    const balance = this.debtBalance(debt, snapshot, input.date);
+    const amount = input.amount > balance ? balance : input.amount;
+    if (amount <= 0n) return { ok: false, error: 'not_positive' };
+    const lines = buildWriteOff(snapshot.chart, { receivableId: debt.ledgerAccountId, amount });
+    if (!lines.ok) return lines;
+    const posted = await this.postEvent(snapshot.chart, snapshot.events, {
+      type: 'write_off',
+      date: input.date,
+      lines: lines.value,
+      debtId,
+      notes: input.reason.trim() || undefined,
+    });
+    if (!posted.ok) return posted;
+    await this.put('debts', debtId, { ...debt, status: 'settled' }, 'debt.write_off');
+    return { ok: true, value: posted.value };
+  }
+
+  /** E19: expense linked to a goal; lowers earmarked savings without budget overspend messaging in UI. */
+  async spendFromGoal(
+    goalId: string,
+    input: { accountId: string; categoryId: string; amount: bigint; date: string; payeeName?: string },
+  ): Promise<Result<{ event: TxEvent; allocation: GoalAllocation }>> {
+    const snapshot = await this.load();
+    const goal = snapshot.goals.find((g) => g.id === goalId);
+    if (!goal || goal.status !== 'active') return { ok: false, error: 'missing_lines' };
+    const saved = this.savedForGoal(goalId, snapshot);
+    if (input.amount > saved) return { ok: false, error: 'refund_too_large' };
+    const lines = buildExpense(snapshot.chart, { accountId: input.accountId, parts: [{ categoryId: input.categoryId, amount: input.amount }] });
+    if (!lines.ok) return lines;
+    const payeeId = input.payeeName?.trim() ? await this.payeeFor(snapshot.payees, input.payeeName.trim(), input.categoryId) : undefined;
+    const posted = await this.postEvent(snapshot.chart, snapshot.events, {
+      type: 'expense',
+      date: input.date,
+      lines: lines.value,
+      payeeId,
+      goalId,
+    });
+    if (!posted.ok) return posted;
+    const allocation: GoalAllocation = {
+      id: this.newId(),
+      goalId,
+      amountMinor: input.amount.toString(),
+      date: input.date,
+      fromAccountId: input.accountId,
+      kind: 'spend',
+    };
+    const { id, ...data } = allocation;
+    await this.put('allocations', id, data, 'goal.spend');
+    return { ok: true, value: { event: posted.value, allocation } };
   }
 
   private linesFor(chart: Chart, input: TransactionInput): Result<{ lines: Line[]; splitTotal?: bigint }> {

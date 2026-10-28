@@ -38,6 +38,11 @@ function snapshotStub(): Snapshot {
     assigns: new Map(),
     goals: [],
     allocations: [],
+    recurring: [],
+    occurrences: [],
+    incomeStreams: [],
+    debts: [],
+    debtEntries: [],
     waiting: new Set(),
     chart: {} as Snapshot['chart'],
   };

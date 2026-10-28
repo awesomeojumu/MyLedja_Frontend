@@ -116,6 +116,81 @@ export type GoalAllocation = {
   amountMinor: string;
   date: string;
   fromAccountId: string;
+  /** Spending from goal (E19) stores a negative amount. */
+  kind?: 'allocate' | 'spend';
+};
+
+export type RecurrenceEvery = 'month' | 'week';
+
+/** How often a bill or income stream repeats (P12-03). */
+export type RecurrenceRule = {
+  every: RecurrenceEvery;
+  /** Day of month (1-31, last day for 31 in short months) or weekday 0-6 for weekly. */
+  on: number;
+};
+
+export type RecurringKind = 'bill' | 'subscription' | 'transfer' | 'income';
+
+export type Recurring = {
+  id: string;
+  kind: RecurringKind;
+  name: string;
+  amountMinor: string;
+  approximate?: boolean;
+  accountId: string;
+  categoryId?: string;
+  payeeId?: string;
+  rule: RecurrenceRule;
+  startDate: string;
+  endDate?: string;
+  autoCreate?: boolean;
+};
+
+export type RecurringOccurrence = {
+  id: string;
+  recurringId: string;
+  dueDate: string;
+  amountMinor: string;
+  status: 'upcoming' | 'paid' | 'missed';
+  eventId?: string;
+};
+
+export type IncomeStreamKind = 'regular' | 'variable' | 'irregular' | 'passive';
+
+export type IncomeStream = {
+  id: string;
+  name: string;
+  kind: IncomeStreamKind;
+  expectedMinor: string;
+  accountId: string;
+  categoryId: string;
+  rule: RecurrenceRule;
+  countInBudget: boolean;
+};
+
+export type DebtDirection = 'owedToMe' | 'iOwe';
+
+/** Person debt (DESIGN.md page 15); bank loans use account type loan instead. */
+export type PersonDebt = {
+  id: string;
+  name: string;
+  direction: DebtDirection;
+  /** Ledger account id for R (asset) or P (liability). */
+  ledgerAccountId: string;
+  payeeId?: string;
+  status: 'open' | 'settled';
+  nextDueDate?: string;
+  notes?: string;
+};
+
+export type DebtEntry = {
+  id: string;
+  debtId: string;
+  date: string;
+  eventId: string;
+  kind: 'lend' | 'borrow' | 'payment' | 'write_off';
+  amountMinor: string;
+  note?: string;
 };
 
 export type StoredLine = { a: string; m: string; c: string };
@@ -136,9 +211,23 @@ export type StoredEvent = {
   cleared?: boolean;
   reconciledBy?: string;
   importId?: string;
+  goalId?: string;
+  debtId?: string;
+  recurringId?: string;
+  incomeStreamId?: string;
 };
 
-export type EventMeta = { payeeId?: string; correctionOf?: string; cleared?: boolean; reconciledBy?: string; importId?: string };
+export type EventMeta = {
+  payeeId?: string;
+  correctionOf?: string;
+  cleared?: boolean;
+  reconciledBy?: string;
+  importId?: string;
+  goalId?: string;
+  debtId?: string;
+  recurringId?: string;
+  incomeStreamId?: string;
+};
 
 export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & EventMeta): StoredEvent {
   return {
@@ -154,6 +243,10 @@ export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & 
     cleared: e.cleared,
     reconciledBy: e.reconciledBy,
     importId: e.importId,
+    goalId: e.goalId,
+    debtId: e.debtId,
+    recurringId: e.recurringId,
+    incomeStreamId: e.incomeStreamId,
   };
 }
 
@@ -175,6 +268,10 @@ export function fromStored(id: string, operationId: string, s: StoredEvent, reve
     cleared: s.cleared,
     reconciledBy: s.reconciledBy,
     importId: s.importId,
+    goalId: s.goalId,
+    debtId: s.debtId,
+    recurringId: s.recurringId,
+    incomeStreamId: s.incomeStreamId,
   };
 }
 
