@@ -2,6 +2,8 @@ import type { Transport, TransportRequest, TransportResponse } from '../client';
 import type { User } from '../auth';
 import en from '@/i18n/en.json';
 
+import { createSecurityMock } from './security';
+
 /** Demo person from build plan 2.7. Works only with the mock adapter. */
 export const DEMO = { name: 'Ada', email: 'ada@example.test', password: 'demo-password-1', code: '123456' };
 
@@ -12,6 +14,7 @@ export function createAuthMock() {
   const pendingCodes = new Map<string, string>();
   const failures = new Map<string, number>();
   const operations = new Map<string, TransportResponse>();
+  const security = createSecurityMock();
   let counter = 0;
 
   users.set(DEMO.email, {
@@ -98,6 +101,8 @@ export function createAuthMock() {
       case 'GET /v1/public-config':
         return ok({ env: 'development', google: { enabled: false, clientId: null }, services: { bankConnections: false, files: false, ai: false } });
       default: {
+        const fromSecurity = security(req);
+        if (fromSecurity) return fromSecurity;
         const setup = req.path.match(/^\/v1\/workspaces\/([^/]+)\/setup$/);
         if (req.method === 'POST' && setup) {
           const u = [...users.values()].find((x) => x.workspaceId === setup[1]);

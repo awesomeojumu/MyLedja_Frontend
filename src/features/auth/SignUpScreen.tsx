@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { isTwoFactorRequired } from '@/api/security';
 import { ApiError } from '@/api/client';
 import type { SessionResponse } from '@/api/auth';
 import { Button, Checkbox, CodeInput, Divider, InlineError, Sheet, Text, TextInput, useToast } from '@/design/components';
@@ -106,8 +107,14 @@ export function SignUpScreen() {
     try {
       const res = await runGoogleSignIn(api);
       if (res.ok) {
-        await completeSignIn(res.session, false);
-        router.replace('/welcome');
+        const session = res.session;
+        if (isTwoFactorRequired(session)) {
+          // An existing account with two-factor: finish on Sign in, which asks for the code.
+          router.replace('/sign-in');
+        } else {
+          await completeSignIn(session, false);
+          router.replace('/welcome');
+        }
       }
     } finally {
       setBusy(false);

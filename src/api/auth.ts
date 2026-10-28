@@ -10,6 +10,8 @@ export type User = Schemas['User'];
 export type Workspace = Schemas['Workspace'];
 export type PublicConfig = Schemas['PublicConfig'];
 export type SessionResponse = Schemas['SessionResponse'];
+/** Sign-in answers a session, or a two-factor challenge when two-factor is on. */
+export type SignInResponse = Schemas['SignInResponse'];
 export type CodeSent = Schemas['CodeSent'];
 
 export type SignInBody = Body<'signIn'>;
@@ -23,7 +25,7 @@ export type SetupBody = Body<'finishSetup'>;
 
 export function authApi(client: ApiClient) {
   return {
-    signIn: (body: SignInBody) => client.request<SessionResponse>('POST', '/v1/auth/sign-in', body, { auth: false }),
+    signIn: (body: SignInBody) => client.request<SignInResponse>('POST', '/v1/auth/sign-in', body, { auth: false }),
     signUp: (body: SignUpBody) => client.request<CodeSent>('POST', '/v1/auth/sign-up', body, { auth: false }),
     verifyEmail: (body: VerifyEmailBody) =>
       client.request<SessionResponse>('POST', '/v1/auth/verify-email', body, { auth: false }),

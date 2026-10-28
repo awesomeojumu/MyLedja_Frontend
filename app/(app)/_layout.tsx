@@ -1,6 +1,7 @@
 import { Redirect, Slot } from 'expo-router';
 import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { AppLockGate } from '@/features/lock/AppLock';
 import { AddTransactionProvider } from '@/features/transactions/AddTransaction';
 
 export default function AppLayout() {
@@ -10,9 +11,11 @@ export default function AppLayout() {
   if (!user.setupComplete) return <Redirect href="/welcome" />;
   return (
     <WorkspaceProvider workspaceId={user.workspaceId}>
-      <AddTransactionProvider>
-        <Slot />
-      </AddTransactionProvider>
+      <AppLockGate>
+        <AddTransactionProvider>
+          <Slot />
+        </AddTransactionProvider>
+      </AppLockGate>
     </WorkspaceProvider>
   );
 }

@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import type { AuthApi, SessionResponse } from '@/api/auth';
+import type { AuthApi, SignInResponse } from '@/api/auth';
 
 export type GooglePublicConfig = {
   enabled: boolean;
@@ -39,7 +39,7 @@ export function googleClientId(): string | null {
 }
 
 export type GoogleSignInResult =
-  | { ok: true; session: SessionResponse; staySignedIn: boolean }
+  | { ok: true; session: SignInResponse; staySignedIn: boolean }
   | { ok: false; reason: 'cancelled' | 'unavailable' | 'link_password' | 'network'; message?: string };
 
 /**

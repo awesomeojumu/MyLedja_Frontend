@@ -80,6 +80,13 @@ export function SyncProvider({ children, value }: { children: ReactNode; value?:
     };
   }, [engine, value]);
 
+  // Signing out clears this device's copy of the workspace (TECH-SPEC 10).
+  const [wasSignedIn, setWasSignedIn] = useState(auth.status === 'signed-in');
+  if ((auth.status === 'signed-in') !== wasSignedIn) {
+    setWasSignedIn(auth.status === 'signed-in');
+    if (wasSignedIn && auth.status === 'signed-out' && !value) void store.clearAll();
+  }
+
   // Join the real BE transport when signed in against local/staging (leave mock for unit tests).
   useEffect(() => {
     if (value) return;

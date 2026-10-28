@@ -97,6 +97,16 @@ export class LocalStore {
     this.emit();
   }
 
+  /**
+   * Sign-out (TECH-SPEC 10): the workspace copy, the outbox and the sync position all go, so the next person on a
+   * shared browser or phone sees nothing. The device id stays.
+   */
+  async clearAll(): Promise<void> {
+    const keys = [...(await this.kv.keys(RECORD)), ...(await this.kv.keys(OUTBOX))];
+    await this.kv.remove([...keys, CONFLICTS, `${META}lastSeq`, `${META}lastPulledAt`]);
+    this.emit();
+  }
+
   async conflicts(): Promise<Conflict[]> {
     const raw = await this.kv.get(CONFLICTS);
     return raw ? (JSON.parse(raw) as Conflict[]) : [];
