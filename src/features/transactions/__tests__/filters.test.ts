@@ -44,6 +44,7 @@ function snapshotStub(): Snapshot {
     debts: [],
     debtEntries: [],
     notifications: [],
+    budgetTemplates: [],
     waiting: new Set(),
     chart: {} as Snapshot['chart'],
   };
