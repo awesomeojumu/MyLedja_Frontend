@@ -1278,6 +1278,54 @@ export class WorkspaceRepository {
     return { ok: true, value: debt };
   }
 
+  /**
+   * TECH-SPEC 6.15 / BE confirmMoneyBack: never posts money back without this choice.
+   * `money_back` → E16/E14 against the debt; `income` keeps or posts E1.
+   */
+  async confirmMoneyBack(
+    suggestion: {
+      debtId: string;
+      amount: bigint;
+      date: string;
+      accountId: string;
+      eventId?: string;
+      payeeId?: string;
+    },
+    choice: 'money_back' | 'income',
+    opts?: { categoryId?: string },
+  ): Promise<Result<TxEvent>> {
+    if (choice === 'money_back') {
+      if (suggestion.eventId) {
+        const snapshot = await this.load();
+        const event = snapshot.events.find((e) => e.id === suggestion.eventId);
+        if (event && event.status === 'posted' && (event.type === 'income' || event.type === 'expense')) {
+          const reversed = await this.deleteTransaction(event.id, suggestion.date);
+          if (!reversed.ok) return reversed;
+        }
+      }
+      return this.recordDebtPayment(suggestion.debtId, {
+        accountId: suggestion.accountId,
+        amount: suggestion.amount,
+        date: suggestion.date,
+      });
+    }
+    if (suggestion.eventId) {
+      const snapshot = await this.load();
+      const event = snapshot.events.find((e) => e.id === suggestion.eventId);
+      if (event) return { ok: true, value: event };
+      return { ok: false, error: 'missing_lines' };
+    }
+    if (!opts?.categoryId) return { ok: false, error: 'missing_lines' };
+    return this.addTransaction({
+      kind: 'income',
+      accountId: suggestion.accountId,
+      categoryId: opts.categoryId,
+      amount: suggestion.amount,
+      date: suggestion.date,
+      payeeName: undefined,
+    });
+  }
+
   async recordDebtPayment(
     debtId: string,
     input: { accountId: string; amount: bigint; date: string; interest?: bigint },

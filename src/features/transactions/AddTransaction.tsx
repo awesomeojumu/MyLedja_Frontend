@@ -25,6 +25,9 @@ import type { Snapshot, TransactionInput } from '@/data/workspace/repository';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
+import { MoneyBackPrompt } from '@/features/debts/MoneyBackPrompt';
+import { suggestMoneyBack, type MoneyBackChoice, type MoneyBackSuggestion } from '@/features/debts/moneyBack';
+
 import { addDays, lastUsedAccount, ledgerMessage, today } from './helpers';
 import { AddMovementDoorSheet, type MovementDoor } from './AddMovementDoors';
 
@@ -112,6 +115,7 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [moneyBack, setMoneyBack] = useState<{ suggestion: MoneyBackSuggestion; another: boolean } | null>(null);
 
   const dirty = amount.text !== '' || payee !== '' || notes !== '' || categoryId !== null;
   const categories = (snapshot?.categories ?? []).filter((c) => c.kind === (kind === 'income' ? 'income' : 'expense') && !c.hidden);
@@ -142,31 +146,7 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
     setError(null);
   };
 
-  const save = async (another: boolean) => {
-    if (!valid || !accountId || amount.minor === null) return;
-    setBusy(true);
-    setError(null);
-    const notesCombined = [attachReceipt && receiptLink.trim() ? `receipt:${receiptLink.trim()}` : '', notes.trim()].filter(Boolean).join('\n');
-    const input: TransactionInput =
-      kind === 'transfer'
-        ? { kind, fromId: accountId, toId: toId!, amount: amount.minor, date, notes: notesCombined || undefined }
-        : kind === 'income'
-          ? { kind, accountId, categoryId: categoryId!, amount: amount.minor, date, payeeName: payee, notes: notesCombined || undefined }
-          : {
-              kind,
-              accountId,
-              date,
-              payeeName: payee,
-              notes: notesCombined || undefined,
-              parts: split ? parts.map((p) => ({ categoryId: p.categoryId!, amount: p.minor! })) : [{ categoryId: categoryId!, amount: amount.minor }],
-            };
-    const result = await repo.addTransaction(input);
-    setBusy(false);
-    if (!result.ok) {
-      setError(ledgerMessage(result.error));
-      return;
-    }
-    const saved = result.value;
+  const finishSave = async (another: boolean, posted: { id: string; date: string }) => {
     if (repeats && kind === 'expense' && categoryId && accountId && amount.minor) {
       await repo.addRecurring({
         kind: 'bill',
@@ -189,9 +169,86 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
         countInBudget: true,
       });
     }
-    toast.show(t('add.saved'), () => void repo.deleteTransaction(saved.id, saved.date));
+    toast.show(t('add.saved'), () => void repo.deleteTransaction(posted.id, posted.date));
     if (another) reset();
     else onClose();
+  };
+
+  const postNormal = async (another: boolean) => {
+    if (!valid || !accountId || amount.minor === null) return;
+    const notesCombined = [attachReceipt && receiptLink.trim() ? `receipt:${receiptLink.trim()}` : '', notes.trim()].filter(Boolean).join('\n');
+    const input: TransactionInput =
+      kind === 'transfer'
+        ? { kind, fromId: accountId, toId: toId!, amount: amount.minor, date, notes: notesCombined || undefined }
+        : kind === 'income'
+          ? { kind, accountId, categoryId: categoryId!, amount: amount.minor, date, payeeName: payee, notes: notesCombined || undefined }
+          : {
+              kind,
+              accountId,
+              date,
+              payeeName: payee,
+              notes: notesCombined || undefined,
+              parts: split ? parts.map((p) => ({ categoryId: p.categoryId!, amount: p.minor! })) : [{ categoryId: categoryId!, amount: amount.minor }],
+            };
+    const result = await repo.addTransaction(input);
+    if (!result.ok) {
+      setError(ledgerMessage(result.error));
+      return;
+    }
+    await finishSave(another, result.value);
+  };
+
+  const save = async (another: boolean) => {
+    if (!valid || !accountId || amount.minor === null || !snapshot) return;
+    setBusy(true);
+    setError(null);
+    if ((kind === 'income' || kind === 'expense') && !split) {
+      const suggestions = suggestMoneyBack(snapshot, {
+        amount: amount.minor,
+        date,
+        accountId,
+        payeeName: payee,
+        movement: kind,
+      });
+      if (suggestions[0]) {
+        setBusy(false);
+        setMoneyBack({ suggestion: suggestions[0], another });
+        return;
+      }
+    }
+    await postNormal(another);
+    setBusy(false);
+  };
+
+  const onMoneyBackChoice = async (choice: MoneyBackChoice) => {
+    if (!moneyBack || !accountId || amount.minor === null) return;
+    const { suggestion, another } = moneyBack;
+    setMoneyBack(null);
+    setBusy(true);
+    setError(null);
+    if (choice === 'money_back') {
+      const result = await repo.confirmMoneyBack(
+        {
+          debtId: suggestion.debtId,
+          amount: suggestion.amount,
+          date: suggestion.date,
+          accountId: suggestion.accountId,
+          payeeId: suggestion.payeeId,
+        },
+        'money_back',
+      );
+      setBusy(false);
+      if (!result.ok) {
+        setError(ledgerMessage(result.error));
+        return;
+      }
+      toast.show(t('add.saved'), () => void repo.deleteTransaction(result.value.id, result.value.date));
+      if (another) reset();
+      else onClose();
+      return;
+    }
+    await postNormal(another);
+    setBusy(false);
   };
 
   const requestClose = () => (dirty ? setConfirmDiscard(true) : onClose());
@@ -333,6 +390,13 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
         }}
       />
       {movementDoor ? <AddMovementDoorSheet door={movementDoor} onClose={() => setMovementDoor(null)} /> : null}
+      {moneyBack ? (
+        <MoneyBackPrompt
+          suggestion={moneyBack.suggestion}
+          onChoice={(c) => void onMoneyBackChoice(c)}
+          onClose={() => setMoneyBack(null)}
+        />
+      ) : null}
     </>
   );
 }

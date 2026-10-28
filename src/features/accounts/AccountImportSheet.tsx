@@ -10,6 +10,8 @@ import { guessMapping, isDuplicate, parseCsv, readRows } from '@/features/import
 import { ledgerMessage } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
+import { suggestMoneyBack } from '@/features/debts/moneyBack';
+
 import { importRulesApplied } from './helpers';
 
 const sp = tokens.spacing;
@@ -45,6 +47,8 @@ export function AccountImportSheet({
   const [mapping, setMapping] = useState<ImportMapping | null>(() => (initialText ? guessMapping(parseCsv(initialText)[0], account.importMapping) : null));
   const [ticked, setTicked] = useState<Map<number, boolean>>(new Map());
   const [categories, setCategories] = useState<Map<number, string>>(new Map());
+  /** Per-line money-back choice when a debt person matches (A-13). Default unset = ask via buttons. */
+  const [moneyBackChoice, setMoneyBackChoice] = useState<Map<number, 'money_back' | 'income'>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -67,7 +71,21 @@ export function AccountImportSheet({
           p.name.toLowerCase() === row.payee.toLowerCase() ||
           p.aliases?.some((a) => a.toLowerCase() === row.payee.toLowerCase()),
       );
-      return { row, duplicate: isDuplicate(row, account.id, snapshot.events, payeeNames), suggested: payee?.defaultCategoryId };
+      const amountAbs = row.amount < 0n ? -row.amount : row.amount;
+      const moneyBack = suggestMoneyBack(snapshot, {
+        amount: amountAbs,
+        date: row.date,
+        accountId: account.id,
+        payeeId: payee?.id,
+        payeeName: row.payee,
+        movement: row.amount < 0n ? 'expense' : 'income',
+      })[0];
+      return {
+        row,
+        duplicate: isDuplicate(row, account.id, snapshot.events, payeeNames),
+        suggested: payee?.defaultCategoryId,
+        moneyBack,
+      };
     });
   }, [read, snapshot, account.id, payeeNames]);
 
@@ -90,22 +108,59 @@ export function AccountImportSheet({
   };
 
   const post = async () => {
-    if (!mapping) return;
+    if (!mapping || !snapshot) return;
+    // Require an explicit choice before posting matching rows as money back (TECH-SPEC 6.15).
+    for (const item of chosen) {
+      if (item.moneyBack && !moneyBackChoice.has(item.row.line)) {
+        setError(t('debts.moneyBack.importChoice', { name: item.moneyBack.personName }));
+        return;
+      }
+    }
     setBusy(true);
-    const r = await repo.importRows(
-      account.id,
-      chosen.map(({ row, suggested }) => ({
-        date: row.date,
-        amount: row.amount,
-        categoryId: categoryOf(row.line, row.amount < 0n, suggested),
-        payeeName: row.payee,
-        notes: row.notes,
-      })),
-      mapping,
-    );
+    setError(null);
+    const asIncomeOrExpense = chosen.filter((item) => !item.moneyBack || moneyBackChoice.get(item.row.line) === 'income');
+    const asMoneyBack = chosen.filter((item) => item.moneyBack && moneyBackChoice.get(item.row.line) === 'money_back');
+    let importId = '';
+    let count = 0;
+    if (asIncomeOrExpense.length > 0) {
+      const r = await repo.importRows(
+        account.id,
+        asIncomeOrExpense.map(({ row, suggested }) => ({
+          date: row.date,
+          amount: row.amount,
+          categoryId: categoryOf(row.line, row.amount < 0n, suggested),
+          payeeName: row.payee,
+          notes: row.notes,
+        })),
+        mapping,
+      );
+      if (!r.ok) {
+        setBusy(false);
+        return setError(ledgerMessage(r.error));
+      }
+      importId = r.value.importId;
+      count = r.value.count;
+    }
+    for (const item of asMoneyBack) {
+      const suggestion = item.moneyBack!;
+      const confirmed = await repo.confirmMoneyBack(
+        {
+          debtId: suggestion.debtId,
+          amount: suggestion.amount,
+          date: suggestion.date,
+          accountId: account.id,
+          payeeId: suggestion.payeeId,
+        },
+        'money_back',
+      );
+      if (!confirmed.ok) {
+        setBusy(false);
+        return setError(ledgerMessage(confirmed.error));
+      }
+      count += 1;
+    }
     setBusy(false);
-    if (!r.ok) return setError(ledgerMessage(r.error));
-    onImported(r.value.importId, r.value.count);
+    onImported(importId || 'money-back', count);
     onClose();
   };
 
@@ -211,9 +266,10 @@ export function AccountImportSheet({
               {t('import.countsFull', { fresh: counts.fresh, duplicates: counts.duplicates, rules: counts.rules })}
             </Text>
             {counts.broken > 0 ? <InlineError message={t('import.broken', { lines: read?.broken.map((b) => b.line).join(', ') ?? '' })} /> : null}
-            {review.map(({ row, duplicate, suggested }) => {
+            {review.map(({ row, duplicate, suggested, moneyBack }) => {
               const out = row.amount < 0n;
               const ruleApplied = suggested && !duplicate;
+              const choice = moneyBackChoice.get(row.line);
               return (
                 <View key={row.line} testID={`review-${row.line}`} style={{ gap: sp['spacing-xs'] }}>
                   <Checkbox
@@ -229,13 +285,36 @@ export function AccountImportSheet({
                     </Text>
                     <Amount minor={row.amount} signed />
                   </View>
-                  <Select
-                    testID={`review-cat-${row.line}`}
-                    label={t('import.category')}
-                    options={(out ? expenseCats : incomeCats).map((c) => ({ value: c.id, label: c.name }))}
-                    value={categoryOf(row.line, out, suggested) || null}
-                    onChange={(v) => setCategories(new Map(categories).set(row.line, v))}
-                  />
+                  {moneyBack && !duplicate ? (
+                    <View testID={`review-money-back-${row.line}`} style={{ gap: sp['spacing-xs'] }}>
+                      <Text variant="caption">{t('debts.moneyBack.importChoice', { name: moneyBack.personName })}</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
+                        <Button
+                          testID={`review-mb-income-${row.line}`}
+                          kind={choice === 'income' ? 'primary-pill' : 'secondary'}
+                          size="sm"
+                          label={t('debts.moneyBack.choiceIncome')}
+                          onPress={() => setMoneyBackChoice(new Map(moneyBackChoice).set(row.line, 'income'))}
+                        />
+                        <Button
+                          testID={`review-mb-back-${row.line}`}
+                          kind={choice === 'money_back' ? 'primary-pill' : 'secondary'}
+                          size="sm"
+                          label={t('debts.moneyBack.choiceMoneyBack')}
+                          onPress={() => setMoneyBackChoice(new Map(moneyBackChoice).set(row.line, 'money_back'))}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
+                  {!moneyBack || choice === 'income' || duplicate ? (
+                    <Select
+                      testID={`review-cat-${row.line}`}
+                      label={t('import.category')}
+                      options={(out ? expenseCats : incomeCats).map((c) => ({ value: c.id, label: c.name }))}
+                      value={categoryOf(row.line, out, suggested) || null}
+                      onChange={(v) => setCategories(new Map(categories).set(row.line, v))}
+                    />
+                  ) : null}
                 </View>
               );
             })}
