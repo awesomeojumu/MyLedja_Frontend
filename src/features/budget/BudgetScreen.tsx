@@ -32,18 +32,19 @@ import {
   barFor,
   budgetCategories,
   budgetForMonth,
+  categoryTemplateLines,
   groupedBudgetCategories,
   monthLabel,
   nextMonth,
   overspentCategories,
   prevMonth,
+  resolveTemplateLineAmount,
   rowFor,
-  sixMonthAverage,
-  threeMonthAverage,
   assignedOf,
   shortMonth,
   type BudgetGroupBy,
 } from './helpers';
+import { EditAmountSheet } from './EditAmountSheet';
 import { TemplatesSheet } from './TemplatesSheet';
 
 function groupLabel(group: string): string {
@@ -70,12 +71,11 @@ export function BudgetScreen() {
   const router = useRouter();
   const [month, setMonth] = useState(() => monthOf(today()));
   const [editId, setEditId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
-  const [editMinor, setEditMinor] = useState<bigint | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [rowMenuId, setRowMenuId] = useState<string | null>(null);
   const [monthSpan, setMonthSpan] = useState<'1' | '3'>('1');
   const [groupBy, setGroupBy] = useState<BudgetGroupBy>('groups');
   const [error, setError] = useState<string | null>(null);
@@ -100,10 +100,24 @@ export function BudgetScreen() {
     };
   }, [snapshot, month, groupBy]);
 
-  const savePlanned = async () => {
-    if (!editId || editMinor === null || editMinor < 0n) return;
+  const categoryOrder = useMemo(() => {
+    if (!model) return [];
+    return model.groups.flatMap(([, cats]) => cats.map((c) => c.id));
+  }, [model]);
+
+  const openEdit = (catId: string) => {
+    setRowMenuId(null);
+    setEditId(catId);
+  };
+
+  const savePlanned = async (amount: bigint, opts: { carryOver: boolean; note: string }) => {
+    if (!editId || !snapshot) return;
     setError(null);
-    await repo.setAssigned(editId, month, editMinor);
+    const cat = snapshot.categories.find((c) => c.id === editId);
+    if (cat && cat.carryOver !== opts.carryOver) {
+      await repo.updateCategory({ ...cat, carryOver: opts.carryOver });
+    }
+    await repo.setAssigned(editId, month, amount, { note: opts.note });
     toast.show(t('common.saved'));
     setEditId(null);
   };
@@ -171,6 +185,7 @@ export function BudgetScreen() {
               overspentCount={model.overspent.length}
               onCover={() => setCoverOpen(true)}
             />
+            <BudgetSummaryStrip snapshot={snapshot!} budget={model.budget} />
             <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
               <Button testID="budget-move" kind="secondary" label={t('budget.moveMoney')} onPress={() => setMoveOpen(true)} />
               {snapshot && snapshot.assigns.size > 0 ? (
@@ -219,6 +234,10 @@ export function BudgetScreen() {
                   const state = barFor(snapshot!, month, cat.id);
                   const plan = row.carried + row.assigned;
                   const pct = plan <= 0n ? (row.activity > 0n ? 1 : 0) : Number((row.activity * 1000n) / plan) / 1000;
+                  const tplLines = categoryTemplateLines(snapshot!, cat.id);
+                  const tplMet =
+                    tplLines.length > 0 &&
+                    tplLines.every(({ line }) => resolveTemplateLineAmount(snapshot!, month, line) <= row.assigned);
                   return (
                     <View
                       key={cat.id}
@@ -229,6 +248,11 @@ export function BudgetScreen() {
                         borderTopWidth: 1,
                         borderTopColor: theme.border,
                         gap: sp['spacing-xs'],
+                        ...(monthSpan === '3' && displayMonths[displayMonths.length - 1] === month
+                          ? {}
+                          : monthSpan === '3'
+                            ? { opacity: 0.92 }
+                            : {}),
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'] }}>
@@ -237,19 +261,33 @@ export function BudgetScreen() {
                           accessibilityRole="link"
                           accessibilityLabel={cat.name}
                           onPress={() => router.push(`/budget/category/${cat.id}`)}
-                          style={{ flex: 1, minHeight: 44, justifyContent: 'center' }}
+                          onLongPress={() => setRowMenuId(cat.id)}
+                          style={{ flex: 1, minHeight: 44, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}
                         >
                           <Text>{cat.name}</Text>
+                          {cat.carryOver ? (
+                            <Text testID={`budget-mark-carry-${cat.id}`} variant="micro" tone="textSecondary" accessibilityLabel={t('budget.markCarryOver')}>
+                              ↻
+                            </Text>
+                          ) : null}
+                          {tplLines.length > 0 ? (
+                            <Text
+                              testID={`budget-mark-template-${cat.id}`}
+                              variant="micro"
+                              tone={tplMet ? 'textSecondary' : undefined}
+                              style={tplMet ? undefined : { color: c.ruby }}
+                              accessibilityLabel={tplMet ? t('budget.markTemplate') : t('budget.markTemplateUnmet')}
+                            >
+                              ◎
+                            </Text>
+                          ) : null}
                         </Pressable>
                         <Pressable
                           testID={`budget-planned-${cat.id}`}
                           accessibilityRole="button"
                           accessibilityLabel={t('budget.editPlanned', { name: cat.name })}
-                          onPress={() => {
-                            setEditId(cat.id);
-                            setEditText((Number(row.assigned) / 100).toString());
-                            setEditMinor(row.assigned);
-                          }}
+                          onPress={() => openEdit(cat.id)}
+                          onLongPress={() => setRowMenuId(cat.id)}
                           style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
                         >
                           <Amount minor={row.assigned} />
@@ -303,43 +341,50 @@ export function BudgetScreen() {
         )}
       </ScrollView>
 
-      <Sheet
-        visible={editId !== null}
-        title={
-          editId && snapshot
-            ? t('budget.editAmount', { name: snapshot.categories.find((c) => c.id === editId)?.name ?? '' })
-            : t('budget.editAmount', { name: '' })
-        }
-        onClose={() => setEditId(null)}
-        testID="budget-edit-sheet"
-        footer={
-          <Button testID="budget-edit-save" label={t('budget.save')} onPress={() => void savePlanned()} disabled={editMinor === null || editMinor < 0n} />
-        }
-      >
-        <AmountInput label={t('budget.col.planned')} value={editText} onChange={(text, minor) => { setEditText(text); setEditMinor(minor); }} testID="budget-edit-amount" />
-        {editId && snapshot ? (
-          <View style={{ gap: sp['spacing-xs'] }}>
-            <Button
-              kind="link"
-              label={t('budget.quickLastMonth', { amount: formatNaira(assignedOf(snapshot, editId, prevMonth(month))) })}
-              onPress={() => {
-                const v = assignedOf(snapshot, editId, prevMonth(month));
-                setEditMinor(v);
-                setEditText((Number(v) / 100).toString());
-              }}
-            />
-            <Button
-              kind="link"
-              label={t('budget.quickThreeMonthAvg', { amount: formatNaira(threeMonthAverage(snapshot, editId, month)) })}
-              onPress={() => {
-                const v = threeMonthAverage(snapshot, editId, month);
-                setEditMinor(v);
-                setEditText((Number(v) / 100).toString());
-              }}
-            />
-          </View>
-        ) : null}
-      </Sheet>
+      {snapshot ? (
+        <EditAmountSheet
+          visible={editId !== null}
+          categoryId={editId}
+          category={editId ? snapshot.categories.find((c) => c.id === editId) : undefined}
+          month={month}
+          snapshot={snapshot}
+          categoryOrder={categoryOrder}
+          onClose={() => setEditId(null)}
+          onSave={savePlanned}
+          onNext={(nextId) => setEditId(nextId)}
+        />
+      ) : null}
+
+      <Popover visible={rowMenuId !== null} onClose={() => setRowMenuId(null)} testID="budget-row-menu">
+        <Text variant="heading-sm">{snapshot?.categories.find((c) => c.id === rowMenuId)?.name}</Text>
+        <Button
+          testID="budget-row-menu-move"
+          kind="secondary"
+          label={t('budget.moveMoney')}
+          onPress={() => {
+            setRowMenuId(null);
+            setMoveOpen(true);
+          }}
+        />
+        <Button
+          testID="budget-row-menu-category"
+          kind="secondary"
+          label={t('budget.rowViewCategory')}
+          onPress={() => {
+            if (rowMenuId) router.push(`/budget/category/${rowMenuId}`);
+            setRowMenuId(null);
+          }}
+        />
+        <Button
+          testID="budget-row-menu-template"
+          kind="secondary"
+          label={t('budget.rowAddTemplate')}
+          onPress={() => {
+            setRowMenuId(null);
+            setTemplatesOpen(true);
+          }}
+        />
+      </Popover>
 
       <Popover visible={menuOpen} onClose={() => setMenuOpen(false)} testID="budget-menu-popover">
         <Text variant="heading-sm">{t('budget.moreMenu')}</Text>
@@ -408,6 +453,36 @@ export function BudgetScreen() {
 
       <TemplatesSheet visible={templatesOpen} month={month} onClose={() => setTemplatesOpen(false)} />
     </AppFrame>
+  );
+}
+
+function BudgetSummaryStrip({
+  snapshot,
+  budget,
+}: {
+  snapshot: NonNullable<ReturnType<typeof useWorkspace>['snapshot']>;
+  budget: ReturnType<typeof budgetForMonth>;
+}) {
+  let planned = 0n;
+  let spent = 0n;
+  for (const cat of budgetCategories(snapshot)) {
+    const row = budget.rows.get(cat.id);
+    if (!row) continue;
+    planned += row.carried + row.assigned;
+    spent += row.activity;
+  }
+  return (
+    <View testID="budget-summary-strip" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-md'] }}>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summaryPlanned', { amount: formatNaira(planned) })}
+      </Text>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summarySpent', { amount: formatNaira(spent) })}
+      </Text>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summaryLeft', { amount: formatNaira(budget.leftToPlan) })}
+      </Text>
+    </View>
   );
 }
 

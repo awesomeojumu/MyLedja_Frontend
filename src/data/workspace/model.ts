@@ -123,8 +123,17 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   hideAmountsOnLockScreen: true,
 };
 
-/** Budget template line (P06-10). */
-export type BudgetTemplateLine = { categoryId: string; amountMinor: string };
+/** Budget template rule kinds (DESIGN popup #9). */
+export type BudgetTemplateRuleKind = 'monthly' | 'saveBy' | 'coverBill' | 'average' | 'cap';
+
+/** Budget template line (P06-10). Legacy rows may only set amountMinor. */
+export type BudgetTemplateLine = {
+  categoryId: string;
+  amountMinor?: string;
+  ruleKind?: BudgetTemplateRuleKind;
+  /** saveBy: targetMinor, targetMonth. coverBill: recurringId. average: months. cap: maxMinor. */
+  ruleMeta?: Record<string, string>;
+};
 
 export type BudgetTemplate = {
   id: string;
@@ -133,7 +142,7 @@ export type BudgetTemplate = {
 };
 
 /** Planned amount for one category in one month, stored as kobo string. */
-export type BudgetAssign = { categoryId: string; month: string; amountMinor: string };
+export type BudgetAssign = { categoryId: string; month: string; amountMinor: string; note?: string };
 
 export const budgetAssignId = (categoryId: string, month: string) => `${categoryId}:${month}`;
 
