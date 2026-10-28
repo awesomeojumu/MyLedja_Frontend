@@ -26,6 +26,8 @@ import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
 import { DebtsPaymentSheet } from './DebtsPaymentSheet';
+import { MoneyBackReviewSheet } from './MoneyBackReviewSheet';
+import { listMoneyBackReview } from './moneyBack';
 import { debtOriginalAmount, debtProgress, nextInstallment } from './schedule';
 import { debtRows, debtTotals, findRecentPayment, type DebtFilter } from './helpers';
 
@@ -44,10 +46,12 @@ export function DebtsScreen() {
   const [payBalance, setPayBalance] = useState<bigint>(0n);
   const [duplicateConfirm, setDuplicateConfirm] = useState<{ accountId: string; principal: bigint; interest: bigint } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [moneyBackReview, setMoneyBackReview] = useState(false);
 
   const rows = useMemo(() => (snapshot ? debtRows(snapshot, filter, onDate) : null), [snapshot, filter, onDate]);
   const totals = rows && snapshot ? debtTotals(debtRows(snapshot, 'all', onDate)) : null;
   const bankLoans = useMemo(() => snapshot?.accounts.filter((a) => a.type === 'loan' && !a.archived) ?? [], [snapshot]);
+  const moneyBackCount = useMemo(() => (snapshot ? listMoneyBackReview(snapshot, onDate).length : 0), [snapshot, onDate]);
 
   async function saveListPayment(debt: PersonDebt, balance: bigint, input: { accountId: string; principal: bigint; interest: bigint; force?: boolean }) {
     setError(null);
@@ -85,6 +89,17 @@ export function DebtsScreen() {
         <Button testID="debts-lent" label={t('debts.iLent')} onPress={() => setLendOpen(true)} />
         <Button testID="debts-borrowed" kind="secondary" label={t('debts.iBorrowed')} onPress={() => setBorrowOpen(true)} />
       </View>
+      {moneyBackCount > 0 ? (
+        <Card testID="debts-money-back-banner" style={{ marginBottom: sp['spacing-md'], gap: sp['spacing-sm'] }}>
+          <Text>{t('debts.moneyBack.banner', { count: String(moneyBackCount) })}</Text>
+          <Button
+            testID="debts-money-back-review"
+            kind="secondary"
+            label={t('debts.moneyBack.review')}
+            onPress={() => setMoneyBackReview(true)}
+          />
+        </Card>
+      ) : null}
       {error ? <InlineError message={error} /> : null}
       {!rows ? (
         <Placeholder height={120} />
@@ -196,6 +211,7 @@ export function DebtsScreen() {
         }}
         onCancel={() => setDuplicateConfirm(null)}
       />
+      {moneyBackReview ? <MoneyBackReviewSheet onClose={() => setMoneyBackReview(false)} /> : null}
     </AppFrame>
   );
 }

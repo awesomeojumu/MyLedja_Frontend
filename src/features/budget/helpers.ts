@@ -45,7 +45,11 @@ export function assignedOf(snapshot: Snapshot, categoryId: string, month: string
 /** Runs the ledger budget formulas for one month (and the prior month when envelope needs carry). */
 export function budgetForMonth(snapshot: Snapshot, month: string): BudgetMonth {
   const cats = budgetCategories(snapshot);
-  const totals = periodTotals(snapshot.events);
+  // E19: goal spend posts to the category but is not overspending (TECH-SPEC 6.6 / P06-08).
+  const budgetEvents = snapshot.events.filter((e) => !e.goalId);
+  const totals = periodTotals(budgetEvents);
+  // Income still uses all events (goal spend is expense-only).
+  const incomeTotals = periodTotals(snapshot.events);
   const months =
     snapshot.settings.budgetStyle === 'envelope' ? [prevMonth(month), month].filter((m, i, a) => i === 0 || a[i - 1] !== m) : [month];
   const run = snapshot.settings.budgetStyle === 'envelope' ? envelopeBudget : trackingBudget;
@@ -54,7 +58,11 @@ export function budgetForMonth(snapshot: Snapshot, month: string): BudgetMonth {
     categories: cats.map((c) => ({ ledgerAccountId: c.id, carryOver: c.carryOver })),
     assigned: (id, m) => assignedOf(snapshot, id, m),
     activity: (id, m) => categoryActivity(totals, m, id),
-    budgetableIncome: (m) => monthIncome(snapshot.chart, totals, m, true),
+    budgetableIncome: (m) => monthIncome(snapshot.chart, incomeTotals, m, true),
+    goalAllocations: (m) =>
+      snapshot.allocations
+        .filter((a) => a.kind !== 'spend' && monthOf(a.date) === m)
+        .reduce((s, a) => s + BigInt(a.amountMinor), 0n),
   });
   return result.find((b) => b.month === month) ?? result[0]!;
 }
