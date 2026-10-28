@@ -91,3 +91,12 @@ Format and rules: build plan section 14. Each open question stops only the task 
 - Recommendation: until then step 4 offers the 12 named categories in their five groups, plus "Add your own".
 - Answer:
 - Status: open
+
+## Q-13: The shared ledger-cases.json and its cross-repo hash check
+- Task: F1.2 (TECH-SPEC 6.12, 6.14)
+- Raised by: frontend agent
+- Documents: TECH-SPEC 6.12 says both repos keep the same file and CI compares hashes.
+- Options: A. The frontend's `test/fixtures/ledger-cases.json` is the first copy; the backend adopts it byte for byte. B. The backend writes it (B1.5) and the frontend copies it.
+- Recommendation: A for now, so F1.2 isn't blocked. If the backend's B1.5 file differs, the frontend takes the backend's copy and updates its runner. The cross-repo hash step is added to CI once the backend file exists on `backend`. The fx-clearing account is shown as "Currency exchange" if it ever appears in a list.
+- Answer:
+- Status: open
