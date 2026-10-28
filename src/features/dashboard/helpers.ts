@@ -8,6 +8,7 @@ import { addDays, rowsFor, today as todayInWorkspace } from '@/features/transact
 import { leftToSpend } from '@/ledger/budget';
 import {
   categoryActivity,
+  ledgerBalance,
   monthIncome,
   monthOf,
   monthSpent,
@@ -16,6 +17,7 @@ import {
   nextMonth,
   periodTotals,
   prevMonth,
+  shownBalance,
 } from '@/ledger';
 import { t, catalogue, type TextKey } from '@/i18n';
 
@@ -49,9 +51,31 @@ export function checklist(snapshot: Snapshot, hidden: boolean) {
     { key: 'account', done: snapshot.accounts.some((a) => !a.archived), labelKey: 'dashboard.check.account', href: '/accounts' },
     { key: 'tx', done: hasTx, labelKey: 'dashboard.check.transactions', href: '/transactions' },
     { key: 'plan', done: hasPlan, labelKey: 'dashboard.check.plan', href: '/budget' },
-    { key: 'import', done: snapshot.events.some((e) => e.importId), labelKey: 'dashboard.check.import', href: '/plan' },
+    { key: 'recurring', done: snapshot.recurring.length > 0, labelKey: 'dashboard.check.import', href: '/plan' },
+    { key: 'goal', done: snapshot.goals.some((g) => g.status === 'active'), labelKey: 'dashboard.check.goal', href: '/goals' },
+    { key: 'twofa', done: false, labelKey: 'dashboard.check.twoFactor', href: '/settings/security' },
   ];
   return items;
+}
+
+export function assetDebtTotals(snapshot: Snapshot, onDate: string) {
+  let assets = 0n;
+  let debts = 0n;
+  for (const account of snapshot.chart.all()) {
+    if (account.kind !== 'asset' && account.kind !== 'liability') continue;
+    const shown = shownBalance(account, ledgerBalance(account.id, snapshot.events, onDate));
+    if (account.kind === 'asset' && shown > 0n) assets += shown;
+    if (account.kind === 'liability' && shown > 0n) debts += shown;
+  }
+  return { assets, debts };
+}
+
+export function daysLeftInMonth(month: string, todayStr: string): number | null {
+  if (monthOf(todayStr) !== month) return null;
+  const end = endOfMonth(month);
+  const [, , dEnd] = end.split('-').map(Number) as [number, number, number];
+  const day = Number(todayStr.slice(8, 10));
+  return Math.max(0, dEnd - day);
 }
 
 function isPaid(snapshot: Snapshot, recurringId: string, dueDate: string): boolean {
@@ -185,6 +209,8 @@ export function dashboardModel(snapshot: Snapshot, month: string) {
     .slice(0, 8);
   const plannedTotal = cats.reduce((s, c) => s + assignedOf(snapshot, c.id, month) + rowFor(snapshot, month, c.id).carried, 0n);
   const todayStr = todayInWorkspace();
+  const onDate = endOfMonth(month);
+  const { assets, debts } = assetDebtTotals(snapshot, onDate);
   return {
     income,
     spent,
@@ -205,5 +231,8 @@ export function dashboardModel(snapshot: Snapshot, month: string) {
     comingUp: comingUp(snapshot, todayStr),
     goals: goalsDashboard(snapshot, todayStr),
     debts: debtsDashboard(snapshot),
+    assets,
+    liabilityTotal: debts,
+    daysLeft: daysLeftInMonth(month, todayStr),
   };
 }

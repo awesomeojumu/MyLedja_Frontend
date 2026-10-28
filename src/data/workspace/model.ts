@@ -83,6 +83,12 @@ export type Payee = {
 
 export type BudgetStyle = 'tracking' | 'envelope';
 
+/** Popup #6 — card visibility and order (DESIGN.md page 5). */
+export type DashboardLayout = {
+  order: string[];
+  hidden: string[];
+};
+
 /** Settings › AI features (DESIGN page 26). */
 export type AiFeaturePrefs = {
   suggestCategories: boolean;
@@ -135,6 +141,7 @@ export type WorkspaceSettings = {
   currency: string;
   weekStart: 'monday' | 'sunday' | 'saturday';
   checklistHidden?: boolean;
+  dashboardLayout?: DashboardLayout;
   notificationPrefs?: NotificationPrefs;
   aiPrefs?: AiFeaturePrefs;
   carryOverDefault?: boolean;

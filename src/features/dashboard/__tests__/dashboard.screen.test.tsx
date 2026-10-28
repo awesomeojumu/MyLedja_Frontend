@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
 
 import { WorkspaceRepository } from '@/data/workspace/repository';
 import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
@@ -92,5 +92,18 @@ describe('Dashboard', () => {
     expect(screen.getByTestId('dashboard-debts')).toBeTruthy();
     expect(screen.getByText(t('dashboard.goalsCard'))).toBeTruthy();
     expect(screen.getByText(t('dashboard.debtsCard'))).toBeTruthy();
+  });
+
+  it('P05-08: Customize opens popup #6', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <DashboardScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    fireEvent.press(await screen.findByTestId('dashboard-customize'));
+    expect(await screen.findByTestId('dashboard-customize-sheet')).toBeTruthy();
+    expect(screen.getByText(t('dashboard.customizeTitle'))).toBeTruthy();
   });
 });

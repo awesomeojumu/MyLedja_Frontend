@@ -173,6 +173,7 @@ export class WorkspaceRepository {
       currency: raw?.currency ?? 'NGN',
       weekStart: raw?.weekStart ?? 'monday',
       checklistHidden: raw?.checklistHidden,
+      dashboardLayout: raw?.dashboardLayout,
       notificationPrefs: {
         ...DEFAULT_NOTIFICATION_PREFS,
         ...raw?.notificationPrefs,
