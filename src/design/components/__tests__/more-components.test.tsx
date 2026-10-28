@@ -47,7 +47,7 @@ describe('Select', () => {
   it('opens, picks and closes', async () => {
     const onChange = jest.fn();
     await renderWithProviders(<Select label={t('welcome.step2.weekStart')} options={[...options]} value="a" onChange={onChange} testID="sel" />);
-    expect(screen.getByTestId('sel')).toHaveProp('accessibilityValue', { text: options[0].label });
+    expect(screen.getByTestId('sel')).toHaveProp('accessibilityLabel', `${t('welcome.step2.weekStart')}, ${options[0].label}`);
     await fireEvent.press(screen.getByTestId('sel'));
     await fireEvent.press(screen.getByRole('radio', { name: options[1].label }));
     expect(onChange).toHaveBeenCalledWith('b');

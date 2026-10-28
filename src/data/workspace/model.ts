@@ -31,6 +31,23 @@ export type Account = {
   countInBudget: boolean;
   archived: boolean;
   order: number;
+  /** The last CSV column mapping used for this account (P09-05). */
+  importMapping?: ImportMapping;
+};
+
+export type DateFormat = 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
+
+export type ImportMapping = {
+  date: number;
+  /** Either one signed amount column, or separate money in and money out columns. */
+  amount: number | null;
+  moneyIn: number | null;
+  moneyOut: number | null;
+  description: number | null;
+  payee: number | null;
+  notes: number | null;
+  dateFormat: DateFormat;
+  hasHeader: boolean;
 };
 
 export type Category = {
@@ -60,9 +77,15 @@ export type StoredEvent = {
   notes?: string;
   /** Set on the new event of a correction (TECH-SPEC 6.3), so history shows both versions. */
   correctionOf?: string;
+  /** Bookkeeping fields that change in place and never affect a figure (Q-16). */
+  cleared?: boolean;
+  reconciledBy?: string;
+  importId?: string;
 };
 
-export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & { payeeId?: string; correctionOf?: string }): StoredEvent {
+export type EventMeta = { payeeId?: string; correctionOf?: string; cleared?: boolean; reconciledBy?: string; importId?: string };
+
+export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & EventMeta): StoredEvent {
   return {
     type: e.type,
     date: e.date,
@@ -73,10 +96,13 @@ export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & 
     payeeId: e.payeeId,
     notes: e.notes,
     correctionOf: e.correctionOf,
+    cleared: e.cleared,
+    reconciledBy: e.reconciledBy,
+    importId: e.importId,
   };
 }
 
-export function fromStored(id: string, operationId: string, s: StoredEvent, reversed: boolean): MoneyEvent & { payeeId?: string; correctionOf?: string } {
+export function fromStored(id: string, operationId: string, s: StoredEvent, reversed: boolean): MoneyEvent & EventMeta {
   const lines: Line[] = s.lines.map((l) => ({ ledgerAccountId: l.a, amountMinor: BigInt(l.m), currency: l.c }));
   return {
     id,
@@ -91,8 +117,22 @@ export function fromStored(id: string, operationId: string, s: StoredEvent, reve
     payeeId: s.payeeId,
     notes: s.notes,
     correctionOf: s.correctionOf,
+    cleared: s.cleared,
+    reconciledBy: s.reconciledBy,
+    importId: s.importId,
   };
 }
 
 /** Income categories every workspace starts with, alongside the expense starters (Q-15). */
 export const STARTER_INCOME: TextKey[] = ['cat.salary', 'cat.business', 'cat.gift', 'cat.otherIncome'];
+
+/** One finished Reconcile (P10): the bank's balance is kept apart from what MyLedja worked out. */
+export type Reconcile = {
+  id: string;
+  accountId: string;
+  statementDate: string;
+  statementBalance: string;
+  calculatedBalance: string;
+  adjustment: string;
+  finishedAt: string;
+};

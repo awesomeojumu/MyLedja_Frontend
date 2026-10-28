@@ -47,6 +47,21 @@ describe('airplane mode', () => {
     expect(await a.store.outbox()).toHaveLength(0);
   });
 
+  it("an edit made before the record's own create has synced is not a conflict with itself", async () => {
+    const a = setup();
+    await a.engine.save(expense('t1', '100'), 'transaction.create', payload('t1', '100'));
+    await a.engine.save(
+      { ...expense('t1', '100'), data: { amountMinor: '100', notes: 'x' } },
+      'transaction.notes',
+      { ...payload('t1', '100'), data: { amountMinor: '100', notes: 'x' } },
+      0,
+    );
+    await a.engine.sync();
+    expect(await a.engine.status()).toEqual({ state: 'synced', waiting: 0, rejected: 0 });
+    expect(await a.store.conflicts()).toHaveLength(0);
+    expect([...a.server.records.values()][0]?.data).toEqual({ amountMinor: '100', notes: 'x' });
+  });
+
   it('sends in the order changes were made, at most 50 a batch', async () => {
     const a = setup();
     const spy = jest.spyOn(a.server, 'postOperations');

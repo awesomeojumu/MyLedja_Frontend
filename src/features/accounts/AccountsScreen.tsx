@@ -1,3 +1,5 @@
+import { useRouter } from 'expo-router';
+import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
@@ -47,6 +49,17 @@ export function AccountsScreen() {
   const theme = useTheme();
   const [adding, setAdding] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [reordering, setReordering] = useState(false);
+  const { repo } = useWorkspace();
+  const move = (id: string, by: -1 | 1) => {
+    if (!snapshot) return;
+    const ids = snapshot.accounts.filter((a) => !a.archived).map((a) => a.id);
+    const i = ids.indexOf(id);
+    const j = i + by;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j]!, ids[i]!];
+    void repo.reorderAccounts(ids);
+  };
 
   const summary = useMemo(() => {
     if (!snapshot) return null;
@@ -71,7 +84,15 @@ export function AccountsScreen() {
             </Text>
             {summary ? <Amount testID="net-worth" minor={summary.worth} variant="display-md" /> : <Placeholder width={180} height={36} />}
           </View>
-          <Button testID="add-account" label={t('accounts.add')} onPress={() => setAdding(true)} />
+          <View style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
+            <Button
+              testID="reorder-accounts"
+              kind="secondary"
+              label={reordering ? t('accounts.reorderDone') : t('accounts.reorder')}
+              onPress={() => setReordering(!reordering)}
+            />
+            <Button testID="add-account" label={t('accounts.add')} onPress={() => setAdding(true)} />
+          </View>
         </View>
 
         {!summary ? (
@@ -90,7 +111,7 @@ export function AccountsScreen() {
                   <Amount minor={g.total} />
                 </View>
                 {g.rows.map((r) => (
-                  <AccountLine key={r.account.id} row={r} borderColor={theme.border} />
+                  <AccountLine key={r.account.id} row={r} borderColor={theme.border} onMove={reordering ? (by) => move(r.account.id, by) : undefined} />
                 ))}
               </Card>
             ))}
@@ -136,30 +157,57 @@ function AssetsDebtsBar({ assets, debts }: { assets: bigint; debts: bigint }) {
   );
 }
 
-function AccountLine({ row, borderColor }: { row: AccountRow; borderColor: string }) {
+function AccountLine({ row, borderColor, onMove }: { row: AccountRow; borderColor: string; onMove?: (by: -1 | 1) => void }) {
   const { account, balance } = row;
   const owes = ACCOUNT_KIND_INFO[account.type].ledger === 'liability';
+  const router = useRouter();
+  const theme = useTheme();
   return (
-    <View
-      testID={`account-${account.id}`}
-      accessible
-      style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'], padding: sp['spacing-md'], borderTopWidth: 1, borderTopColor: borderColor }}
-    >
-      <View style={{ flex: 1, gap: sp['spacing-xxs'] }}>
-        <Text>{account.name}</Text>
-        <Text variant="caption" tone="textSecondary">
-          {[account.institution, account.last4 ? t('accounts.masked', { last4: account.last4 }) : null].filter(Boolean).join(' · ')}
-        </Text>
-      </View>
-      {!account.countInBudget ? <PillTag label={t('accounts.tracking')} /> : null}
-      {row.waiting ? <StatusPill label={t('tx.waiting')} kind="pending" /> : null}
-      {owes && balance < 0n ? (
-        <Text variant="body-tabular">
-          {t('accounts.youOwe')} <Amount minor={-balance} />
-        </Text>
-      ) : (
-        <Amount minor={balance} />
-      )}
+    <View style={{ flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: borderColor }}>
+      {onMove ? (
+        <View style={{ paddingLeft: sp['spacing-sm'] }}>
+          <Pressable
+            testID={`up-${account.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={t('accounts.moveUp', { name: account.name })}
+            onPress={() => onMove(-1)}
+            style={{ minWidth: 44, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <ChevronUp size={18} color={theme.text} />
+          </Pressable>
+          <Pressable
+            testID={`down-${account.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={t('accounts.moveDown', { name: account.name })}
+            onPress={() => onMove(1)}
+            style={{ minWidth: 44, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <ChevronDown size={18} color={theme.text} />
+          </Pressable>
+        </View>
+      ) : null}
+      <Pressable
+        testID={`account-${account.id}`}
+        accessibilityRole="link"
+        onPress={() => router.push(`/accounts/${account.id}`)}
+        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'], padding: sp['spacing-md'] }}
+      >
+        <View style={{ flex: 1, gap: sp['spacing-xxs'] }}>
+          <Text>{account.name}</Text>
+          <Text variant="caption" tone="textSecondary">
+            {[account.institution, account.last4 ? t('accounts.masked', { last4: account.last4 }) : null].filter(Boolean).join(' · ')}
+          </Text>
+        </View>
+        {!account.countInBudget ? <PillTag label={t('accounts.tracking')} /> : null}
+        {row.waiting ? <StatusPill label={t('tx.waiting')} kind="pending" /> : null}
+        {owes && balance < 0n ? (
+          <Text variant="body-tabular">
+            {t('accounts.youOwe')} <Amount minor={-balance} />
+          </Text>
+        ) : (
+          <Amount minor={balance} />
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -230,7 +278,12 @@ function AddAccountSheet({ onClose }: { onClose: () => void }) {
           ))}
         </View>
         <TextInput testID="account-name" label={t('accounts.name')} value={name} onChangeText={setName} />
-        <TextInput testID="account-institution" label={`${t('accounts.institution')} ${t('common.optional')}`} value={institution} onChangeText={setInstitution} />
+        <TextInput
+          testID="account-institution"
+          label={`${t('accounts.institution')} ${t('common.optional')}`}
+          value={institution}
+          onChangeText={setInstitution}
+        />
         <TextInput
           testID="account-last4"
           label={`${t('accounts.last4')} ${t('common.optional')}`}
@@ -239,7 +292,12 @@ function AddAccountSheet({ onClose }: { onClose: () => void }) {
           keyboardType="number-pad"
           error={last4Ok ? null : t('accounts.last4Invalid')}
         />
-        <AmountInput testID="account-opening" label={owes ? t('accounts.openingOwed') : t('accounts.opening')} value={opening.text} onChange={(text, minor) => setOpening({ text, minor })} />
+        <AmountInput
+          testID="account-opening"
+          label={owes ? t('accounts.openingOwed') : t('accounts.opening')}
+          value={opening.text}
+          onChange={(text, minor) => setOpening({ text, minor })}
+        />
         <Text variant="caption" tone="textSecondary">
           {t('welcome.step3.openingNote')}
         </Text>
@@ -250,4 +308,3 @@ function AddAccountSheet({ onClose }: { onClose: () => void }) {
     </Sheet>
   );
 }
-

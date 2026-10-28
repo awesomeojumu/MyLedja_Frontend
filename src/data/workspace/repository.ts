@@ -3,6 +3,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type { SetupBody } from '@/api/auth';
 import { t, type TextKey } from '@/i18n';
 import {
+  buildAdjustment,
   buildExpense,
   buildIncome,
   buildOpeningBalance,
@@ -11,6 +12,7 @@ import {
   buildTransfer,
   Chart,
   checkEvent,
+  ledgerBalance,
   systemAccounts,
   type ExpensePart,
   type LedgerAccount,
@@ -30,11 +32,14 @@ import {
   type Account,
   type AccountKind,
   type Category,
+  type EventMeta,
+  type ImportMapping,
   type Payee,
+  type Reconcile,
   type StoredEvent,
 } from './model';
 
-export type TxEvent = MoneyEvent & { payeeId?: string; correctionOf?: string };
+export type TxEvent = MoneyEvent & EventMeta;
 
 export type Snapshot = {
   workspaceId: string;
@@ -42,10 +47,13 @@ export type Snapshot = {
   categories: Category[];
   payees: Payee[];
   events: TxEvent[];
+  reconciles: Reconcile[];
   /** Events made on this device that haven't synced yet. */
   waiting: Set<string>;
   chart: Chart;
 };
+
+export type ImportRow = { date: string; amount: bigint; categoryId: string; payeeName?: string; notes?: string };
 
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: LedgerErrorCode };
 
@@ -71,12 +79,13 @@ export class WorkspaceRepository {
   ) {}
 
   async load(): Promise<Snapshot> {
-    const [accounts, categories, payees, events, outbox] = await Promise.all([
+    const [accounts, categories, payees, events, outbox, reconciles] = await Promise.all([
       this.store.list('accounts'),
       this.store.list('categories'),
       this.store.list('payees'),
       this.store.list('events'),
       this.store.outbox(),
+      this.store.list('reconciles'),
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
     const accountList = accounts.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id })).sort((a, b) => a.order - b.order);
@@ -84,13 +93,16 @@ export class WorkspaceRepository {
     const eventList = events
       .map((r) => fromStored(r.id, String(r.data.operationId ?? r.id), r.data as StoredEvent, reversedIds.has(r.id)))
       .sort((a, b) => (a.date === b.date ? b.id.localeCompare(a.id) : b.date.localeCompare(a.date)));
-    const waiting = new Set(outbox.filter((o) => (o.payload as { collection?: string }).collection === 'events').map((o) => String((o.payload as { id: string }).id)));
+    const waiting = new Set(
+      outbox.filter((o) => (o.payload as { collection?: string }).collection === 'events').map((o) => String((o.payload as { id: string }).id)),
+    );
     return {
       workspaceId: this.workspaceId,
       accounts: accountList,
       categories: categoryList,
       payees: payees.map((r) => ({ ...(r.data as Omit<Payee, 'id'>), id: r.id })),
       events: eventList,
+      reconciles: reconciles.map((r) => ({ ...(r.data as Omit<Reconcile, 'id'>), id: r.id })).sort((a, b) => b.statementDate.localeCompare(a.statementDate)),
       waiting,
       chart: this.chartFor(accountList, categoryList),
     };
@@ -114,10 +126,20 @@ export class WorkspaceRepository {
     if ((await this.store.list('categories')).length > 0) return;
     for (const [i, c] of body.categories.entries()) {
       const key = c.key.startsWith('cat.') ? (c.key as TextKey) : undefined;
-      await this.put('categories', this.newId(), { name: c.name, kind: 'expense', group: c.group, key, hidden: false, countInBudget: true, order: i }, 'category.create');
+      await this.put(
+        'categories',
+        this.newId(),
+        { name: c.name, kind: 'expense', group: c.group, key, hidden: false, countInBudget: true, order: i },
+        'category.create',
+      );
     }
     for (const key of STARTER_INCOME) {
-      await this.put('categories', this.newId(), { name: t(key), kind: 'income', group: 'group.income', key, hidden: false, countInBudget: key !== 'cat.gift' }, 'category.create');
+      await this.put(
+        'categories',
+        this.newId(),
+        { name: t(key), kind: 'income', group: 'group.income', key, hidden: false, countInBudget: key !== 'cat.gift' },
+        'category.create',
+      );
     }
     for (const a of body.accounts) {
       const type = (a.type in ACCOUNT_KIND_INFO ? a.type : 'other') as AccountKind;
@@ -125,7 +147,15 @@ export class WorkspaceRepository {
     }
   }
 
-  async addAccount(input: { name: string; type: AccountKind; institution?: string; last4?: string; countInBudget?: boolean; openingBalance: bigint; openingDate: string }): Promise<Result<Account>> {
+  async addAccount(input: {
+    name: string;
+    type: AccountKind;
+    institution?: string;
+    last4?: string;
+    countInBudget?: boolean;
+    openingBalance: bigint;
+    openingDate: string;
+  }): Promise<Result<Account>> {
     const snapshot = await this.load();
     const account: Account = {
       id: this.newId(),
@@ -169,8 +199,21 @@ export class WorkspaceRepository {
     }
     if (!lines.ok) return lines;
     const payeeName = input.kind === 'transfer' ? undefined : input.payeeName?.trim();
-    const payeeId = payeeName ? await this.payeeFor(snapshot.payees, payeeName, input.kind === 'expense' ? input.parts[0]?.categoryId : input.kind === 'income' ? input.categoryId : undefined) : undefined;
-    return this.postEvent(chart, snapshot.events, { type: input.kind, date: input.date, lines: lines.value, splitTotal, payeeId, notes: input.notes?.trim() || undefined });
+    const payeeId = payeeName
+      ? await this.payeeFor(
+          snapshot.payees,
+          payeeName,
+          input.kind === 'expense' ? input.parts[0]?.categoryId : input.kind === 'income' ? input.categoryId : undefined,
+        )
+      : undefined;
+    return this.postEvent(chart, snapshot.events, {
+      type: input.kind,
+      date: input.date,
+      lines: lines.value,
+      splitTotal,
+      payeeId,
+      notes: input.notes?.trim() || undefined,
+    });
   }
 
   /** "Delete": a reversal (TECH-SPEC 6.3). Undo reverses the reversal's effect by posting the original again. */
@@ -212,7 +255,12 @@ export class WorkspaceRepository {
     const existing = new Map(snapshot.events.map((e) => [e.id, e]));
     const checked = checkEvent(snapshot.chart, replacement, existing);
     if (!checked.ok) return checked;
-    const reversal = await this.postEvent(snapshot.chart, snapshot.events, { type: 'reversal', date: input.date, lines: buildReversal(original), reversalOf: id });
+    const reversal = await this.postEvent(snapshot.chart, snapshot.events, {
+      type: 'reversal',
+      date: input.date,
+      lines: buildReversal(original),
+      reversalOf: id,
+    });
     if (!reversal.ok) return reversal;
     const { id: _id, operationId: _op, status: _status, ...rest } = replacement;
     await this.put('events', replacementId, { ...toStored(rest), operationId: replacementId }, `event.${input.kind}`);
@@ -226,7 +274,13 @@ export class WorkspaceRepository {
     if (!original) return { ok: false, error: 'missing_lines' };
     const lines = buildRefund(snapshot.chart, { accountId: input.accountId, original, amount: input.amount });
     if (!lines.ok) return lines;
-    return this.postEvent(snapshot.chart, snapshot.events, { type: 'refund', date: input.date, lines: lines.value, refundOf: originalId, payeeId: original.payeeId });
+    return this.postEvent(snapshot.chart, snapshot.events, {
+      type: 'refund',
+      date: input.date,
+      lines: lines.value,
+      refundOf: originalId,
+      payeeId: original.payeeId,
+    });
   }
 
   /** Notes and payee may change in place; they don't affect any figure (TECH-SPEC 6.3). */
@@ -235,6 +289,108 @@ export class WorkspaceRepository {
     if (!rec) return;
     const data = { ...(rec.data as StoredEvent), notes: notes.trim() || undefined };
     await this.engine.save({ ...rec, data }, 'event.notes', { collection: 'events', id, data }, rec.version);
+  }
+
+  /** E10: a new value for property or an untracked investment; the change goes to Revaluation, never income (P08-05). */
+  async updateValue(accountId: string, value: bigint, date: string): Promise<Result<TxEvent | null>> {
+    const snapshot = await this.load();
+    const account = snapshot.chart.get(accountId);
+    if (!account) return { ok: false, error: 'missing_lines' };
+    const current = ledgerBalance(accountId, snapshot.events);
+    const target = account.kind === 'liability' ? -value : value;
+    if (target === current) return { ok: true, value: null };
+    const lines = buildAdjustment(snapshot.chart, { accountId, delta: target - current, against: 'revaluation' });
+    if (!lines.ok) return lines;
+    return this.postEvent(snapshot.chart, snapshot.events, { type: 'balance_adjustment', date, lines: lines.value });
+  }
+
+  /** P08-06: a balance moves to another account first, then the account is archived. */
+  async archiveAccount(accountId: string, date: string, moveToId?: string): Promise<Result> {
+    const snapshot = await this.load();
+    const account = snapshot.accounts.find((a) => a.id === accountId);
+    if (!account) return { ok: false, error: 'missing_lines' };
+    const balance = ledgerBalance(accountId, snapshot.events);
+    if (balance !== 0n) {
+      if (!moveToId) return { ok: false, error: 'missing_lines' };
+      const amount = balance > 0n ? balance : -balance;
+      const lines =
+        balance > 0n
+          ? buildTransfer(snapshot.chart, { fromId: accountId, toId: moveToId, amount })
+          : buildTransfer(snapshot.chart, { fromId: moveToId, toId: accountId, amount });
+      if (!lines.ok) return lines;
+      const posted = await this.postEvent(snapshot.chart, snapshot.events, { type: 'transfer', date, lines: lines.value });
+      if (!posted.ok) return posted;
+    }
+    await this.updateAccount({ ...account, archived: true });
+    return { ok: true, value: undefined };
+  }
+
+  async reorderAccounts(ids: string[]): Promise<void> {
+    const snapshot = await this.load();
+    for (const [order, id] of ids.entries()) {
+      const account = snapshot.accounts.find((a) => a.id === id);
+      if (account && account.order !== order) await this.updateAccount({ ...account, order });
+    }
+  }
+
+  /** P09-02 to P09-05: posts the ticked rows as one batch; every row shares an import id so Undo can reverse exactly them. */
+  async importRows(accountId: string, rows: ImportRow[], mapping: ImportMapping): Promise<Result<{ importId: string; count: number }>> {
+    const snapshot = await this.load();
+    const account = snapshot.accounts.find((a) => a.id === accountId);
+    if (!account) return { ok: false, error: 'missing_lines' };
+    const importId = this.newId();
+    const payees = [...snapshot.payees];
+    const events = [...snapshot.events];
+    let count = 0;
+    for (const row of rows) {
+      const kind = row.amount < 0n ? 'expense' : 'income';
+      const amount = row.amount < 0n ? -row.amount : row.amount;
+      const lines =
+        kind === 'expense'
+          ? buildExpense(snapshot.chart, { accountId, parts: [{ categoryId: row.categoryId, amount }] })
+          : buildIncome(snapshot.chart, { accountId, categoryId: row.categoryId, amount });
+      if (!lines.ok) return lines;
+      let payeeId: string | undefined;
+      const name = row.payeeName?.trim();
+      if (name) {
+        payeeId = await this.payeeFor(payees, name, row.categoryId);
+        if (!payees.some((p) => p.id === payeeId)) payees.push({ id: payeeId, name, defaultCategoryId: row.categoryId });
+      }
+      const posted = await this.postEvent(snapshot.chart, events, {
+        type: kind,
+        date: row.date,
+        lines: lines.value,
+        payeeId,
+        notes: row.notes?.trim() || undefined,
+        importId,
+      });
+      if (!posted.ok) return posted;
+      events.push(posted.value);
+      count += 1;
+    }
+    await this.updateAccount({ ...account, importMapping: mapping });
+    return { ok: true, value: { importId, count } };
+  }
+
+  /** Undo of an import: reverses every row it posted and nothing else (P09-04). */
+  async undoImport(importId: string, date: string): Promise<number> {
+    let undone = 0;
+    for (;;) {
+      const snapshot = await this.load();
+      const next = snapshot.events.find((e) => e.importId === importId && e.status === 'posted' && e.type !== 'reversal');
+      if (!next) return undone;
+      const r = await this.deleteTransaction(next.id, date);
+      if (!r.ok) return undone;
+      undone += 1;
+    }
+  }
+
+  /** In-place bookkeeping fields (Q-16): cleared, and the reconcile that locked an event. */
+  async setEventMeta(id: string, meta: Pick<EventMeta, 'cleared' | 'reconciledBy'>): Promise<void> {
+    const rec = await this.store.read('events', id);
+    if (!rec) return;
+    const data = { ...(rec.data as StoredEvent), ...meta };
+    await this.engine.save({ ...rec, data }, 'event.meta', { collection: 'events', id, data }, rec.version);
   }
 
   private linesFor(chart: Chart, input: TransactionInput): Result<{ lines: Line[]; splitTotal?: bigint }> {
@@ -261,7 +417,7 @@ export class WorkspaceRepository {
   private async postEvent(
     chart: Chart,
     events: TxEvent[],
-    input: Omit<MoneyEvent, 'id' | 'operationId' | 'status' | 'lines'> & { lines: Line[]; payeeId?: string; correctionOf?: string },
+    input: Omit<MoneyEvent, 'id' | 'operationId' | 'status' | 'lines'> & { lines: Line[] } & EventMeta,
   ): Promise<Result<TxEvent>> {
     const id = this.newId();
     const event: TxEvent = { ...input, id, operationId: id, status: 'posted' };

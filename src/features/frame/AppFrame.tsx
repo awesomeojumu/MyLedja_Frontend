@@ -366,7 +366,12 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
               <SidebarList compact={false} onNavigate={() => setDrawer(false)} />
             </SafeAreaView>
           </View>
-          <Pressable accessibilityLabel={t('common.close')} style={{ flex: 1, backgroundColor: `${c['brand-dark-900']}73` }} onPress={() => setDrawer(false)} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+            style={{ flex: 1, backgroundColor: `${c['brand-dark-900']}73` }}
+            onPress={() => setDrawer(false)}
+          />
         </View>
       </Modal>
     </SafeAreaView>
