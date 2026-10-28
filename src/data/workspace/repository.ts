@@ -36,6 +36,8 @@ import {
   type Category,
   type EventMeta,
   type ImportMapping,
+  type Goal,
+  type GoalAllocation,
   type Payee,
   type Reconcile,
   type StoredEvent,
@@ -55,6 +57,8 @@ export type Snapshot = {
   reconciles: Reconcile[];
   /** categoryId:month → assigned kobo */
   assigns: Map<string, bigint>;
+  goals: Goal[];
+  allocations: GoalAllocation[];
   /** Events made on this device that haven't synced yet. */
   waiting: Set<string>;
   chart: Chart;
@@ -86,7 +90,7 @@ export class WorkspaceRepository {
   ) {}
 
   async load(): Promise<Snapshot> {
-    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows] = await Promise.all([
+    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows] = await Promise.all([
       this.store.list('accounts'),
       this.store.list('categories'),
       this.store.list('payees'),
@@ -95,6 +99,8 @@ export class WorkspaceRepository {
       this.store.list('reconciles'),
       this.store.list('settings'),
       this.store.list('budget_assigns'),
+      this.store.list('goals'),
+      this.store.list('allocations'),
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
     const accountList = accounts.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id })).sort((a, b) => a.order - b.order);
@@ -137,6 +143,8 @@ export class WorkspaceRepository {
       events: eventList,
       reconciles: reconciles.map((r) => ({ ...(r.data as Omit<Reconcile, 'id'>), id: r.id })).sort((a, b) => b.statementDate.localeCompare(a.statementDate)),
       assigns,
+      goals: goalRows.map((r) => ({ ...(r.data as Omit<Goal, 'id'>), id: r.id })),
+      allocations: allocationRows.map((r) => ({ ...(r.data as Omit<GoalAllocation, 'id'>), id: r.id })),
       waiting,
       chart: this.chartFor(accountList, categoryList),
     };
@@ -757,6 +765,73 @@ export class WorkspaceRepository {
       if (!moved.ok) return moved;
     }
     return { ok: true, value: undefined };
+  }
+
+  savedForGoal(goalId: string, snapshot: Snapshot): bigint {
+    return snapshot.allocations.filter((a) => a.goalId === goalId).reduce((s, a) => s + BigInt(a.amountMinor), 0n);
+  }
+
+  async addGoal(input: { name: string; targetMinor: bigint; accountId: string; targetDate?: string; categoryId?: string }): Promise<Result<Goal>> {
+    if (!input.accountId.trim()) return { ok: false, error: 'missing_lines' };
+    if (input.targetMinor <= 0n) return { ok: false, error: 'not_positive' };
+    const snapshot = await this.load();
+    if (!snapshot.accounts.some((a) => a.id === input.accountId && !a.archived)) return { ok: false, error: 'missing_lines' };
+    const goal: Goal = {
+      id: this.newId(),
+      name: input.name.trim(),
+      targetMinor: input.targetMinor.toString(),
+      accountId: input.accountId,
+      targetDate: input.targetDate,
+      categoryId: input.categoryId,
+      status: 'active',
+    };
+    const { id, ...data } = goal;
+    await this.put('goals', id, data, 'goal.create');
+    return { ok: true, value: goal };
+  }
+
+  async updateGoal(goal: Goal): Promise<void> {
+    const { id, ...data } = goal;
+    await this.put('goals', id, data, 'goal.update');
+  }
+
+  /** E18: earmark money for a goal; transfer when the source account differs. */
+  async allocateToGoal(
+    goalId: string,
+    input: { amount: bigint; date: string; fromAccountId?: string },
+  ): Promise<Result<{ allocation: GoalAllocation; completed: boolean }>> {
+    if (input.amount <= 0n) return { ok: false, error: 'not_positive' };
+    const snapshot = await this.load();
+    const goal = snapshot.goals.find((g) => g.id === goalId);
+    if (!goal || goal.status !== 'active') return { ok: false, error: 'missing_lines' };
+    const fromId = input.fromAccountId ?? goal.accountId;
+    if (!snapshot.accounts.some((a) => a.id === fromId && !a.archived)) return { ok: false, error: 'missing_lines' };
+    if (fromId !== goal.accountId) {
+      const moved = await this.addTransaction({
+        kind: 'transfer',
+        fromId,
+        toId: goal.accountId,
+        amount: input.amount,
+        date: input.date,
+        notes: t('goals.transferNote', { name: goal.name }),
+      });
+      if (!moved.ok) return moved;
+    }
+    const allocation: GoalAllocation = {
+      id: this.newId(),
+      goalId,
+      amountMinor: input.amount.toString(),
+      date: input.date,
+      fromAccountId: fromId,
+    };
+    const { id, ...data } = allocation;
+    await this.put('allocations', id, data, 'goal.allocate');
+    const saved = this.savedForGoal(goalId, await this.load());
+    const completed = saved >= BigInt(goal.targetMinor);
+    if (completed) {
+      await this.updateGoal({ ...goal, status: 'completed' });
+    }
+    return { ok: true, value: { allocation, completed } };
   }
 
   private linesFor(chart: Chart, input: TransactionInput): Result<{ lines: Line[]; splitTotal?: bigint }> {

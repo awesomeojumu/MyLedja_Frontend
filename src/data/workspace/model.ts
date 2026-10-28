@@ -95,6 +95,29 @@ export type BudgetAssign = { categoryId: string; month: string; amountMinor: str
 
 export const budgetAssignId = (categoryId: string, month: string) => `${categoryId}:${month}`;
 
+/** DESIGN.md page 14 — saving target tied to an account (P14-02). */
+export type Goal = {
+  id: string;
+  name: string;
+  targetMinor: string;
+  targetDate?: string;
+  accountId: string;
+  categoryId?: string;
+  status: 'active' | 'paused' | 'completed';
+  /** Optional monthly schedule (P14-04). */
+  scheduleAmountMinor?: string;
+  scheduleDayOfMonth?: number;
+};
+
+/** Earmark into a goal (TECH-SPEC E18); amounts are kobo strings. */
+export type GoalAllocation = {
+  id: string;
+  goalId: string;
+  amountMinor: string;
+  date: string;
+  fromAccountId: string;
+};
+
 export type StoredLine = { a: string; m: string; c: string };
 
 /** A money event as stored and synced: amounts are strings of kobo. */

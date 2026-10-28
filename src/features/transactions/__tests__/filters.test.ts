@@ -36,6 +36,8 @@ function snapshotStub(): Snapshot {
     ],
     reconciles: [],
     assigns: new Map(),
+    goals: [],
+    allocations: [],
     waiting: new Set(),
     chart: {} as Snapshot['chart'],
   };
