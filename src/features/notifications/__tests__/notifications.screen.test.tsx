@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
 
 import { WorkspaceRepository } from '@/data/workspace/repository';
 import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
@@ -8,6 +8,8 @@ import { memorySync, renderWithProviders } from '../../../../test/helpers/render
 import { NotificationsScreen } from '../NotificationsScreen';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
+
+import { router } from 'expo-router';
 
 async function seeded() {
   const sync = memorySync();
@@ -26,6 +28,10 @@ async function seeded() {
 }
 
 describe('Notifications page (F2.5)', () => {
+  beforeEach(() => {
+    jest.mocked(router.push).mockClear();
+  });
+
   it('P27-01: shows grouped inbox header', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
@@ -36,5 +42,17 @@ describe('Notifications page (F2.5)', () => {
     );
     expect(screen.getByText(t('notifications.title'))).toBeTruthy();
     expect(screen.getByTestId('notifications-mark-all')).toBeTruthy();
+  });
+
+  it('P27-02: settings gear opens Settings › Notifications (DESIGN.md Page 27)', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <NotificationsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('notifications-settings'));
+    expect(router.push).toHaveBeenCalledWith('/settings/notifications');
   });
 });
