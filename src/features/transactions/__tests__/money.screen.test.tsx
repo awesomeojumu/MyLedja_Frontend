@@ -43,7 +43,7 @@ async function show(screenEl: React.ReactElement, sync: ReturnType<typeof memory
     </WorkspaceProvider>,
     { sync },
   );
-  await screen.findByTestId('tx-add').catch(() => screen.findByTestId('add-account'));
+  await screen.findByTestId('tx-add').catch(() => screen.findByTestId('accounts-add'));
 }
 
 async function typeAmount(testID: string, value: string) {
