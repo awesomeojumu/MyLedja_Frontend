@@ -60,6 +60,13 @@ describe('App frame (F0.6, E-09)', () => {
     expect(screen.queryByTestId('nav-notifications')).toBeNull();
   });
 
+  it('DESIGN 3.3 phone bottom bar uses Plan, not Accounts', async () => {
+    atWidth(375);
+    await frame(<AppFrame title={t('dashboard.title')}>{null}</AppFrame>);
+    expect(screen.getByLabelText(t('nav.plan'))).toBeTruthy();
+    expect(screen.queryByLabelText(t('nav.accounts'))).toBeNull();
+  });
+
   it('the privacy toggle switches amounts off and on', async () => {
     atWidth(1100);
     await frame(<AppFrame title={t('dashboard.title')}>{null}</AppFrame>);

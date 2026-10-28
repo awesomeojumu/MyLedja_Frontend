@@ -13,11 +13,20 @@ export type NavItem = {
  * Only pages that have shipped appear in navigation (DESIGN.md principle 12, G-01).
  * Each phase adds its pages here as they ship.
  */
+/** Everyday pages in the sidebar (DESIGN.md 3.2). Accounts stay here; phone bottom bar uses PHONE_BOTTOM_PAGES. */
 export const SHIPPED_PAGES: NavItem[] = [
   { key: 'dashboard', label: 'nav.dashboard', phoneLabel: 'nav.home', href: '/', icon: 'dashboard' },
   { key: 'transactions', label: 'nav.transactions', href: '/transactions', icon: 'transactions' },
   { key: 'budget', label: 'nav.budget', href: '/budget', icon: 'budget' },
   { key: 'accounts', label: 'nav.accounts', href: '/accounts', icon: 'accounts' },
+];
+
+/** Phone bottom bar: Home · Transactions · (+) · Budget · Plan (DESIGN.md 3.3). */
+export const PHONE_BOTTOM_PAGES: NavItem[] = [
+  { key: 'dashboard', label: 'nav.dashboard', phoneLabel: 'nav.home', href: '/', icon: 'dashboard' },
+  { key: 'transactions', label: 'nav.transactions', href: '/transactions', icon: 'transactions' },
+  { key: 'budget', label: 'nav.budget', href: '/budget', icon: 'budget' },
+  { key: 'plan', label: 'nav.planBills', phoneLabel: 'nav.plan', href: '/plan', icon: 'plan' },
 ];
 
 /** Manage section in the drawer (DESIGN.md 3.2); not in the phone bottom bar. */
