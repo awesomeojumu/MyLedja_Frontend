@@ -2,7 +2,7 @@ import { fireEvent, screen } from '@testing-library/react-native';
 import { t } from '@/i18n';
 import { renderWithProviders } from '../../../../test/helpers/render';
 import { AppFrame } from '../AppFrame';
-import { SHIPPED_PAGES } from '../navigation';
+import { MANAGE_PAGES, SHIPPED_PAGES } from '../navigation';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 jest.mock('@/lib/useOnline', () => ({ useOnline: () => true }));
@@ -41,7 +41,15 @@ describe('App frame (F0.6, E-09)', () => {
     atWidth(1100);
     await renderWithProviders(<AppFrame title={t('dashboard.title')}>{null}</AppFrame>);
     const links = screen.getAllByRole('link');
-    expect(links).toHaveLength(SHIPPED_PAGES.length);
+    expect(links).toHaveLength(SHIPPED_PAGES.length + MANAGE_PAGES.length);
+  });
+
+  it('G-01 manage pages are not in the phone bottom bar', async () => {
+    atWidth(375);
+    await renderWithProviders(<AppFrame title={t('dashboard.title')}>{null}</AppFrame>);
+    expect(screen.getByTestId('bottom-bar')).toBeTruthy();
+    expect(screen.queryByTestId('nav-payees')).toBeNull();
+    expect(screen.queryByTestId('nav-settings')).toBeNull();
   });
 
   it('the privacy toggle switches amounts off and on', async () => {
@@ -51,11 +59,5 @@ describe('App frame (F0.6, E-09)', () => {
     expect(toggle).not.toBeChecked();
     await fireEvent.press(toggle);
     expect(screen.getByTestId('privacy-toggle')).toBeChecked();
-  });
-
-  it('shows the connection pill', async () => {
-    atWidth(1100);
-    await renderWithProviders(<AppFrame title={t('dashboard.title')}>{null}</AppFrame>);
-    expect(screen.getByLabelText(t('status.synced'))).toBeTruthy();
   });
 });

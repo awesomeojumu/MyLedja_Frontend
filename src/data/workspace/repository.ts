@@ -569,6 +569,37 @@ export class WorkspaceRepository {
     await this.put('settings', 'workspace', settings, 'settings.update');
   }
 
+  async addCategory(input: { name: string; kind: 'income' | 'expense'; group: string }): Promise<Category> {
+    const snapshot = await this.load();
+    const category: Category = {
+      id: this.newId(),
+      name: input.name.trim(),
+      kind: input.kind,
+      group: input.group,
+      hidden: false,
+      countInBudget: input.kind === 'expense',
+      order: snapshot.categories.length,
+      budgetType: 'flexible',
+      carryOver: false,
+    };
+    const { id, ...data } = category;
+    await this.put('categories', id, data, 'category.create');
+    return category;
+  }
+
+  async reorderCategory(categoryId: string, direction: 'up' | 'down'): Promise<void> {
+    const snapshot = await this.load();
+    const kind = snapshot.categories.find((x) => x.id === categoryId)?.kind;
+    const sameKind = snapshot.categories.filter((c) => c.kind === kind);
+    const index = sameKind.findIndex((c) => c.id === categoryId);
+    const swap = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || swap < 0 || swap >= sameKind.length) return;
+    const a = sameKind[index]!;
+    const b = sameKind[swap]!;
+    await this.updateCategory({ ...a, order: b.order ?? swap });
+    await this.updateCategory({ ...b, order: a.order ?? index });
+  }
+
   async updatePayee(payee: Payee): Promise<void> {
     const { id, ...data } = payee;
     await this.put('payees', id, data, 'payee.update');
