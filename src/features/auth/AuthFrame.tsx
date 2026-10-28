@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Banner, Text } from '@/design/components';
+import { GradientBand, GradientMesh } from '@/design/components/GradientMesh';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
@@ -9,18 +10,11 @@ import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 
 const c = tokens.color;
-// The gradient mesh (DESIGN.md 2.10): cream, navy tint and navy across the upper third, with a faint gold stop.
-const MESH = [
-  `radial-gradient(circle at 15% 0%, ${c.primary}E6 0%, transparent 45%)`,
-  `radial-gradient(circle at 60% 5%, ${c['primary-bg-subdued-hover']} 0%, transparent 40%)`,
-  `radial-gradient(circle at 90% 0%, ${c['canvas-cream']} 0%, transparent 35%)`,
-  `radial-gradient(circle at 40% 25%, ${c.gold}1F 0%, transparent 30%)`,
-].join(', ');
-
 export function GradientMeshBackdrop({ children }: { children: ReactNode }) {
   const theme = useTheme();
   return (
-    <View testID="gradient-mesh" style={{ flex: 1, backgroundColor: theme.page, experimental_backgroundImage: MESH }}>
+    <View testID="gradient-mesh" style={{ flex: 1, backgroundColor: theme.page }}>
+      <GradientMesh />
       {children}
     </View>
   );
@@ -37,7 +31,8 @@ export function AuthFrame({ children, offlineMessage = true }: { children: React
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={{ flex: 1, flexDirection: 'row' }}>
             {showHero ? (
-              <View testID="auth-hero" style={{ flex: 1, backgroundColor: c.primary, experimental_backgroundImage: `linear-gradient(120deg, ${c.primary}, ${c['primary-deep']})`, padding: tokens.spacing['spacing-huge'], justifyContent: 'center', gap: tokens.spacing['spacing-xl'] }}>
+              <View testID="auth-hero" style={{ flex: 1, overflow: 'hidden', padding: tokens.spacing['spacing-huge'], justifyContent: 'center', gap: tokens.spacing['spacing-xl'] }}>
+                <GradientBand />
                 <Text variant="heading-sm" tone="onPrimaryFill" style={{ fontFamily: 'Inter_400Regular', color: c['on-primary'] }}>
                   {t('app.name')}
                 </Text>
