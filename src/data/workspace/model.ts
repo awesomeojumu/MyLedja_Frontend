@@ -88,6 +88,44 @@ export type WorkspaceSettings = {
   budgetStyle: BudgetStyle;
   currency: string;
   weekStart: 'monday' | 'sunday' | 'saturday';
+  checklistHidden?: boolean;
+  notificationPrefs?: NotificationPrefs;
+};
+
+/** Settings › Notifications (P26-05). */
+export type NotificationPrefs = {
+  bills: boolean;
+  budget: boolean;
+  goals: boolean;
+  debts: boolean;
+  income: boolean;
+  security: boolean;
+  /** Days before a bill is due, e.g. 1, 3, 7 */
+  billReminderDays: number[];
+  quietHoursStart?: string;
+  quietHoursEnd?: string;
+  /** Default on: hide amounts on the lock screen (DESIGN.md 10.3). */
+  hideAmountsOnLockScreen: boolean;
+};
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  bills: true,
+  budget: true,
+  goals: true,
+  debts: true,
+  income: true,
+  security: true,
+  billReminderDays: [1, 3],
+  hideAmountsOnLockScreen: true,
+};
+
+/** Budget template line (P06-10). */
+export type BudgetTemplateLine = { categoryId: string; amountMinor: string };
+
+export type BudgetTemplate = {
+  id: string;
+  name: string;
+  lines: BudgetTemplateLine[];
 };
 
 /** Planned amount for one category in one month, stored as kobo string. */
