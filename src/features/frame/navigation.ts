@@ -1,7 +1,7 @@
 import type { Href } from 'expo-router';
 import type { TextKey } from '@/i18n';
 
-export type NavItem = { key: string; label: TextKey; phoneLabel?: TextKey; href: Href; icon: 'dashboard' | 'accounts' | 'transactions' | 'budget' };
+export type NavItem = { key: string; label: TextKey; phoneLabel?: TextKey; href: Href; icon: 'dashboard' | 'accounts' | 'transactions' | 'budget' | 'payees' };
 
 /**
  * Only pages that have shipped appear in navigation (DESIGN.md principle 12, G-01).
@@ -13,3 +13,6 @@ export const SHIPPED_PAGES: NavItem[] = [
   { key: 'budget', label: 'nav.budget', href: '/budget', icon: 'budget' },
   { key: 'accounts', label: 'nav.accounts', href: '/accounts', icon: 'accounts' },
 ];
+
+/** Manage section in the drawer (DESIGN.md 3.2); not in the phone bottom bar. */
+export const MANAGE_PAGES: NavItem[] = [{ key: 'payees', label: 'nav.payees', href: '/payees', icon: 'payees' }];

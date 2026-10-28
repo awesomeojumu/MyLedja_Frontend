@@ -184,3 +184,14 @@ Format and rules: build plan section 14. Each open question stops only the task 
   - Category chart shows twelve months of spending (BarChart, gold on the current month) with a planned hint for this month; case 23 carry-over stays in ledger tests.
 - Answer:
 - Status: open
+
+## Q-19: Phase 1 decisions for Payees
+- Task: F1.9
+- Raised by: frontend agent
+- Documents: DESIGN.md page 24, P24
+- Decisions taken so as not to block:
+  - Payees live in the workspace snapshot; merge repoints `payeeId` on events in place and soft-deletes merged records (`deleted` flag).
+  - Logos and "Create rule" wait for Phase 4; aliases are a comma-separated list on the payee sheet.
+  - Payees appear under Manage in the drawer, not the phone bottom bar (DESIGN.md 3.2).
+- Answer:
+- Status: open

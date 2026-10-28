@@ -72,7 +72,14 @@ export type Category = {
   deleted?: boolean;
 };
 
-export type Payee = { id: string; name: string; defaultCategoryId?: string };
+export type Payee = {
+  id: string;
+  name: string;
+  defaultCategoryId?: string;
+  /** Bank import names that map here (P24-03). */
+  aliases?: string[];
+  deleted?: boolean;
+};
 
 export type BudgetStyle = 'tracking' | 'envelope';
 

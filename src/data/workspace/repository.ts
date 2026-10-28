@@ -131,7 +131,9 @@ export class WorkspaceRepository {
       settings,
       accounts: accountList,
       categories: categoryList,
-      payees: payees.map((r) => ({ ...(r.data as Omit<Payee, 'id'>), id: r.id })),
+      payees: payees
+        .map((r) => ({ ...(r.data as Omit<Payee, 'id'>), id: r.id }))
+        .filter((p) => !p.deleted),
       events: eventList,
       reconciles: reconciles.map((r) => ({ ...(r.data as Omit<Reconcile, 'id'>), id: r.id })).sort((a, b) => b.statementDate.localeCompare(a.statementDate)),
       assigns,
@@ -567,6 +569,43 @@ export class WorkspaceRepository {
     await this.put('settings', 'workspace', settings, 'settings.update');
   }
 
+  async updatePayee(payee: Payee): Promise<void> {
+    const { id, ...data } = payee;
+    await this.put('payees', id, data, 'payee.update');
+  }
+
+  /** P24-04: move every transaction to the kept payee and remove the others. */
+  async mergePayees(keepId: string, mergeIds: string[]): Promise<Result> {
+    const ids = mergeIds.filter((id) => id !== keepId);
+    if (ids.length === 0) return { ok: false, error: 'not_positive' };
+    const snapshot = await this.load();
+    const keep = snapshot.payees.find((p) => p.id === keepId);
+    if (!keep) return { ok: false, error: 'missing_lines' };
+    const merged = ids.map((id) => snapshot.payees.find((p) => p.id === id)).filter(Boolean) as Payee[];
+    if (merged.length !== ids.length) return { ok: false, error: 'missing_lines' };
+
+    for (const event of snapshot.events) {
+      if (!event.payeeId || !ids.includes(event.payeeId)) continue;
+      const rec = await this.store.read('events', event.id);
+      if (!rec) continue;
+      const data = { ...(rec.data as StoredEvent), payeeId: keepId };
+      await this.engine.save({ ...rec, data }, 'event.payee', { collection: 'events', id: event.id, data }, rec.version);
+    }
+
+    const aliases = new Set(keep.aliases ?? []);
+    for (const p of merged) {
+      aliases.add(p.name);
+      for (const a of p.aliases ?? []) aliases.add(a);
+    }
+    await this.updatePayee({ ...keep, aliases: [...aliases] });
+
+    for (const id of ids) {
+      const p = merged.find((m) => m.id === id)!;
+      await this.put('payees', id, { ...p, deleted: true }, 'payee.delete');
+    }
+    return { ok: true, value: undefined };
+  }
+
   /**
    * P07-06: move this category's transactions to another, then soft-delete it.
    * Each move is a correction (TECH-SPEC 6.3).
@@ -638,7 +677,10 @@ export class WorkspaceRepository {
   }
 
   private async payeeFor(payees: Payee[], name: string, categoryId?: string): Promise<string> {
-    const existing = payees.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    const key = name.toLowerCase();
+    const existing =
+      payees.find((p) => p.name.toLowerCase() === key) ??
+      payees.find((p) => (p.aliases ?? []).some((a) => a.toLowerCase() === key));
     if (existing) return existing.id;
     const id = this.newId();
     await this.put('payees', id, { name, defaultCategoryId: categoryId }, 'payee.create');
