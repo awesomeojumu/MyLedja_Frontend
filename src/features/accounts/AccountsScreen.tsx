@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ChevronDown, ChevronUp } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, MoreHorizontal } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
@@ -8,6 +8,7 @@ import {
   Button,
   Card,
   EmptyState,
+  Icon,
   Menu,
   PillTag,
   Placeholder,
@@ -301,8 +302,14 @@ function AccountLine({
         <Menu
           testID={`account-row-menu-${account.id}`}
           trigger={(open) => (
-            <Pressable accessibilityRole="button" onPress={open} onLongPress={open} style={{ padding: sp['spacing-md'] }}>
-              <Text tone="textSecondary">⋯</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.options')}
+              onPress={open}
+              onLongPress={open}
+              style={{ padding: sp['spacing-md'], minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Icon icon={MoreHorizontal} size="nav" />
             </Pressable>
           )}
           items={menuItems}

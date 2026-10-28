@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Pressable, ScrollView, View, Platform } from 'react-native';
-import { MoreHorizontal } from 'lucide-react-native';
+import { MoreHorizontal, X } from 'lucide-react-native';
 
 import {
   Amount,
@@ -9,6 +9,7 @@ import {
   Checkbox,
   EmptyState,
   formatDay,
+  Icon,
   InlineError,
   Menu,
   PillTag,
@@ -190,8 +191,16 @@ export function TransactionsScreen() {
       {chips.length > 0 ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'], marginBottom: sp['spacing-md'] }}>
           {chips.map((chip) => (
-            <Pressable key={chip.key} testID={`tx-chip-${chip.key}`} accessibilityRole="button" onPress={() => setFilters(removeChip(filters, chip.key))}>
-              <PillTag label={`${chip.label} ✕`} />
+            <Pressable
+              key={chip.key}
+              testID={`tx-chip-${chip.key}`}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.dismissChip')}
+              onPress={() => setFilters(removeChip(filters, chip.key))}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            >
+              <PillTag label={chip.label} />
+              <Icon icon={X} size={12} color={theme.textSecondary} />
             </Pressable>
           ))}
         </View>

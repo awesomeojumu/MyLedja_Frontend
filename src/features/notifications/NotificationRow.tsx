@@ -1,7 +1,7 @@
 import { Pressable, View } from 'react-native';
-import { AlertTriangle, Check, Lock, MoreHorizontal, X } from 'lucide-react-native';
+import { AlertTriangle, Check, CircleDot, Lock, MoreHorizontal, X } from 'lucide-react-native';
 
-import { Amount, Button, Card, Menu, Text } from '@/design/components';
+import { Amount, Button, Card, Icon, Menu, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import type { AppNotification } from '@/data/workspace/model';
@@ -15,10 +15,10 @@ const c = tokens.color;
 const ICONS = {
   due: AlertTriangle,
   missed: X,
-  budget: () => null,
+  budget: CircleDot,
   goal: Check,
   security: Lock,
-  default: () => null,
+  default: CircleDot,
 } as const;
 
 export function NotificationRow({
@@ -46,11 +46,9 @@ export function NotificationRow({
 }) {
   const theme = useTheme();
   const iconKey = notificationIcon(n);
-  const Icon = ICONS[iconKey];
+  const Glyph = ICONS[iconKey];
   const when = formatNotificationWhen(n.createdAt, today);
   const unread = !n.read;
-  const budgetGlyph = iconKey === 'budget' ? '◔' : null;
-  const goalGlyph = iconKey === 'goal' ? '✓' : null;
 
   return (
     <Card
@@ -72,13 +70,7 @@ export function NotificationRow({
         ) : (
           <View style={{ width: 8, height: 8, marginBottom: sp['spacing-xxs'] }} />
         )}
-        {budgetGlyph ? (
-          <Text variant="caption">{budgetGlyph}</Text>
-        ) : goalGlyph ? (
-          <Text variant="caption">{goalGlyph}</Text>
-        ) : Icon ? (
-          <Icon size={16} color={iconKey === 'missed' ? theme.error : theme.textSecondary} />
-        ) : null}
+        <Icon icon={Glyph} size="row" color={iconKey === 'missed' ? theme.error : theme.textSecondary} />
       </View>
       <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
         <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], alignItems: 'flex-start' }}>
@@ -131,7 +123,7 @@ export function NotificationRow({
                   onPress={open}
                   style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <MoreHorizontal size={18} color={theme.textSecondary} />
+                  <Icon icon={MoreHorizontal} size="nav" color={theme.textSecondary} />
                 </Pressable>
               )}
               items={[{ key: 'dismiss', label: t('notifications.dismiss'), onPress: onDismiss }]}

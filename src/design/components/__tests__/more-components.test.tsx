@@ -1,8 +1,10 @@
 import { fireEvent, screen } from '@testing-library/react-native';
+import { Check } from 'lucide-react-native';
 import { Text as RNText } from 'react-native';
 import { renderWithProviders } from '../../../../test/helpers/render';
 import { t } from '@/i18n';
-import { DatePicker, formatDay, GradientMesh, LogomarkLoader, Menu, Panel, Popover, SegmentedControl, Select, Switch, Tabs } from '..';
+import { DatePicker, formatDay, GradientMesh, Icon, LogomarkLoader, Menu, Panel, Popover, SegmentedControl, Select, Switch, Tabs } from '..';
+import tokens from '../../tokens.json';
 
 const options = [
   { value: 'a', label: t('welcome.day.monday') },
@@ -114,5 +116,14 @@ describe('LogomarkLoader and GradientMesh', () => {
   it('mesh draws with SVG', async () => {
     await renderWithProviders(<GradientMesh />);
     expect(screen.getByTestId('gradient-mesh-art', { includeHiddenElements: true })).toBeTruthy();
+  });
+});
+
+describe('Icon (F0.4)', () => {
+  it('renders a Lucide glyph at row size by default', async () => {
+    await renderWithProviders(<Icon icon={Check} testID="icon-check" color={tokens.color['ink-secondary']} />);
+    const el = screen.getByTestId('icon-check', { includeHiddenElements: true });
+    expect(el.props.width).toBe(16);
+    expect(el.props.height).toBe(16);
   });
 });

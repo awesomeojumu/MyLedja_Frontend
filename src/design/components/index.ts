@@ -6,6 +6,7 @@ export { TextInput } from './TextInput';
 export { CodeInput } from './CodeInput';
 export { Sheet, Confirm } from './Dialog';
 export { ToastProvider, useToast } from './Toast';
+export { Icon, type IconSize } from './Icon';
 export {
   Banner,
   Card,

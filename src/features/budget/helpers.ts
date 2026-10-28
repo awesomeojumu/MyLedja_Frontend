@@ -117,20 +117,20 @@ export function templateLineLabel(snapshot: Snapshot, line: BudgetTemplateLine):
   const kind = line.ruleKind ?? 'monthly';
   const meta = line.ruleMeta ?? {};
   if (kind === 'saveBy') {
-    const target = meta.targetMinor ? formatNaira(BigInt(meta.targetMinor)) : '—';
-    const when = meta.targetMonth ? shortMonth(meta.targetMonth) : '—';
+    const target = meta.targetMinor ? formatNaira(BigInt(meta.targetMinor)) : t('common.notSet');
+    const when = meta.targetMonth ? shortMonth(meta.targetMonth) : t('common.notSet');
     return t('budget.templatesRuleSaveBy', { amount: target, month: when });
   }
   if (kind === 'coverBill') {
     const bill = snapshot.recurring.find((r) => r.id === meta.recurringId);
-    return t('budget.templatesRuleCoverBill', { name: bill?.name ?? '—' });
+    return t('budget.templatesRuleCoverBill', { name: bill?.name ?? t('common.notSet') });
   }
   if (kind === 'average') {
     const n = meta.months ?? '3';
     return t('budget.templatesRuleAverage', { count: n });
   }
   if (kind === 'cap') {
-    return t('budget.templatesRuleCap', { amount: meta.maxMinor ? formatNaira(BigInt(meta.maxMinor)) : '—' });
+    return t('budget.templatesRuleCap', { amount: meta.maxMinor ? formatNaira(BigInt(meta.maxMinor)) : t('common.notSet') });
   }
   const amount = line.amountMinor ? BigInt(line.amountMinor) : 0n;
   return t('budget.templatesRuleMonthly', { amount: formatNaira(amount) });

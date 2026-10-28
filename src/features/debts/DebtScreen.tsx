@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Share, View, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { AlertTriangle, Check, Circle, MoreHorizontal } from 'lucide-react-native';
 
 import {
   Amount,
@@ -8,6 +9,7 @@ import {
   Card,
   Confirm,
   formatDay,
+  Icon,
   InlineError,
   Menu,
   Placeholder,
@@ -174,10 +176,17 @@ export function DebtScreen() {
       ) : (
         schedule.map((inst) => (
           <View key={inst.dueDate} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="caption" tone="textSecondary">
-              {inst.status === 'paid' ? '✓' : inst.status === 'overdue' ? '⚠' : '○'} {formatDay(inst.dueDate)}
-              {inst.status === 'overdue' ? ` (${t('debts.overdue')})` : inst.status === 'due' ? ` (${t('debts.dueNow')})` : ''}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Icon
+                icon={inst.status === 'paid' ? Check : inst.status === 'overdue' ? AlertTriangle : Circle}
+                size="row"
+                color={inst.status === 'overdue' ? theme.error : theme.textSecondary}
+              />
+              <Text variant="caption" tone="textSecondary">
+                {formatDay(inst.dueDate)}
+                {inst.status === 'overdue' ? ` (${t('debts.overdue')})` : inst.status === 'due' ? ` (${t('debts.dueNow')})` : ''}
+              </Text>
+            </View>
             <Amount minor={inst.amountMinor} variant="caption" />
           </View>
         ))
@@ -253,7 +262,17 @@ export function DebtScreen() {
           ) : null}
           <Menu
             testID="debt-menu"
-            trigger={(open) => <Button testID="debt-more" kind="secondary" label="⋯" onPress={open} />}
+            trigger={(open) => (
+              <Pressable
+                testID="debt-more"
+                accessibilityRole="button"
+                accessibilityLabel={t('common.options')}
+                onPress={open}
+                style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.inputBorder, borderRadius: tokens.radius['rounded-pill'], paddingHorizontal: sp['spacing-md'] }}
+              >
+                <Icon icon={MoreHorizontal} size="nav" color={theme.textSecondary} />
+              </Pressable>
+            )}
             items={menuItems}
           />
         </View>

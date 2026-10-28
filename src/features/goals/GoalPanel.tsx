@@ -1,7 +1,9 @@
 import { Pressable, View } from 'react-native';
+import { MoreHorizontal } from 'lucide-react-native';
 
-import { Amount, Button, LineChart, Menu, Panel, Text, formatDay } from '@/design/components';
+import { Amount, Button, Icon, LineChart, Menu, Panel, Text, formatDay } from '@/design/components';
 import tokens from '@/design/tokens.json';
+import { useTheme } from '@/design/ThemeProvider';
 import type { Snapshot, WorkspaceRepository } from '@/data/workspace/repository';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
@@ -31,6 +33,7 @@ export function GoalPanel({
   onSpend: () => void;
   onAllocate: () => void;
 }) {
+  const theme = useTheme();
   const { goal } = card;
   const category = goal.categoryId ? snapshot.categories.find((c) => c.id === goal.categoryId)?.name : undefined;
   const allocations = snapshot.allocations.filter((a) => a.goalId === goal.id).sort((a, b) => b.date.localeCompare(a.date));
@@ -64,7 +67,7 @@ export function GoalPanel({
             testID="goal-panel-menu"
             trigger={(open) => (
               <Pressable accessibilityRole="button" accessibilityLabel={t('common.options')} onPress={open} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-                <Text variant="heading-md">⋯</Text>
+                <Icon icon={MoreHorizontal} size="nav" color={theme.textSecondary} />
               </Pressable>
             )}
             items={menuItems}
