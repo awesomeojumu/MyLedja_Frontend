@@ -240,7 +240,15 @@ export type DebtEntry = {
 
 export type NotificationCategory = 'bills' | 'budget' | 'goals' | 'debts' | 'income' | 'security';
 
-export type NotificationAction = 'mark_paid' | 'remind_tomorrow' | 'record_payment' | 'open_plan' | 'open_debt';
+export type NotificationAction =
+  | 'mark_paid'
+  | 'match'
+  | 'remind_tomorrow'
+  | 'record_payment'
+  | 'see_budget'
+  | 'open_plan'
+  | 'open_debt'
+  | 'security_review';
 
 /** In-app notification (DESIGN.md page 27). */
 export type AppNotification = {
