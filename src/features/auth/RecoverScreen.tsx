@@ -117,9 +117,7 @@ export function RecoverScreen() {
                 <Button testID="save-password" kind="gradient" label={t('recover.save')} onPress={save} disabled={busy || !online} fullWidth />
               </>
             )}
-            {step !== 'done' ? (
-              <Button kind="link" label={t('recover.backToSignIn')} onPress={() => router.replace('/sign-in')} />
-            ) : null}
+            <Button kind="link" label={t('recover.backToSignIn')} onPress={() => router.replace('/sign-in')} />
           </>
         )}
       </AuthStepPanel>

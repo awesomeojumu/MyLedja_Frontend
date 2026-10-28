@@ -30,10 +30,10 @@ function setup() {
 describe('the auth mock follows openapi.json', () => {
   it('sessions carry accessTokenExpiresIn; a web cookie session has a null refresh token', async () => {
     const { api } = setup();
-    const kept: SessionResponse = await api.signIn({ email: DEMO.email, password: DEMO.password, staySignedIn: true });
+    const kept = (await api.signIn({ email: DEMO.email, password: DEMO.password, staySignedIn: true })) as SessionResponse;
     expect(conforms(kept, schemas.SessionResponse!)).toEqual([]);
     expect(kept.refreshToken).toBeNull();
-    const plain = await api.signIn({ email: DEMO.email, password: DEMO.password, staySignedIn: false });
+    const plain = (await api.signIn({ email: DEMO.email, password: DEMO.password, staySignedIn: false })) as SessionResponse;
     expect(typeof plain.refreshToken).toBe('string');
   });
 

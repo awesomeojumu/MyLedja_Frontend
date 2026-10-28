@@ -1,5 +1,5 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 
 import {
@@ -27,14 +27,17 @@ import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 import { ledgerBalance } from '@/ledger';
 
-import { AccountImportSheet } from './AccountImportSheet';
+import { aiApi, type ServerImport } from '@/api/ai';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { useOnline } from '@/lib/useOnline';
+
+import { AccountImportSheet, statementCsv } from './AccountImportSheet';
 import { ArchiveSheet, EditAccountSheet, UpdateValueSheet } from './accountSheets';
-import { groupRegisterByDay, hasValueTab, isInvestmentAccount } from './helpers';
-import { HoldingsTab } from './HoldingsTab';
+import { groupRegisterByDay, hasValueTab } from './helpers';
 
 const sp = tokens.spacing;
 
-type Tab = 'transactions' | 'holdings' | 'value' | 'details';
+type Tab = 'transactions' | 'value' | 'details';
 export type RegisterRow = Row & { line: bigint; running: bigint };
 
 /** Rows that touch the account, newest first, with the balance after each (P09-01). */
@@ -81,13 +84,23 @@ export function AccountScreen() {
   const [sheet, setSheet] = useState<'import' | 'edit' | 'value' | 'archive' | null>(null);
   const [dropped, setDropped] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const { client, user } = useAuth();
+  const online = useOnline();
+  const bank = useMemo(() => aiApi(client), [client]);
+  // Bank syncs waiting for review on this account (P15-07, P25-05); reviewed here like an import.
+  const [pending, setPending] = useState<ServerImport[]>([]);
+  const [reviewing, setReviewing] = useState<string | null>(null);
+  const loadPending = useCallback(() => {
+    if (!online || !user || !params.id) return;
+    bank.pendingImports(user.workspaceId, params.id).then((r) => setPending(r.imports.filter((i) => i.source === 'bank')), () => setPending([]));
+  }, [bank, online, user, params.id]);
+  useEffect(loadPending, [loadPending]);
 
   const account = snapshot?.accounts.find((a) => a.id === params.id);
   const rows = useMemo(() => (snapshot && account ? register(snapshot, account.id) : []), [snapshot, account]);
   const dayGroups = useMemo(() => groupRegisterByDay(rows), [rows]);
   const balance = snapshot && account ? ledgerBalance(account.id, snapshot.events) : 0n;
   const owes = account ? ACCOUNT_KIND_INFO[account.type].ledger === 'liability' : false;
-  const investment = account ? isInvestmentAccount(account.type) : false;
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined' || !account) return;
@@ -125,7 +138,6 @@ export function AccountScreen() {
   const split = clearedSplit(rows);
   const tabs: { value: Tab; label: string }[] = [
     { value: 'transactions', label: t('account.tab.transactions') },
-    ...(investment ? [{ value: 'holdings' as const, label: t('account.tab.holdings') }] : []),
     ...(account && hasValueTab(account.type) ? [{ value: 'value' as const, label: t('account.tab.value') }] : []),
     { value: 'details', label: t('account.tab.details') },
   ];
@@ -135,6 +147,12 @@ export function AccountScreen() {
     setSyncing(true);
     try {
       await engine.sync({ force: true });
+      // A connected bank pulls new transactions into review too (B4.6).
+      if (online && user && account) {
+        const { links } = await bank.bankLinks(user.workspaceId).catch(() => ({ links: [] as { id: string; accountId: string; status: string }[] }));
+        for (const l of links.filter((x) => x.accountId === account.id && x.status === 'active')) await bank.syncBank(user.workspaceId, l.id).catch(() => null);
+        loadPending();
+      }
       toast.show(t('account.synced'));
     } finally {
       setSyncing(false);
@@ -144,6 +162,20 @@ export function AccountScreen() {
   return (
     <AppFrame title={account?.name ?? t('accounts.title')}>
       <ScrollView contentContainerStyle={{ gap: sp['spacing-lg'] }}>
+        {pending.map((p) => (
+          <Card key={p.id} testID={`bank-review-${p.id}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp['spacing-sm'] }}>
+            <Text style={{ flex: 1 }}>{t('account.bankReview', { count: String(p.counts.new) })}</Text>
+            <Button
+              kind="secondary"
+              label={t('account.bankReviewAction')}
+              onPress={() => {
+                setDropped(statementCsv(p.rows));
+                setReviewing(p.id);
+                setSheet('import');
+              }}
+            />
+          </Card>
+        ))}
         <Button kind="link" label={t('account.back')} onPress={() => router.push('/accounts')} style={{ alignSelf: 'flex-start' }} />
         {!account || !snapshot ? (
           <Placeholder height={120} />
@@ -210,8 +242,6 @@ export function AccountScreen() {
                   ))}
                 </View>
               )
-            ) : tab === 'holdings' ? (
-              <HoldingsTab account={account} />
             ) : tab === 'value' ? (
               <Card testID="value-list" style={{ gap: sp['spacing-sm'] }}>
                 {revalued(snapshot, account.id).length === 0 ? (
@@ -238,9 +268,14 @@ export function AccountScreen() {
           onClose={() => {
             setSheet(null);
             setDropped(null);
+            setReviewing(null);
           }}
           onImported={(importId, count) => {
             toast.show(t('import.done', { count }), () => void repo.undoImport(importId, today()));
+            if (reviewing && user) {
+              void bank.importReviewed(user.workspaceId, reviewing).then(loadPending, () => null);
+              setReviewing(null);
+            }
           }}
         />
       ) : null}

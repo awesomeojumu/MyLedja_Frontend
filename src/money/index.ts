@@ -24,6 +24,15 @@ export function toWire(minor: bigint): string {
   return minor.toString();
 }
 
+/** Kobo as text for an amount field to start from: 1845050n is "18450.50", 1845000n is "18450". Reads back with parseAmount. */
+export function toInputText(minor: bigint): string {
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const kobo = abs % 100n;
+  const text = kobo === 0n ? `${abs / 100n}` : `${abs / 100n}.${kobo.toString().padStart(2, '0')}`;
+  return negative ? `-${text}` : text;
+}
+
 function groupThousands(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }

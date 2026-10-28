@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, View } from 'react-native';
+import { Animated, Easing } from 'react-native';
 import tokens from '@/design/tokens.json';
 import { useReduceMotion } from '@/design/components';
 
 const m = tokens.motion;
+const easeOut = Easing.bezier(...(m['ease-out'] as [number, number, number, number]));
 
 /** Short slide when auth steps swap inside the card (DESIGN pages 1–3). */
 export function AuthStepPanel({ step, children }: { step: string; children: ReactNode }) {
@@ -23,8 +24,8 @@ export function AuthStepPanel({ step, children }: { step: string; children: Reac
     x.setValue(12);
     opacity.setValue(0);
     Animated.parallel([
-      Animated.timing(x, { toValue: 0, duration: m['motion-base'], easing: Easing.bezier(...m['ease-out']), useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 1, duration: m['motion-base'], easing: Easing.bezier(...m['ease-out']), useNativeDriver: true }),
+      Animated.timing(x, { toValue: 0, duration: m['motion-base'], easing: easeOut, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: m['motion-base'], easing: easeOut, useNativeDriver: true }),
     ]).start();
   }, [step, reduceMotion, x, opacity]);
 

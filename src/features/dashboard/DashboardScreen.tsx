@@ -17,7 +17,7 @@ import { monthOf } from '@/ledger';
 
 import { CustomizeDashboardSheet } from './CustomizeDashboardSheet';
 import { checklist, dashboardModel, type ComingUpRow } from './helpers';
-import { DEFAULT_DASHBOARD_LAYOUT, resolveDashboardLayout, toStoredLayout, visibleDashboardCards, type DashboardLayout, type DashboardCardId } from './layout';
+import { resolveDashboardLayout, toStoredLayout, visibleDashboardCards, type DashboardLayout, type DashboardCardId } from './layout';
 
 const sp = tokens.spacing;
 
@@ -26,8 +26,6 @@ function greeting(name: string): string {
   const part = h < 12 ? t('dashboard.goodMorning') : h < 17 ? t('dashboard.goodAfternoon') : t('dashboard.goodEvening');
   return t('dashboard.greeting', { part, name });
 }
-
-type Model = NonNullable<ReturnType<typeof dashboardModel>>;
 
 export function DashboardScreen() {
   const { snapshot, repo } = useWorkspace();

@@ -1,5 +1,4 @@
 import { Platform, useWindowDimensions } from 'react-native';
-import tokens from '@/design/tokens.json';
 import { sizeClassFor } from '@/design/size';
 
 /** DESIGN pages 1–3: hero from ~900 on web; tablet portrait is card-only; landscape matches web. */

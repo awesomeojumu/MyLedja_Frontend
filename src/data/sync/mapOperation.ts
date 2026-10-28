@@ -1,8 +1,8 @@
-import type { Account } from '@/data/workspace/model';
-import type { StoredEvent } from '@/data/workspace/model';
+import type { Account, StoredEvent } from '@/data/workspace/model';
 import { ACCOUNT_KIND_INFO } from '@/data/workspace/model';
 
-import type { LocalRecord, Operation, OperationResult } from './types';
+import { localFromServer } from './serverRecords';
+import type { Change, LocalRecord, Operation, OperationResult } from './types';
 
 /** BE push body operation (TECH-SPEC 9 / B1.11). */
 export type BackendOperation = {
@@ -11,8 +11,23 @@ export type BackendOperation = {
   targetId?: string | null;
   payload: Record<string, unknown>;
   baseVersion?: number | null;
+  /** Ids this device made for the transactions the operation posts, in posting order. */
+  transactionIds?: string[];
   createdAt: string;
   schemaVersion: number;
+};
+
+/**
+ * The exact API operation a local write stands for. The repository attaches it when one action writes several
+ * local records (a debt, its first event and its history row), so the server gets the action once. `null` marks
+ * a write the server derives itself and never needs to receive.
+ */
+export type RemoteOperation = {
+  type: string;
+  targetId?: string | null;
+  payload: Record<string, unknown>;
+  baseVersion?: number | null;
+  transactionIds?: string[];
 };
 
 export type BackendOperationResult = {
@@ -175,7 +190,21 @@ const BE_TYPES = new Set([
  * Map a local outbox operation to the backend sync contract.
  * Local writes use `{ collection, id, data }`; the server wants route bodies.
  */
-export function toBackendOperation(op: Operation, accounts: Account[]): BackendOperation | { reject: string } {
+export function toBackendOperation(op: Operation, accounts: Account[]): BackendOperation | { reject: string } | { local: true } {
+  if ('remote' in op.payload) {
+    const remote = op.payload.remote as RemoteOperation | null;
+    if (remote === null) return { local: true };
+    return {
+      operationId: op.operationId,
+      type: remote.type,
+      targetId: remote.targetId ?? null,
+      payload: remote.payload,
+      baseVersion: remote.baseVersion ?? op.baseVersion ?? null,
+      transactionIds: remote.transactionIds,
+      createdAt: op.createdAt,
+      schemaVersion: op.schemaVersion,
+    };
+  }
   if (BE_TYPES.has(op.type) && !('collection' in op.payload && 'data' in op.payload)) {
     return {
       operationId: op.operationId,
@@ -203,6 +232,7 @@ export function toBackendOperation(op: Operation, accounts: Account[]): BackendO
         targetId,
         payload: { baseVersion: op.baseVersion ?? 0 },
         baseVersion: op.baseVersion ?? null,
+        transactionIds: [id],
         createdAt: op.createdAt,
         schemaVersion: op.schemaVersion,
       };
@@ -229,6 +259,7 @@ export function toBackendOperation(op: Operation, accounts: Account[]): BackendO
       type: 'transaction.create',
       payload: input,
       baseVersion: op.baseVersion ?? null,
+      transactionIds: [id],
       createdAt: op.createdAt,
       schemaVersion: op.schemaVersion,
     };
@@ -326,8 +357,24 @@ function asRecord(collection: string, id: string, doc: unknown, version = 1): Lo
   return { id, collection, version: v, data };
 }
 
-/** Map a backend operation result into the engine's result shape. */
-export function fromBackendResult(result: BackendOperationResult, fallbackCollection = 'events'): OperationResult {
+const SERVER_COLLECTION: [string, string][] = [
+  ['transaction.', 'transactions'],
+  ['account.', 'accounts'],
+  ['category.', 'categories'],
+  ['payee.', 'payees'],
+  ['tag.', 'tags'],
+  ['budget.', 'budget_months'],
+  ['schedule.', 'schedules'],
+  ['goal.', 'goals'],
+  ['debt.', 'debts'],
+  ['income.stream.', 'income_streams'],
+];
+
+/**
+ * Map a backend operation result into the engine's result shape. Applied changes come back through the pull,
+ * already translated, so only a conflict carries the server's version here.
+ */
+export function fromBackendResult(result: BackendOperationResult, opType: string, workspaceId: string): OperationResult {
   if (result.status === 'rejected') {
     return {
       operationId: result.operationId,
@@ -336,40 +383,28 @@ export function fromBackendResult(result: BackendOperationResult, fallbackCollec
     };
   }
   if (result.status === 'conflict') {
-    const current = result.current;
-    const id =
-      current && typeof current === 'object' && 'id' in current && typeof (current as { id: unknown }).id === 'string'
-        ? (current as { id: string }).id
-        : 'unknown';
-    return {
-      operationId: result.operationId,
-      status: 'conflict',
-      record: asRecord(fallbackCollection, id, current),
-    };
-  }
-  if (result.result && typeof result.result === 'object') {
-    const doc = result.result as Record<string, unknown>;
-    // create/correct often nest under `transaction`
-    const inner = (doc.transaction && typeof doc.transaction === 'object' ? doc.transaction : doc) as Record<string, unknown>;
-    const id = typeof inner.id === 'string' ? inner.id : typeof doc.id === 'string' ? doc.id : result.operationId;
-    const collection = typeof inner.type === 'string' || typeof (doc as { type?: string }).type === 'string' ? 'events' : fallbackCollection;
-    return {
-      operationId: result.operationId,
-      status: result.status === 'duplicate' ? 'duplicate' : 'applied',
-      record: asRecord(collection, id, inner),
-    };
+    const current = result.current as Record<string, unknown> | null;
+    const collection = SERVER_COLLECTION.find(([prefix]) => opType.startsWith(prefix))?.[1] ?? 'transactions';
+    const id = current && typeof current.id === 'string' ? current.id : 'unknown';
+    const record = localFromServer(collection, id, current, workspaceId) ?? asRecord(collection, id, current);
+    return { operationId: result.operationId, status: 'conflict', record };
   }
   return { operationId: result.operationId, status: result.status === 'duplicate' ? 'duplicate' : 'applied' };
 }
 
-export function fromBackendChange(change: BackendChange): import('./types').Change {
+const LOCAL_COLLECTION: Record<string, string> = {
+  transactions: 'events',
+  budget_months: 'budget_assigns',
+  schedules: 'recurring',
+  goal_allocations: 'allocations',
+};
+
+/** One change from the feed, as the local change it stands for; null when the app keeps no copy. */
+export function fromBackendChange(change: BackendChange, workspaceId: string): Change | null {
   const seq = Number(change.seq);
   if (change.op === 'tombstone') {
-    return { seq, op: 'tombstone', collection: change.collection, id: change.id };
+    return { seq, op: 'tombstone', collection: LOCAL_COLLECTION[change.collection] ?? change.collection, id: change.id };
   }
-  return {
-    seq,
-    op: 'upsert',
-    record: asRecord(change.collection === 'transactions' ? 'events' : change.collection, change.id, change.doc),
-  };
+  const record = localFromServer(change.collection, change.id, change.doc, workspaceId);
+  return record ? { seq, op: 'upsert', record } : null;
 }

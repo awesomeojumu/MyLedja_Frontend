@@ -4,8 +4,7 @@ import Svg, { Line as SvgLine, Path, Rect } from 'react-native-svg';
 
 import tokens from '@/design/tokens.json';
 import { useDesign, useTheme } from '@/design/ThemeProvider';
-import { Switch, Text } from '@/design/components';
-import { DONUT_COLOURS } from '@/design/components';
+import { Switch, Text , DONUT_COLOURS } from '@/design/components';
 import { t } from '@/i18n';
 import { formatNaira, PRIVACY_MASK } from '@/money';
 

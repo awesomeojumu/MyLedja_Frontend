@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { AmountInput, Button, Select, Sheet, Switch, Text, TextInput } from '@/design/components';
@@ -8,6 +8,7 @@ import type { Snapshot } from '@/data/workspace/repository';
 import { monthOf, nextMonth } from '@/ledger';
 import { today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
+import { toInputText } from '@/money';
 
 import { dueDatesInMonth } from './recurrence';
 
@@ -71,35 +72,41 @@ export function RecurringFormSheet({
   const [reminderDays, setReminderDays] = useState<number>(0);
   const [hideAmountOnLock, setHideAmountOnLock] = useState(true);
 
-  useEffect(() => {
-    if (existing) {
-      setKind(existing.kind);
-      setName(existing.name);
-      setApproximate(!!existing.approximate);
-      setPayeeId(existing.payeeId ?? '');
-      setAccountId(existing.accountId);
-      setCategoryId(existing.categoryId ?? '');
-      setEvery(existing.rule.every);
-      setEveryN(String(existing.rule.interval ?? 1));
-      setLastDayOfMonth(existing.rule.every === 'month' && existing.rule.on === 31);
-      setOnDay(String(existing.rule.every === 'month' && existing.rule.on === 31 ? 1 : existing.rule.on));
-      setMonthOfYear(String(existing.rule.monthOfYear ?? Number(existing.startDate.slice(5, 7))));
-      setStartDate(existing.startDate);
-      setEndMode(existing.endAfterCount ? 'afterCount' : existing.endDate ? 'onDate' : 'never');
-      setEndDate(existing.endDate ?? '');
-      setEndAfterCount(String(existing.endAfterCount ?? 12));
-      setAutoCreate(!!existing.autoCreate);
-      setReminderDays(existing.reminderDays ?? 0);
-      setHideAmountOnLock(existing.hideAmountOnLock !== false);
-      setAmountMinor(BigInt(existing.amountMinor));
-      setAmountText((Number(existing.amountMinor) / 100).toString());
-    } else {
-      setKind(initialKind);
-      setEndMode('never');
-      setEndDate('');
-      setHideAmountOnLock(true);
+  // Fill the form when it opens, or when it switches to another item.
+  const openKey = visible ? `${existing?.id ?? 'new'}:${initialKind}` : null;
+  const [filledFor, setFilledFor] = useState<string | null>(null);
+  if (openKey !== filledFor) {
+    setFilledFor(openKey);
+    if (openKey) {
+      if (existing) {
+        setKind(existing.kind);
+        setName(existing.name);
+        setApproximate(!!existing.approximate);
+        setPayeeId(existing.payeeId ?? '');
+        setAccountId(existing.accountId);
+        setCategoryId(existing.categoryId ?? '');
+        setEvery(existing.rule.every);
+        setEveryN(String(existing.rule.interval ?? 1));
+        setLastDayOfMonth(existing.rule.every === 'month' && existing.rule.on === 31);
+        setOnDay(String(existing.rule.every === 'month' && existing.rule.on === 31 ? 1 : existing.rule.on));
+        setMonthOfYear(String(existing.rule.monthOfYear ?? Number(existing.startDate.slice(5, 7))));
+        setStartDate(existing.startDate);
+        setEndMode(existing.endAfterCount ? 'afterCount' : existing.endDate ? 'onDate' : 'never');
+        setEndDate(existing.endDate ?? '');
+        setEndAfterCount(String(existing.endAfterCount ?? 12));
+        setAutoCreate(!!existing.autoCreate);
+        setReminderDays(existing.reminderDays ?? 0);
+        setHideAmountOnLock(existing.hideAmountOnLock !== false);
+        setAmountMinor(BigInt(existing.amountMinor));
+        setAmountText(toInputText(BigInt(existing.amountMinor)));
+      } else {
+        setKind(initialKind);
+        setEndMode('never');
+        setEndDate('');
+        setHideAmountOnLock(true);
+      }
     }
-  }, [existing, initialKind, visible]);
+  }
 
   const accounts = useMemo(
     () => snapshot.accounts.filter((a) => !a.archived).map((a) => ({ value: a.id, label: a.name })),

@@ -1,7 +1,7 @@
 import type { Snapshot } from '@/data/workspace/repository';
 
 import { billMatchCandidates } from '../match';
-import { billsForMonth, type BillRow } from '../recurrence';
+import { billsForMonth } from '../recurrence';
 
 function stub(): Snapshot {
   return {
@@ -25,6 +25,7 @@ function stub(): Snapshot {
     ],
     reconciles: [],
     assigns: new Map(),
+    assignNotes: new Map(),
     goals: [],
     allocations: [],
     recurring: [

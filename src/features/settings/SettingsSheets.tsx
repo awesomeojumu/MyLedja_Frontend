@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { View } from 'react-native';
 
-import { Button, Checkbox, Confirm, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
+import { Button, Confirm, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { Category, ExchangeRateEntry } from '@/data/workspace/model';
 import { t, type TextKey } from '@/i18n';
@@ -17,13 +17,16 @@ export function InviteMemberSheet({ visible, onClose }: { visible: boolean; onCl
   const [role, setRole] = useState<(typeof INVITE_ROLES)[number]>('editor');
   const [note, setNote] = useState('');
 
-  useEffect(() => {
+  // Clear the form when the sheet closes.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (!visible) {
       setEmail('');
       setRole('editor');
       setNote('');
     }
-  }, [visible]);
+  }
 
   return (
     <Sheet
@@ -99,143 +102,6 @@ export function ChangeRoleSheet({
   );
 }
 
-/** #52 Set up two-factor — UI shell only until backend 2FA ships (no demo secret). */
-export function TwoFactorSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const toast = useToast();
-  const [code, setCode] = useState('');
-  return (
-    <Sheet
-      visible={visible}
-      title={t('settings.popup.twoFactorTitle')}
-      onClose={onClose}
-      testID="settings-2fa-sheet"
-      footer={
-        <Button
-          label={t('settings.popup.twoFactorConfirm')}
-          disabled={code.trim().length !== 6}
-          onPress={() => {
-            toast.show(t('common.saved'));
-            onClose();
-          }}
-        />
-      }
-    >
-      <Text tone="textSecondary">{t('settings.popup.twoFactorBody')}</Text>
-      <View style={{ alignItems: 'center', padding: sp['spacing-md'], borderRadius: tokens.radius['rounded-md'], borderWidth: 1, borderColor: tokens.color.hairline }}>
-        <Text variant="caption" tone="textSecondary">
-          {t('settings.popup.twoFactorQrPlaceholder')}
-        </Text>
-      </View>
-      <TextInput testID="settings-2fa-code" label={t('settings.popup.twoFactorCode')} value={code} onChangeText={setCode} keyboardType="number-pad" maxLength={6} />
-    </Sheet>
-  );
-}
-
-const BACKUP_CODES = ['8f3a-91bc', '2d44-aa01', 'c91e-0044', '11ab-9982', '77ce-5510', '0044-bb21', 'aa99-1200', '5510-88fd', '3321-cc90', 'eedd-4411'];
-
-/** #53 Backup codes */
-export function BackupCodesSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const toast = useToast();
-  const [saved, setSaved] = useState(false);
-  return (
-    <Sheet
-      visible={visible}
-      title={t('settings.popup.backupCodesTitle')}
-      onClose={onClose}
-      testID="settings-backup-codes-sheet"
-      footer={
-        <Button
-          label={t('settings.popup.backupCodesDone')}
-          disabled={!saved}
-          onPress={() => {
-            onClose();
-            setSaved(false);
-          }}
-        />
-      }
-    >
-      <Text tone="textSecondary">{t('settings.popup.backupCodesBody')}</Text>
-      <ScrollView style={{ maxHeight: 200 }}>
-        {BACKUP_CODES.map((c) => (
-          <Text key={c} style={{ fontFamily: 'monospace' }}>
-            {c}
-          </Text>
-        ))}
-      </ScrollView>
-      <Button kind="secondary" label={t('settings.popup.backupCodesCopy')} onPress={() => toast.show(t('settings.popup.backupCodesCopied'))} />
-      <Checkbox testID="settings-backup-saved" label={t('settings.popup.backupCodesSaved')} checked={saved} onChange={setSaved} />
-    </Sheet>
-  );
-}
-
-/** #54 Add passkey */
-export function PasskeySheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const toast = useToast();
-  const [name, setName] = useState('');
-  return (
-    <Sheet
-      visible={visible}
-      title={t('settings.popup.passkeyTitle')}
-      onClose={onClose}
-      testID="settings-passkey-sheet"
-      footer={
-        <Button
-          label={t('settings.popup.passkeyAdd')}
-          disabled={!name.trim()}
-          onPress={() => {
-            toast.show(t('settings.popup.passkeyPrompt'));
-            onClose();
-            setName('');
-          }}
-        />
-      }
-    >
-      <Text tone="textSecondary">{t('settings.popup.passkeyBody')}</Text>
-      <TextInput testID="settings-passkey-name" label={t('settings.popup.passkeyName')} value={name} onChangeText={setName} />
-    </Sheet>
-  );
-}
-
-/** #55 Restore backup */
-export function RestoreBackupSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [summary, setSummary] = useState<string | null>(null);
-  const toast = useToast();
-
-  const pickFile = () => {
-    setSummary(t('settings.popup.restoreSummary'));
-    setConfirmOpen(true);
-  };
-
-  return (
-    <>
-      <Sheet
-        visible={visible}
-        title={t('settings.popup.restoreTitle')}
-        onClose={onClose}
-        testID="settings-restore-sheet"
-        footer={<Button kind="secondary" label={t('settings.popup.restorePick')} onPress={pickFile} />}
-      >
-        <Text tone="textSecondary">{t('settings.popup.restoreBody')}</Text>
-        {summary ? <Text variant="caption" tone="textSecondary">{summary}</Text> : null}
-      </Sheet>
-      <Confirm
-        visible={confirmOpen}
-        title={t('settings.popup.restoreConfirmTitle')}
-        body={t('settings.popup.restoreConfirmBody')}
-        confirmLabel={t('settings.popup.restoreConfirm')}
-        onConfirm={() => {
-          setConfirmOpen(false);
-          toast.show(t('settings.popup.restoreStarted'));
-          onClose();
-          setSummary(null);
-        }}
-        onCancel={() => setConfirmOpen(false)}
-      />
-    </>
-  );
-}
-
 /** #56 Exchange rate */
 export function ExchangeRateSheet({
   visible,
@@ -251,13 +117,16 @@ export function ExchangeRateSheet({
   const [date, setDate] = useState('');
   const [rate, setRate] = useState('');
 
-  useEffect(() => {
+  // Start empty each time the sheet opens.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (visible) {
       setCurrency('USD');
       setDate('');
       setRate('');
     }
-  }, [visible]);
+  }
 
   return (
     <Sheet
@@ -300,13 +169,16 @@ export function ApiKeySheet({ visible, onClose }: { visible: boolean; onClose: (
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const key = useMemo(() => (createdKey ? createdKey : null), [createdKey]);
 
-  useEffect(() => {
+  // Clear the form and the shown key when the sheet closes.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (!visible) {
       setName('');
       setAccess('read');
       setCreatedKey(null);
     }
-  }, [visible]);
+  }
 
   return (
     <Sheet
@@ -367,9 +239,11 @@ export function EditCategorySheet({
   onSave: (c: Category) => Promise<void>;
 }) {
   const [name, setName] = useState(category?.name ?? '');
-  useEffect(() => {
+  const [shownId, setShownId] = useState(category?.id);
+  if (category?.id !== shownId) {
+    setShownId(category?.id);
     setName(category?.name ?? '');
-  }, [category]);
+  }
   if (!category) return null;
   return (
     <Sheet

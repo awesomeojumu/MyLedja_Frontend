@@ -2,6 +2,10 @@ import { v7 as uuidv7 } from 'uuid';
 
 import type { SetupBody } from '@/api/auth';
 import { formatDay } from '@/design/components/overlays';
+import { resolveTemplateLineAmount } from '@/features/budget/helpers';
+import { ruleChangeFor } from '@/features/rules/ruleEngine';
+import type { RemoteOperation } from '../sync/mapOperation';
+import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
 import { t, type TextKey } from '@/i18n';
 import {
   buildAdjustment,
@@ -121,6 +125,28 @@ export type TransactionInput =
   | { kind: 'income'; accountId: string; categoryId: string; amount: bigint; date: string; payeeName?: string; notes?: string }
   | { kind: 'transfer'; fromId: string; toId: string; amount: bigint; date: string; notes?: string };
 
+/**
+ * Writes the server derives from another operation, or keeps per device for now: they're saved locally and never
+ * sent. Debt history and settling follow the debt's own operations; occurrences follow the matched transaction.
+ */
+const LOCAL_ONLY = new Set([
+  'debt.entry',
+  'debt.settle',
+  'debt.update',
+  'occurrence.paid',
+  'occurrence.matched',
+  'reconcile.finish',
+  'transfer.dismiss',
+  'settings.update',
+  'budget.template.save',
+  'payee.delete',
+  'notification.create',
+  'notification.read',
+  'notification.snooze',
+]);
+
+const todayInLagos = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(new Date());
+
 const record = (collection: string, id: string, data: object, version = 0): LocalRecord => ({
   id,
   collection,
@@ -161,11 +187,14 @@ export class WorkspaceRepository {
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
     const accountList = accounts.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id })).sort((a, b) => a.order - b.order);
+    // Categories from the server name their group by id; show the group's name.
+    const groupNames = new Map((await this.store.list('category_groups')).map((g) => [g.id, String(g.data.name ?? '')]));
     const categoryList = categories
       .map((r) => {
         const data = r.data as Omit<Category, 'id'>;
         return {
           ...data,
+          group: groupNames.get(data.group) ?? data.group,
           id: r.id,
           order: data.order ?? 0,
           budgetType: data.budgetType ?? 'flexible',
@@ -268,8 +297,19 @@ export class WorkspaceRepository {
     return new Chart(ledger);
   }
 
-  private async put(collection: string, id: string, data: object, type: string, baseVersion?: number) {
-    await this.engine.save(record(collection, id, data, baseVersion ?? 0), type, { collection, id, data }, baseVersion);
+  /**
+   * Saves locally and queues the write. `remote` is the API operation the write stands for when the local shape
+   * can't be mapped on its own (see RemoteOperation); null keeps the write on this device.
+   */
+  private async put(collection: string, id: string, data: object, type: string, baseVersion?: number, remote?: RemoteOperation | null) {
+    const kept = remote === undefined && LOCAL_ONLY.has(type) ? null : remote;
+    const payload = kept === undefined ? { collection, id, data } : { collection, id, data, remote: kept };
+    await this.engine.save(record(collection, id, data, baseVersion ?? 0), type, payload, baseVersion);
+  }
+
+  /** The record's version as the server last sent it, for an update's baseVersion. */
+  private async versionOf(collection: string, id: string): Promise<number> {
+    return (await this.store.read(collection, id))?.version ?? 1;
   }
 
   /** After Welcome: the accounts, categories and opening balances the person chose. */
@@ -375,7 +415,22 @@ export class WorkspaceRepository {
       lines = buildTransfer(chart, { fromId: input.fromId, toId: input.toId, amount: input.amount });
     }
     if (!lines.ok) return lines;
-    const payeeName = input.kind === 'transfer' ? undefined : input.payeeName?.trim();
+    // Rules rename the payee and add notes as the transaction is saved (P25-05); the category was already offered.
+    const amount = input.kind === 'expense' ? input.parts.reduce((s, p) => s + p.amount, 0n) : input.amount;
+    const fromRules =
+      input.kind === 'transfer'
+        ? {}
+        : ruleChangeFor(snapshot.rules, {
+            payeeName: input.payeeName?.trim() ?? '',
+            description: input.payeeName?.trim() ?? '',
+            amountMinor: amount,
+            accountId: input.accountId,
+            categoryId: input.kind === 'expense' ? (input.parts[0]?.categoryId ?? '') : input.categoryId,
+            notes: input.notes ?? '',
+            date: input.date,
+          });
+    const payeeName = input.kind === 'transfer' ? undefined : (fromRules.payeeName ?? input.payeeName?.trim());
+    const notes = [input.notes?.trim(), fromRules.notes].filter(Boolean).join('. ') || undefined;
     const payeeId = payeeName
       ? await this.payeeFor(
           snapshot.payees,
@@ -389,7 +444,7 @@ export class WorkspaceRepository {
       lines: lines.value,
       splitTotal,
       payeeId,
-      notes: input.notes?.trim() || undefined,
+      notes,
     });
   }
 
@@ -712,7 +767,11 @@ export class WorkspaceRepository {
       amountMinor: amount.toString(),
       ...(note ? { note } : {}),
     };
-    await this.put('budget_assigns', id, payload, 'budget.assign');
+    await this.put('budget_assigns', id, payload, 'budget.assign', undefined, {
+      type: 'budget.assign',
+      targetId: categoryId,
+      payload: { month, assigned: payload.amountMinor },
+    });
   }
 
   /** P06-06: move planned money between categories in the same month. */
@@ -757,7 +816,6 @@ export class WorkspaceRepository {
     const snapshot = await this.load();
     const template = snapshot.budgetTemplates.find((t) => t.id === templateId);
     if (!template) return;
-    const { resolveTemplateLineAmount } = require('@/features/budget/helpers') as typeof import('@/features/budget/helpers');
     for (const line of template.lines) {
       const amount = resolveTemplateLineAmount(snapshot, month, line);
       if (amount > 0n) await this.setAssigned(line.categoryId, month, amount);
@@ -863,7 +921,8 @@ export class WorkspaceRepository {
 
   async saveRule(rule: TransactionRule): Promise<void> {
     const { id, ...data } = rule;
-    await this.put('rules', id, data, 'rule.update');
+    const { deleted: _d, ...body } = data as typeof data & { deleted?: boolean };
+    await this.put('rules', id, data, 'rule.update', undefined, { type: 'rule.upsert', targetId: id, payload: body });
   }
 
   async createRule(
@@ -885,7 +944,7 @@ export class WorkspaceRepository {
     const snapshot = await this.load();
     const rule = snapshot.rules.find((r) => r.id === ruleId);
     if (!rule) return;
-    await this.put('rules', ruleId, { ...rule, deleted: true, enabled: false }, 'rule.delete');
+    await this.put('rules', ruleId, { ...rule, deleted: true, enabled: false }, 'rule.delete', undefined, { type: 'rule.delete', targetId: ruleId, payload: {} });
   }
 
   async reorderRules(ruleId: string, direction: 'up' | 'down'): Promise<void> {
@@ -1097,13 +1156,14 @@ export class WorkspaceRepository {
       status: 'active',
     };
     const { id, ...data } = goal;
-    await this.put('goals', id, data, 'goal.create');
+    await this.put('goals', id, data, 'goal.create', undefined, { type: 'goal.create', payload: goalBody(id, data) });
     return { ok: true, value: goal };
   }
 
   async updateGoal(goal: Goal): Promise<void> {
     const { id, ...data } = goal;
-    await this.put('goals', id, data, 'goal.update');
+    const baseVersion = await this.versionOf('goals', id);
+    await this.put('goals', id, data, 'goal.update', undefined, { type: 'goal.update', targetId: id, payload: goalUpdateBody(data, baseVersion) });
   }
 
   /** E18: earmark money for a goal; transfer when the source account differs. */
@@ -1117,16 +1177,19 @@ export class WorkspaceRepository {
     if (!goal || goal.status !== 'active') return { ok: false, error: 'missing_lines' };
     const fromId = input.fromAccountId ?? goal.accountId;
     if (!snapshot.accounts.some((a) => a.id === fromId && !a.archived)) return { ok: false, error: 'missing_lines' };
+    // A different account moves the money first (E6); the server makes that transfer from goal.allocate.
+    let transferId: string | undefined;
     if (fromId !== goal.accountId) {
-      const moved = await this.addTransaction({
-        kind: 'transfer',
-        fromId,
-        toId: goal.accountId,
-        amount: input.amount,
-        date: input.date,
-        notes: t('goals.transferNote', { name: goal.name }),
-      });
+      const lines = this.linesFor(snapshot.chart, { kind: 'transfer', fromId, toId: goal.accountId, amount: input.amount, date: input.date });
+      if (!lines.ok) return lines;
+      const moved = await this.postEvent(
+        snapshot.chart,
+        snapshot.events,
+        { type: 'transfer', date: input.date, lines: lines.value.lines, notes: t('goals.transferNote', { name: goal.name }), goalId },
+        null,
+      );
       if (!moved.ok) return moved;
+      transferId = moved.value.id;
     }
     const allocation: GoalAllocation = {
       id: this.newId(),
@@ -1136,7 +1199,12 @@ export class WorkspaceRepository {
       fromAccountId: fromId,
     };
     const { id, ...data } = allocation;
-    await this.put('allocations', id, data, 'goal.allocate');
+    await this.put('allocations', id, data, 'goal.allocate', undefined, {
+      type: 'goal.allocate',
+      targetId: goalId,
+      payload: { id, date: input.date, amount: allocation.amountMinor, fromAccountId: fromId === goal.accountId ? null : fromId },
+      transactionIds: transferId ? [transferId] : undefined,
+    });
     const saved = this.savedForGoal(goalId, await this.load());
     const completed = saved >= BigInt(goal.targetMinor);
     if (completed) {
@@ -1156,37 +1224,18 @@ export class WorkspaceRepository {
     const id = this.newId();
     const recurring: Recurring = { ...input, id };
     const { id: _id, ...data } = recurring;
-    await this.put('recurring', id, data, 'recurring.create');
+    await this.put('recurring', id, data, 'recurring.create', undefined, { type: 'schedule.create', payload: scheduleBody(id, data) });
     return recurring;
   }
 
   async updateRecurring(recurring: Recurring): Promise<void> {
     const { id, ...data } = recurring;
-    await this.put('recurring', id, data, 'recurring.update');
-  }
-
-  /** Link an existing expense to a bill occurrence (DESIGN #26). */
-  async matchBillToEvent(recurringId: string, dueDate: string, eventId: string): Promise<Result<RecurringOccurrence>> {
-    const snapshot = await this.load();
-    const bill = snapshot.recurring.find((r) => r.id === recurringId);
-    if (!bill) return { ok: false, error: 'missing_lines' };
-    const occId = `${recurringId}:${dueDate}`;
-    const existing = snapshot.occurrences.find((o) => o.id === occId);
-    if (existing?.status === 'paid') return { ok: false, error: 'already_reversed' };
-    const event = snapshot.events.find((e) => e.id === eventId && e.status === 'posted');
-    if (!event || event.type !== 'expense') return { ok: false, error: 'missing_lines' };
-    const accountIds = new Set(snapshot.accounts.map((a) => a.id));
-    const amount = event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + (l.amountMinor < 0n ? -l.amountMinor : l.amountMinor), 0n);
-    const occurrence: RecurringOccurrence = {
-      id: occId,
-      recurringId,
-      dueDate,
-      amountMinor: amount.toString(),
-      status: 'paid',
-      eventId,
-    };
-    await this.put('occurrences', occId, { recurringId, dueDate, amountMinor: amount.toString(), status: 'paid', eventId }, 'occurrence.paid');
-    return { ok: true, value: occurrence };
+    const baseVersion = await this.versionOf('recurring', id);
+    await this.put('recurring', id, data, 'recurring.update', undefined, {
+      type: 'schedule.update',
+      targetId: id,
+      payload: scheduleUpdateBody(data, baseVersion),
+    });
   }
 
   async markBillPaid(
@@ -1232,7 +1281,8 @@ export class WorkspaceRepository {
     const occId = `${recurringId}:${dueDate}`;
     if (snapshot.occurrences.some((o) => o.id === occId && o.status === 'paid')) return { ok: false, error: 'already_reversed' };
     const accountIds = new Set(snapshot.accounts.map((a) => a.id));
-    const amountMinor = event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + l.amountMinor, 0n);
+    // An expense credits the account it was paid from, so the money that left is minus the account lines.
+    const amountMinor = -event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + l.amountMinor, 0n);
     if (amountMinor <= 0n) return { ok: false, error: 'not_positive' };
     const occurrence: RecurringOccurrence = {
       id: occId,
@@ -1255,7 +1305,10 @@ export class WorkspaceRepository {
     const id = this.newId();
     const stream: IncomeStream = { ...input, id };
     const { id: _id, ...data } = stream;
-    await this.put('income_streams', id, data, 'income_stream.create');
+    await this.put('income_streams', id, data, 'income_stream.create', undefined, {
+      type: 'income.stream.create',
+      payload: incomeStreamBody(id, data, todayInLagos()),
+    });
     return stream;
   }
 
@@ -1311,9 +1364,13 @@ export class WorkspaceRepository {
       lines: lines.value,
       debtId: id,
       payeeId,
-    });
+    }, null);
     if (!posted.ok) return posted;
-    await this.put('debts', id, { name: debt.name, direction: debt.direction, ledgerAccountId, payeeId, status: 'open' }, 'debt.open');
+    await this.put('debts', id, { name: debt.name, direction: debt.direction, ledgerAccountId, payeeId, status: 'open' }, 'debt.open', undefined, {
+      type: input.direction === 'owedToMe' ? 'debt.lend' : 'debt.borrow',
+      payload: { id, personName: debt.name, ...(payeeId ? { payeeId } : {}), amount: input.amount.toString(), accountId: input.accountId, date: input.date },
+      transactionIds: [posted.value.id],
+    });
     const entry: DebtEntry = {
       id: this.newId(),
       debtId: id,
@@ -1394,7 +1451,7 @@ export class WorkspaceRepository {
       date: input.date,
       lines: lines.value,
       debtId,
-    });
+    }, null);
     if (!posted.ok) return posted;
     const entry: DebtEntry = {
       id: this.newId(),
@@ -1405,7 +1462,17 @@ export class WorkspaceRepository {
       amountMinor: principal.toString(),
       interestMinor: input.interest ? input.interest.toString() : undefined,
     };
-    await this.put('debt_entries', entry.id, { debtId: entry.debtId, date: entry.date, eventId: entry.eventId, kind: entry.kind, amountMinor: entry.amountMinor, interestMinor: entry.interestMinor }, 'debt.entry');
+    await this.put('debt_entries', entry.id, { debtId: entry.debtId, date: entry.date, eventId: entry.eventId, kind: entry.kind, amountMinor: entry.amountMinor, interestMinor: entry.interestMinor }, 'debt.entry', undefined, {
+      type: 'debt.payment',
+      targetId: debtId,
+      payload: {
+        date: input.date,
+        accountId: input.accountId,
+        amount: (principal + (input.interest ?? 0n)).toString(),
+        split: { principal: principal.toString(), interest: (input.interest ?? 0n).toString() },
+      },
+      transactionIds: [posted.value.id],
+    });
     const after = await this.load();
     const left = this.debtBalance(debt, after, input.date);
     if (left <= 0n) await this.put('debts', debtId, { name: debt.name, direction: debt.direction, ledgerAccountId: debt.ledgerAccountId, payeeId: debt.payeeId, status: 'settled' }, 'debt.settle');
@@ -1427,9 +1494,15 @@ export class WorkspaceRepository {
       lines: lines.value,
       debtId,
       notes: input.reason.trim() || undefined,
-    });
+    }, null);
     if (!posted.ok) return posted;
-    await this.put('debts', debtId, { ...debt, status: 'settled' }, 'debt.write_off');
+    const baseVersion = await this.versionOf('debts', debtId);
+    await this.put('debts', debtId, { ...debt, status: 'settled' }, 'debt.write_off', undefined, {
+      type: 'debt.write_off',
+      targetId: debtId,
+      payload: { date: input.date, baseVersion },
+      transactionIds: [posted.value.id],
+    });
     return { ok: true, value: posted.value };
   }
 
@@ -1504,7 +1577,12 @@ export class WorkspaceRepository {
 
   async updateIncomeStream(stream: IncomeStream): Promise<void> {
     const { id, ...data } = stream;
-    await this.put('income_streams', id, data, 'income_stream.update');
+    const baseVersion = await this.versionOf('income_streams', id);
+    await this.put('income_streams', id, data, 'income_stream.update', undefined, {
+      type: 'income.stream.update',
+      targetId: id,
+      payload: incomeStreamUpdateBody(data, baseVersion),
+    });
   }
 
   async linkEventToStream(eventId: string, streamId: string): Promise<void> {
@@ -1540,7 +1618,7 @@ export class WorkspaceRepository {
       lines: lines.value,
       payeeId,
       goalId,
-    });
+    }, null);
     if (!posted.ok) return posted;
     const allocation: GoalAllocation = {
       id: this.newId(),
@@ -1551,7 +1629,12 @@ export class WorkspaceRepository {
       kind: 'spend',
     };
     const { id, ...data } = allocation;
-    await this.put('allocations', id, data, 'goal.spend');
+    await this.put('allocations', id, data, 'goal.spend', undefined, {
+      type: 'goal.spend',
+      targetId: goalId,
+      payload: { id, date: input.date, amount: allocation.amountMinor, categoryId: input.categoryId, accountId: input.accountId, payeeId: payeeId ?? null },
+      transactionIds: [posted.value.id],
+    });
     return { ok: true, value: { event: posted.value, allocation } };
   }
 
@@ -1579,16 +1662,18 @@ export class WorkspaceRepository {
     return id;
   }
 
+  /** `remote: null` when another write of the same action tells the server (a debt, a goal), so it posts once. */
   private async postEvent(
     chart: Chart,
     events: TxEvent[],
     input: Omit<MoneyEvent, 'id' | 'operationId' | 'status' | 'lines'> & { lines: Line[] } & EventMeta,
+    remote?: null,
   ): Promise<Result<TxEvent>> {
     const id = this.newId();
     const event: TxEvent = { ...input, id, operationId: id, status: 'posted' };
     const checked = checkEvent(chart, event, new Map(events.map((e) => [e.id, e])));
     if (!checked.ok) return checked;
-    await this.put('events', id, { ...toStored(input), operationId: id }, `event.${input.type}`);
+    await this.put('events', id, { ...toStored(input), operationId: id }, `event.${input.type}`, undefined, remote);
     return { ok: true, value: event };
   }
 }

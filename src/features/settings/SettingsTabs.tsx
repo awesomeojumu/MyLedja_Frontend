@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { v7 as uuidv7 } from 'uuid';
@@ -19,68 +19,83 @@ import {
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import {
-  DEFAULT_AI_PREFS,
   DEFAULT_BUDGET_TYPES_SHOWN,
   DEFAULT_DEVICE_SYNC,
   type BudgetTypesShown,
-  type ExchangeRateEntry,
 } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useOnline } from '@/lib/useOnline';
+import { useAppLockSetting } from '@/features/lock/AppLock';
 import { t, type TextKey } from '@/i18n';
 import Constants from 'expo-constants';
 
-import { exportTransactionsCsv, exportWorkspaceBackupJson } from './export';
+import { ApiError } from '@/api/client';
+import type { ActivityEvent, DeviceSession, SecurityStatus } from '@/api/security';
+import { type AiConsent, type AiSettings, aiApi, type BankLink } from '@/api/ai';
+import { ConnectBankSheet } from '@/features/accounts/accountSheets';
+import { bankConnectAvailable, openMonoConnect } from '@/features/banking/monoConnect';
+import { formatDay } from '@/design/components/overlays';
+import { passkeysAvailable } from '@/features/auth/passkey';
+
+import { ApiKeySheet, ChangeRoleSheet, ExchangeRateSheet, InviteMemberSheet } from './SettingsSheets';
 import {
-  ApiKeySheet,
   BackupCodesSheet,
-  ChangeRoleSheet,
-  ExchangeRateSheet,
-  InviteMemberSheet,
+  ChangePasswordSheet,
   PasskeySheet,
   RestoreBackupSheet,
+  saveText,
   TwoFactorSheet,
-} from './SettingsSheets';
+  useRecheck,
+  useSecurityApi,
+} from './SecuritySheets';
 
 const sp = tokens.spacing;
 
 export function AiTab() {
-  const { snapshot, repo } = useWorkspace();
+  const { client, user } = useAuth();
   const toast = useToast();
-  const prefs = { ...DEFAULT_AI_PREFS, ...snapshot?.settings.aiPrefs };
+  const api = useMemo(() => aiApi(client), [client]);
+  const [settings, setSettings] = useState<AiSettings | null>(null);
+  const [failed, setFailed] = useState(false);
+  const workspaceId = user?.workspaceId;
 
-  const save = async (next: typeof prefs) => {
-    if (!snapshot) return;
-    await repo.updateSettings({ ...snapshot.settings, aiPrefs: next });
-    toast.show(t('common.saved'));
+  useEffect(() => {
+    if (!workspaceId) return;
+    api.settings(workspaceId).then(setSettings, () => setFailed(true));
+  }, [api, workspaceId]);
+
+  const save = async (key: keyof AiConsent, on: boolean) => {
+    if (!settings || !workspaceId) return;
+    const { updatedAt: _u, ...consent } = settings.consent;
+    try {
+      setSettings(await api.setConsent(workspaceId, { ...consent, [key]: on }));
+      toast.show(t('common.saved'));
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.body.message : t('errors.network'));
+    }
   };
 
+  const on = settings && (settings.available.claude || settings.available.gemini);
+  const rows: { key: keyof AiConsent; label: TextKey; detail: TextKey }[] = [
+    { key: 'categorize', label: 'settings.ai.suggestCategories', detail: 'settings.ai.suggestCategoriesDetail' },
+    { key: 'statements', label: 'settings.ai.readStatements', detail: 'settings.ai.readStatementsDetail' },
+    // Health advice joins when Health ships (Phase 5, DESIGN principle 12).
+  ];
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-ai">
       <Text tone="textSecondary">{t('settings.ai.body')}</Text>
-      <Card style={{ gap: sp['spacing-sm'] }}>
-        <Switch
-          testID="settings-ai-suggest"
-          label={t('settings.ai.suggestCategories')}
-          value={prefs.suggestCategories}
-          onChange={(suggestCategories) => void save({ ...prefs, suggestCategories })}
-        />
-        <Text variant="caption" tone="textSecondary">
-          {t('settings.ai.suggestCategoriesDetail')}
-        </Text>
-      </Card>
-      <Card style={{ gap: sp['spacing-sm'] }}>
-        <Switch
-          testID="settings-ai-statements"
-          label={t('settings.ai.readStatements')}
-          value={prefs.readStatements}
-          onChange={(readStatements) => void save({ ...prefs, readStatements })}
-        />
-        <Text variant="caption" tone="textSecondary">
-          {t('settings.ai.readStatementsDetail')}
-        </Text>
-      </Card>
+      {(settings && !on) || failed || !workspaceId ? <Banner message={t('settings.ai.unavailable')} /> : null}
+      {on
+        ? rows.map((r) => (
+            <Card key={r.key} style={{ gap: sp['spacing-sm'] }}>
+              <Switch testID={`settings-ai-${r.key}`} label={t(r.label)} value={settings.consent[r.key]} onChange={(v) => void save(r.key, v)} />
+              <Text variant="caption" tone="textSecondary">
+                {t(r.detail)}
+              </Text>
+            </Card>
+          ))
+        : null}
     </ScrollView>
   );
 }
@@ -214,30 +229,104 @@ export function CurrenciesTabDeep() {
 
 export function BanksTab() {
   const { snapshot } = useWorkspace();
-  const router = useRouter();
-  const banks = useMemo(
-    () => snapshot?.accounts.filter((a) => !a.archived && (a.type === 'bank' || a.institution)) ?? [],
-    [snapshot],
-  );
+  const { client, user } = useAuth();
+  const toast = useToast();
+  const api = useMemo(() => aiApi(client), [client]);
+  const [links, setLinks] = useState<BankLink[] | null>(null);
+  const [available, setAvailable] = useState(false);
+  const [connect, setConnect] = useState(false);
+  const workspaceId = user?.workspaceId;
+  const accountName = (id: string) => snapshot?.accounts.find((a) => a.id === id)?.name ?? '';
+
+  const load = useCallback(() => {
+    if (!workspaceId) return;
+    api.bankLinks(workspaceId).then(
+      (r) => {
+        setLinks(r.links);
+        setAvailable(r.available);
+      },
+      () => setLinks([]),
+    );
+  }, [api, workspaceId]);
+  useEffect(load, [load]);
+
+  const run = (action: () => Promise<void>) => void action().catch((e: unknown) => toast.show(e instanceof ApiError ? e.body.message : t('errors.network')));
 
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-banks">
       <Text tone="textSecondary">{t('settings.banks.body')}</Text>
-      {banks.map((a) => (
-        <Card key={a.id} style={{ gap: sp['spacing-sm'] }} testID={`settings-bank-${a.id}`}>
-          <Text variant="heading-sm">{a.name}</Text>
-          <Text tone="textSecondary">{a.institution ?? t('settings.banks.manualAccount')}</Text>
+      {links && links.length === 0 ? <Text tone="textSecondary">{t('settings.banks.none')}</Text> : null}
+      {(links ?? []).map((l) => (
+        <Card key={l.id} style={{ gap: sp['spacing-sm'] }} testID={`settings-bank-${l.id}`}>
+          <Text variant="heading-sm">{l.last4 ? t('settings.banks.ending', { bank: l.institution, last4: l.last4 }) : l.institution}</Text>
+          <Text tone="textSecondary">{accountName(l.accountId)}</Text>
           <Text variant="caption" tone="textSecondary">
-            {t('settings.banks.lastSync', { when: t('settings.banks.syncNever') })}
+            {l.status === 'needs_reauth'
+              ? t('settings.banks.needsReauth')
+              : t('settings.banks.lastSync', { when: l.lastSyncedAt ? formatDay(l.lastSyncedAt.slice(0, 10)) : t('settings.banks.syncNever') })}
+          </Text>
+          <Text variant="caption" tone="textSecondary">
+            {l.consentExpiresAt
+              ? t('settings.banks.consentUntil', { date: formatDay(l.consentExpiresAt.slice(0, 10)) })
+              : t('settings.banks.consentOngoing')}
           </Text>
           <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
-            <Button testID={`settings-bank-sync-${a.id}`} kind="secondary" label={t('settings.banks.syncNow')} onPress={() => {}} disabled />
-            <Button testID={`settings-bank-reconnect-${a.id}`} kind="secondary" label={t('settings.banks.reconnect')} onPress={() => router.push(`/accounts/${a.id}`)} />
+            <Button
+              testID={`settings-bank-sync-${l.id}`}
+              kind="secondary"
+              label={t('settings.banks.syncNow')}
+              onPress={() =>
+                run(async () => {
+                  const r = await api.syncBank(workspaceId!, l.id);
+                  toast.show(r.newTransactions ? t('settings.banks.synced', { count: String(r.newTransactions) }) : t('settings.banks.upToDate'));
+                  load();
+                })
+              }
+            />
+            {bankConnectAvailable() ? (
+              <Button
+                testID={`settings-bank-reconnect-${l.id}`}
+                kind="secondary"
+                label={t('settings.banks.reconnect')}
+                onPress={() =>
+                  run(async () => {
+                    const { reauthToken } = await api.reauthBank(workspaceId!, l.id);
+                    if (await openMonoConnect(reauthToken)) {
+                      await api.bankReconnected(workspaceId!, l.id);
+                      toast.show(t('settings.banks.reconnected'));
+                      load();
+                    }
+                  })
+                }
+              />
+            ) : null}
+            <Button
+              kind="secondary"
+              label={t('settings.banks.disconnect')}
+              onPress={() =>
+                run(async () => {
+                  await api.disconnectBank(workspaceId!, l.id);
+                  toast.show(t('settings.banks.disconnected'));
+                  load();
+                })
+              }
+            />
           </View>
         </Card>
       ))}
-      <Button testID="settings-connect-bank" label={t('settings.banks.connect')} onPress={() => router.push('/accounts')} />
-      <Banner message={t('settings.banks.laterPhase')} />
+      {available && bankConnectAvailable() ? (
+        <Button testID="settings-connect-bank" label={t('settings.banks.connect')} onPress={() => setConnect(true)} />
+      ) : (
+        <Banner message={t('settings.banks.unavailable')} />
+      )}
+      {connect ? (
+        <ConnectBankSheet
+          onClose={() => {
+            setConnect(false);
+            load();
+          }}
+        />
+      ) : null}
     </ScrollView>
   );
 }
@@ -289,7 +378,7 @@ export function WorkspaceTabDeep() {
       <Text variant="heading-sm">{t('settings.workspace.rolesTitle')}</Text>
       <Text tone="textSecondary">{t('settings.workspace.rolesBody')}</Text>
       <Text variant="heading-sm">{t('settings.workspace.activity')}</Text>
-      <Text tone="textSecondary">{t('settings.workspace.activityEmpty')}</Text>
+      <ActivityLog />
       <InviteMemberSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} />
       <ChangeRoleSheet member={roleMember} visible={roleMember !== null} onClose={() => setRoleMember(null)} />
     </ScrollView>
@@ -300,42 +389,251 @@ export function SecurityTabDeep() {
   const size = useSizeClass();
   const phone = size === 'phone';
   const web = Platform.OS === 'web';
+  const api = useSecurityApi();
+  const toast = useToast();
+  const recheck = useRecheck();
+  const lock = useAppLockSetting();
+  const [status, setStatus] = useState<SecurityStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [twoFa, setTwoFa] = useState(false);
-  const [codes, setCodes] = useState(false);
+  const [codes, setCodes] = useState<string[] | null>(null);
   const [passkey, setPasskey] = useState(false);
-  const [appLock, setAppLock] = useState(false);
-  const [privacyMode, setPrivacyMode] = useState(true);
-  const [hideRecent, setHideRecent] = useState(false);
+  const [password, setPassword] = useState(false);
+  const [turnOff, setTurnOff] = useState(false);
+
+  const load = useCallback(() => {
+    api.status().then(setStatus, () => setError(t('settings.security.loadFailed')));
+  }, [api]);
+  useEffect(load, [load]);
+
+  const act = (action: () => Promise<void>) =>
+    recheck.guard(action).catch((e: unknown) => toast.show(e instanceof ApiError ? e.body.message : t('errors.network')));
 
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-security">
       <Text tone="textSecondary">{t('settings.security.body')}</Text>
-      <TextInput testID="settings-password" label={t('settings.security.password')} value="" secureTextEntry onChangeText={() => {}} placeholder={t('settings.security.passwordHint')} />
-      <Button testID="settings-2fa" kind="secondary" label={t('settings.security.twoFactor')} onPress={() => setTwoFa(true)} />
-      <Button testID="settings-backup-codes" kind="secondary" label={t('settings.security.backupCodes')} onPress={() => setCodes(true)} />
-      <Button testID="settings-passkey" kind="secondary" label={t('settings.security.passkey')} onPress={() => setPasskey(true)} />
-      <Text variant="heading-sm">{t('settings.security.devicesTitle')}</Text>
-      <Card>
-        <Text>{t('settings.security.thisDevice')}</Text>
-        <Text variant="caption" tone="textSecondary">
-          {Platform.OS === 'web' ? t('settings.security.sessionWeb') : t('settings.security.sessionPhone')}
-        </Text>
-        <Button testID="settings-sign-out-others" kind="secondary" label={t('settings.security.signOutOthers')} onPress={() => {}} />
+      {error ? <Banner message={error} /> : null}
+      {status?.hasPassword !== false ? (
+        <Button testID="settings-password" kind="secondary" label={t('settings.security.changePassword')} onPress={() => setPassword(true)} />
+      ) : null}
+
+      <Text variant="heading-sm">{t('settings.security.twoFactor')}</Text>
+      <Card style={{ gap: sp['spacing-sm'] }}>
+        <Text>{status?.twoFactorOn ? t('settings.security.twoFactorOn') : t('settings.security.twoFactorOff')}</Text>
+        {status?.twoFactorOn ? (
+          <>
+            <Text variant="caption" tone="textSecondary">
+              {t('settings.security.codesLeft', { count: String(status.backupCodesLeft) })}
+            </Text>
+            <Button
+              testID="settings-backup-codes"
+              kind="secondary"
+              label={t('settings.security.newBackupCodes')}
+              onPress={() => void act(async () => setCodes((await api.newBackupCodes()).backupCodes))}
+            />
+            <Button testID="settings-2fa-off" kind="secondary" label={t('settings.security.turnOffTwoFactor')} onPress={() => setTurnOff(true)} />
+          </>
+        ) : (
+          <Button testID="settings-2fa" kind="secondary" label={t('settings.security.setUpTwoFactor')} onPress={() => setTwoFa(true)} />
+        )}
       </Card>
+
+      {passkeysAvailable() ? (
+        <>
+          <Text variant="heading-sm">{t('settings.security.passkeysTitle')}</Text>
+          <Card style={{ gap: sp['spacing-sm'] }}>
+            {(status?.passkeys ?? []).length === 0 ? <Text tone="textSecondary">{t('settings.security.noPasskeys')}</Text> : null}
+            {(status?.passkeys ?? []).map((p) => (
+              <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View>
+                  <Text>{p.name}</Text>
+                  <Text variant="caption" tone="textSecondary">
+                    {t('settings.security.addedOn', { date: formatDay(p.createdAt.slice(0, 10)) })}
+                  </Text>
+                </View>
+                <Button
+                  kind="link"
+                  label={t('settings.security.removePasskey')}
+                  onPress={() =>
+                    void act(async () => {
+                      await api.passkeyRemove(p.id);
+                      toast.show(t('settings.security.passkeyRemoved'));
+                      load();
+                    })
+                  }
+                />
+              </View>
+            ))}
+            <Button testID="settings-passkey" kind="secondary" label={t('settings.security.passkey')} onPress={() => setPasskey(true)} />
+          </Card>
+        </>
+      ) : null}
+
+      <Text variant="heading-sm">{t('settings.security.devicesTitle')}</Text>
+      <SessionsList />
+
       {!web && phone ? (
         <>
-          <Switch testID="settings-app-lock" label={t('settings.security.appLock')} value={appLock} onChange={setAppLock} />
-          <Switch testID="settings-privacy-mode" label={t('settings.security.privacyMode')} value={privacyMode} onChange={setPrivacyMode} />
+          <Switch testID="settings-app-lock" label={t('settings.security.appLock')} value={lock.enabled} onChange={(v) => void lock.setEnabled(v)} />
+          <Switch testID="settings-privacy-mode" label={t('settings.security.privacyMode')} value={lock.privacyDefault} onChange={(v) => void lock.setPrivacyDefault(v)} />
         </>
       ) : null}
       {Platform.OS === 'android' ? (
-        <Switch testID="settings-hide-recent" label={t('settings.security.hideRecent')} value={hideRecent} onChange={setHideRecent} />
+        <Switch testID="settings-hide-recent" label={t('settings.security.hideRecent')} value={lock.hideInRecents} onChange={(v) => void lock.setHideInRecents(v)} />
       ) : null}
-      <TwoFactorSheet visible={twoFa} onClose={() => setTwoFa(false)} />
-      <BackupCodesSheet visible={codes} onClose={() => setCodes(false)} />
-      <PasskeySheet visible={passkey} onClose={() => setPasskey(false)} />
+
+      <TwoFactorSheet
+        visible={twoFa}
+        onClose={() => setTwoFa(false)}
+        onDone={(c) => {
+          setTwoFa(false);
+          setCodes(c);
+          load();
+        }}
+      />
+      <BackupCodesSheet codes={codes} onClose={() => setCodes(null)} />
+      <PasskeySheet
+        visible={passkey}
+        onClose={() => setPasskey(false)}
+        onAdded={() => {
+          setPasskey(false);
+          load();
+        }}
+      />
+      <ChangePasswordSheet visible={password} onClose={() => setPassword(false)} />
+      <Confirm
+        visible={turnOff}
+        title={t('settings.security.turnOffTitle')}
+        body={t('settings.security.turnOffBody')}
+        confirmLabel={t('settings.security.turnOffTwoFactor')}
+        onConfirm={() => {
+          setTurnOff(false);
+          void act(async () => {
+            await api.twoFactorOff();
+            toast.show(t('settings.security.twoFactorTurnedOff'));
+            load();
+          });
+        }}
+        onCancel={() => setTurnOff(false)}
+      />
+      {recheck.sheet}
     </ScrollView>
   );
+}
+
+/** Devices and sessions: this device marked; web sessions that stay signed in labelled (DESIGN page 26). */
+function SessionsList() {
+  const api = useSecurityApi();
+  const toast = useToast();
+  const [sessions, setSessions] = useState<DeviceSession[] | null>(null);
+  const load = useCallback(() => {
+    api.sessions().then((r) => setSessions(r.sessions), () => setSessions([]));
+  }, [api]);
+  useEffect(load, [load]);
+
+  return (
+    <Card style={{ gap: sp['spacing-sm'] }} testID="settings-sessions">
+      {(sessions ?? []).map((s) => (
+        <View key={s.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp['spacing-sm'] }}>
+          <View style={{ flex: 1 }}>
+            <Text>{s.current ? t('settings.security.thisDevice') : (s.deviceName ?? t('settings.security.unnamedDevice'))}</Text>
+            <Text variant="caption" tone="textSecondary">
+              {s.staysSignedIn ? `${t('settings.security.staysSignedIn')} · ` : ''}
+              {t('settings.security.lastUsed', { date: formatDay(s.lastUsedAt.slice(0, 10)) })}
+            </Text>
+          </View>
+          {!s.current ? (
+            <Button
+              kind="link"
+              label={t('settings.security.signOut')}
+              onPress={() =>
+                void api.signOutSession(s.id).then(() => {
+                  toast.show(t('settings.security.signedOut'));
+                  load();
+                })
+              }
+            />
+          ) : null}
+        </View>
+      ))}
+      <Button
+        testID="settings-sign-out-others"
+        kind="secondary"
+        label={t('settings.security.signOutOthers')}
+        onPress={() =>
+          void api.signOutOthers().then(() => {
+            toast.show(t('settings.security.signedOutOthers'));
+            load();
+          })
+        }
+      />
+    </Card>
+  );
+}
+
+/** Activity log: who did what, when, filterable (DESIGN page 26, B3.9). */
+function ActivityLog() {
+  const api = useSecurityApi();
+  const { user } = useAuth();
+  const [filter, setFilter] = useState('');
+  const [events, setEvents] = useState<ActivityEvent[] | null>(null);
+  const [next, setNext] = useState<string | null>(null);
+  const workspaceId = user?.workspaceId;
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    let alive = true;
+    api.activity(workspaceId, filter ? { action: filter } : {}).then(
+      (r) => {
+        if (!alive) return;
+        setEvents(r.events);
+        setNext(r.nextBefore);
+      },
+      () => alive && setEvents([]),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [api, workspaceId, filter]);
+
+  const more = async () => {
+    if (!workspaceId || !next) return;
+    const r = await api.activity(workspaceId, { before: next, ...(filter ? { action: filter } : {}) });
+    setEvents((cur) => [...(cur ?? []), ...r.events]);
+    setNext(r.nextBefore);
+  };
+
+  return (
+    <View style={{ gap: sp['spacing-sm'] }} testID="settings-activity">
+      <SegmentedControl
+        label={t('settings.workspace.activityFilter')}
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { value: '', label: t('settings.workspace.activityAll') },
+          { value: 'transaction.', label: t('settings.workspace.activityMoney') },
+          { value: 'session.', label: t('settings.workspace.activitySignIns') },
+          { value: 'security.', label: t('settings.workspace.activitySecurity') },
+        ]}
+      />
+      {events && events.length === 0 ? <Text tone="textSecondary">{t('settings.workspace.activityEmpty')}</Text> : null}
+      {(events ?? []).map((e) => (
+        <View key={e.id} style={{ gap: 2 }}>
+          <Text>{activityLabel(e.action)}</Text>
+          <Text variant="caption" tone="textSecondary">
+            {[e.who, e.device, formatDay(e.at.slice(0, 10))].filter(Boolean).join(' · ')}
+          </Text>
+        </View>
+      ))}
+      {next ? <Button kind="link" label={t('settings.workspace.activityMore')} onPress={() => void more()} /> : null}
+    </View>
+  );
+}
+
+function activityLabel(action: string): string {
+  const key = `activity.${action}` as TextKey;
+  const text = t(key);
+  return text === key ? t('activity.other') : text;
 }
 
 export function DevicesTab() {
@@ -411,22 +709,17 @@ export function AdvancedTabDeep() {
 }
 
 export function ImportExportTabDeep() {
-  const { snapshot } = useWorkspace();
   const router = useRouter();
   const toast = useToast();
+  const api = useSecurityApi();
+  const recheck = useRecheck();
+  const { user, signOut } = useAuth();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
+  const workspaceId = user?.workspaceId;
 
-  const download = (filename: string, content: string, mime: string) => {
-    if (typeof document === 'undefined') return;
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const run = (action: () => Promise<void>) =>
+    recheck.guard(action).catch((e: unknown) => toast.show(e instanceof ApiError ? e.body.message : t('errors.network')));
 
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-import-export">
@@ -438,24 +731,30 @@ export function ImportExportTabDeep() {
       <Button
         testID="settings-export-csv"
         label={t('settings.importExport.exportCsv')}
-        onPress={() => {
-          if (!snapshot) return;
-          download('myledja-transactions.csv', exportTransactionsCsv(snapshot), 'text/csv');
-          toast.show(t('settings.importExport.exportDone'));
-        }}
+        onPress={() =>
+          void run(async () => {
+            if (!workspaceId) return;
+            const file = await api.exportCsv(workspaceId);
+            await saveText(file.filename, file.content, file.mimeType);
+            toast.show(t('settings.importExport.exportDone'));
+          })
+        }
       />
       <Button
         testID="settings-export-backup"
         kind="secondary"
         label={t('settings.importExport.fullBackup')}
-        onPress={() => {
-          if (!snapshot) return;
-          download('myledja-backup.json', exportWorkspaceBackupJson(snapshot), 'application/json');
-          toast.show(t('settings.importExport.backupDone'));
-        }}
+        onPress={() =>
+          void run(async () => {
+            if (!workspaceId) return;
+            const file = await api.backup(workspaceId);
+            await saveText(file.filename, file.content, file.mimeType);
+            toast.show(t('settings.importExport.backupDone'));
+          })
+        }
       />
       <Button testID="settings-restore-backup" kind="secondary" label={t('settings.importExport.restore')} onPress={() => setRestoreOpen(true)} />
-      <RestoreBackupSheet visible={restoreOpen} onClose={() => setRestoreOpen(false)} />
+      <RestoreBackupSheet visible={restoreOpen} onClose={() => setRestoreOpen(false)} guard={recheck.guard} />
       <View style={{ marginTop: sp['spacing-lg'] }}>
         <Button testID="settings-delete-account" kind="secondary" label={t('settings.importExport.deleteAccount')} onPress={() => setDeleteOpen(true)} />
       </View>
@@ -466,10 +765,15 @@ export function ImportExportTabDeep() {
         confirmLabel={t('settings.importExport.deleteAccountConfirm')}
         onConfirm={() => {
           setDeleteOpen(false);
-          toast.show(t('settings.importExport.deleteAccountQueued'));
+          void run(async () => {
+            await api.deleteAccount();
+            toast.show(t('settings.importExport.deleteAccountQueued'));
+            await signOut();
+          });
         }}
         onCancel={() => setDeleteOpen(false)}
       />
+      {recheck.sheet}
     </ScrollView>
   );
 }

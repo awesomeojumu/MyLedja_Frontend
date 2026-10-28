@@ -5,6 +5,7 @@ import {
   parseAmount,
   roundHalfAwayFromZero,
   splitByWeights,
+  toInputText,
   toWire,
 } from '..';
 
@@ -50,6 +51,18 @@ describe('wire format', () => {
     expect(fromWire('6000000')).toBe(6000000n);
     expect(toWire(-1n)).toBe('-1');
     expect(() => fromWire('60.00')).toThrow();
+  });
+});
+
+describe('toInputText', () => {
+  it('writes kobo as text that reads back exactly', () => {
+    expect(toInputText(1_845_000n)).toBe('18450');
+    expect(toInputText(1_845_050n)).toBe('18450.50');
+    expect(toInputText(5n)).toBe('0.05');
+    expect(toInputText(-1_845_001n)).toBe('-18450.01');
+    for (const minor of [0n, 1n, 99n, 100n, 80_000_001n, -250n]) {
+      expect(parseAmount(toInputText(minor))).toEqual({ ok: true, minor });
+    }
   });
 });
 

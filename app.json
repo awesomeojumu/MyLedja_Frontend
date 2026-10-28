@@ -8,7 +8,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.planexi.myledja",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "MyLedja uses Face ID to unlock the app when app lock is on."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +21,8 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.planexi.myledja"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -30,7 +35,13 @@
       "expo-secure-store",
       "expo-font",
       "expo-sqlite",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "MyLedja uses Face ID to unlock the app when app lock is on."
+        }
+      ]
     ]
   }
 }

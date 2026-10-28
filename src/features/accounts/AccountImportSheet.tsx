@@ -1,8 +1,13 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { useMemo, useState } from 'react';
+
+import { aiApi, type StatementImport, toBase64 } from '@/api/ai';
+import { ApiError } from '@/api/client';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { useOnline } from '@/lib/useOnline';
 import { View } from 'react-native';
 
-import { Amount, Button, Checkbox, EmptyState, Footer, formatDay, InlineError, SegmentedControl, Select, Sheet, Switch, Text } from '@/design/components';
+import { Amount, Button, Checkbox, Confirm, EmptyState, Footer, formatDay, InlineError, SegmentedControl, Select, Sheet, Switch, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { Account, DateFormat, ImportMapping } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
@@ -11,6 +16,7 @@ import { ledgerMessage } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
 import { suggestMoneyBack } from '@/features/debts/moneyBack';
+import { ruleChangeFor } from '@/features/rules/ruleEngine';
 
 import { importRulesApplied } from './helpers';
 
@@ -20,13 +26,34 @@ const FORMATS: DateFormat[] = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
 
 type Step = 'upload' | 'map' | 'review';
 
-async function pickCsv(): Promise<string | null> {
-  const result = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/plain'], copyToCacheDirectory: true });
+type Picked = { kind: 'csv'; text: string } | { kind: 'statement'; fileName: string; base64: string };
+
+const STATEMENT_TYPES = ['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+
+/** A CSV is read on the device; a PDF or Excel statement is read by the API (F4.1). */
+async function pickFile(): Promise<Picked | null> {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ['text/csv', 'text/comma-separated-values', 'text/plain', ...STATEMENT_TYPES],
+    copyToCacheDirectory: true,
+  });
   if (result.canceled) return null;
   const asset = result.assets[0];
   if (!asset) return null;
-  if (asset.file) return asset.file.text();
-  return (await fetch(asset.uri)).text();
+  const isStatement = /\.(pdf|xlsx)$/i.test(asset.name) || STATEMENT_TYPES.includes(asset.mimeType ?? '');
+  if (!isStatement) return { kind: 'csv', text: asset.file ? await asset.file.text() : await (await fetch(asset.uri)).text() };
+  const buffer = asset.file ? await asset.file.arrayBuffer() : await (await fetch(asset.uri)).arrayBuffer();
+  return { kind: 'statement', fileName: asset.name, base64: toBase64(new Uint8Array(buffer)) };
+}
+
+/** Statement rows from the API as CSV text, so they go through the same mapping and review as a CSV. */
+export function statementCsv(rows: StatementImport['rows']): string {
+  const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const amount = (minor: string) => {
+    const neg = minor.startsWith('-');
+    const digits = (neg ? minor.slice(1) : minor).padStart(3, '0');
+    return `${neg ? '-' : ''}${digits.slice(0, -2)}.${digits.slice(-2)}`;
+  };
+  return ['Date,Description,Amount', ...rows.filter((r) => r.date && r.amount).map((r) => [r.date!, cell(r.description), amount(r.amount!)].join(','))].join('\n');
 }
 
 /** DESIGN popup #17 — Import file (CSV in Phase 1–2). */
@@ -42,6 +69,11 @@ export function AccountImportSheet({
   onImported: (importId: string, count: number) => void;
 }) {
   const { snapshot, repo } = useWorkspace();
+  const { client, user } = useAuth();
+  const online = useOnline();
+  const ai = useMemo(() => aiApi(client), [client]);
+  const [askAi, setAskAi] = useState<{ fileName: string; base64: string } | null>(null);
+  const [reading, setReading] = useState(false);
   const [table, setTable] = useState<string[][] | null>(() => (initialText ? parseCsv(initialText) : null));
   const [step, setStep] = useState<Step>(initialText ? 'map' : 'upload');
   const [mapping, setMapping] = useState<ImportMapping | null>(() => (initialText ? guessMapping(parseCsv(initialText)[0], account.importMapping) : null));
@@ -59,6 +91,41 @@ export function AccountImportSheet({
     setTable(parsed);
     setMapping(guessMapping(parsed[0], account.importMapping));
     setStep('map');
+  };
+
+  /** Reads a PDF or Excel statement through the API; suggested categories come back with the rows. */
+  const readStatement = async (file: { fileName: string; base64: string }, useAi: boolean) => {
+    if (!online || !user) return setError(t('import.statementOffline'));
+    setReading(true);
+    setError(null);
+    try {
+      const res = await ai.uploadStatement(user.workspaceId, { accountId: account.id, fileName: file.fileName, fileBase64: file.base64, useAi });
+      const kept = res.rows.filter((r) => r.date && r.amount);
+      load(statementCsv(res.rows));
+      setCategories(new Map(kept.flatMap((r, i) => (r.categoryId ? [[i, r.categoryId] as const] : []))));
+    } catch (e) {
+      const code = e instanceof ApiError ? e.body?.code : undefined;
+      if (!useAi && (code === 'statement_unreadable' || code === 'ai_consent_needed')) {
+        const settings = await ai.settings(user.workspaceId).catch(() => null);
+        if (settings && (settings.available.claude || settings.available.gemini)) {
+          if (settings.consent.statements) return void readStatement(file, true);
+          return setAskAi(file);
+        }
+      }
+      setError(e instanceof ApiError ? e.body.message : t('import.unreadable'));
+    } finally {
+      setReading(false);
+    }
+  };
+
+  const agreeAndRead = async () => {
+    const file = askAi;
+    setAskAi(null);
+    if (!file || !user) return;
+    const settings = await ai.settings(user.workspaceId);
+    const { updatedAt: _u, ...consent } = settings.consent;
+    await ai.setConsent(user.workspaceId, { ...consent, statements: true });
+    await readStatement(file, true);
   };
 
   const read = useMemo(() => (table && mapping ? readRows(table, mapping) : null), [table, mapping]);
@@ -80,10 +147,20 @@ export function AccountImportSheet({
         payeeName: row.payee,
         movement: row.amount < 0n ? 'expense' : 'income',
       })[0];
+      // The person's rules first, then the payee's usual category (P25-05).
+      const fromRules = ruleChangeFor(snapshot.rules, {
+        payeeName: payee?.name ?? row.payee,
+        description: row.payee,
+        amountMinor: amountAbs,
+        accountId: account.id,
+        categoryId: '',
+        notes: '',
+        date: row.date,
+      });
       return {
         row,
         duplicate: isDuplicate(row, account.id, snapshot.events, payeeNames),
-        suggested: payee?.defaultCategoryId,
+        suggested: fromRules.categoryId ?? payee?.defaultCategoryId,
         moneyBack,
       };
     });
@@ -195,12 +272,25 @@ export function AccountImportSheet({
             body={t('import.uploadBody')}
             actionLabel={t('import.choose')}
             onAction={() =>
-              void pickCsv()
-                .then((text) => text !== null && load(text))
+              void pickFile()
+                .then((picked) => {
+                  if (!picked) return;
+                  if (picked.kind === 'csv') load(picked.text);
+                  else void readStatement({ fileName: picked.fileName, base64: picked.base64 }, false);
+                })
                 .catch(() => setError(t('import.unreadable')))
             }
           />
         ) : null}
+        {reading ? <Text tone="textSecondary">{t('import.reading')}</Text> : null}
+        <Confirm
+          visible={askAi !== null}
+          title={t('import.aiConsentTitle')}
+          body={t('import.aiConsentBody')}
+          confirmLabel={t('import.aiConsentConfirm')}
+          onConfirm={() => void agreeAndRead().catch(() => setError(t('import.unreadable')))}
+          onCancel={() => setAskAi(null)}
+        />
 
         {step === 'map' && mapping && read ? (
           <>

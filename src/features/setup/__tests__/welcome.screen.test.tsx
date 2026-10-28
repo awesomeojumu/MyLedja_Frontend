@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { BackHandler } from 'react-native';
 import type { Transport } from '@/api/client';
+import type { SessionResponse } from '@/api/auth';
 import { createAuthMock, DEMO } from '@/api/mocks/auth';
 import { t } from '@/i18n';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -14,7 +15,7 @@ jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 function SignedIn({ children }: { children: React.ReactNode }) {
   const { api, completeSignIn, user } = useAuth();
   useEffect(() => {
-    api.signIn({ email: DEMO.email, password: DEMO.password, staySignedIn: false }).then((r) => completeSignIn(r, false));
+    api.signIn({ email: DEMO.email, password: DEMO.password, staySignedIn: false }).then((r) => completeSignIn(r as SessionResponse, false));
   }, [api, completeSignIn]);
   return user ? <>{children}</> : null;
 }

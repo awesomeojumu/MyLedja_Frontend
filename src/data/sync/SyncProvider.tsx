@@ -80,27 +80,36 @@ export function SyncProvider({ children, value }: { children: ReactNode; value?:
     };
   }, [engine, value]);
 
+  // Signing out clears this device's copy of the workspace (TECH-SPEC 10).
+  const [wasSignedIn, setWasSignedIn] = useState(auth.status === 'signed-in');
+  if ((auth.status === 'signed-in') !== wasSignedIn) {
+    setWasSignedIn(auth.status === 'signed-in');
+    if (wasSignedIn && auth.status === 'signed-out' && !value) void store.clearAll();
+  }
+
   // Join the real BE transport when signed in against local/staging (leave mock for unit tests).
   useEffect(() => {
     if (value) return;
     const useHttp = auth.source !== 'mock' && auth.status === 'signed-in' && !!auth.user?.workspaceId;
     if (!useHttp) {
       if (!(transport.inner instanceof MockSyncServer)) {
-        transport.inner = new MockSyncServer();
+        transport.use(new MockSyncServer());
         engine.setTransport(transport);
       }
       return;
     }
     const workspaceId = auth.user!.workspaceId;
-    transport.inner = new HttpSyncTransport({
-      client: auth.client,
-      workspaceId: () => workspaceId,
-      deviceId,
-      accounts: async () => {
-        const rows = await store.list('accounts');
-        return rows.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id }));
-      },
-    });
+    transport.use(
+      new HttpSyncTransport({
+        client: auth.client,
+        workspaceId: () => workspaceId,
+        deviceId,
+        accounts: async () => {
+          const rows = await store.list('accounts');
+          return rows.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id }));
+        },
+      }),
+    );
     engine.setTransport(transport);
   }, [auth.source, auth.status, auth.user, auth.client, deviceId, engine, store, transport, value]);
 
