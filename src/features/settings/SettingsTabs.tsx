@@ -57,11 +57,12 @@ export function AiTab() {
   const toast = useToast();
   const api = useMemo(() => aiApi(client), [client]);
   const [settings, setSettings] = useState<AiSettings | null>(null);
+  const [failed, setFailed] = useState(false);
   const workspaceId = user?.workspaceId;
 
   useEffect(() => {
     if (!workspaceId) return;
-    api.settings(workspaceId).then(setSettings, () => setSettings(null));
+    api.settings(workspaceId).then(setSettings, () => setFailed(true));
   }, [api, workspaceId]);
 
   const save = async (key: keyof AiConsent, on: boolean) => {
@@ -84,7 +85,7 @@ export function AiTab() {
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-ai">
       <Text tone="textSecondary">{t('settings.ai.body')}</Text>
-      {settings && !on ? <Banner message={t('settings.ai.unavailable')} /> : null}
+      {(settings && !on) || failed || !workspaceId ? <Banner message={t('settings.ai.unavailable')} /> : null}
       {on
         ? rows.map((r) => (
             <Card key={r.key} style={{ gap: sp['spacing-sm'] }}>

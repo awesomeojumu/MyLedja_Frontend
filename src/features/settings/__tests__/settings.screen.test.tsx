@@ -126,8 +126,8 @@ describe('Settings (F1.10)', () => {
     });
   });
 
-  it('P26-07: AI feature toggles persist', async () => {
-    const { sync, repo } = await seeded();
+  it('P26-07: AI features are hidden when no AI provider is set up (TECH-SPEC 2.3 rule 3)', async () => {
+    const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
         <SettingsScreen />
@@ -135,10 +135,8 @@ describe('Settings (F1.10)', () => {
       { sync },
     );
     await fireEvent.press(screen.getByTestId('settings-tab-ai'));
-    await fireEvent(screen.getByTestId('settings-ai-statements'), 'onChange', true);
-    await waitFor(async () => {
-      expect((await repo.load()).settings.aiPrefs?.readStatements).toBe(true);
-    });
+    expect(await screen.findByText(t('settings.ai.unavailable'))).toBeTruthy();
+    expect(screen.queryByTestId('settings-ai-statements')).toBeNull();
   });
 
   it('TECH-SPEC 9.9: sign-out warns when unsent outbox ops exist', async () => {

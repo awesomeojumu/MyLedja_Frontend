@@ -13,16 +13,22 @@ import { t } from '@/i18n';
 /** App lock and app-switcher privacy on phones (DESIGN.md 10.3, 10.4; build plan F3.3, G-11). */
 
 const LOCK_AFTER_MS = 5 * 60_000;
-const kv = openKeyValue('myledja-device');
+let store: ReturnType<typeof openKeyValue> | null = null;
+/** Opened on first use, so importing this file doesn't open the phone's database. */
+const kv = () => (store ??= openKeyValue('myledja-device'));
 const KEYS = { enabled: 'lock:enabled', offered: 'lock:offered', privacy: 'lock:privacyDefault', hideRecents: 'lock:hideInRecents' } as const;
 
 const phone = Platform.OS === 'ios' || Platform.OS === 'android';
 
 async function readFlag(key: string, fallback: boolean) {
-  const v = await kv.get(key);
-  return v === null ? fallback : v === '1';
+  try {
+    const v = await kv().get(key);
+    return v === null ? fallback : v === '1';
+  } catch {
+    return fallback;
+  }
 }
-const writeFlag = (key: string, value: boolean) => kv.set([[key, value ? '1' : '0']]);
+const writeFlag = (key: string, value: boolean) => kv().set([[key, value ? '1' : '0']]);
 
 async function canUseBiometrics() {
   if (!phone) return false;
@@ -141,7 +147,7 @@ export function AppLockGate({ children }: { children: ReactNode }) {
             gap: tokens.spacing['spacing-md'],
           }}
         >
-          <Text variant="display-md">MyLedja</Text>
+          <Text variant="display-md">{t('app.name')}</Text>
           {locked ? <Button label={t('lock.unlock')} onPress={() => void unlock()} /> : null}
         </View>
       ) : null}
