@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ApiError } from '@/api/client';
-import { Button, Checkbox, InlineError, Text, TextInput } from '@/design/components';
+import { Button, Checkbox, Divider, InlineError, Text, TextInput } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { AuthFrame } from './AuthFrame';
 import { useAuth } from './AuthProvider';
+import { GoogleSignInButton } from './GoogleSignInButton';
+import { googleSignInEnabled, runGoogleSignIn } from './googleSignIn';
 import { EMAIL_PATTERN } from './password';
 
 export function SignInScreen({ now = () => Date.now() }: { now?: () => number }) {
@@ -22,6 +24,7 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
   const [busy, setBusy] = useState(false);
   const [waitUntil, setWaitUntil] = useState<number | null>(null);
   const [, setTick] = useState(0);
+  const showGoogle = googleSignInEnabled();
 
   const secondsLeft = waitUntil ? Math.max(0, Math.ceil((waitUntil - now()) / 1000)) : 0;
   useEffect(() => {
@@ -36,6 +39,11 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
     return () => clearInterval(id);
   }, [waitUntil, now]);
 
+  const finishSession = async (res: Awaited<ReturnType<typeof api.signIn>>, signedInStay: boolean) => {
+    await completeSignIn(res, signedInStay);
+    router.replace(res.user.setupComplete ? '/' : '/welcome');
+  };
+
   const submit = async () => {
     if (!online || busy || secondsLeft > 0) return;
     if (!EMAIL_PATTERN.test(email.trim())) {
@@ -47,8 +55,7 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
     setError(null);
     try {
       const res = await api.signIn({ email: email.trim(), password, staySignedIn: Platform.OS === 'web' && stay });
-      await completeSignIn(res, Platform.OS === 'web' && stay);
-      router.replace(res.user.setupComplete ? '/' : '/welcome');
+      await finishSession(res, Platform.OS === 'web' && stay);
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
         setWaitUntil(now() + (e.body.retryAfterSeconds ?? 60) * 1000);
@@ -58,6 +65,19 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
       } else {
         setError(t('errors.network'));
       }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const google = async () => {
+    if (!online || busy || secondsLeft > 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await runGoogleSignIn(api);
+      if (res.ok) await finishSession(res.session, Platform.OS === 'web' && stay);
+      else if (res.reason === 'link_password') setError(t('signIn.googleLinkPassword'));
     } finally {
       setBusy(false);
     }
@@ -106,6 +126,12 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
         </Text>
       ) : null}
       <Button testID="sign-in" kind="gradient" label={t('signIn.submit')} onPress={submit} disabled={disabled} fullWidth />
+      {showGoogle ? (
+        <>
+          <Divider label={t('auth.or')} />
+          <GoogleSignInButton onPress={google} disabled={disabled} />
+        </>
+      ) : null}
       <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: tokens.spacing['spacing-xs'] }}>
         <Text tone="textSecondary">{t('signIn.newPrompt')}</Text>
         <Button kind="link" label={t('signIn.createOne')} onPress={() => router.push('/sign-up')} />
