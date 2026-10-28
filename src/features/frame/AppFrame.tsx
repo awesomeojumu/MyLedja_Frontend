@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeftRight, Eye, EyeOff, LayoutDashboard, LogOut, Menu, PieChart, Plus, Users, Wallet } from 'lucide-react-native';
+import { ArrowLeftRight, Eye, EyeOff, LayoutDashboard, Menu, PieChart, Plus, Settings, Users, Wallet } from 'lucide-react-native';
 import { Banner, Button, StatusPill, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
@@ -22,6 +22,7 @@ const ICONS = {
   budget: PieChart,
   accounts: Wallet,
   payees: Users,
+  settings: Settings,
 };
 const onSidebarMuted = `${c['on-primary']}B3`;
 const onSidebarSection = `${c['on-primary']}99`;
@@ -64,7 +65,7 @@ function PrivacyToggle({ color }: { color: string }) {
 function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: () => void }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const add = useOptionalAddTransaction();
   return (
     <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
@@ -201,29 +202,6 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
           <ConnectionPill />
           <PrivacyToggle color={c['on-primary']} />
         </View>
-        <Pressable
-          testID="sign-out"
-          accessibilityRole="button"
-          accessibilityLabel={t('nav.signOut')}
-          onPress={async () => {
-            await signOut();
-            router.replace('/sign-in');
-          }}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: sp['spacing-md'],
-            minHeight: 44,
-            paddingHorizontal: sp['spacing-md'],
-          }}
-        >
-          <LogOut size={18} color={onSidebarMuted} />
-          {compact ? null : (
-            <Text variant="caption" style={{ color: onSidebarSection }}>
-              {t('nav.signOut')}
-            </Text>
-          )}
-        </Pressable>
       </View>
     </View>
   );
