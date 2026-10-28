@@ -22,8 +22,14 @@ export type BillRow = {
   group: 'overdue' | 'dueSoon' | 'later' | 'paid';
 };
 
-export function billsForMonth(snapshot: Snapshot, month: string, today: string): BillRow[] {
-  const dueSoonEnd = addDays(today, 7);
+export function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function billsForMonth(snapshot: Snapshot, month: string, today: string, dueSoonDays = 7): BillRow[] {
+  const dueSoonEnd = addDays(today, dueSoonDays);
   const rows: BillRow[] = [];
   for (const recurring of snapshot.recurring) {
     if (recurring.kind === 'income') continue;
@@ -41,6 +47,20 @@ export function billsForMonth(snapshot: Snapshot, month: string, today: string):
   return rows.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 
+/** DESIGN.md page 12 summary strip. */
+export function planSummaryStrip(snapshot: Snapshot, month: string, billRows: BillRow[]) {
+  let comingIn = 0n;
+  for (const stream of snapshot.incomeStreams) {
+    const due = dueDateInMonth(stream.rule, month);
+    if (due) comingIn += BigInt(stream.expectedMinor);
+  }
+  const unpaid = billRows.filter((r) => r.group !== 'paid');
+  const goingOut = unpaid.reduce((s, r) => s + BigInt(r.recurring.amountMinor), 0n);
+  const missed = billRows.filter((r) => r.group === 'overdue').length;
+  const leftAfter = comingIn >= goingOut ? comingIn - goingOut : 0n;
+  return { comingIn, goingOut, leftAfter, missed };
+}
+
 export function planSummary(rows: BillRow[]) {
   const out = rows.filter((r) => r.group !== 'paid');
   const overdue = rows.filter((r) => r.group === 'overdue').length;
@@ -48,8 +68,56 @@ export function planSummary(rows: BillRow[]) {
   return { outTotal, overdue, billCount: out.length };
 }
 
-function addDays(iso: string, days: number): string {
-  const d = new Date(`${iso}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+/** All ISO dates in a month for the calendar grid (DESIGN page 12). */
+export function calendarDays(month: string): string[] {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  const count = lastDayOfMonth(y, m - 1);
+  return Array.from({ length: count }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`);
+}
+
+export function rowsByDate(rows: BillRow[]): Map<string, BillRow[]> {
+  const map = new Map<string, BillRow[]>();
+  for (const row of rows) {
+    const list = map.get(row.dueDate) ?? [];
+    list.push(row);
+    map.set(row.dueDate, list);
+  }
+  return map;
+}
+
+export type FindRecurringSuggestion = {
+  id: string;
+  name: string;
+  averageMinor: bigint;
+  count: number;
+  confidence: 'strong' | 'likely';
+};
+
+/** DESIGN popup #27 — heuristic from expense history. */
+export function findRecurringSuggestions(snapshot: Snapshot, month: string): FindRecurringSuggestion[] {
+  const keyCounts = new Map<string, { name: string; amounts: bigint[]; payeeId?: string }>();
+  for (const e of snapshot.events) {
+    if (e.status !== 'posted' || e.type !== 'expense' || !e.date.startsWith(month)) continue;
+    const payee = e.payeeId ? snapshot.payees.find((p) => p.id === e.payeeId)?.name : e.notes;
+    const name = payee ?? 'Repeating expense';
+    const amount = e.lines.reduce((s, l) => (l.amountMinor < 0n ? s - l.amountMinor : s), 0n);
+    if (amount <= 0n) continue;
+    const key = `${name}:${amount}`;
+    const cur = keyCounts.get(key) ?? { name, amounts: [] };
+    cur.amounts.push(amount);
+    keyCounts.set(key, cur);
+  }
+  const out: FindRecurringSuggestion[] = [];
+  for (const [key, data] of keyCounts) {
+    if (data.amounts.length < 2) continue;
+    const avg = data.amounts.reduce((a, b) => a + b, 0n) / BigInt(data.amounts.length);
+    out.push({
+      id: key,
+      name: data.name,
+      averageMinor: avg,
+      count: data.amounts.length,
+      confidence: data.amounts.length >= 3 ? 'strong' : 'likely',
+    });
+  }
+  return out.sort((a, b) => b.count - a.count);
 }
