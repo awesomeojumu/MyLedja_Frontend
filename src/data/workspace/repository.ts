@@ -966,6 +966,35 @@ export class WorkspaceRepository {
     return recurring;
   }
 
+  async updateRecurring(recurring: Recurring): Promise<void> {
+    const { id, ...data } = recurring;
+    await this.put('recurring', id, data, 'recurring.update');
+  }
+
+  /** Link an existing expense to a bill occurrence (DESIGN #26). */
+  async matchBillToEvent(recurringId: string, dueDate: string, eventId: string): Promise<Result<RecurringOccurrence>> {
+    const snapshot = await this.load();
+    const bill = snapshot.recurring.find((r) => r.id === recurringId);
+    if (!bill) return { ok: false, error: 'missing_lines' };
+    const occId = `${recurringId}:${dueDate}`;
+    const existing = snapshot.occurrences.find((o) => o.id === occId);
+    if (existing?.status === 'paid') return { ok: false, error: 'already_reversed' };
+    const event = snapshot.events.find((e) => e.id === eventId && e.status === 'posted');
+    if (!event || event.type !== 'expense') return { ok: false, error: 'missing_lines' };
+    const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+    const amount = event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + (l.amountMinor < 0n ? -l.amountMinor : l.amountMinor), 0n);
+    const occurrence: RecurringOccurrence = {
+      id: occId,
+      recurringId,
+      dueDate,
+      amountMinor: amount.toString(),
+      status: 'paid',
+      eventId,
+    };
+    await this.put('occurrences', occId, { recurringId, dueDate, amountMinor: amount.toString(), status: 'paid', eventId }, 'occurrence.paid');
+    return { ok: true, value: occurrence };
+  }
+
   async markBillPaid(
     recurringId: string,
     dueDate: string,

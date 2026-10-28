@@ -26,15 +26,18 @@ import type { Recurring } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { monthOf } from '@/ledger';
-import { ledgerMessage, today } from '@/features/transactions/helpers';
+import { today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
+import { MarkPaidMatchSheet } from './MarkPaidMatchSheet';
+import { billMatchReviewCount } from './match';
+import { RecurringFormSheet } from './RecurringFormSheet';
 import {
-  billsForMonth,
   calendarDays,
   findRecurringSuggestions,
   planSummaryStrip,
+  planRowsForMonth,
   rowsByDate,
   allScheduleRows,
   scheduleFrequency,
@@ -61,16 +64,21 @@ export function PlanScreen() {
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [dueSoonDays, setDueSoonDays] = useState<number>(7);
   const [upcomingOpen, setUpcomingOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formKind, setFormKind] = useState<Recurring['kind']>('bill');
+  const [editRecurring, setEditRecurring] = useState<Recurring | null>(null);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [matchRow, setMatchRow] = useState<BillRow | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [daySheet, setDaySheet] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const rows = useMemo(
-    () => (snapshot ? billsForMonth(snapshot, month, today(), dueSoonDays) : null),
+    () => (snapshot ? planRowsForMonth(snapshot, month, today(), dueSoonDays) : null),
     [snapshot, month, dueSoonDays],
   );
   const strip = useMemo(() => (snapshot && rows ? planSummaryStrip(snapshot, month, rows) : null), [snapshot, month, rows]);
+  const matchReviewCount = useMemo(() => (snapshot && rows ? billMatchReviewCount(snapshot, rows) : 0), [snapshot, rows]);
   const byDate = useMemo(() => (rows ? rowsByDate(rows) : new Map()), [rows]);
   const suggestions = useMemo(() => (snapshot ? findRecurringSuggestions(snapshot, month) : []), [snapshot, month]);
   const schedules = useMemo(
@@ -78,21 +86,19 @@ export function PlanScreen() {
     [snapshot, scheduleSearch],
   );
 
-  const markPaid = async (row: BillRow) => {
-    if (!snapshot) return;
+  const openMatch = (row: BillRow) => {
     if (row.occurrence?.status === 'paid') {
       toast.show(t('plan.alreadyPaid', { date: formatDay(row.dueDate) }));
       return;
     }
-    setError(null);
-    const categoryId = row.recurring.categoryId ?? snapshot.categories.find((c) => c.kind === 'expense')!.id;
-    const r = await repo.markBillPaid(row.recurring.id, row.dueDate, {
-      accountId: row.recurring.accountId,
-      categoryId,
-      amount: BigInt(row.recurring.amountMinor),
-      date: today(),
-    });
-    if (!r.ok) setError(ledgerMessage(r.error));
+    setMatchRow(row);
+  };
+
+  const openAdd = (kind: Recurring['kind']) => {
+    setEditRecurring(null);
+    setFormKind(kind);
+    setFormOpen(true);
+    setAddMenuOpen(false);
   };
 
   return (
@@ -123,6 +129,21 @@ export function PlanScreen() {
         </View>
       ) : null}
 
+      {matchReviewCount > 0 ? (
+        <Card testID="plan-match-banner" style={{ marginBottom: sp['spacing-md'], gap: sp['spacing-sm'] }}>
+          <Text>{t('plan.matchBanner', { count: String(matchReviewCount) })}</Text>
+          <Button
+            testID="plan-match-review"
+            kind="secondary"
+            label={t('plan.matchReview')}
+            onPress={() => {
+              const first = rows?.find((r) => r.group !== 'paid' && r.recurring.kind !== 'income');
+              if (first) setMatchRow(first);
+            }}
+          />
+        </Card>
+      ) : null}
+
       <SegmentedControl
         testID="plan-tab"
         label={t('plan.mainTab')}
@@ -151,7 +172,7 @@ export function PlanScreen() {
         />
         <Button testID="plan-find" kind="secondary" label={t('plan.findRecurring')} onPress={() => setFindOpen(true)} />
         <Button testID="plan-upcoming" kind="link" label={t('plan.upcomingLength', { days: dueSoonDays })} onPress={() => setUpcomingOpen(true)} />
-        <Button testID="plan-add" label={t('plan.addBill')} onPress={() => setAddOpen(true)} />
+        <Button testID="plan-add-menu" label={t('plan.addMenu')} onPress={() => setAddMenuOpen(true)} />
       </View>
 
       {error ? <InlineError message={error} /> : null}
@@ -159,7 +180,7 @@ export function PlanScreen() {
       {!rows ? (
         <Placeholder height={120} />
       ) : rows.length === 0 ? (
-        <EmptyState title={t('plan.emptyTitle')} body={t('plan.emptyBody')} actionLabel={t('plan.addBill')} onAction={() => setAddOpen(true)} />
+        <EmptyState title={t('plan.emptyTitle')} body={t('plan.emptyBody')} actionLabel={t('plan.addMenu')} onAction={() => setAddMenuOpen(true)} />
       ) : view === 'list' ? (
         <ScrollView contentContainerStyle={{ gap: sp['spacing-lg'] }}>
           {GROUP_ORDER.map((group) => {
@@ -169,7 +190,22 @@ export function PlanScreen() {
               <View key={group} style={{ gap: sp['spacing-sm'] }}>
                 <Text variant="heading-sm">{t(`plan.group.${group}`)}</Text>
                 {groupRows.map((row) => (
-                  <BillRowView key={`${row.recurring.id}-${row.dueDate}`} row={row} onMarkPaid={() => void markPaid(row)} />
+                  <BillRowView
+                    key={`${row.recurring.id}-${row.dueDate}`}
+                    row={row}
+                    onMark={() => openMatch(row)}
+                    onEdit={
+                      row.recurring.id.startsWith('stream:')
+                        ? () => router.push('/income')
+                        : () => {
+                            const rec = snapshot!.recurring.find((r) => r.id === row.recurring.id);
+                            if (rec) {
+                              setEditRecurring(rec);
+                              setFormOpen(true);
+                            }
+                          }
+                    }
+                  />
                 ))}
               </View>
             );
@@ -182,17 +218,41 @@ export function PlanScreen() {
         </>
       )}
 
-      {addOpen && snapshot ? (
-        <AddBillSheet
+      {formOpen && snapshot ? (
+        <RecurringFormSheet
           snapshot={snapshot}
-          onClose={() => setAddOpen(false)}
+          existing={editRecurring}
+          initialKind={formKind}
+          visible
+          onClose={() => {
+            setFormOpen(false);
+            setEditRecurring(null);
+          }}
           onSave={async (data) => {
             setError(null);
-            await repo.addRecurring(data);
-            setAddOpen(false);
+            if (editRecurring) await repo.updateRecurring({ ...data, id: editRecurring.id });
+            else await repo.addRecurring(data);
           }}
         />
       ) : null}
+
+      {snapshot && matchRow ? (
+        <MarkPaidMatchSheet
+          row={matchRow}
+          snapshot={snapshot}
+          visible
+          onClose={() => setMatchRow(null)}
+          onDone={() => toast.show(t('common.saved'))}
+        />
+      ) : null}
+
+      <Popover visible={addMenuOpen} onClose={() => setAddMenuOpen(false)} testID="plan-add-popover">
+        <Text variant="heading-sm">{t('plan.addMenu')}</Text>
+        <Button testID="plan-add-bill" kind="secondary" label={t('plan.kind.bill')} onPress={() => openAdd('bill')} />
+        <Button testID="plan-add-subscription" kind="secondary" label={t('plan.kind.subscription')} onPress={() => openAdd('subscription')} />
+        <Button testID="plan-add-transfer" kind="secondary" label={t('plan.kind.transfer')} onPress={() => openAdd('transfer')} />
+        <Button testID="plan-add-income" kind="secondary" label={t('plan.kind.income')} onPress={() => { setAddMenuOpen(false); router.push('/income'); }} />
+      </Popover>
 
       {findOpen && snapshot ? (
         <FindRecurringSheet
@@ -232,7 +292,21 @@ export function PlanScreen() {
       {daySheet && rows ? (
         <Sheet visible title={formatDay(daySheet)} onClose={() => setDaySheet(null)} testID="plan-day-sheet">
           {(byDate.get(daySheet) ?? []).map((row: BillRow) => (
-            <BillRowView key={`${row.recurring.id}-${row.dueDate}`} row={row} onMarkPaid={() => void markPaid(row)} />
+            <BillRowView
+              key={`${row.recurring.id}-${row.dueDate}`}
+              row={row}
+              onMark={() => openMatch(row)}
+              onEdit={() => {
+                if (row.recurring.id.startsWith('stream:')) router.push('/income');
+                else {
+                  const rec = snapshot!.recurring.find((r) => r.id === row.recurring.id);
+                  if (rec) {
+                    setEditRecurring(rec);
+                    setFormOpen(true);
+                  }
+                }
+              }}
+            />
           ))}
           {(byDate.get(daySheet) ?? []).length === 0 ? <Text tone="textSecondary">{t('plan.dayEmpty')}</Text> : null}
         </Sheet>
@@ -363,20 +437,34 @@ function CalendarGrid({
   );
 }
 
-function BillRowView({ row, onMarkPaid }: { row: BillRow; onMarkPaid: () => void }) {
+function BillRowView({ row, onMark, onEdit }: { row: BillRow; onMark: () => void; onEdit: () => void }) {
   const paid = row.occurrence?.status === 'paid';
+  const income = row.recurring.kind === 'income';
   return (
     <Card testID={`bill-${row.recurring.id}`} style={{ gap: sp['spacing-xs'] }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text variant="heading-sm">{row.recurring.name}</Text>
+        <Text variant="heading-sm">
+          {income ? '+ ' : ''}
+          {row.recurring.name}
+        </Text>
         {row.group === 'overdue' && !paid ? <StatusPill label={t('plan.overdue')} kind="pending" /> : null}
-        {paid ? <StatusPill label={t('plan.paid')} kind="done" /> : null}
+        {paid ? <StatusPill label={income ? t('plan.received') : t('plan.paid')} kind="done" /> : null}
       </View>
       <Text tone="textSecondary">
-        {formatDay(row.dueDate)} · <Amount minor={BigInt(row.recurring.amountMinor)} variant="caption" />
+        {formatDay(row.dueDate)} · <Amount minor={BigInt(row.recurring.amountMinor)} signed={income} variant="caption" />
         {row.recurring.approximate ? ` ${t('plan.approximate')}` : ''}
       </Text>
-      {paid ? null : <Button testID={`bill-mark-${row.recurring.id}`} kind="secondary" label={t('plan.markPaid')} onPress={onMarkPaid} />}
+      {paid ? null : (
+        <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
+          <Button
+            testID={`bill-mark-${row.recurring.id}`}
+            kind="secondary"
+            label={income ? t('plan.markReceived') : t('plan.markPaid')}
+            onPress={onMark}
+          />
+          <Button testID={`bill-edit-${row.recurring.id}`} kind="link" label={t('plan.editRecurring')} onPress={onEdit} />
+        </View>
+      )}
     </Card>
   );
 }
@@ -405,52 +493,6 @@ function FindRecurringSheet({
           </Card>
         ))
       )}
-    </Sheet>
-  );
-}
-
-function AddBillSheet({
-  snapshot,
-  onClose,
-  onSave,
-}: {
-  snapshot: NonNullable<ReturnType<typeof useWorkspace>['snapshot']>;
-  onClose: () => void;
-  onSave: (data: Omit<Recurring, 'id'>) => Promise<void>;
-}) {
-  const [name, setName] = useState('');
-  const [amountText, setAmountText] = useState('');
-  const [amountMinor, setAmountMinor] = useState<bigint | null>(null);
-  const [accountId, setAccountId] = useState(snapshot.accounts[0]?.id ?? '');
-  const [categoryId, setCategoryId] = useState(snapshot.categories.find((c) => c.kind === 'expense')?.id ?? '');
-  const [day, setDay] = useState('1');
-  const accounts = snapshot.accounts.filter((a) => !a.archived).map((a) => ({ value: a.id, label: a.name }));
-  const categories = snapshot.categories.filter((c) => c.kind === 'expense').map((c) => ({ value: c.id, label: c.name }));
-
-  return (
-    <Sheet visible title={t('plan.addBillTitle')} onClose={onClose} testID="plan-add-sheet" footer={
-      <Button
-        testID="plan-save"
-        label={t('panel.save')}
-        disabled={!name.trim() || amountMinor === null || amountMinor <= 0n || !accountId || !categoryId}
-        onPress={() =>
-          void onSave({
-            kind: 'bill',
-            name: name.trim(),
-            amountMinor: amountMinor!.toString(),
-            accountId,
-            categoryId,
-            rule: { every: 'month', on: Math.min(31, Math.max(1, Number(day) || 1)) },
-            startDate: today(),
-          })
-        }
-      />
-    }>
-      <TextInput testID="plan-name" label={t('plan.name')} value={name} onChangeText={setName} />
-      <AmountInput testID="plan-amount" label={t('plan.amount')} value={amountText} onChange={(text, minor) => { setAmountText(text); setAmountMinor(minor); }} />
-      <Select testID="plan-account" label={t('plan.account')} options={accounts} value={accountId} onChange={setAccountId} />
-      <Select testID="plan-category" label={t('plan.category')} options={categories} value={categoryId} onChange={setCategoryId} />
-      <TextInput testID="plan-day" label={t('plan.dayOfMonth')} value={day} onChangeText={setDay} keyboardType="number-pad" />
     </Sheet>
   );
 }

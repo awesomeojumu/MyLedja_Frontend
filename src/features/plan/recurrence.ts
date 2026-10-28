@@ -49,6 +49,40 @@ export function billsForMonth(snapshot: Snapshot, month: string, today: string, 
   return rows.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 
+/** Expected income due this month (DESIGN page 12 list). */
+export function incomeDueRows(snapshot: Snapshot, month: string, today: string, dueSoonDays = 7): BillRow[] {
+  const dueSoonEnd = addDays(today, dueSoonDays);
+  const rows: BillRow[] = [];
+  for (const stream of snapshot.incomeStreams) {
+    const dueDate = dueDateInMonth(stream.rule, month);
+    if (!dueDate) continue;
+    const pseudo: Recurring = {
+      id: `stream:${stream.id}`,
+      kind: 'income',
+      name: stream.name,
+      amountMinor: stream.expectedMinor,
+      accountId: stream.accountId,
+      categoryId: stream.categoryId,
+      rule: stream.rule,
+      startDate: dueDate,
+    };
+    let group: BillRow['group'] = 'later';
+    const occId = `${pseudo.id}:${dueDate}`;
+    const occurrence = snapshot.occurrences.find((o) => o.id === occId);
+    if (occurrence?.status === 'paid') group = 'paid';
+    else if (dueDate < today) group = 'overdue';
+    else if (dueDate <= dueSoonEnd) group = 'dueSoon';
+    rows.push({ recurring: pseudo, dueDate, occurrence, group });
+  }
+  return rows;
+}
+
+export function planRowsForMonth(snapshot: Snapshot, month: string, today: string, dueSoonDays = 7): BillRow[] {
+  return [...billsForMonth(snapshot, month, today, dueSoonDays), ...incomeDueRows(snapshot, month, today, dueSoonDays)].sort((a, b) =>
+    a.dueDate.localeCompare(b.dueDate),
+  );
+}
+
 /** DESIGN.md page 12 summary strip. */
 export function planSummaryStrip(snapshot: Snapshot, month: string, billRows: BillRow[]) {
   let comingIn = 0n;
@@ -56,9 +90,9 @@ export function planSummaryStrip(snapshot: Snapshot, month: string, billRows: Bi
     const due = dueDateInMonth(stream.rule, month);
     if (due) comingIn += BigInt(stream.expectedMinor);
   }
-  const unpaid = billRows.filter((r) => r.group !== 'paid');
+  const unpaid = billRows.filter((r) => r.group !== 'paid' && r.recurring.kind !== 'income');
   const goingOut = unpaid.reduce((s, r) => s + BigInt(r.recurring.amountMinor), 0n);
-  const missed = billRows.filter((r) => r.group === 'overdue').length;
+  const missed = billRows.filter((r) => r.group === 'overdue' && r.recurring.kind !== 'income').length;
   const leftAfter = comingIn >= goingOut ? comingIn - goingOut : 0n;
   return { comingIn, goingOut, leftAfter, missed };
 }
