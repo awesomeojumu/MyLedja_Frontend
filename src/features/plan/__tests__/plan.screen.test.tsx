@@ -102,6 +102,18 @@ describe('Plan page (DESIGN.md page 12)', () => {
     expect(screen.getByTestId('plan-match-sheet')).toBeTruthy();
   });
 
+  it('P12-09: month navigation', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <PlanScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(screen.getByTestId('plan-month-nav')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('plan-prev-month'));
+  });
+
   it('P12-08: add recurring sheet (#25)', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
