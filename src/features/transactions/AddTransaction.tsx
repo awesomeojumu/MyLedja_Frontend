@@ -9,6 +9,7 @@ import {
   DatePicker,
   Footer,
   InlineError,
+  Menu,
   PillTag,
   Select,
   Sheet,
@@ -25,6 +26,7 @@ import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
 import { addDays, lastUsedAccount, ledgerMessage, today } from './helpers';
+import { AddMovementDoorSheet, type MovementDoor } from './AddMovementDoors';
 
 const sp = tokens.spacing;
 
@@ -90,6 +92,7 @@ type Part = { categoryId: string | null; text: string; minor: bigint | null };
 function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind; prefill: Prefill; onKind: (k: AddKind) => void; onClose: () => void }) {
   const { repo, snapshot } = useWorkspace();
   const toast = useToast();
+  const [movementDoor, setMovementDoor] = useState<MovementDoor | null>(null);
   const accounts = useMemo(() => (snapshot?.accounts ?? []).filter((a) => !a.archived), [snapshot]);
   const [amount, setAmount] = useState<{ text: string; minor: bigint | null }>({ text: '', minor: null });
   const [payee, setPayee] = useState('');
@@ -184,7 +187,22 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
         }
       >
         <View style={{ gap: sp['spacing-lg'] }}>
-          <Tabs testID="add-kind" options={KINDS.map((k) => ({ value: k, label: t(`add.kind.${k}`) }))} value={kind} onChange={onKind} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
+          <View style={{ flex: 1, minWidth: 200 }}>
+            <Tabs testID="add-kind" options={KINDS.map((k) => ({ value: k, label: t(`add.kind.${k}`) }))} value={kind} onChange={onKind} />
+          </View>
+          <Menu
+            testID="add-more-menu"
+            trigger={(open) => <Button kind="secondary" size="sm" testID="add-more" label={t('add.more')} onPress={open} />}
+            items={[
+              { key: 'lend', label: t('add.door.lend'), onPress: () => setMovementDoor('lend') },
+              { key: 'payment', label: t('add.door.payment'), onPress: () => setMovementDoor('debtPayment') },
+              { key: 'allocate', label: t('add.door.allocate'), onPress: () => setMovementDoor('allocate') },
+              { key: 'spend', label: t('add.door.spend'), onPress: () => setMovementDoor('spend') },
+              { key: 'investment', label: t('add.door.investment'), onPress: () => setMovementDoor('investment') },
+            ]}
+          />
+        </View>
           {accounts.length === 0 ? <InlineError message={t('add.noAccounts')} /> : null}
           <AmountInput testID="add-amount" label={t('add.amount')} value={amount.text} onChange={(text, minor) => setAmount({ text, minor })} />
 
@@ -277,6 +295,7 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
           onClose();
         }}
       />
+      {movementDoor ? <AddMovementDoorSheet door={movementDoor} onClose={() => setMovementDoor(null)} /> : null}
     </>
   );
 }
