@@ -100,11 +100,12 @@ export type NotificationPrefs = {
   debts: boolean;
   income: boolean;
   security: boolean;
-  /** Days before a bill is due, e.g. 1, 3, 7 */
+  weeklySummary: boolean;
+  /** Days before a bill is due, e.g. 1, 3, 7 (DESIGN.md Page 26). */
   billReminderDays: number[];
   quietHoursStart?: string;
   quietHoursEnd?: string;
-  /** Default on: hide amounts on the lock screen (DESIGN.md 10.3). */
+  /** Default on: hide amounts on the lock screen (DESIGN.md Page 26 / 10.3). */
   hideAmountsOnLockScreen: boolean;
 };
 
@@ -115,7 +116,10 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   debts: true,
   income: true,
   security: true,
-  billReminderDays: [1, 3],
+  weeklySummary: true,
+  billReminderDays: [1, 3, 7],
+  quietHoursStart: '22:00',
+  quietHoursEnd: '07:00',
   hideAmountsOnLockScreen: true,
 };
 

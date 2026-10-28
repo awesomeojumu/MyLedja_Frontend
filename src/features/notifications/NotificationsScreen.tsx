@@ -36,7 +36,7 @@ export function NotificationsScreen() {
     <AppFrame title={t('notifications.title')}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'], alignItems: 'center' }}>
         <Button testID="notifications-mark-all" kind="secondary" label={t('notifications.markAllRead')} onPress={() => void repo.markAllNotificationsRead()} />
-        <Button testID="notifications-settings" kind="link" label={t('notifications.settingsLink')} onPress={() => router.push('/settings/general')} />
+        <Button testID="notifications-settings" kind="link" label={t('notifications.settingsLink')} onPress={() => router.push('/settings/notifications')} />
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp['spacing-xs'], marginBottom: sp['spacing-md'] }}>
         {FILTERS.map((f) => (
