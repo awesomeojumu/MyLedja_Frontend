@@ -166,6 +166,8 @@ export type IncomeStream = {
   categoryId: string;
   rule: RecurrenceRule;
   countInBudget: boolean;
+  /** For tax-class report (P13-08). */
+  taxClass?: string;
 };
 
 export type DebtDirection = 'owedToMe' | 'iOwe';
@@ -190,7 +192,30 @@ export type DebtEntry = {
   eventId: string;
   kind: 'lend' | 'borrow' | 'payment' | 'write_off';
   amountMinor: string;
+  interestMinor?: string;
   note?: string;
+};
+
+export type NotificationCategory = 'bills' | 'budget' | 'goals' | 'debts' | 'income' | 'security';
+
+export type NotificationAction = 'mark_paid' | 'remind_tomorrow' | 'record_payment' | 'open_plan' | 'open_debt';
+
+/** In-app notification (DESIGN.md page 27). */
+export type AppNotification = {
+  id: string;
+  createdAt: string;
+  title: string;
+  body?: string;
+  category: NotificationCategory;
+  read: boolean;
+  action?: NotificationAction;
+  recurringId?: string;
+  debtId?: string;
+  dueDate?: string;
+  amountMinor?: string;
+  /** Lock-screen safe: omit amount in push copy when true (default). */
+  hideAmount?: boolean;
+  snoozedUntil?: string;
 };
 
 export type StoredLine = { a: string; m: string; c: string };
@@ -215,6 +240,7 @@ export type StoredEvent = {
   debtId?: string;
   recurringId?: string;
   incomeStreamId?: string;
+  oneOff?: boolean;
 };
 
 export type EventMeta = {
@@ -227,6 +253,7 @@ export type EventMeta = {
   debtId?: string;
   recurringId?: string;
   incomeStreamId?: string;
+  oneOff?: boolean;
 };
 
 export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & EventMeta): StoredEvent {
@@ -247,6 +274,7 @@ export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & 
     debtId: e.debtId,
     recurringId: e.recurringId,
     incomeStreamId: e.incomeStreamId,
+    oneOff: e.oneOff,
   };
 }
 
@@ -272,6 +300,7 @@ export function fromStored(id: string, operationId: string, s: StoredEvent, reve
     debtId: s.debtId,
     recurringId: s.recurringId,
     incomeStreamId: s.incomeStreamId,
+    oneOff: s.oneOff,
   };
 }
 

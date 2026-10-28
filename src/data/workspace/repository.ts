@@ -21,6 +21,7 @@ import {
   reconcileDelta,
   shownBalance,
   systemAccounts,
+  monthOf,
   type ExpensePart,
   type LedgerAccount,
   type LedgerErrorCode,
@@ -43,10 +44,12 @@ import {
   type ImportMapping,
   type Goal,
   type GoalAllocation,
+  type AppNotification,
   type PersonDebt,
   type DebtEntry,
   type Recurring,
   type RecurringOccurrence,
+  type RecurrenceRule,
   type IncomeStream,
   type Payee,
   type Reconcile,
@@ -74,6 +77,7 @@ export type Snapshot = {
   incomeStreams: IncomeStream[];
   debts: PersonDebt[];
   debtEntries: DebtEntry[];
+  notifications: AppNotification[];
   /** Events made on this device that haven't synced yet. */
   waiting: Set<string>;
   chart: Chart;
@@ -82,6 +86,18 @@ export type Snapshot = {
 export type ImportRow = { date: string; amount: bigint; categoryId: string; payeeName?: string; notes?: string };
 
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: LedgerErrorCode };
+
+function workspaceToday(now = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
+
+function billDueInMonth(rule: RecurrenceRule, month: string): string | null {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  if (rule.every !== 'month') return null;
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const day = rule.on === 31 ? last : Math.min(rule.on, last);
+  return `${month}-${String(day).padStart(2, '0')}`;
+}
 
 export type TransactionInput =
   | { kind: 'expense'; accountId: string; parts: ExpensePart[]; date: string; payeeName?: string; notes?: string }
@@ -105,7 +121,7 @@ export class WorkspaceRepository {
   ) {}
 
   async load(): Promise<Snapshot> {
-    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows] =
+    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows] =
       await Promise.all([
       this.store.list('accounts'),
       this.store.list('categories'),
@@ -122,6 +138,7 @@ export class WorkspaceRepository {
       this.store.list('income_streams'),
       this.store.list('debts'),
       this.store.list('debt_entries'),
+      this.store.list('notifications'),
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
     const accountList = accounts.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id })).sort((a, b) => a.order - b.order);
@@ -171,6 +188,9 @@ export class WorkspaceRepository {
       incomeStreams: streamRows.map((r) => ({ ...(r.data as Omit<IncomeStream, 'id'>), id: r.id })),
       debts: debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id })),
       debtEntries: debtEntryRows.map((r) => ({ ...(r.data as Omit<DebtEntry, 'id'>), id: r.id })),
+      notifications: notificationRows
+        .map((r) => ({ ...(r.data as Omit<AppNotification, 'id'>), id: r.id }))
+        .filter((n) => !n.snoozedUntil || n.snoozedUntil <= workspaceToday()),
       waiting,
       chart: this.chartFor(accountList, categoryList, debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id }))),
     };
@@ -1023,11 +1043,12 @@ export class WorkspaceRepository {
       eventId: posted.value.id,
       kind: 'payment',
       amountMinor: principal.toString(),
+      interestMinor: input.interest ? input.interest.toString() : undefined,
     };
-    await this.put('debt_entries', entry.id, entry, 'debt.entry');
+    await this.put('debt_entries', entry.id, { debtId: entry.debtId, date: entry.date, eventId: entry.eventId, kind: entry.kind, amountMinor: entry.amountMinor, interestMinor: entry.interestMinor }, 'debt.entry');
     const after = await this.load();
     const left = this.debtBalance(debt, after, input.date);
-    if (left <= 0n) await this.put('debts', debtId, { ...debt, status: 'settled' }, 'debt.settle');
+    if (left <= 0n) await this.put('debts', debtId, { name: debt.name, direction: debt.direction, ledgerAccountId: debt.ledgerAccountId, payeeId: debt.payeeId, status: 'settled' }, 'debt.settle');
     return { ok: true, value: posted.value };
   }
 
@@ -1050,6 +1071,77 @@ export class WorkspaceRepository {
     if (!posted.ok) return posted;
     await this.put('debts', debtId, { ...debt, status: 'settled' }, 'debt.write_off');
     return { ok: true, value: posted.value };
+  }
+
+  async refreshBillNotifications(): Promise<void> {
+    const snapshot = await this.load();
+    const today = workspaceToday();
+    const month = monthOf(today);
+    const existing = new Map(snapshot.notifications.map((n) => [n.id, n]));
+    for (const bill of snapshot.recurring) {
+      if (bill.kind === 'income') continue;
+      const dueDate = billDueInMonth(bill.rule, month);
+      if (!dueDate || dueDate < bill.startDate) continue;
+      const occId = `${bill.id}:${dueDate}`;
+      const paid = snapshot.occurrences.some((o) => o.id === occId && o.status === 'paid');
+      if (paid) continue;
+      const id = `bill:${occId}`;
+      if (existing.has(id)) continue;
+      const overdue = dueDate < today;
+      const notification: AppNotification = {
+        id,
+        createdAt: new Date().toISOString(),
+        title: overdue ? t('notifications.billOverdue', { name: bill.name }) : t('notifications.billDue', { name: bill.name }),
+        category: 'bills',
+        read: false,
+        action: 'mark_paid',
+        recurringId: bill.id,
+        dueDate,
+        amountMinor: bill.amountMinor,
+        hideAmount: true,
+      };
+      const { id: nid, ...data } = notification;
+      await this.put('notifications', id, data, 'notification.create');
+    }
+  }
+
+  async markNotificationRead(id: string): Promise<void> {
+    const rec = await this.store.read('notifications', id);
+    if (!rec) return;
+    await this.put('notifications', id, { ...(rec.data as object), read: true }, 'notification.read', rec.version);
+  }
+
+  async markAllNotificationsRead(): Promise<void> {
+    const rows = await this.store.list('notifications');
+    for (const r of rows) {
+      if ((r.data as AppNotification).read) continue;
+      await this.put('notifications', r.id, { ...(r.data as object), read: true }, 'notification.read', r.version);
+    }
+  }
+
+  async snoozeNotification(id: string, until: string): Promise<void> {
+    const rec = await this.store.read('notifications', id);
+    if (!rec) return;
+    await this.put('notifications', id, { ...(rec.data as object), snoozedUntil: until, read: true }, 'notification.snooze', rec.version);
+  }
+
+  async updateIncomeStream(stream: IncomeStream): Promise<void> {
+    const { id, ...data } = stream;
+    await this.put('income_streams', id, data, 'income_stream.update');
+  }
+
+  async linkEventToStream(eventId: string, streamId: string): Promise<void> {
+    const rec = await this.store.read('events', eventId);
+    if (!rec) return;
+    const data = { ...(rec.data as StoredEvent), incomeStreamId: streamId, oneOff: undefined };
+    await this.engine.save({ ...rec, data }, 'event.link_stream', { collection: 'events', id: eventId, data }, rec.version);
+  }
+
+  async markIncomeOneOff(eventId: string): Promise<void> {
+    const rec = await this.store.read('events', eventId);
+    if (!rec) return;
+    const data = { ...(rec.data as StoredEvent), incomeStreamId: undefined, oneOff: true };
+    await this.engine.save({ ...rec, data }, 'event.one_off', { collection: 'events', id: eventId, data }, rec.version);
   }
 
   /** E19: expense linked to a goal; lowers earmarked savings without budget overspend messaging in UI. */
