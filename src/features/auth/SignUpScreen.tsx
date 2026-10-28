@@ -48,9 +48,9 @@ export function SignUpScreen() {
     if (Object.keys(next).length || !online) return;
     setBusy(true);
     try {
-      await api.signUp({ name: name.trim(), email: email.trim(), password, termsAccepted: true });
+      const sent = await api.signUp({ name: name.trim(), email: email.trim(), password, termsAccepted: true });
       setStep('code');
-      setResendIn(RESEND_SECONDS);
+      setResendIn(sent?.resendAfterSeconds ?? RESEND_SECONDS);
     } catch (e) {
       setErrors({ form: e instanceof ApiError ? e.body.message : t('errors.network') });
     } finally {
@@ -77,8 +77,8 @@ export function SignUpScreen() {
 
   const resend = async () => {
     try {
-      await api.resendCode({ email: email.trim() });
-      setResendIn(RESEND_SECONDS);
+      const sent = await api.resendCode({ email: email.trim(), purpose: 'sign_up' });
+      setResendIn(sent?.resendAfterSeconds ?? RESEND_SECONDS);
       toast.show(t('signUp.resent'));
     } catch {
       setCodeError(t('errors.network'));
