@@ -172,7 +172,11 @@ export class WorkspaceRepository {
       currency: raw?.currency ?? 'NGN',
       weekStart: raw?.weekStart ?? 'monday',
       checklistHidden: raw?.checklistHidden,
-      notificationPrefs: { ...DEFAULT_NOTIFICATION_PREFS, ...raw?.notificationPrefs },
+      notificationPrefs: {
+        ...DEFAULT_NOTIFICATION_PREFS,
+        ...raw?.notificationPrefs,
+        billReminderDays: raw?.notificationPrefs?.billReminderDays ?? DEFAULT_NOTIFICATION_PREFS.billReminderDays,
+      },
     };
     const assigns = new Map<string, bigint>();
     for (const r of assignRows) {

@@ -6,6 +6,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import {
   Button,
   Card,
+  Checkbox,
   SegmentedControl,
   Select,
   Switch,
@@ -315,14 +316,61 @@ function NotificationsTab() {
     toast.show(t('common.saved'));
   };
 
+  const toggleReminderDay = (day: number, on: boolean) => {
+    const set = new Set(prefs.billReminderDays);
+    if (on) set.add(day);
+    else set.delete(day);
+    void save({ ...prefs, billReminderDays: [...set].sort((a, b) => a - b) });
+  };
+
+  const reminderLabel = (days: number) =>
+    days === 1 ? t('settings.notifications.remindDaysBefore', { days: String(days) }) : t('settings.notifications.remindDaysBeforePlural', { days: String(days) });
+
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-notifications">
       <Text tone="textSecondary">{t('settings.notifications.intro')}</Text>
       <Switch testID="settings-notify-bills" label={t('settings.notifications.bills')} value={prefs.bills} onChange={(bills) => void save({ ...prefs, bills })} />
+      {prefs.bills ? (
+        <View style={{ gap: sp['spacing-sm'], paddingLeft: sp['spacing-sm'] }}>
+          <Text variant="heading-sm">{t('settings.notifications.billReminders')}</Text>
+          {[1, 3, 7].map((day) => (
+            <Checkbox
+              key={day}
+              testID={`settings-notify-bill-day-${day}`}
+              label={reminderLabel(day)}
+              checked={prefs.billReminderDays.includes(day)}
+              onChange={(checked) => toggleReminderDay(day, checked)}
+            />
+          ))}
+        </View>
+      ) : null}
       <Switch testID="settings-notify-budget" label={t('settings.notifications.budget')} value={prefs.budget} onChange={(budget) => void save({ ...prefs, budget })} />
       <Switch testID="settings-notify-goals" label={t('settings.notifications.goals')} value={prefs.goals} onChange={(goals) => void save({ ...prefs, goals })} />
       <Switch testID="settings-notify-debts" label={t('settings.notifications.debts')} value={prefs.debts} onChange={(debts) => void save({ ...prefs, debts })} />
       <Switch testID="settings-notify-income" label={t('settings.notifications.income')} value={prefs.income} onChange={(income) => void save({ ...prefs, income })} />
+      <Switch
+        testID="settings-notify-weekly"
+        label={t('settings.notifications.weeklySummary')}
+        value={prefs.weeklySummary}
+        onChange={(weeklySummary) => void save({ ...prefs, weeklySummary })}
+      />
+      <Text variant="heading-sm">{t('settings.notifications.quietHours')}</Text>
+      <View style={{ flexDirection: 'row', gap: sp['spacing-md'] }}>
+        <TextInput
+          testID="settings-notify-quiet-start"
+          label={t('settings.notifications.quietStart')}
+          value={prefs.quietHoursStart ?? ''}
+          onChangeText={(quietHoursStart) => void save({ ...prefs, quietHoursStart: quietHoursStart.trim() || undefined })}
+          placeholder="22:00"
+        />
+        <TextInput
+          testID="settings-notify-quiet-end"
+          label={t('settings.notifications.quietEnd')}
+          value={prefs.quietHoursEnd ?? ''}
+          onChangeText={(quietHoursEnd) => void save({ ...prefs, quietHoursEnd: quietHoursEnd.trim() || undefined })}
+          placeholder="07:00"
+        />
+      </View>
       <Switch
         testID="settings-notify-hide-amounts"
         label={t('settings.notifications.hideAmounts')}

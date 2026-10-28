@@ -100,9 +100,14 @@ describe('Settings (F1.10)', () => {
     );
     await fireEvent.press(screen.getByTestId('settings-tab-notifications'));
     expect(screen.getByTestId('settings-notifications')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('settings-notify-bill-day-7'));
     await fireEvent(screen.getByTestId('settings-notify-bills'), 'onChange', false);
+    await fireEvent.changeText(screen.getByTestId('settings-notify-quiet-start'), '21:30');
     await waitFor(async () => {
-      expect((await repo.load()).settings.notificationPrefs?.bills).toBe(false);
+      const prefs = (await repo.load()).settings.notificationPrefs;
+      expect(prefs?.bills).toBe(false);
+      expect(prefs?.billReminderDays).toEqual([1, 3]);
+      expect(prefs?.quietHoursStart).toBe('21:30');
     });
   });
 });
