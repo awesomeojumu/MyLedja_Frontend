@@ -1,4 +1,4 @@
-// npm run api:sync  copies ../MyLedja_Backend/openapi.json and regenerates src/api/types.ts.
+// npm run api:sync [-- --from <path>]  copies the backend's openapi.json (default ../MyLedja_Backend/openapi.json) and regenerates src/api/types.ts.
 // npm run api:check fails if src/api/types.ts wasn't generated from the committed src/api/openapi.json.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -8,7 +8,8 @@ import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const spec = resolve(root, 'src/api/openapi.json');
 const types = resolve(root, 'src/api/types.ts');
-const backendSpec = resolve(root, '../MyLedja_Backend/openapi.json');
+const fromIndex = process.argv.indexOf('--from');
+const backendSpec = fromIndex > -1 ? resolve(process.argv[fromIndex + 1]) : resolve(root, '../MyLedja_Backend/openapi.json');
 const check = process.argv.includes('--check');
 
 const hashOf = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -29,7 +30,7 @@ if (check) {
 }
 
 if (!existsSync(backendSpec)) {
-  console.error('api:sync: ../MyLedja_Backend/openapi.json not found.');
+  console.error(`api:sync: ${backendSpec} not found.`);
   process.exit(1);
 }
 copyFileSync(backendSpec, spec);

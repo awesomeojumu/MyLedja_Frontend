@@ -52,7 +52,8 @@ export function fetchTransport(baseUrl: string): Transport {
   };
 }
 
-export type Tokens = { accessToken: string; refreshToken?: string | null };
+/** From openapi.json: `refreshToken` is null when the browser holds it as an HttpOnly cookie. */
+export type Tokens = { accessToken: string; accessTokenExpiresIn?: number; refreshToken?: string | null };
 
 const RETRY_WAITS_MS = [500, 1500];
 
