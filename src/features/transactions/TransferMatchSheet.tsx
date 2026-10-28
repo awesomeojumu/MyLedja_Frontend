@@ -3,35 +3,18 @@ import { View } from 'react-native';
 
 import { Amount, Button, Select, Sheet, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
-import type { Snapshot, TxEvent } from '@/data/workspace/repository';
+import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 
-const sp = tokens.spacing;
+import { duplicateTransferPairs } from './transferMatch';
 
-function transferAmount(snapshot: Snapshot, e: TxEvent): bigint {
-  const accounts = new Set(snapshot.accounts.map((a) => a.id));
-  return e.lines.find((l) => accounts.has(l.ledgerAccountId) && l.amountMinor > 0n)?.amountMinor ?? 0n;
-}
+const sp = tokens.spacing;
 
 /** Popup #21 — pair duplicate transfer imports (DESIGN page 11). */
 export function TransferMatchSheet({ snapshot, onClose }: { snapshot: Snapshot; onClose: () => void }) {
   const { repo } = useWorkspace();
-  const candidates = useMemo(() => {
-    const transfers = snapshot.events.filter((e) => e.status === 'posted' && e.type === 'transfer');
-    const pairs: { a: TxEvent; b: TxEvent; amount: bigint }[] = [];
-    for (let i = 0; i < transfers.length; i += 1) {
-      for (let j = i + 1; j < transfers.length; j += 1) {
-        const a = transfers[i]!;
-        const b = transfers[j]!;
-        if (a.date !== b.date) continue;
-        const amtA = transferAmount(snapshot, a);
-        const amtB = transferAmount(snapshot, b);
-        if (amtA > 0n && amtA === amtB) pairs.push({ a, b, amount: amtA });
-      }
-    }
-    return pairs.slice(0, 20);
-  }, [snapshot]);
+  const candidates = useMemo(() => duplicateTransferPairs(snapshot).slice(0, 20), [snapshot]);
 
   const [selected, setSelected] = useState<string | null>(null);
   const pair = candidates.find((p) => `${p.a.id}:${p.b.id}` === selected);

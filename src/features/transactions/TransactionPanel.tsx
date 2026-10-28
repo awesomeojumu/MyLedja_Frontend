@@ -11,6 +11,9 @@ import { purchaseCost, refundedSoFar } from '@/ledger';
 import { formatNaira } from '@/money';
 
 import { ledgerMessage, today } from './helpers';
+import { duplicateInput } from './duplicate';
+import { connectedLines } from './panelConnected';
+import { RefundSheet } from './RefundSheet';
 
 const sp = tokens.spacing;
 
@@ -44,8 +47,7 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
   const theme = useTheme();
   const event = snapshot?.events.find((e) => e.id === id);
   const [editing, setEditing] = useState(false);
-  const [refunding, setRefunding] = useState(false);
-  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!snapshot || !event) return null;
@@ -65,6 +67,19 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
       </View>
     ) : null;
 
+  const connected = connectedLines(snapshot, event);
+  const splitParts = event.type === 'expense' && others.length > 1 ? others : [];
+
+  const duplicate = async () => {
+    const input = duplicateInput(snapshot, event);
+    if (!input) return setError(t('panel.duplicateUnsupported'));
+    const r = await repo.addTransaction(input);
+    if (!r.ok) setError(ledgerMessage(r.error));
+    else {
+      toast.show(t('panel.duplicated'));
+      onClose();
+    }
+  };
   const remove = async () => {
     const r = await repo.deleteTransaction(event.id, today());
     if (!r.ok) return setError(ledgerMessage(r.error));
@@ -119,14 +134,36 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
 
         <NotesField key={event.id} event={event} />
 
-        {event.notes?.startsWith('receipt:') || event.notes?.startsWith('http') ? (
-          <Button kind="link" testID="panel-receipt" label={t('panel.viewReceipt')} onPress={() => setReceiptOpen(true)} />
+        <ReceiptField event={event} />
+
+        {splitParts.length > 0 ? (
+          <View testID="panel-split" style={{ gap: sp['spacing-xs'] }}>
+            <Text variant="heading-sm">{t('panel.splitTitle')}</Text>
+            {splitParts.map((p) => (
+              <View key={p.ledgerAccountId} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text tone="textSecondary">{names.get(p.ledgerAccountId)}</Text>
+                <Amount minor={p.amountMinor} variant="caption" />
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {connected.length > 0 ? (
+          <View style={{ gap: sp['spacing-xs'] }} testID="panel-connected-links">
+            <Text variant="heading-sm">{t('panel.connected')}</Text>
+            {connected.map((line) => (
+              <Text key={line.key} tone="textSecondary">
+                {line.label}
+                {line.detail ? `: ${line.detail}` : ''}
+              </Text>
+            ))}
+          </View>
         ) : null}
 
         {event.type === 'expense' ? (
           <View style={{ gap: sp['spacing-sm'] }} testID="panel-connected">
             <Text variant="heading-sm" accessibilityRole="header">
-              {t('panel.connected')}
+              {t('panel.refundsTitle')}
             </Text>
             {refunds.map((r) => (
               <View key={r.id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -134,10 +171,8 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
                 <Amount minor={amountOf(snapshot, r)} signed />
               </View>
             ))}
-            {refunding ? (
-              <RefundForm event={event} left={left} onDone={() => setRefunding(false)} />
-            ) : left > 0n && event.status === 'posted' ? (
-              <Button kind="link" testID="panel-add-refund" label={t('panel.addRefund')} onPress={() => setRefunding(true)} />
+            {left > 0n && event.status === 'posted' ? (
+              <Button kind="link" testID="panel-add-refund" label={t('panel.addRefund')} onPress={() => setRefundOpen(true)} />
             ) : null}
           </View>
         ) : null}
@@ -165,21 +200,54 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         </View>
 
         {error ? <InlineError testID="panel-error" message={error} /> : null}
-        {event.status === 'posted' && !event.reconciledBy ? (
-          <Button kind="secondary" testID="panel-delete" label={t('tx.delete')} onPress={() => void remove()} />
-        ) : null}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
+          <Button kind="secondary" testID="panel-duplicate" label={t('panel.duplicate')} onPress={() => void duplicate()} />
+          {event.status === 'posted' && !event.reconciledBy ? (
+            <Button kind="secondary" testID="panel-delete" label={t('tx.delete')} onPress={() => void remove()} />
+          ) : null}
+        </View>
       </View>
-      <Sheet visible={receiptOpen} title={t('panel.receiptTitle')} onClose={() => setReceiptOpen(false)} testID="panel-receipt-sheet">
-        <Text>{event.notes?.replace(/^receipt:/, '') ?? t('panel.receiptEmpty')}</Text>
-      </Sheet>
+      {refundOpen ? (
+        <RefundSheet event={event} purchaseAmount={amount} left={left} onClose={() => setRefundOpen(false)} />
+      ) : null}
     </Panel>
+  );
+}
+
+function ReceiptField({ event }: { event: TxEvent }) {
+  const { repo } = useWorkspace();
+  const toast = useToast();
+  const raw = event.notes?.startsWith('receipt:') ? event.notes.slice(8) : '';
+  const [link, setLink] = useState(raw);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  return (
+    <>
+      <TextInput
+        testID="panel-receipt-link"
+        label={t('panel.receiptLink')}
+        value={link}
+        onChangeText={setLink}
+        onBlur={() => {
+          const trimmed = link.trim();
+          const next = trimmed ? `receipt:${trimmed}` : (event.notes?.replace(/^receipt:[^\n]*/, '').trim() ?? '');
+          if ((event.notes ?? '') === next) return;
+          void repo.updateNotes(event.id, next).then(() => toast.show(t('common.saved')));
+        }}
+      />
+      {(event.notes?.startsWith('receipt:') || event.notes?.startsWith('http')) && link ? (
+        <Button kind="link" testID="panel-receipt" label={t('panel.viewReceipt')} onPress={() => setReceiptOpen(true)} />
+      ) : null}
+      <Sheet visible={receiptOpen} title={t('panel.receiptTitle')} onClose={() => setReceiptOpen(false)}>
+        <Text>{link || t('panel.receiptEmpty')}</Text>
+      </Sheet>
+    </>
   );
 }
 
 function NotesField({ event }: { event: TxEvent }) {
   const { repo } = useWorkspace();
   const toast = useToast();
-  const [notes, setNotes] = useState(event.notes ?? '');
+  const [notes, setNotes] = useState((event.notes ?? '').replace(/^receipt:[^\n]*\n?/, ''));
   return (
     <TextInput
       testID="panel-notes"
@@ -187,8 +255,11 @@ function NotesField({ event }: { event: TxEvent }) {
       value={notes}
       onChangeText={setNotes}
       onBlur={() => {
-        if ((event.notes ?? '') === notes.trim()) return;
-        void repo.updateNotes(event.id, notes).then(() => toast.show(t('common.saved')));
+        const trimmed = notes.trim();
+        const receiptPart = event.notes?.match(/^receipt:[^\n]*/)?.[0];
+        const combined = [receiptPart, trimmed].filter(Boolean).join('\n');
+        if ((event.notes ?? '') === combined) return;
+        void repo.updateNotes(event.id, combined).then(() => toast.show(t('common.saved')));
       }}
     />
   );
@@ -278,53 +349,6 @@ function EditForm({
       <View style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
         <Button kind="secondary" label={t('common.cancel')} onPress={onDone} />
         <Button testID="panel-save" label={t('panel.save')} disabled={minor === null || minor <= 0n} onPress={() => void save()} />
-      </View>
-    </View>
-  );
-}
-
-function RefundForm({ event, left, onDone }: { event: TxEvent; left: bigint; onDone: () => void }) {
-  const { repo, snapshot } = useWorkspace();
-  const toast = useToast();
-  const accountIds = new Set((snapshot?.accounts ?? []).map((a) => a.id));
-  const [text, setText] = useState('');
-  const [minor, setMinor] = useState<bigint | null>(null);
-  const [accountId, setAccountId] = useState<string | null>(event.lines.find((l) => accountIds.has(l.ledgerAccountId))?.ledgerAccountId ?? null);
-  const [date, setDate] = useState(today());
-  const [error, setError] = useState<string | null>(null);
-  const too = minor !== null && minor > left;
-
-  const save = async () => {
-    if (minor === null || !accountId) return;
-    const r = await repo.addRefund(event.id, { accountId, amount: minor, date });
-    if (!r.ok) return setError(r.error === 'refund_too_large' ? t('ledger.error.refund_too_large', { amount: formatNaira(left) }) : ledgerMessage(r.error));
-    toast.show(t('panel.refundSaved'));
-    onDone();
-  };
-
-  return (
-    <View style={{ gap: sp['spacing-sm'] }} testID="refund-form">
-      <AmountInput
-        testID="refund-amount"
-        label={t('panel.refundAmount')}
-        value={text}
-        onChange={(v, m) => {
-          setText(v);
-          setMinor(m);
-        }}
-      />
-      {too ? <InlineError testID="refund-error" message={t('ledger.error.refund_too_large', { amount: formatNaira(left) })} /> : null}
-      <Select
-        label={t('panel.refundInto')}
-        options={(snapshot?.accounts ?? []).filter((a) => !a.archived).map((a) => ({ value: a.id, label: a.name }))}
-        value={accountId}
-        onChange={setAccountId}
-      />
-      <DatePicker label={t('add.date')} value={date} onChange={setDate} />
-      {error ? <InlineError message={error} /> : null}
-      <View style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
-        <Button kind="secondary" label={t('common.cancel')} onPress={onDone} />
-        <Button testID="refund-save" label={t('panel.saveRefund')} disabled={minor === null || minor <= 0n || too} onPress={() => void save()} />
       </View>
     </View>
   );
