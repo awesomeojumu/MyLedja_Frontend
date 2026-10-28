@@ -149,7 +149,13 @@ describe('Transactions', () => {
     const s = await repo.load();
     const gt = s.accounts[0]!.id;
     const market = s.categories.find((c) => c.name === 'Market')!.id;
-    await repo.addTransaction({ kind: 'expense', accountId: gt, parts: [{ categoryId: market, amount: 1_845_000n }], date: '2026-10-28', payeeName: 'Shoprite Lekki' });
+    await repo.addTransaction({
+      kind: 'expense',
+      accountId: gt,
+      parts: [{ categoryId: market, amount: 1_845_000n }],
+      date: '2026-10-28',
+      payeeName: 'Shoprite Lekki',
+    });
     await repo.addTransaction({ kind: 'expense', accountId: gt, parts: [{ categoryId: market, amount: 850_000n }], date: '2026-10-27', payeeName: 'Bolt' });
     await show(<TransactionsScreen />, sync);
     expect(await screen.findByTestId('day-2026-10-28')).toBeTruthy();

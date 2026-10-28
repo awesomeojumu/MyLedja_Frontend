@@ -73,7 +73,14 @@ export function AddTransactionProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={api}>
       {children}
-      {kind ? <AddTransactionSheet kind={kind} prefill={{ accountId: params.account, date: params.date }} onKind={(k) => open(k, { accountId: params.account, date: params.date })} onClose={close} /> : null}
+      {kind ? (
+        <AddTransactionSheet
+          kind={kind}
+          prefill={{ accountId: params.account, date: params.date }}
+          onKind={(k) => open(k, { accountId: params.account, date: params.date })}
+          onClose={close}
+        />
+      ) : null}
     </Ctx.Provider>
   );
 }

@@ -58,9 +58,11 @@ export type StoredEvent = {
   splitTotal?: string;
   payeeId?: string;
   notes?: string;
+  /** Set on the new event of a correction (TECH-SPEC 6.3), so history shows both versions. */
+  correctionOf?: string;
 };
 
-export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & { payeeId?: string }): StoredEvent {
+export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & { payeeId?: string; correctionOf?: string }): StoredEvent {
   return {
     type: e.type,
     date: e.date,
@@ -70,10 +72,11 @@ export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & 
     splitTotal: e.splitTotal?.toString(),
     payeeId: e.payeeId,
     notes: e.notes,
+    correctionOf: e.correctionOf,
   };
 }
 
-export function fromStored(id: string, operationId: string, s: StoredEvent, reversed: boolean): MoneyEvent & { payeeId?: string } {
+export function fromStored(id: string, operationId: string, s: StoredEvent, reversed: boolean): MoneyEvent & { payeeId?: string; correctionOf?: string } {
   const lines: Line[] = s.lines.map((l) => ({ ledgerAccountId: l.a, amountMinor: BigInt(l.m), currency: l.c }));
   return {
     id,
@@ -87,6 +90,7 @@ export function fromStored(id: string, operationId: string, s: StoredEvent, reve
     splitTotal: s.splitTotal === undefined ? undefined : BigInt(s.splitTotal),
     payeeId: s.payeeId,
     notes: s.notes,
+    correctionOf: s.correctionOf,
   };
 }
 

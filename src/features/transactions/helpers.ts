@@ -42,10 +42,7 @@ export type Row = {
 
 /** One row per transaction for lists (P11). Reversals and the events they undid are left out. */
 export function rowsFor(snapshot: Snapshot): Row[] {
-  const names = new Map<string, string>([
-    ...snapshot.accounts.map((a) => [a.id, a.name] as const),
-    ...snapshot.categories.map((c) => [c.id, c.name] as const),
-  ]);
+  const names = new Map<string, string>([...snapshot.accounts.map((a) => [a.id, a.name] as const), ...snapshot.categories.map((c) => [c.id, c.name] as const)]);
   const accountIds = new Set(snapshot.accounts.map((a) => a.id));
   const payees = new Map(snapshot.payees.map((p) => [p.id, p.name]));
   const rows: Row[] = [];
@@ -68,11 +65,7 @@ export function rowsFor(snapshot: Snapshot): Row[] {
     }
     const amount = money.reduce((s, l) => s + l.amountMinor, 0n);
     const category =
-      event.type === 'opening_balance'
-        ? t('tx.openingBalance')
-        : other.length > 1
-          ? t('tx.split')
-          : (names.get(other[0]?.ledgerAccountId ?? '') ?? '');
+      event.type === 'opening_balance' ? t('tx.openingBalance') : other.length > 1 ? t('tx.split') : (names.get(other[0]?.ledgerAccountId ?? '') ?? '');
     rows.push({
       event,
       amount,

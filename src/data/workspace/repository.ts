@@ -6,6 +6,7 @@ import {
   buildExpense,
   buildIncome,
   buildOpeningBalance,
+  buildRefund,
   buildReversal,
   buildTransfer,
   Chart,
@@ -33,7 +34,7 @@ import {
   type StoredEvent,
 } from './model';
 
-export type TxEvent = MoneyEvent & { payeeId?: string };
+export type TxEvent = MoneyEvent & { payeeId?: string; correctionOf?: string };
 
 export type Snapshot = {
   workspaceId: string;
@@ -187,6 +188,68 @@ export class WorkspaceRepository {
     return this.postEvent(snapshot.chart, snapshot.events, { type, date, lines, splitTotal, payeeId, notes, refundOf });
   }
 
+  /** Changing amount, date, account or category: a reversal and the corrected event (TECH-SPEC 6.3, case 21). */
+  async correctTransaction(id: string, input: TransactionInput): Promise<Result<TxEvent>> {
+    const snapshot = await this.load();
+    const original = snapshot.events.find((e) => e.id === id);
+    if (!original) return { ok: false, error: 'missing_lines' };
+    if (original.status === 'reversed') return { ok: false, error: 'already_reversed' };
+    const lines = this.linesFor(snapshot.chart, input);
+    if (!lines.ok) return lines;
+    const replacementId = this.newId();
+    const replacement: TxEvent = {
+      id: replacementId,
+      operationId: replacementId,
+      status: 'posted',
+      type: input.kind,
+      date: input.date,
+      lines: lines.value.lines,
+      splitTotal: lines.value.splitTotal,
+      payeeId: original.payeeId,
+      notes: input.notes?.trim() || original.notes,
+      correctionOf: id,
+    };
+    const existing = new Map(snapshot.events.map((e) => [e.id, e]));
+    const checked = checkEvent(snapshot.chart, replacement, existing);
+    if (!checked.ok) return checked;
+    const reversal = await this.postEvent(snapshot.chart, snapshot.events, { type: 'reversal', date: input.date, lines: buildReversal(original), reversalOf: id });
+    if (!reversal.ok) return reversal;
+    const { id: _id, operationId: _op, status: _status, ...rest } = replacement;
+    await this.put('events', replacementId, { ...toStored(rest), operationId: replacementId }, `event.${input.kind}`);
+    return { ok: true, value: replacement };
+  }
+
+  /** E11: never more than what's left of the purchase (case 14). */
+  async addRefund(originalId: string, input: { accountId: string; amount: bigint; date: string }): Promise<Result<TxEvent>> {
+    const snapshot = await this.load();
+    const original = snapshot.events.find((e) => e.id === originalId);
+    if (!original) return { ok: false, error: 'missing_lines' };
+    const lines = buildRefund(snapshot.chart, { accountId: input.accountId, original, amount: input.amount });
+    if (!lines.ok) return lines;
+    return this.postEvent(snapshot.chart, snapshot.events, { type: 'refund', date: input.date, lines: lines.value, refundOf: originalId, payeeId: original.payeeId });
+  }
+
+  /** Notes and payee may change in place; they don't affect any figure (TECH-SPEC 6.3). */
+  async updateNotes(id: string, notes: string): Promise<void> {
+    const rec = await this.store.read('events', id);
+    if (!rec) return;
+    const data = { ...(rec.data as StoredEvent), notes: notes.trim() || undefined };
+    await this.engine.save({ ...rec, data }, 'event.notes', { collection: 'events', id, data }, rec.version);
+  }
+
+  private linesFor(chart: Chart, input: TransactionInput): Result<{ lines: Line[]; splitTotal?: bigint }> {
+    if (input.kind === 'expense') {
+      const r = buildExpense(chart, { accountId: input.accountId, parts: input.parts });
+      if (!r.ok) return r;
+      return { ok: true, value: { lines: r.value, splitTotal: input.parts.length > 1 ? input.parts.reduce((s, p) => s + p.amount, 0n) : undefined } };
+    }
+    const r =
+      input.kind === 'income'
+        ? buildIncome(chart, { accountId: input.accountId, categoryId: input.categoryId, amount: input.amount })
+        : buildTransfer(chart, { fromId: input.fromId, toId: input.toId, amount: input.amount });
+    return r.ok ? { ok: true, value: { lines: r.value } } : r;
+  }
+
   private async payeeFor(payees: Payee[], name: string, categoryId?: string): Promise<string> {
     const existing = payees.find((p) => p.name.toLowerCase() === name.toLowerCase());
     if (existing) return existing.id;
@@ -198,7 +261,7 @@ export class WorkspaceRepository {
   private async postEvent(
     chart: Chart,
     events: TxEvent[],
-    input: Omit<MoneyEvent, 'id' | 'operationId' | 'status' | 'lines'> & { lines: Line[]; payeeId?: string },
+    input: Omit<MoneyEvent, 'id' | 'operationId' | 'status' | 'lines'> & { lines: Line[]; payeeId?: string; correctionOf?: string },
   ): Promise<Result<TxEvent>> {
     const id = this.newId();
     const event: TxEvent = { ...input, id, operationId: id, status: 'posted' };
