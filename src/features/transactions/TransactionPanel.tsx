@@ -98,7 +98,19 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
           {field(t('panel.status'), t(event.status === 'reversed' ? 'panel.status.reversed' : 'panel.status.posted'))}
         </View>
 
-        {event.status === 'posted' && (event.type === 'expense' || event.type === 'income' || event.type === 'transfer') ? (
+        {event.reconciledBy ? (
+          <View style={{ gap: sp['spacing-sm'] }} testID="panel-locked">
+            <PillTag label={t('panel.locked')} />
+            <Button
+              kind="secondary"
+              testID="panel-unlock"
+              label={t('panel.unlock')}
+              onPress={() => void repo.unlockEvent(event.id).then(() => toast.show(t('panel.unlockDone')))}
+            />
+          </View>
+        ) : null}
+
+        {event.status === 'posted' && !event.reconciledBy && (event.type === 'expense' || event.type === 'income' || event.type === 'transfer') ? (
           editing ? (
             <EditForm
               snapshot={snapshot}
@@ -161,7 +173,9 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         </View>
 
         {error ? <InlineError testID="panel-error" message={error} /> : null}
-        {event.status === 'posted' ? <Button kind="secondary" testID="panel-delete" label={t('tx.delete')} onPress={() => void remove()} /> : null}
+        {event.status === 'posted' && !event.reconciledBy ? (
+          <Button kind="secondary" testID="panel-delete" label={t('tx.delete')} onPress={() => void remove()} />
+        ) : null}
       </View>
     </Panel>
   );
