@@ -22,3 +22,4 @@ export {
 export { LogomarkLoader, SegmentedControl, Switch, Tabs, type Option } from './controls';
 export { DatePicker, formatDay, Menu, Panel, Popover, Select, type MenuItem } from './overlays';
 export { GradientBand, GradientMesh } from './GradientMesh';
+export { BarChart, LineChart, DonutChart, ProgressRing, DONUT_COLOURS, type Point } from './charts';
