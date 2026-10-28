@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeftRight, CalendarClock, CircleDollarSign, Eye, EyeOff, HandCoins, LayoutDashboard, Menu, PieChart, Plus, Settings, Target, Users, Wallet } from 'lucide-react-native';
+import { ArrowLeftRight, Bell, CalendarClock, CircleDollarSign, Eye, EyeOff, HandCoins, LayoutDashboard, Menu, PieChart, Plus, Settings, Target, Users, Wallet } from 'lucide-react-native';
 import { Banner, Button, StatusPill, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
@@ -10,7 +10,9 @@ import { useDesign, useTheme } from '@/design/ThemeProvider';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { useSyncStatus } from '@/data/sync/SyncProvider';
+import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { NotificationsBell } from '@/features/notifications/NotificationsBell';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
 import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, type NavItem } from './navigation';
 
@@ -27,6 +29,7 @@ const ICONS = {
   plan: CalendarClock,
   income: CircleDollarSign,
   debts: HandCoins,
+  notifications: Bell,
 };
 const onSidebarMuted = `${c['on-primary']}B3`;
 const onSidebarSection = `${c['on-primary']}99`;
@@ -317,6 +320,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
   const size = useSizeClass();
   const theme = useTheme();
   const online = useOnline();
+  const { snapshot } = useWorkspace();
   const [drawer, setDrawer] = useState(false);
   const phone = size === 'phone';
   const navWidth = size === 'tablet' ? tokens.frame.rail : tokens.frame.sidebar;
@@ -393,6 +397,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
         <Text variant="heading-lg" accessibilityRole="header" style={{ flex: 1, textAlign: 'center' }}>
           {title}
         </Text>
+        <NotificationsBell items={snapshot?.notifications ?? []} />
         <PrivacyToggle color={theme.textSecondary} />
       </View>
       {content}

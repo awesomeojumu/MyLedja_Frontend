@@ -6,7 +6,7 @@ export type NavItem = {
   label: TextKey;
   phoneLabel?: TextKey;
   href: Href;
-  icon: 'dashboard' | 'accounts' | 'transactions' | 'budget' | 'payees' | 'settings' | 'goals' | 'plan' | 'income' | 'debts';
+  icon: 'dashboard' | 'accounts' | 'transactions' | 'budget' | 'payees' | 'settings' | 'goals' | 'plan' | 'income' | 'debts' | 'notifications';
 };
 
 /**
@@ -22,6 +22,7 @@ export const SHIPPED_PAGES: NavItem[] = [
 
 /** Manage section in the drawer (DESIGN.md 3.2); not in the phone bottom bar. */
 export const MANAGE_PAGES: NavItem[] = [
+  { key: 'notifications', label: 'nav.notifications', href: '/notifications', icon: 'notifications' },
   { key: 'payees', label: 'nav.payees', href: '/payees', icon: 'payees' },
   { key: 'settings', label: 'nav.settings', href: '/settings', icon: 'settings' },
 ];

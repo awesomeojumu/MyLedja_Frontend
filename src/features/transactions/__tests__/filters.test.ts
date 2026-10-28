@@ -43,6 +43,7 @@ function snapshotStub(): Snapshot {
     incomeStreams: [],
     debts: [],
     debtEntries: [],
+    notifications: [],
     waiting: new Set(),
     chart: {} as Snapshot['chart'],
   };
