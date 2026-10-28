@@ -66,7 +66,7 @@ export function DebtScheduleSheet({
         }}
       />
       <Select testID="debts-schedule-every" label={t('debts.scheduleEvery')} options={everyOptions} value={every} onChange={setEvery} />
-      <TextInput testID="debt-schedule-first" label={t('debts.scheduleFirstDue')} value={firstDue} onChangeText={setFirstDue} placeholder="YYYY-MM-DD" />
+      <TextInput testID="debt-schedule-first" label={t('debts.scheduleFirstDue')} value={firstDue} onChangeText={setFirstDue} placeholder={t('common.datePlaceholder')} />
       {preview.length > 0 ? (
         <View testID="debt-schedule-preview" style={{ gap: sp['spacing-xs'], marginTop: sp['spacing-sm'] }}>
           <Text variant="heading-sm">{t('debts.schedulePreview')}</Text>

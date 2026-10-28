@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react-native';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
@@ -9,6 +9,7 @@ import {
   Card,
   Checkbox,
   EmptyState,
+  Icon,
   InlineError,
   Placeholder,
   Popover,
@@ -458,12 +459,16 @@ function AllSchedulesTable({
   return (
     <View testID="plan-all-schedules" style={{ gap: sp['spacing-md'] }}>
       <TextInput testID="plan-schedules-search" label={t('plan.schedulesSearch')} value={search} onChangeText={onSearch} />
-      <Button
+      <Pressable
         testID="plan-show-cancelled"
-        kind="link"
-        label={showCancelled ? `▾ ${t('plan.showCancelled')}` : `▸ ${t('plan.showCancelled')}`}
+        accessibilityRole="button"
+        accessibilityLabel={t('plan.showCancelled')}
         onPress={onToggleCancelled}
-      />
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44 }}
+      >
+        <Icon icon={showCancelled ? ChevronDown : ChevronRight} size="row" />
+        <Text tone="link">{t('plan.showCancelled')}</Text>
+      </Pressable>
       {rows.length === 0 ? (
         <Text tone="textSecondary">{t('plan.schedulesEmpty')}</Text>
       ) : (
@@ -496,8 +501,8 @@ function AllSchedulesTable({
               </Text>
             </View>
             {rows.map((row) => {
-              const payee = row.recurring.payeeId ? snapshot?.payees.find((p) => p.id === row.recurring.payeeId)?.name : '—';
-              const account = snapshot?.accounts.find((a) => a.id === row.recurring.accountId)?.name ?? '—';
+              const payee = row.recurring.payeeId ? snapshot?.payees.find((p) => p.id === row.recurring.payeeId)?.name : t('common.notSet');
+              const account = snapshot?.accounts.find((a) => a.id === row.recurring.accountId)?.name ?? t('common.notSet');
               return (
                 <Card key={row.recurring.id} testID={`plan-schedule-${row.recurring.id}`} style={{ flexDirection: 'row', gap: sp['spacing-sm'], alignItems: 'center' }}>
                   <Text style={{ flex: 2 }}>{row.recurring.name}</Text>
@@ -508,7 +513,7 @@ function AllSchedulesTable({
                     {account}
                   </Text>
                   <Text variant="caption" style={{ width: 100 }}>
-                    {row.nextDate ? formatDay(row.nextDate) : '—'}
+                    {row.nextDate ? formatDay(row.nextDate) : t('common.notSet')}
                   </Text>
                   <Text variant="caption" style={{ width: 88 }}>
                     {t(`plan.scheduleStatus.${row.status}`)}
@@ -519,7 +524,15 @@ function AllSchedulesTable({
                   <Text variant="caption" tone="textSecondary" style={{ width: 120 }}>
                     {scheduleFrequency(row.recurring)}
                   </Text>
-                  <Button testID={`plan-schedule-menu-${row.recurring.id}`} kind="link" label="⋯" onPress={() => onOpenMenu(row.recurring)} />
+                  <Pressable
+                    testID={`plan-schedule-menu-${row.recurring.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.options')}
+                    onPress={() => onOpenMenu(row.recurring)}
+                    style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Icon icon={MoreHorizontal} size="nav" />
+                  </Pressable>
                 </Card>
               );
             })}

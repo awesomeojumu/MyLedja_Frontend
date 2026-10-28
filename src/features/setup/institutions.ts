@@ -1,29 +1,27 @@
-/** Nigerian banks and wallets for Welcome step 3 (DESIGN.md page 4). Logos via API later (Q-8); monogram badges until then. */
+/** Nigerian banks and wallets for Welcome step 3 (DESIGN.md page 4). Logos via API later (Q-8); navy monogram tiles until then. */
 export type Institution = {
   id: string;
   label: string;
   keywords: string[];
-  /** Badge background (brand-adjacent; not official marks). */
-  color: string;
   initials: string;
 };
 
 export const NG_INSTITUTIONS: Institution[] = [
-  { id: 'gtbank', label: 'GTBank', keywords: ['gtb', 'gt bank', 'guaranty trust'], color: '#E35205', initials: 'GT' },
-  { id: 'access', label: 'Access Bank', keywords: ['access', 'diamond'], color: '#FF8200', initials: 'AB' },
-  { id: 'zenith', label: 'Zenith Bank', keywords: ['zenith'], color: '#E2231A', initials: 'ZB' },
-  { id: 'firstbank', label: 'First Bank', keywords: ['first bank', 'fbn', 'firstbank'], color: '#002776', initials: 'FB' },
-  { id: 'uba', label: 'UBA', keywords: ['uba', 'united bank'], color: '#D71920', initials: 'UB' },
-  { id: 'fcmb', label: 'FCMB', keywords: ['fcmb'], color: '#5C068C', initials: 'FC' },
-  { id: 'stanbic', label: 'Stanbic IBTC', keywords: ['stanbic', 'ibtc'], color: '#0033A0', initials: 'SI' },
-  { id: 'fidelity', label: 'Fidelity Bank', keywords: ['fidelity'], color: '#081A4A', initials: 'FB' },
-  { id: 'union', label: 'Union Bank', keywords: ['union bank', 'unionbank'], color: '#2A2A72', initials: 'UB' },
-  { id: 'polaris', label: 'Polaris Bank', keywords: ['polaris', 'skye'], color: '#582C83', initials: 'PB' },
-  { id: 'kuda', label: 'Kuda', keywords: ['kuda'], color: '#40196D', initials: 'KD' },
-  { id: 'opay', label: 'OPay', keywords: ['opay', 'o pay'], color: '#1DCF9F', initials: 'OP' },
-  { id: 'palmpay', label: 'PalmPay', keywords: ['palmpay', 'palm pay'], color: '#6A35FF', initials: 'PP' },
-  { id: 'moniepoint', label: 'Moniepoint', keywords: ['moniepoint', 'monie point'], color: '#035FE3', initials: 'MP' },
-  { id: 'paystack', label: 'Paystack Titan', keywords: ['paystack'], color: '#3BB75E', initials: 'PS' },
+  { id: 'gtbank', label: 'GTBank', keywords: ['gtb', 'gt bank', 'guaranty trust'], initials: 'GT' },
+  { id: 'access', label: 'Access Bank', keywords: ['access', 'diamond'], initials: 'AB' },
+  { id: 'zenith', label: 'Zenith Bank', keywords: ['zenith'], initials: 'ZB' },
+  { id: 'firstbank', label: 'First Bank', keywords: ['first bank', 'fbn', 'firstbank'], initials: 'FB' },
+  { id: 'uba', label: 'UBA', keywords: ['uba', 'united bank'], initials: 'UB' },
+  { id: 'fcmb', label: 'FCMB', keywords: ['fcmb'], initials: 'FC' },
+  { id: 'stanbic', label: 'Stanbic IBTC', keywords: ['stanbic', 'ibtc'], initials: 'SI' },
+  { id: 'fidelity', label: 'Fidelity Bank', keywords: ['fidelity'], initials: 'FB' },
+  { id: 'union', label: 'Union Bank', keywords: ['union bank', 'unionbank'], initials: 'UB' },
+  { id: 'polaris', label: 'Polaris Bank', keywords: ['polaris', 'skye'], initials: 'PB' },
+  { id: 'kuda', label: 'Kuda', keywords: ['kuda'], initials: 'KD' },
+  { id: 'opay', label: 'OPay', keywords: ['opay', 'o pay'], initials: 'OP' },
+  { id: 'palmpay', label: 'PalmPay', keywords: ['palmpay', 'palm pay'], initials: 'PP' },
+  { id: 'moniepoint', label: 'Moniepoint', keywords: ['moniepoint', 'monie point'], initials: 'MP' },
+  { id: 'paystack', label: 'Paystack Titan', keywords: ['paystack'], initials: 'PS' },
 ];
 
 function normalize(input: string): string {

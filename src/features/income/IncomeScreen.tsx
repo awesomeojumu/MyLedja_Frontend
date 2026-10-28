@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import { ChevronLeft, ChevronRight, Circle, CircleDashed, CircleDot, MoreHorizontal } from 'lucide-react-native';
 
-import { Amount, Button, Card, EmptyState, InlineError, Placeholder, Select, Sheet, Text } from '@/design/components';
+import { Amount, Button, Card, EmptyState, Icon, InlineError, Placeholder, Select, Sheet, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { IncomeStream } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
@@ -61,9 +62,25 @@ export function IncomeScreen() {
     <AppFrame title={t('income.title')}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: sp['spacing-md'], gap: sp['spacing-sm'] }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-xs'] }}>
-          <Button testID="income-month-prev" kind="secondary" size="sm" label="‹" onPress={() => setMonth((m) => prevMonth(m))} />
+          <Pressable
+            testID="income-month-prev"
+            accessibilityRole="button"
+            accessibilityLabel={t('common.previous')}
+            onPress={() => setMonth((m) => prevMonth(m))}
+            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon icon={ChevronLeft} size="tile" />
+          </Pressable>
           <Text variant="heading-sm">{monthLabel}</Text>
-          <Button testID="income-month-next" kind="secondary" size="sm" label="›" onPress={() => setMonth((m) => nextMonth(m))} />
+          <Pressable
+            testID="income-month-next"
+            accessibilityRole="button"
+            accessibilityLabel={t('common.next')}
+            onPress={() => setMonth((m) => nextMonth(m))}
+            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon icon={ChevronRight} size="tile" />
+          </Pressable>
         </View>
         <Button testID="income-add" label={t('income.addStream')} onPress={() => setAddOpen(true)} />
       </View>
@@ -75,7 +92,7 @@ export function IncomeScreen() {
           <SummaryTile label={t('income.stillToCome')} minor={summary.expected > summary.received ? summary.expected - summary.received : 0n} />
           <SummaryTile
             label={t('income.steadinessLabel')}
-            text={summary.steadiness !== null ? t('income.steadinessShort', { percent: summary.steadiness }) : '—'}
+            text={summary.steadiness !== null ? t('income.steadinessShort', { percent: summary.steadiness }) : t('common.notSet')}
           />
         </View>
       ) : null}
@@ -289,8 +306,14 @@ function StreamCard({
             {stream.taxClass ? ` · ${stream.taxClass}` : ''}
           </Text>
         </View>
-        <Pressable testID={`income-edit-${stream.id}`} accessibilityRole="button" accessibilityLabel={t('income.editStream')} onPress={onEdit}>
-          <Text variant="caption">⋯</Text>
+        <Pressable
+          testID={`income-edit-${stream.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={t('income.editStream')}
+          onPress={onEdit}
+          style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Icon icon={MoreHorizontal} size="nav" color={theme.textSecondary} />
         </Pressable>
       </View>
       {!stream.countInBudget ? (
@@ -316,12 +339,15 @@ function StreamCard({
           → {route}
         </Text>
       ) : null}
-      <View accessibilityRole="text" accessibilityLabel={dots.map((d) => t(`income.dot.${d}`)).join(', ')} style={{ flexDirection: 'row', gap: 4 }}>
-        {dots.map((d, i) => (
-          <Text key={i} variant="caption" style={{ color: d === 'missed' ? tokens.color.ruby : undefined }}>
-            {d === 'onTime' ? '●' : d === 'partial' ? '◐' : d === 'late' ? '◔' : d === 'missed' ? '○' : '·'}
-          </Text>
-        ))}
+      <View accessibilityRole="text" accessibilityLabel={dots.map((d) => t(`income.dot.${d}`)).join(', ')} style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+        {dots.map((d, i) => {
+          const color = d === 'missed' ? tokens.color.ruby : theme.textSecondary;
+          if (d === 'onTime') return <Icon key={i} icon={Circle} size={10} color={color} fill={color} />;
+          if (d === 'partial') return <Icon key={i} icon={CircleDot} size={10} color={color} />;
+          if (d === 'late') return <Icon key={i} icon={CircleDashed} size={10} color={color} />;
+          if (d === 'missed') return <Icon key={i} icon={Circle} size={10} color={color} />;
+          return <Icon key={i} icon={Circle} size={8} color={theme.border} fill={theme.border} />;
+        })}
       </View>
       {received < expected ? (
         <Button testID={`income-record-${stream.id}`} kind="secondary" label={t('income.markReceived')} onPress={onRecord} />

@@ -55,7 +55,7 @@ export function filterChips(filters: TxFilters, snapshot: Snapshot): FilterChip[
   if (filters.dateFrom || filters.dateTo) {
     chips.push({
       key: 'dateFrom',
-      label: t('tx.filter.date', { from: filters.dateFrom ?? '…', to: filters.dateTo ?? '…' }),
+      label: t('tx.filter.date', { from: filters.dateFrom ?? t('common.notSet'), to: filters.dateTo ?? t('common.notSet') }),
     });
   }
   if (filters.accountId) {

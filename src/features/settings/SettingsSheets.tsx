@@ -99,11 +99,10 @@ export function ChangeRoleSheet({
   );
 }
 
-/** #52 Set up two-factor */
+/** #52 Set up two-factor — UI shell only until backend 2FA ships (no demo secret). */
 export function TwoFactorSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const toast = useToast();
   const [code, setCode] = useState('');
-  const secret = 'JBSWY3DPEHPK3PXP';
   return (
     <Sheet
       visible={visible}
@@ -127,10 +126,6 @@ export function TwoFactorSheet({ visible, onClose }: { visible: boolean; onClose
           {t('settings.popup.twoFactorQrPlaceholder')}
         </Text>
       </View>
-      <Text variant="caption" tone="textSecondary">
-        {secret}
-      </Text>
-      <Button kind="secondary" label={t('settings.popup.twoFactorCopyKey')} onPress={() => toast.show(t('settings.popup.twoFactorCopied'))} />
       <TextInput testID="settings-2fa-code" label={t('settings.popup.twoFactorCode')} value={code} onChangeText={setCode} keyboardType="number-pad" maxLength={6} />
     </Sheet>
   );

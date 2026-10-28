@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, CircleDot, RotateCcw } from 'lucide-react-native';
 
 import {
   Amount,
@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   EmptyState,
+  Icon,
   InlineError,
   Placeholder,
   Popover,
@@ -266,20 +267,17 @@ export function BudgetScreen() {
                         >
                           <Text>{cat.name}</Text>
                           {cat.carryOver ? (
-                            <Text testID={`budget-mark-carry-${cat.id}`} variant="micro" tone="textSecondary" accessibilityLabel={t('budget.markCarryOver')}>
-                              ↻
-                            </Text>
+                            <View testID={`budget-mark-carry-${cat.id}`} accessibilityLabel={t('budget.markCarryOver')}>
+                              <Icon icon={RotateCcw} size="row" color={theme.textSecondary} />
+                            </View>
                           ) : null}
                           {tplLines.length > 0 ? (
-                            <Text
+                            <View
                               testID={`budget-mark-template-${cat.id}`}
-                              variant="micro"
-                              tone={tplMet ? 'textSecondary' : undefined}
-                              style={tplMet ? undefined : { color: c.ruby }}
                               accessibilityLabel={tplMet ? t('budget.markTemplate') : t('budget.markTemplateUnmet')}
                             >
-                              ◎
-                            </Text>
+                              <Icon icon={CircleDot} size="row" color={tplMet ? theme.textSecondary : c.ruby} />
+                            </View>
                           ) : null}
                         </Pressable>
                         <Pressable

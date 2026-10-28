@@ -84,7 +84,7 @@ export function AddGoalSheet({
         value={categoryId || '__none__'}
         onChange={(v) => setCategoryId(v === '__none__' ? '' : v)}
       />
-      <TextInput testID="goal-date" label={t('goals.targetDate')} value={targetDate} onChangeText={setTargetDate} placeholder="YYYY-MM-DD" />
+      <TextInput testID="goal-date" label={t('goals.targetDate')} value={targetDate} onChangeText={setTargetDate} placeholder={t('common.datePlaceholder')} />
     </Sheet>
   );
 }
