@@ -1,10 +1,41 @@
 import { Platform } from 'react-native';
-import type { SessionResponse } from '@/api/auth';
-import type { AuthApi } from '@/api/auth';
+import type { AuthApi, SessionResponse } from '@/api/auth';
 
-/** Hidden until prototype T0.2 supplies a client id (docs/QUESTIONS.md Q-6). */
+export type GooglePublicConfig = {
+  enabled: boolean;
+  clientId: string | null;
+};
+
+let cached: GooglePublicConfig | null = null;
+
+/** Clears the public-config cache (tests). */
+export function resetGoogleSignInCache(): void {
+  cached = null;
+}
+
+/**
+ * Loads whether Google sign-in is on from GET /v1/public-config (TECH-SPEC 2.3 / Q-B5).
+ * No EXPO_PUBLIC_GOOGLE_* — client id stays on the server and is exposed as public config only.
+ */
+export async function loadGoogleSignIn(api: AuthApi): Promise<GooglePublicConfig> {
+  if (cached) return cached;
+  try {
+    const cfg = await api.publicConfig();
+    const clientId = cfg.google.clientId?.trim() || null;
+    cached = { enabled: Boolean(cfg.google.enabled && clientId), clientId };
+  } catch {
+    cached = { enabled: false, clientId: null };
+  }
+  return cached;
+}
+
+/** Last loaded public-config result; false until `loadGoogleSignIn` succeeds with Google on. */
 export function googleSignInEnabled(): boolean {
-  return Boolean(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID?.trim());
+  return Boolean(cached?.enabled);
+}
+
+export function googleClientId(): string | null {
+  return cached?.clientId ?? null;
 }
 
 export type GoogleSignInResult =
@@ -12,11 +43,12 @@ export type GoogleSignInResult =
   | { ok: false; reason: 'cancelled' | 'unavailable' | 'link_password' | 'network'; message?: string };
 
 /**
- * Starts Google sign-in. Web uses the public client id when set; native uses expo-auth-session in a later slice.
- * Until GIS / auth-session is wired, returns unavailable when no id token can be obtained.
+ * Starts Google sign-in once public-config has enabled it.
+ * Until GIS / auth-session is wired (T0.2), returns unavailable when no id token can be obtained.
  */
-export async function runGoogleSignIn(_api: AuthApi): Promise<GoogleSignInResult> {
-  if (!googleSignInEnabled()) return { ok: false, reason: 'unavailable' };
+export async function runGoogleSignIn(api: AuthApi): Promise<GoogleSignInResult> {
+  const google = await loadGoogleSignIn(api);
+  if (!google.enabled || !google.clientId) return { ok: false, reason: 'unavailable' };
   if (Platform.OS !== 'web') return { ok: false, reason: 'unavailable' };
   return { ok: false, reason: 'unavailable' };
 }
