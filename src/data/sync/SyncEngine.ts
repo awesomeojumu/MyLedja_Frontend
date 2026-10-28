@@ -41,11 +41,17 @@ export class SyncEngine {
 
   /** Saves the record and its operation together. The screen may show it as saved once this resolves. */
   async save(record: LocalRecord, type: string, payload: Record<string, unknown>, baseVersion?: number): Promise<QueuedOperation> {
+    // Each of this device's unsent writes to the same record will raise the server's version by one before this one arrives.
+    const own =
+      baseVersion === undefined
+        ? 0
+        : (await this.options.store.outbox()).filter((o) => o.state !== 'rejected' && o.payload.collection === record.collection && o.payload.id === record.id)
+            .length;
     const op: QueuedOperation = {
       operationId: this.newId(),
       type,
       payload,
-      baseVersion,
+      baseVersion: baseVersion === undefined ? undefined : baseVersion + own,
       createdAt: new Date(this.now()).toISOString(),
       schemaVersion: SCHEMA_VERSION,
       deviceId: this.options.deviceId,

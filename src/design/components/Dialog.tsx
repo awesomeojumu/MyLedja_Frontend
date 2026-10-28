@@ -32,9 +32,9 @@ export function Sheet({
   const theme = useTheme();
   const phone = useSizeClass() === 'phone';
   return (
-    <Modal visible={visible} transparent animationType={phone ? 'slide' : 'fade'} onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={phone ? 'slide' : 'fade'} onRequestClose={onClose} aria-label={title}>
       <View style={{ flex: 1, backgroundColor: backdrop, justifyContent: phone ? 'flex-end' : 'center', alignItems: 'center' }}>
-        <Pressable accessibilityLabel={t('common.close')} onPress={onClose} style={{ position: 'absolute', inset: 0 }} />
+        <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={onClose} style={{ position: 'absolute', inset: 0 }} />
         <View
           testID={testID}
           accessibilityViewIsModal
@@ -85,7 +85,7 @@ export function Confirm({
 }) {
   const theme = useTheme();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} aria-label={title}>
       <View style={{ flex: 1, backgroundColor: backdrop, justifyContent: 'center', alignItems: 'center', padding: tokens.spacing['spacing-lg'] }}>
         <View
           accessibilityViewIsModal

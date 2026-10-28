@@ -19,9 +19,9 @@ export function Panel({ visible, title, onClose, children, testID }: { visible: 
   const size = useSizeClass();
   const side = size === 'desktop' || size === 'wide';
   return (
-    <Modal visible={visible} transparent={side} animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent={side} animationType="slide" onRequestClose={onClose} aria-label={title}>
       <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }}>
-        {side ? <Pressable accessibilityLabel={t('common.close')} onPress={onClose} style={{ flex: 1 }} /> : null}
+        {side ? <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={onClose} style={{ flex: 1 }} /> : null}
         <View
           testID={testID}
           accessibilityViewIsModal
@@ -77,9 +77,9 @@ export function Popover({ visible, onClose, children, testID }: { visible: boole
   );
   if (phone) {
     return (
-      <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <Modal visible transparent animationType="slide" onRequestClose={onClose} aria-label={t('common.options')}>
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: backdrop }}>
-          <Pressable accessibilityLabel={t('common.close')} onPress={onClose} style={{ flex: 1 }} />
+          <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={onClose} style={{ flex: 1 }} />
           {card}
         </View>
       </Modal>
@@ -131,10 +131,11 @@ export function Select<T extends string>({ label, options, value, onChange, test
       </Text>
       <Pressable
         testID={testID}
-        accessibilityRole="combobox"
-        accessibilityLabel={label}
-        accessibilityValue={{ text: current?.label ?? '' }}
+        accessibilityRole="button"
+        accessibilityLabel={current ? `${label}, ${current.label}` : label}
         accessibilityState={{ expanded: open }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onPress={() => setOpen(true)}
         style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: theme.inputBorder, borderRadius: r['rounded-sm'], paddingHorizontal: sp['spacing-md'], backgroundColor: theme.card }}
       >
