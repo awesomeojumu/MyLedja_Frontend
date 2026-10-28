@@ -162,13 +162,17 @@ export type GoalAllocation = {
   kind?: 'allocate' | 'spend';
 };
 
-export type RecurrenceEvery = 'month' | 'week';
+export type RecurrenceEvery = 'day' | 'week' | 'month' | 'year';
 
 /** How often a bill or income stream repeats (P12-03). */
 export type RecurrenceRule = {
   every: RecurrenceEvery;
-  /** Day of month (1-31, last day for 31 in short months) or weekday 0-6 for weekly. */
+  /** Day: interval in days; week: weekday 0–6; month: day 1–31 (31 = last); year: day of month. */
   on: number;
+  /** Repeat every N days/weeks/months/years (default 1). */
+  interval?: number;
+  /** Month 1–12 when `every` is `year`. */
+  monthOfYear?: number;
 };
 
 export type RecurringKind = 'bill' | 'subscription' | 'transfer' | 'income';

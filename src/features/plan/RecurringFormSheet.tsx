@@ -3,13 +3,13 @@ import { View } from 'react-native';
 
 import { AmountInput, Button, Select, Sheet, Switch, Text, TextInput } from '@/design/components';
 import tokens from '@/design/tokens.json';
-import type { Recurring, RecurringKind } from '@/data/workspace/model';
+import type { RecurrenceRule, Recurring, RecurringKind } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { monthOf, nextMonth } from '@/ledger';
 import { today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
-import { dueDateInMonth } from './recurrence';
+import { dueDatesInMonth } from './recurrence';
 
 const sp = tokens.spacing;
 
@@ -17,15 +17,17 @@ const KINDS: RecurringKind[] = ['bill', 'subscription', 'transfer'];
 const REMINDER_OPTIONS = [0, 1, 3, 7] as const;
 type EndMode = 'never' | 'onDate' | 'afterCount';
 
-function endDateAfterOccurrences(start: string, rule: Recurring['rule'], count: number): string {
+function endDateAfterOccurrences(start: string, rule: RecurrenceRule, count: number): string {
   let month = monthOf(start);
-  let lastDue = start;
-  for (let i = 0; i < count; i++) {
-    const due = dueDateInMonth(rule, month);
-    if (due && due >= start) lastDue = due;
+  let seen = 0;
+  for (let i = 0; i < 240 && seen < count; i++) {
+    for (const d of dueDatesInMonth(rule, month, start)) {
+      seen += 1;
+      if (seen === count) return d;
+    }
     month = nextMonth(month);
   }
-  return lastDue;
+  return start;
 }
 
 /** DESIGN popup #25 — Add / edit recurring. */
@@ -36,6 +38,8 @@ export function RecurringFormSheet({
   visible,
   onClose,
   onSave,
+  onCancelSchedule,
+  onRestoreSchedule,
 }: {
   snapshot: Snapshot;
   existing?: Recurring | null;
@@ -43,6 +47,8 @@ export function RecurringFormSheet({
   visible: boolean;
   onClose: () => void;
   onSave: (data: Omit<Recurring, 'id'>) => Promise<void>;
+  onCancelSchedule?: () => Promise<void>;
+  onRestoreSchedule?: () => Promise<void>;
 }) {
   const [kind, setKind] = useState<RecurringKind>('bill');
   const [name, setName] = useState('');
@@ -52,9 +58,11 @@ export function RecurringFormSheet({
   const [payeeId, setPayeeId] = useState('');
   const [accountId, setAccountId] = useState(snapshot.accounts[0]?.id ?? '');
   const [categoryId, setCategoryId] = useState(snapshot.categories.find((c) => c.kind === 'expense')?.id ?? '');
-  const [every, setEvery] = useState<'month' | 'week'>('month');
+  const [every, setEvery] = useState<RecurrenceRule['every']>('month');
+  const [everyN, setEveryN] = useState('1');
   const [lastDayOfMonth, setLastDayOfMonth] = useState(false);
   const [onDay, setOnDay] = useState('1');
+  const [monthOfYear, setMonthOfYear] = useState('1');
   const [startDate, setStartDate] = useState(today());
   const [endMode, setEndMode] = useState<EndMode>('never');
   const [endDate, setEndDate] = useState('');
@@ -72,8 +80,10 @@ export function RecurringFormSheet({
       setAccountId(existing.accountId);
       setCategoryId(existing.categoryId ?? '');
       setEvery(existing.rule.every);
+      setEveryN(String(existing.rule.interval ?? 1));
       setLastDayOfMonth(existing.rule.every === 'month' && existing.rule.on === 31);
-      setOnDay(String(existing.rule.on === 31 ? 1 : existing.rule.on));
+      setOnDay(String(existing.rule.every === 'month' && existing.rule.on === 31 ? 1 : existing.rule.on));
+      setMonthOfYear(String(existing.rule.monthOfYear ?? Number(existing.startDate.slice(5, 7))));
       setStartDate(existing.startDate);
       setEndMode(existing.endAfterCount ? 'afterCount' : existing.endDate ? 'onDate' : 'never');
       setEndDate(existing.endDate ?? '');
@@ -104,15 +114,25 @@ export function RecurringFormSheet({
     [snapshot],
   );
 
+  const buildRule = (): RecurrenceRule => {
+    const interval = Math.max(1, Number(everyN) || 1);
+    if (every === 'day') return { every: 'day', on: 0, interval };
+    if (every === 'week') return { every: 'week', on: Math.min(6, Math.max(0, Number(onDay) || 0)), interval };
+    if (every === 'year') {
+      return {
+        every: 'year',
+        on: Math.min(31, Math.max(1, Number(onDay) || 1)),
+        monthOfYear: Math.min(12, Math.max(1, Number(monthOfYear) || 1)),
+        interval,
+      };
+    }
+    const day = lastDayOfMonth ? 31 : Math.min(31, Math.max(1, Number(onDay) || 1));
+    return { every: 'month', on: day, interval };
+  };
+
   const save = () => {
     if (!name.trim() || amountMinor === null || amountMinor <= 0n || !accountId) return;
-    const ruleOn =
-      every === 'month'
-        ? lastDayOfMonth
-          ? 31
-          : Math.min(31, Math.max(1, Number(onDay) || 1))
-        : Math.min(6, Math.max(0, Number(onDay) || 0));
-    const rule = { every, on: ruleOn };
+    const rule = buildRule();
     let resolvedEnd: string | undefined;
     let resolvedAfter: number | undefined;
     if (endMode === 'onDate') resolvedEnd = endDate.trim() || undefined;
@@ -145,7 +165,17 @@ export function RecurringFormSheet({
       title={existing ? t('plan.editRecurringTitle') : t('plan.addRecurringTitle')}
       onClose={onClose}
       testID="plan-recurring-sheet"
-      footer={<Button testID="plan-recurring-save" label={t('panel.save')} onPress={save} disabled={!name.trim() || amountMinor === null || amountMinor <= 0n} />}
+      footer={
+        <View style={{ gap: sp['spacing-sm'] }}>
+          {existing && !existing.cancelled && onCancelSchedule ? (
+            <Button testID="plan-recurring-cancel" kind="secondary" label={t('plan.cancelSchedule')} onPress={() => void onCancelSchedule().then(onClose)} />
+          ) : null}
+          {existing?.cancelled && onRestoreSchedule ? (
+            <Button testID="plan-recurring-restore" kind="secondary" label={t('plan.restoreSchedule')} onPress={() => void onRestoreSchedule().then(onClose)} />
+          ) : null}
+          <Button testID="plan-recurring-save" label={t('panel.save')} onPress={save} disabled={!name.trim() || amountMinor === null || amountMinor <= 0n || !!existing?.cancelled} />
+        </View>
+      }
     >
       <Select
         testID="plan-recurring-kind"
@@ -169,22 +199,30 @@ export function RecurringFormSheet({
         testID="plan-frequency"
         label={t('plan.howOften')}
         value={every}
-        onChange={(v) => setEvery(v as 'month' | 'week')}
+        onChange={(v) => setEvery(v as RecurrenceRule['every'])}
         options={[
-          { value: 'month', label: t('plan.freqEveryMonth') },
-          { value: 'week', label: t('plan.freqEveryWeek') },
+          { value: 'day', label: t('plan.freqUnitDay') },
+          { value: 'week', label: t('plan.freqUnitWeek') },
+          { value: 'month', label: t('plan.freqUnitMonth') },
+          { value: 'year', label: t('plan.freqUnitYear') },
         ]}
       />
+      {every !== 'year' ? (
+        <TextInput testID="plan-every-n" label={t('plan.everyN')} value={everyN} onChangeText={setEveryN} keyboardType="number-pad" />
+      ) : null}
       {every === 'month' ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text>{t('plan.lastDayOfMonth')}</Text>
           <Switch testID="plan-last-day" label={t('plan.lastDayOfMonth')} value={lastDayOfMonth} onChange={setLastDayOfMonth} />
         </View>
       ) : null}
-      {!lastDayOfMonth || every !== 'month' ? (
+      {every === 'year' ? (
+        <TextInput testID="plan-month-of-year" label={t('plan.monthOfYear')} value={monthOfYear} onChangeText={setMonthOfYear} keyboardType="number-pad" />
+      ) : null}
+      {(every === 'month' && !lastDayOfMonth) || every === 'week' || every === 'year' ? (
         <TextInput
           testID="plan-day"
-          label={every === 'month' ? t('plan.dayOfMonth') : t('plan.dayOfWeek')}
+          label={every === 'week' ? t('plan.dayOfWeek') : t('plan.dayOfMonth')}
           value={onDay}
           onChangeText={setOnDay}
           keyboardType="number-pad"

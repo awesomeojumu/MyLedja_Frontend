@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
@@ -22,11 +23,13 @@ import {
   useToast,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
+import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
 import type { Recurring } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
+import { monthLabel, nextMonth, prevMonth } from '@/features/budget/helpers';
 import { monthOf } from '@/ledger';
 import { today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
@@ -59,8 +62,11 @@ export function PlanScreen() {
   const router = useRouter();
   const toast = useToast();
   const theme = useTheme();
+  const sizeClass = useSizeClass();
+  const calendarCompact = sizeClass === 'phone';
   const { snapshot, repo } = useWorkspace();
-  const month = monthOf(today());
+  const [viewMonth, setViewMonth] = useState(() => monthOf(today()));
+  const month = viewMonth;
   const [view, setView] = useState<ViewMode>('list');
   const [planTab, setPlanTab] = useState<PlanTab>('thisMonth');
   const [scheduleSearch, setScheduleSearch] = useState('');
@@ -75,6 +81,7 @@ export function PlanScreen() {
   const [matchRow, setMatchRow] = useState<BillRow | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [daySheet, setDaySheet] = useState<string | null>(null);
+  const [scheduleAction, setScheduleAction] = useState<Recurring | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const rows = useMemo(
@@ -112,6 +119,30 @@ export function PlanScreen() {
 
   return (
     <AppFrame title={t('plan.title')}>
+      <View
+        testID="plan-month-nav"
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'] }}
+      >
+        <Pressable
+          testID="plan-prev-month"
+          accessibilityLabel={t('date.previousMonth')}
+          onPress={() => setViewMonth(prevMonth(viewMonth))}
+          style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <ChevronLeft size={20} color={theme.textSecondary} />
+        </Pressable>
+        <Text variant="heading-sm" style={{ minWidth: 160, textAlign: 'center' }}>
+          {monthLabel(viewMonth)}
+        </Text>
+        <Pressable
+          testID="plan-next-month"
+          accessibilityLabel={t('date.nextMonth')}
+          onPress={() => setViewMonth(nextMonth(viewMonth))}
+          style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <ChevronRight size={20} color={theme.textSecondary} />
+        </Pressable>
+      </View>
       {strip ? (
         <View testID="plan-summary-strip" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'] }}>
           <SummaryCell label={t('plan.comingIn')} testID="plan-coming-in">
@@ -172,10 +203,7 @@ export function PlanScreen() {
           onSearch={setScheduleSearch}
           showCancelled={showCancelled}
           onToggleCancelled={() => setShowCancelled((v) => !v)}
-          onEdit={(rec) => {
-            setEditRecurring(rec);
-            setFormOpen(true);
-          }}
+          onOpenMenu={setScheduleAction}
         />
       ) : (
         <>
@@ -244,7 +272,7 @@ export function PlanScreen() {
           })}
         </ScrollView>
       ) : (
-        <CalendarGrid month={month} today={today()} byDate={byDate} onDay={(d) => setDaySheet(d)} theme={theme} />
+        <CalendarGrid month={month} today={today()} byDate={byDate} onDay={(d) => setDaySheet(d)} theme={theme} compact={calendarCompact} />
       )}
 
         </>
@@ -265,6 +293,22 @@ export function PlanScreen() {
             if (editRecurring) await repo.updateRecurring({ ...data, id: editRecurring.id });
             else await repo.addRecurring(data);
           }}
+          onCancelSchedule={
+            editRecurring
+              ? async () => {
+                  await repo.updateRecurring({ ...editRecurring, cancelled: true });
+                  toast.show(t('plan.scheduleCancelled'));
+                }
+              : undefined
+          }
+          onRestoreSchedule={
+            editRecurring?.cancelled
+              ? async () => {
+                  await repo.updateRecurring({ ...editRecurring, cancelled: false });
+                  toast.show(t('plan.scheduleRestored'));
+                }
+              : undefined
+          }
         />
       ) : null}
 
@@ -284,6 +328,48 @@ export function PlanScreen() {
         <Button testID="plan-add-subscription" kind="secondary" label={t('plan.kind.subscription')} onPress={() => openAdd('subscription')} />
         <Button testID="plan-add-transfer" kind="secondary" label={t('plan.kind.transfer')} onPress={() => openAdd('transfer')} />
         <Button testID="plan-add-income" kind="secondary" label={t('plan.kind.income')} onPress={() => { setAddMenuOpen(false); router.push('/income'); }} />
+      </Popover>
+
+      <Popover visible={!!scheduleAction} onClose={() => setScheduleAction(null)} testID="plan-schedule-menu">
+        {scheduleAction ? (
+          <>
+            <Button
+              testID="plan-schedule-edit"
+              kind="secondary"
+              label={t('plan.editRecurring')}
+              onPress={() => {
+                setEditRecurring(scheduleAction);
+                setFormOpen(true);
+                setScheduleAction(null);
+              }}
+            />
+            {scheduleAction.cancelled ? (
+              <Button
+                testID="plan-schedule-restore"
+                kind="secondary"
+                label={t('plan.restoreSchedule')}
+                onPress={() =>
+                  void repo.updateRecurring({ ...scheduleAction, cancelled: false }).then(() => {
+                    toast.show(t('plan.scheduleRestored'));
+                    setScheduleAction(null);
+                  })
+                }
+              />
+            ) : (
+              <Button
+                testID="plan-schedule-cancel"
+                kind="secondary"
+                label={t('plan.cancelSchedule')}
+                onPress={() =>
+                  void repo.updateRecurring({ ...scheduleAction, cancelled: true }).then(() => {
+                    toast.show(t('plan.scheduleCancelled'));
+                    setScheduleAction(null);
+                  })
+                }
+              />
+            )}
+          </>
+        ) : null}
       </Popover>
 
       {findOpen && snapshot ? (
@@ -358,6 +444,7 @@ function AllSchedulesTable({
   showCancelled,
   onToggleCancelled,
   onEdit,
+  onOpenMenu,
 }: {
   rows: ScheduleRow[];
   snapshot: Snapshot | null;
@@ -366,6 +453,7 @@ function AllSchedulesTable({
   showCancelled: boolean;
   onToggleCancelled: () => void;
   onEdit: (rec: Recurring) => void;
+  onOpenMenu: (rec: Recurring) => void;
 }) {
   return (
     <View testID="plan-all-schedules" style={{ gap: sp['spacing-md'] }}>
@@ -431,7 +519,7 @@ function AllSchedulesTable({
                   <Text variant="caption" tone="textSecondary" style={{ width: 120 }}>
                     {scheduleFrequency(row.recurring)}
                   </Text>
-                  <Button testID={`plan-schedule-menu-${row.recurring.id}`} kind="link" label="⋯" onPress={() => onEdit(row.recurring)} />
+                  <Button testID={`plan-schedule-menu-${row.recurring.id}`} kind="link" label="⋯" onPress={() => onOpenMenu(row.recurring)} />
                 </Card>
               );
             })}
@@ -459,19 +547,21 @@ function CalendarGrid({
   byDate,
   onDay,
   theme,
+  compact,
 }: {
   month: string;
   today: string;
   byDate: Map<string, BillRow[]>;
   onDay: (iso: string) => void;
   theme: ReturnType<typeof useTheme>;
+  compact: boolean;
 }) {
   const days = calendarDays(month);
   return (
     <View testID="plan-calendar" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
       {days.map((d) => {
         const items = byDate.get(d) ?? [];
-        const overdue = items.some((r) => r.group === 'overdue');
+        const overdue = items.some((r) => r.group === 'overdue' && r.occurrence?.status !== 'paid');
         const isToday = d === todayIso;
         return (
           <Pressable
@@ -481,23 +571,63 @@ function CalendarGrid({
             accessibilityLabel={d}
             onPress={() => onDay(d)}
             style={{
-              width: '13%',
-              minWidth: 40,
-              aspectRatio: 1,
+              width: compact ? '13%' : '13%',
+              minWidth: compact ? 40 : 72,
+              minHeight: compact ? undefined : 56,
+              aspectRatio: compact ? 1 : undefined,
               borderWidth: 1,
               borderColor: isToday ? theme.primaryFill : theme.border,
               borderRadius: 8,
               alignItems: 'center',
-              justifyContent: 'center',
-              padding: 2,
+              justifyContent: 'flex-start',
+              padding: 4,
             }}
           >
             <Text variant="caption">{d.slice(-2)}</Text>
             {items.length > 0 ? (
-              <View style={{ flexDirection: 'row', gap: 2, marginTop: 2 }}>
-                {overdue ? <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: tokens.color.ruby }} /> : null}
-                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: theme.textSecondary }} />
-              </View>
+              compact ? (
+                <View style={{ flexDirection: 'row', gap: 2, marginTop: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {items.slice(0, 3).map((r) => (
+                    <View
+                      key={`${r.recurring.id}-${r.dueDate}`}
+                      style={{
+                        width: 4,
+                        height: 4,
+                        borderRadius: 2,
+                        backgroundColor: r.recurring.kind === 'income' ? theme.primaryFill : overdue ? tokens.color.ruby : theme.textSecondary,
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <View style={{ gap: 2, marginTop: 2, width: '100%' }}>
+                  {items.slice(0, 2).map((r) => (
+                    <View
+                      key={`${r.recurring.id}-${r.dueDate}`}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 2,
+                        backgroundColor: theme.hover,
+                        borderRadius: 4,
+                        paddingHorizontal: 2,
+                      }}
+                    >
+                      {r.group === 'overdue' && r.occurrence?.status !== 'paid' ? (
+                        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: tokens.color.ruby }} />
+                      ) : null}
+                      <Text variant="caption" numberOfLines={1} style={{ flex: 1 }}>
+                        {r.recurring.kind === 'income' ? `+ ${r.recurring.name}` : r.recurring.name}
+                      </Text>
+                    </View>
+                  ))}
+                  {items.length > 2 ? (
+                    <Text variant="caption" tone="textSecondary">
+                      +{items.length - 2}
+                    </Text>
+                  ) : null}
+                </View>
+              )
             ) : null}
           </Pressable>
         );

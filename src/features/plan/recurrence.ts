@@ -9,12 +9,67 @@ export function lastDayOfMonth(year: number, monthIndex: number): number {
 }
 
 export function dueDateInMonth(rule: RecurrenceRule, month: string): string | null {
-  const [y, m] = month.split('-').map(Number) as [number, number];
-  if (rule.every === 'week') {
-    return null;
+  const dates = dueDatesInMonth(rule, month, '1970-01-01');
+  return dates[0] ?? null;
+}
+
+function weekdayUtc(iso: string): number {
+  return new Date(`${iso}T12:00:00Z`).getUTCDay();
+}
+
+function daysBetween(from: string, to: string): number {
+  const a = new Date(`${from}T12:00:00Z`).getTime();
+  const b = new Date(`${to}T12:00:00Z`).getTime();
+  return Math.round((b - a) / 86400000);
+}
+
+/** All due ISO dates for a rule within a calendar month (DESIGN #25 cadences). */
+export function dueDatesInMonth(rule: RecurrenceRule, month: string, startDate: string, endDate?: string): string[] {
+  const interval = rule.interval ?? 1;
+  const inRange = (d: string) => d >= startDate && (!endDate || d <= endDate);
+
+  if (rule.every === 'month') {
+    const [y, m] = month.split('-').map(Number) as [number, number];
+    const day = rule.on === 31 ? lastDayOfMonth(y, m - 1) : Math.min(rule.on, lastDayOfMonth(y, m - 1));
+    const d = `${month}-${String(day).padStart(2, '0')}`;
+    return inRange(d) ? [d] : [];
   }
-  const day = rule.on === 31 ? lastDayOfMonth(y, m - 1) : Math.min(rule.on, lastDayOfMonth(y, m - 1));
-  return `${month}-${String(day).padStart(2, '0')}`;
+
+  if (rule.every === 'year') {
+    const [, viewM] = month.split('-').map(Number) as [number, number];
+    const targetMonth = rule.monthOfYear ?? viewM;
+    if (viewM !== targetMonth) return [];
+    const d = dueDatesInMonth({ every: 'month', on: rule.on }, month, startDate, endDate)[0];
+    return d ? [d] : [];
+  }
+
+  const days = calendarDays(month);
+  const monthStart = days[0]!;
+
+  if (rule.every === 'day') {
+    const out: string[] = [];
+    const monthEnd = days[days.length - 1]!;
+    let cursor = startDate;
+    while (cursor < monthStart) cursor = addDays(cursor, interval);
+    while (cursor <= monthEnd) {
+      if (cursor.startsWith(month) && inRange(cursor)) out.push(cursor);
+      cursor = addDays(cursor, interval);
+    }
+    return out;
+  }
+
+  if (rule.every === 'week') {
+    const out: string[] = [];
+    for (const d of days) {
+      if (weekdayUtc(d) !== rule.on) continue;
+      if (!inRange(d)) continue;
+      const weeks = Math.floor(daysBetween(startDate, d) / 7);
+      if (weeks >= 0 && weeks % interval === 0) out.push(d);
+    }
+    return out;
+  }
+
+  return [];
 }
 
 export type BillRow = {
@@ -35,16 +90,15 @@ export function billsForMonth(snapshot: Snapshot, month: string, today: string, 
   const rows: BillRow[] = [];
   for (const recurring of snapshot.recurring) {
     if (recurring.cancelled || recurring.kind === 'income') continue;
-    const dueDate = dueDateInMonth(recurring.rule, month);
-    if (!dueDate || dueDate < recurring.startDate) continue;
-    if (recurring.endDate && dueDate > recurring.endDate) continue;
-    const occId = `${recurring.id}:${dueDate}`;
-    const occurrence = snapshot.occurrences.find((o) => o.id === occId);
-    let group: BillRow['group'] = 'later';
-    if (occurrence?.status === 'paid') group = 'paid';
-    else if (dueDate < today) group = 'overdue';
-    else if (dueDate <= dueSoonEnd) group = 'dueSoon';
-    rows.push({ recurring, dueDate, occurrence, group });
+    for (const dueDate of dueDatesInMonth(recurring.rule, month, recurring.startDate, recurring.endDate)) {
+      const occId = `${recurring.id}:${dueDate}`;
+      const occurrence = snapshot.occurrences.find((o) => o.id === occId);
+      let group: BillRow['group'] = 'later';
+      if (occurrence?.status === 'paid') group = 'paid';
+      else if (dueDate < today) group = 'overdue';
+      else if (dueDate <= dueSoonEnd) group = 'dueSoon';
+      rows.push({ recurring, dueDate, occurrence, group });
+    }
   }
   return rows.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
@@ -165,18 +219,21 @@ export type ScheduleRow = {
 };
 
 function ruleLabel(rule: RecurrenceRule): string {
-  if (rule.every === 'week') return t('plan.freqWeekly', { day: String(rule.on) });
-  if (rule.on === 31) return t('plan.freqMonthlyLast');
-  return t('plan.freqMonthly', { day: String(rule.on) });
+  const n = rule.interval ?? 1;
+  if (rule.every === 'day') return t('plan.freqEveryDays', { days: String(n) });
+  if (rule.every === 'week') return t('plan.freqEveryWeeks', { weeks: String(n), day: String(rule.on) });
+  if (rule.every === 'year') {
+    return t('plan.freqYearly', { month: String(rule.monthOfYear ?? 1), day: String(rule.on) });
+  }
+  if (rule.on === 31) return n === 1 ? t('plan.freqMonthlyLast') : t('plan.freqEveryMonthsLast', { months: String(n) });
+  return n === 1 ? t('plan.freqMonthly', { day: String(rule.on) }) : t('plan.freqEveryMonths', { months: String(n), day: String(rule.on) });
 }
 
 function nextDueOnOrAfter(recurring: Recurring, from: string, horizonMonths = 14): string | null {
   let month = monthOf(from);
   for (let i = 0; i < horizonMonths; i++) {
-    const due = dueDateInMonth(recurring.rule, month);
-    if (due && due >= recurring.startDate && due >= from && (!recurring.endDate || due <= recurring.endDate)) {
-      return due;
-    }
+    const dates = dueDatesInMonth(recurring.rule, month, recurring.startDate, recurring.endDate).filter((d) => d >= from);
+    if (dates[0]) return dates[0];
     month = nextMonth(month);
   }
   return null;
