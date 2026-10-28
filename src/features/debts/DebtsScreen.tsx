@@ -24,6 +24,7 @@ export function DebtsScreen() {
 
   const rows = useMemo(() => (snapshot ? debtRows(snapshot, filter, today()) : null), [snapshot, filter]);
   const totals = rows ? debtTotals(debtRows(snapshot!, 'all', today())) : null;
+  const bankLoans = useMemo(() => snapshot?.accounts.filter((a) => a.type === 'loan' && !a.archived) ?? [], [snapshot]);
 
   return (
     <AppFrame title={t('debts.title')}>
@@ -60,6 +61,17 @@ export function DebtsScreen() {
         <EmptyState title={t('debts.emptyTitle')} body={t('debts.emptyBody')} actionLabel={t('debts.iLent')} onAction={() => setLendOpen(true)} />
       ) : (
         <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }}>
+          {bankLoans.length > 0 ? (
+            <Card testID="debts-bank-loans" style={{ gap: sp['spacing-sm'] }}>
+              <Text variant="heading-sm">{t('debts.bankLoansTitle')}</Text>
+              <Text tone="textSecondary">{t('debts.bankLoansBody')}</Text>
+              {bankLoans.map((a) => (
+                <Pressable key={a.id} testID={`debts-bank-${a.id}`} accessibilityRole="link" onPress={() => router.push(`/accounts/${a.id}`)}>
+                  <Text>{a.name}</Text>
+                </Pressable>
+              ))}
+            </Card>
+          ) : null}
           {rows.map(({ debt, balance }) => (
             <Pressable key={debt.id} testID={`debt-row-${debt.id}`} accessibilityRole="button" onPress={() => router.push(`/debts/${debt.id}`)}>
               <Card style={{ gap: sp['spacing-xs'] }}>
