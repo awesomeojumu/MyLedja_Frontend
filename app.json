@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "MyLedja",
+    "slug": "myledja",
+    "scheme": "myledja",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": { "supportsTablet": true },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1E3D",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": { "favicon": "./assets/favicon.png", "output": "single", "bundler": "metro" },
+    "plugins": ["expo-router", "expo-status-bar", "expo-secure-store", "expo-font"]
+  }
+}
