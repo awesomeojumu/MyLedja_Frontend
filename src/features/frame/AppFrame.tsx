@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeftRight, Eye, EyeOff, LayoutDashboard, LogOut, Menu, PieChart, Plus, Wallet } from 'lucide-react-native';
+import { ArrowLeftRight, Eye, EyeOff, LayoutDashboard, LogOut, Menu, PieChart, Plus, Users, Wallet } from 'lucide-react-native';
 import { Banner, Button, StatusPill, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
@@ -12,7 +12,7 @@ import { useOnline } from '@/lib/useOnline';
 import { useSyncStatus } from '@/data/sync/SyncProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
-import { SHIPPED_PAGES, type NavItem } from './navigation';
+import { SHIPPED_PAGES, MANAGE_PAGES, type NavItem } from './navigation';
 
 const c = tokens.color;
 const sp = tokens.spacing;
@@ -21,6 +21,7 @@ const ICONS = {
   transactions: ArrowLeftRight,
   budget: PieChart,
   accounts: Wallet,
+  payees: Users,
 };
 const onSidebarMuted = `${c['on-primary']}B3`;
 const onSidebarSection = `${c['on-primary']}99`;
@@ -118,6 +119,41 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
         </View>
       )}
       {SHIPPED_PAGES.map((item) => {
+        const active = isActive(pathname, item);
+        const Icon = ICONS[item.icon];
+        return (
+          <Pressable
+            key={item.key}
+            testID={`nav-${item.key}`}
+            accessibilityRole="link"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={t(item.label)}
+            onPress={() => {
+              router.push(item.href);
+              onNavigate?.();
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: compact ? 'center' : 'flex-start',
+              gap: sp['spacing-md'],
+              minHeight: 44,
+              paddingHorizontal: sp['spacing-md'],
+              borderRadius: tokens.radius['rounded-pill'],
+              backgroundColor: active ? c['primary-deep'] : undefined,
+            }}
+          >
+            <Icon size={18} color={active ? c['on-primary'] : onSidebarMuted} />
+            {compact ? null : <Text style={{ color: active ? c['on-primary'] : onSidebarMuted }}>{t(item.label)}</Text>}
+          </Pressable>
+        );
+      })}
+      {compact ? null : (
+        <Text variant="micro" style={{ color: onSidebarSection, marginTop: sp['spacing-md'], textTransform: 'uppercase' }}>
+          {t('nav.manage')}
+        </Text>
+      )}
+      {MANAGE_PAGES.map((item) => {
         const active = isActive(pathname, item);
         const Icon = ICONS[item.icon];
         return (
