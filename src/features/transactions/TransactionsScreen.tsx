@@ -10,7 +10,10 @@ import { AppFrame } from '@/features/frame/AppFrame';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
+import { useGlobalSearchParams, useRouter } from 'expo-router';
+
 import { useAddTransaction } from './AddTransaction';
+import { TransactionPanel } from './TransactionPanel';
 import { ledgerMessage, rowsFor, today, type Row } from './helpers';
 
 const sp = tokens.spacing;
@@ -37,6 +40,8 @@ export function TransactionsScreen() {
   const theme = useTheme();
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const params = useGlobalSearchParams<{ tx?: string }>();
 
   const days = useMemo(() => {
     if (!snapshot) return [];
@@ -118,8 +123,10 @@ export function TransactionsScreen() {
                       borderTopColor: theme.border,
                     }}
                   >
-                    <View
-                      accessible
+                    <Pressable
+                      testID={`open-${row.event.id}`}
+                      accessibilityRole="button"
+                      onPress={() => router.setParams({ tx: row.event.id })}
                       accessibilityLabel={t('tx.rowLabel', {
                         title: row.title,
                         category: row.category,
@@ -138,7 +145,12 @@ export function TransactionsScreen() {
                           {row.event.notes}
                         </Text>
                       ) : null}
-                    </View>
+                      {row.event.correctionOf ? (
+                        <Text variant="caption" tone="textSecondary">
+                          {t('panel.edited')}
+                        </Text>
+                      ) : null}
+                    </Pressable>
                     {row.waiting ? <StatusPill label={t('tx.waiting')} kind="pending" /> : null}
                     <Amount minor={row.amount} signed={row.event.type !== 'transfer'} />
                     <Menu
@@ -173,6 +185,7 @@ export function TransactionsScreen() {
           ))}
         </ScrollView>
       )}
+      {params.tx ? <TransactionPanel id={params.tx} onClose={() => router.setParams({ tx: undefined })} /> : null}
     </AppFrame>
   );
 }
