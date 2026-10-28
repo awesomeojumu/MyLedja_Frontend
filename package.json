@@ -53,5 +53,8 @@
     "serve": "14.2.6",
     "test-renderer": "1.3.1",
     "typescript": "6.0.3"
+  },
+  "overrides": {
+    "compression": "1.8.2"
   }
 }
