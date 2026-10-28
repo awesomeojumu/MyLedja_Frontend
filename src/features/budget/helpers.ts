@@ -22,6 +22,20 @@ export function budgetCategories(snapshot: Snapshot) {
   return snapshot.categories.filter((c) => c.kind === 'expense' && !c.hidden && c.countInBudget);
 }
 
+export type BudgetGroupBy = 'groups' | 'type';
+
+export function groupedBudgetCategories(snapshot: Snapshot, groupBy: BudgetGroupBy) {
+  const cats = budgetCategories(snapshot);
+  const keyOf = (c: (typeof cats)[0]) => (groupBy === 'type' ? c.budgetType : c.group);
+  const groups = new Map<string, typeof cats>();
+  for (const cat of cats) {
+    const list = groups.get(keyOf(cat)) ?? [];
+    list.push(cat);
+    groups.set(keyOf(cat), list);
+  }
+  return [...groups.entries()];
+}
+
 export function assignedOf(snapshot: Snapshot, categoryId: string, month: string): bigint {
   return snapshot.assigns.get(budgetAssignId(categoryId, month)) ?? 0n;
 }
@@ -82,6 +96,14 @@ export function sixMonthAverage(snapshot: Snapshot, categoryId: string, endMonth
   let sum = 0n;
   for (const m of months) sum += categoryActivity(totals, m, categoryId);
   return sum / 6n;
+}
+
+export function threeMonthAverage(snapshot: Snapshot, categoryId: string, endMonth: string): bigint {
+  const months = monthsEndingAt(endMonth, 3);
+  const totals = periodTotals(snapshot.events);
+  let sum = 0n;
+  for (const m of months) sum += categoryActivity(totals, m, categoryId);
+  return sum / 3n;
 }
 
 export { monthOf, nextMonth, prevMonth, monthsEndingAt, periodTotals, categoryActivity };

@@ -195,4 +195,12 @@ describe('Category page', () => {
       expect((await repo.load()).assigns.get(`${id('Market')}:2026-10`)).toBe(40_000_000n);
     });
   });
+
+  it('P06-11: budget ⋯ menu and 1|3 month (DESIGN page 6)', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<BudgetScreen />), { sync });
+    expect(screen.getByTestId('budget-month-span')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('budget-more-menu'));
+    expect(screen.getByTestId('budget-menu-popover')).toBeTruthy();
+  });
 });

@@ -660,6 +660,35 @@ export class WorkspaceRepository {
     }
   }
 
+  /** DESIGN page 6 ⋯ menu — copy planned amounts from another month. */
+  async copyBudgetMonth(fromMonth: string, toMonth: string): Promise<void> {
+    const snapshot = await this.load();
+    for (const cat of snapshot.categories) {
+      if (cat.kind !== 'expense') continue;
+      const amount = this.assigned(cat.id, fromMonth, snapshot);
+      if (amount > 0n) await this.setAssigned(cat.id, toMonth, amount);
+    }
+  }
+
+  /** DESIGN page 6 — fill planned from recent spending average. */
+  async fillBudgetFromAverages(month: string): Promise<void> {
+    const { budgetCategories, sixMonthAverage } = await import('@/features/budget/helpers');
+    const snapshot = await this.load();
+    const cats = budgetCategories(snapshot);
+    for (const cat of cats) {
+      const avg = sixMonthAverage(snapshot, cat.id, month);
+      if (avg > 0n) await this.setAssigned(cat.id, month, avg);
+    }
+  }
+
+  async clearMonthBudget(month: string): Promise<void> {
+    const { budgetCategories } = await import('@/features/budget/helpers');
+    const snapshot = await this.load();
+    for (const cat of budgetCategories(snapshot)) {
+      await this.setAssigned(cat.id, month, 0n);
+    }
+  }
+
   async addCategory(input: { name: string; kind: 'income' | 'expense'; group: string }): Promise<Category> {
     const snapshot = await this.load();
     const category: Category = {

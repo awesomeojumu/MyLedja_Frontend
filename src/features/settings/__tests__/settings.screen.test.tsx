@@ -67,7 +67,9 @@ describe('Settings (F1.10)', () => {
       { sync },
     );
     await fireEvent.press(screen.getByTestId('settings-tab-categories'));
-    await fireEvent.changeText(screen.getByTestId(`settings-cat-name-${market.id}`), 'Groceries');
+    await fireEvent.press(screen.getByTestId(`settings-cat-edit-${market.id}`));
+    await fireEvent.changeText(screen.getByTestId('settings-edit-cat-name'), 'Groceries');
+    await fireEvent.press(screen.getByText(t('panel.save')));
     await waitFor(async () => {
       expect((await repo.load()).categories.find((c) => c.id === market.id)?.name).toBe('Groceries');
     });
@@ -88,6 +90,19 @@ describe('Settings (F1.10)', () => {
     const csv = exportTransactionsCsv(await repo.load());
     expect(csv).toContain('Date,Type,Payee');
     expect(csv).toContain('Shoprite');
+  });
+
+  it('P26-06: workspace invite sheet (DESIGN page 26 popup #50)', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-workspace'));
+    await fireEvent.press(screen.getByTestId('settings-invite'));
+    expect(screen.getByTestId('settings-invite-sheet')).toBeTruthy();
   });
 
   it('P26-05: notifications toggles persist', async () => {

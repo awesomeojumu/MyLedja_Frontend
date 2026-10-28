@@ -12,7 +12,9 @@ import {
   EmptyState,
   InlineError,
   Placeholder,
+  Popover,
   Select,
+  SegmentedControl,
   Sheet,
   Text,
   useToast,
@@ -30,16 +32,26 @@ import {
   barFor,
   budgetCategories,
   budgetForMonth,
+  groupedBudgetCategories,
   monthLabel,
   nextMonth,
   overspentCategories,
   prevMonth,
   rowFor,
+  sixMonthAverage,
+  threeMonthAverage,
+  assignedOf,
+  shortMonth,
+  type BudgetGroupBy,
 } from './helpers';
 import { TemplatesSheet } from './TemplatesSheet';
 
 function groupLabel(group: string): string {
-  return group in catalogue ? t(group as TextKey) : group;
+  if (group in catalogue) return t(group as TextKey);
+  if (group === 'fixed' || group === 'flexible' || group === 'nonMonthly' || group === 'savings') {
+    return t(`budget.type.${group}` as TextKey);
+  }
+  return group;
 }
 
 const sp = tokens.spacing;
@@ -63,27 +75,30 @@ export function BudgetScreen() {
   const [moveOpen, setMoveOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [monthSpan, setMonthSpan] = useState<'1' | '3'>('1');
+  const [groupBy, setGroupBy] = useState<BudgetGroupBy>('groups');
   const [error, setError] = useState<string | null>(null);
+
+  const displayMonths = useMemo(() => {
+    if (monthSpan === '1') return [month];
+    return [prevMonth(prevMonth(month)), prevMonth(month), month];
+  }, [month, monthSpan]);
 
   const model = useMemo(() => {
     if (!snapshot) return null;
     const cats = budgetCategories(snapshot);
     const budget = budgetForMonth(snapshot, month);
-    const groups = new Map<string, typeof cats>();
-    for (const cat of cats) {
-      const list = groups.get(cat.group) ?? [];
-      list.push(cat);
-      groups.set(cat.group, list);
-    }
+    const groups = groupedBudgetCategories(snapshot, groupBy);
     return {
       cats,
       budget,
-      groups: [...groups.entries()],
+      groups,
       overspent: overspentCategories(snapshot, month),
       style: snapshot.settings.budgetStyle,
       income: budget.leftToPlan,
     };
-  }, [snapshot, month]);
+  }, [snapshot, month, groupBy]);
 
   const savePlanned = async () => {
     if (!editId || editMinor === null || editMinor < 0n) return;
@@ -120,6 +135,30 @@ export function BudgetScreen() {
           </Pressable>
         </View>
 
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], alignItems: 'center' }}>
+          <SegmentedControl
+            testID="budget-month-span"
+            label={t('budget.monthSpan')}
+            value={monthSpan}
+            onChange={setMonthSpan}
+            options={[
+              { value: '1', label: t('budget.oneMonth') },
+              { value: '3', label: t('budget.threeMonths') },
+            ]}
+          />
+          <Select
+            testID="budget-group-by"
+            label={t('budget.groupBy')}
+            value={groupBy}
+            onChange={(v) => setGroupBy(v as BudgetGroupBy)}
+            options={[
+              { value: 'groups', label: t('budget.groupGroups') },
+              { value: 'type', label: t('budget.groupType') },
+            ]}
+          />
+          <Button testID="budget-more-menu" kind="secondary" label={t('budget.moreMenu')} onPress={() => setMenuOpen(true)} />
+        </View>
+
         {!model ? (
           <Placeholder height={120} />
         ) : model.cats.length === 0 ? (
@@ -147,6 +186,15 @@ export function BudgetScreen() {
               ) : null}
             </View>
             {error ? <InlineError message={error} /> : null}
+            {monthSpan === '3' ? (
+              <View testID="budget-three-months" style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
+                {displayMonths.map((m) => (
+                  <Text key={m} variant="caption" tone={m === month ? undefined : 'textSecondary'}>
+                    {shortMonth(m)}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
             <View testID="budget-columns" style={{ flexDirection: 'row', gap: sp['spacing-md'], paddingHorizontal: sp['spacing-md'] }}>
               <Text variant="caption" tone="textSecondary" style={{ flex: 1 }}>
                 {t('budget.col.category')}
@@ -206,6 +254,15 @@ export function BudgetScreen() {
                         >
                           <Amount minor={row.assigned} />
                         </Pressable>
+                        {monthSpan === '3'
+                          ? displayMonths
+                              .filter((m) => m !== month)
+                              .map((m) => (
+                                <View key={m} style={{ width: 72, alignItems: 'flex-end' }}>
+                                  <Amount minor={assignedOf(snapshot!, cat.id, m)} variant="caption" />
+                                </View>
+                              ))
+                          : null}
                         <Pressable
                           testID={`budget-spent-${cat.id}`}
                           accessibilityRole="link"
@@ -260,7 +317,60 @@ export function BudgetScreen() {
         }
       >
         <AmountInput label={t('budget.col.planned')} value={editText} onChange={(text, minor) => { setEditText(text); setEditMinor(minor); }} testID="budget-edit-amount" />
+        {editId && snapshot ? (
+          <View style={{ gap: sp['spacing-xs'] }}>
+            <Button
+              kind="link"
+              label={t('budget.quickLastMonth', { amount: formatNaira(assignedOf(snapshot, editId, prevMonth(month))) })}
+              onPress={() => {
+                const v = assignedOf(snapshot, editId, prevMonth(month));
+                setEditMinor(v);
+                setEditText((Number(v) / 100).toString());
+              }}
+            />
+            <Button
+              kind="link"
+              label={t('budget.quickThreeMonthAvg', { amount: formatNaira(threeMonthAverage(snapshot, editId, month)) })}
+              onPress={() => {
+                const v = threeMonthAverage(snapshot, editId, month);
+                setEditMinor(v);
+                setEditText((Number(v) / 100).toString());
+              }}
+            />
+          </View>
+        ) : null}
       </Sheet>
+
+      <Popover visible={menuOpen} onClose={() => setMenuOpen(false)} testID="budget-menu-popover">
+        <Text variant="heading-sm">{t('budget.moreMenu')}</Text>
+        <Button
+          testID="budget-menu-copy"
+          kind="secondary"
+          label={t('budget.menuCopyLast')}
+          onPress={() => void repo.copyBudgetMonth(prevMonth(month), month).then(() => { toast.show(t('common.saved')); setMenuOpen(false); })}
+        />
+        <Button
+          testID="budget-menu-averages"
+          kind="secondary"
+          label={t('budget.menuFillAverages')}
+          onPress={() => void repo.fillBudgetFromAverages(month).then(() => { toast.show(t('common.saved')); setMenuOpen(false); })}
+        />
+        <Button
+          testID="budget-menu-templates"
+          kind="secondary"
+          label={t('budget.menuApplyTemplates')}
+          onPress={() => {
+            setMenuOpen(false);
+            setTemplatesOpen(true);
+          }}
+        />
+        <Button
+          testID="budget-menu-zero"
+          kind="secondary"
+          label={t('budget.menuZero')}
+          onPress={() => void repo.clearMonthBudget(month).then(() => { toast.show(t('common.saved')); setMenuOpen(false); })}
+        />
+      </Popover>
 
       {snapshot && moveOpen ? (
         <MoveMoneySheet

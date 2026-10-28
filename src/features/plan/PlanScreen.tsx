@@ -36,8 +36,11 @@ import {
   findRecurringSuggestions,
   planSummaryStrip,
   rowsByDate,
+  allScheduleRows,
+  scheduleFrequency,
   type BillRow,
   type FindRecurringSuggestion,
+  type ScheduleRow,
 } from './recurrence';
 
 const sp = tokens.spacing;
@@ -45,6 +48,7 @@ const GROUP_ORDER: BillRow['group'][] = ['overdue', 'dueSoon', 'later', 'paid'];
 const UPCOMING_OPTIONS = [3, 7, 14, 30] as const;
 
 type ViewMode = 'list' | 'calendar';
+type PlanTab = 'thisMonth' | 'allSchedules';
 
 export function PlanScreen() {
   const router = useRouter();
@@ -53,6 +57,8 @@ export function PlanScreen() {
   const { snapshot, repo } = useWorkspace();
   const month = monthOf(today());
   const [view, setView] = useState<ViewMode>('list');
+  const [planTab, setPlanTab] = useState<PlanTab>('thisMonth');
+  const [scheduleSearch, setScheduleSearch] = useState('');
   const [dueSoonDays, setDueSoonDays] = useState<number>(7);
   const [upcomingOpen, setUpcomingOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -67,6 +73,10 @@ export function PlanScreen() {
   const strip = useMemo(() => (snapshot && rows ? planSummaryStrip(snapshot, month, rows) : null), [snapshot, month, rows]);
   const byDate = useMemo(() => (rows ? rowsByDate(rows) : new Map()), [rows]);
   const suggestions = useMemo(() => (snapshot ? findRecurringSuggestions(snapshot, month) : []), [snapshot, month]);
+  const schedules = useMemo(
+    () => (snapshot ? allScheduleRows(snapshot, today(), scheduleSearch) : []),
+    [snapshot, scheduleSearch],
+  );
 
   const markPaid = async (row: BillRow) => {
     if (!snapshot) return;
@@ -113,6 +123,21 @@ export function PlanScreen() {
         </View>
       ) : null}
 
+      <SegmentedControl
+        testID="plan-tab"
+        label={t('plan.mainTab')}
+        value={planTab}
+        onChange={setPlanTab}
+        options={[
+          { value: 'thisMonth', label: t('plan.tabThisMonth') },
+          { value: 'allSchedules', label: t('plan.tabAllSchedules') },
+        ]}
+      />
+
+      {planTab === 'allSchedules' ? (
+        <AllSchedulesTable rows={schedules} search={scheduleSearch} onSearch={setScheduleSearch} />
+      ) : (
+        <>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'], alignItems: 'center' }}>
         <SegmentedControl
           testID="plan-view-toggle"
@@ -152,6 +177,9 @@ export function PlanScreen() {
         </ScrollView>
       ) : (
         <CalendarGrid month={month} today={today()} byDate={byDate} onDay={(d) => setDaySheet(d)} theme={theme} />
+      )}
+
+        </>
       )}
 
       {addOpen && snapshot ? (
@@ -210,6 +238,64 @@ export function PlanScreen() {
         </Sheet>
       ) : null}
     </AppFrame>
+  );
+}
+
+function AllSchedulesTable({
+  rows,
+  search,
+  onSearch,
+}: {
+  rows: ScheduleRow[];
+  search: string;
+  onSearch: (q: string) => void;
+}) {
+  return (
+    <View testID="plan-all-schedules" style={{ gap: sp['spacing-md'] }}>
+      <TextInput testID="plan-schedules-search" label={t('plan.schedulesSearch')} value={search} onChangeText={onSearch} />
+      {rows.length === 0 ? (
+        <Text tone="textSecondary">{t('plan.schedulesEmpty')}</Text>
+      ) : (
+        <ScrollView horizontal>
+          <View style={{ minWidth: 640, gap: sp['spacing-xs'] }}>
+            <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], paddingBottom: sp['spacing-xs'] }}>
+              <Text variant="caption" tone="textSecondary" style={{ flex: 2 }}>
+                {t('plan.schedulesName')}
+              </Text>
+              <Text variant="caption" tone="textSecondary" style={{ width: 100 }}>
+                {t('plan.schedulesNext')}
+              </Text>
+              <Text variant="caption" tone="textSecondary" style={{ width: 88 }}>
+                {t('plan.schedulesStatus')}
+              </Text>
+              <Text variant="caption" tone="textSecondary" style={{ width: 100 }}>
+                {t('plan.schedulesAmount')}
+              </Text>
+              <Text variant="caption" tone="textSecondary" style={{ width: 120 }}>
+                {t('plan.schedulesOften')}
+              </Text>
+            </View>
+            {rows.map((row) => (
+              <Card key={row.recurring.id} testID={`plan-schedule-${row.recurring.id}`} style={{ flexDirection: 'row', gap: sp['spacing-sm'], alignItems: 'center' }}>
+                <Text style={{ flex: 2 }}>{row.recurring.name}</Text>
+                <Text variant="caption" style={{ width: 100 }}>
+                  {row.nextDate ? formatDay(row.nextDate) : '—'}
+                </Text>
+                <Text variant="caption" style={{ width: 88 }}>
+                  {t(`plan.scheduleStatus.${row.status}`)}
+                </Text>
+                <View style={{ width: 100 }}>
+                  <Amount minor={BigInt(row.recurring.amountMinor)} variant="caption" />
+                </View>
+                <Text variant="caption" tone="textSecondary" style={{ width: 120 }}>
+                  {scheduleFrequency(row.recurring)}
+                </Text>
+              </Card>
+            ))}
+          </View>
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
