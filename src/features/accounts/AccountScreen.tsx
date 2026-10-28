@@ -4,40 +4,37 @@ import { Platform, Pressable, ScrollView, View } from 'react-native';
 
 import {
   Amount,
-  AmountInput,
   Button,
   Card,
-  Confirm,
-  DatePicker,
   EmptyState,
   formatDay,
-  Footer,
-  InlineError,
   Menu,
   Placeholder,
-  Select,
-  Sheet,
   Tabs,
   Text,
-  TextInput,
   useToast,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
+import { useSync } from '@/data/sync/SyncProvider';
 import { ACCOUNT_KIND_INFO, type Account } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
-import { ImportSheet } from '@/features/import/ImportSheet';
-import { ledgerMessage, rowsFor, today, type Row } from '@/features/transactions/helpers';
+import { rowsFor, today, type Row } from '@/features/transactions/helpers';
 import { TransactionPanel } from '@/features/transactions/TransactionPanel';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 import { ledgerBalance } from '@/ledger';
 
+import { AccountImportSheet } from './AccountImportSheet';
+import { ArchiveSheet, EditAccountSheet, UpdateValueSheet } from './accountSheets';
+import { groupRegisterByDay, hasValueTab, isInvestmentAccount } from './helpers';
+import { HoldingsTab } from './HoldingsTab';
+
 const sp = tokens.spacing;
 
-type Tab = 'transactions' | 'value' | 'details';
+type Tab = 'transactions' | 'holdings' | 'value' | 'details';
 export type RegisterRow = Row & { line: bigint; running: bigint };
 
 /** Rows that touch the account, newest first, with the balance after each (P09-01). */
@@ -75,6 +72,7 @@ const revalued = (snapshot: Snapshot, accountId: string) =>
 
 export function AccountScreen() {
   const { snapshot, repo } = useWorkspace();
+  const { engine } = useSync();
   const params = useGlobalSearchParams<{ id?: string; tx?: string }>();
   const router = useRouter();
   const theme = useTheme();
@@ -82,12 +80,14 @@ export function AccountScreen() {
   const [tab, setTab] = useState<Tab>('transactions');
   const [sheet, setSheet] = useState<'import' | 'edit' | 'value' | 'archive' | null>(null);
   const [dropped, setDropped] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const account = snapshot?.accounts.find((a) => a.id === params.id);
   const rows = useMemo(() => (snapshot && account ? register(snapshot, account.id) : []), [snapshot, account]);
+  const dayGroups = useMemo(() => groupRegisterByDay(rows), [rows]);
   const balance = snapshot && account ? ledgerBalance(account.id, snapshot.events) : 0n;
   const owes = account ? ACCOUNT_KIND_INFO[account.type].ledger === 'liability' : false;
-  const hasValue = account ? account.type === 'property' || account.type === 'investment' : false;
+  const investment = account ? isInvestmentAccount(account.type) : false;
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined' || !account) return;
@@ -125,10 +125,21 @@ export function AccountScreen() {
   const split = clearedSplit(rows);
   const tabs: { value: Tab; label: string }[] = [
     { value: 'transactions', label: t('account.tab.transactions') },
-    ...(hasValue ? [{ value: 'value' as const, label: t('account.tab.value') }] : []),
+    ...(investment ? [{ value: 'holdings' as const, label: t('account.tab.holdings') }] : []),
+    ...(account && hasValueTab(account.type) ? [{ value: 'value' as const, label: t('account.tab.value') }] : []),
     { value: 'details', label: t('account.tab.details') },
   ];
   const sign = (v: bigint) => (owes ? -v : v);
+
+  const syncNow = async () => {
+    setSyncing(true);
+    try {
+      await engine.sync({ force: true });
+      toast.show(t('account.synced'));
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
     <AppFrame title={account?.name ?? t('accounts.title')}>
@@ -140,7 +151,7 @@ export function AccountScreen() {
           <>
             <View style={{ gap: sp['spacing-xs'] }}>
               <Text variant="caption" tone="textSecondary">
-                {[t(`accounts.kind.${account.type}`), account.institution].filter(Boolean).join(' · ')}
+                {[t(`accounts.kind.${account.type}`), account.institution, t('accounts.syncedNow')].filter(Boolean).join(' · ')}
               </Text>
               {owes ? (
                 <Text variant="caption" tone="textSecondary">
@@ -160,12 +171,13 @@ export function AccountScreen() {
                 onPress={() => router.push(`/accounts/${account.id}/reconcile`)}
               />
               <Button testID="account-import" kind="secondary" label={t('account.import')} onPress={() => setSheet('import')} />
+              <Button testID="account-sync" kind="secondary" label={t('account.syncNow')} disabled={syncing} onPress={() => void syncNow()} />
               <Menu
                 testID="account-menu"
                 trigger={(open) => <Button testID="account-more" kind="secondary" label={t('account.more')} onPress={open} />}
                 items={[
                   { key: 'edit', label: t('account.edit'), onPress: () => setSheet('edit') },
-                  ...(hasValue ? [{ key: 'value', label: t('account.updateValue'), onPress: () => setSheet('value') }] : []),
+                  ...(hasValueTab(account.type) ? [{ key: 'value', label: t('account.updateValue'), onPress: () => setSheet('value') }] : []),
                   { key: 'archive', label: t('account.archive'), onPress: () => setSheet('archive') },
                 ]}
               />
@@ -180,40 +192,26 @@ export function AccountScreen() {
                   onAction={() => setSheet('import')}
                 />
               ) : (
-                <Card style={{ padding: 0 }}>
-                  {rows.map((r, i) => (
-                    <Pressable
-                      key={r.event.id}
-                      testID={`reg-${r.event.id}`}
-                      accessibilityRole="button"
-                      onPress={() => router.setParams({ tx: r.event.id })}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: sp['spacing-md'],
-                        padding: sp['spacing-md'],
-                        borderTopWidth: i === 0 ? 0 : 1,
-                        borderTopColor: theme.border,
-                      }}
-                    >
-                      <View style={{ flex: 1, gap: sp['spacing-xxs'] }}>
-                        <Text>{r.title}</Text>
+                <View style={{ gap: sp['spacing-md'] }}>
+                  {dayGroups.map((g) => (
+                    <View key={g.day} testID={`day-${g.day}`} style={{ gap: sp['spacing-xs'] }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: sp['spacing-xs'] }}>
                         <Text variant="caption" tone="textSecondary">
-                          {[formatDay(r.event.date), r.category, r.event.reconciledBy ? t('account.locked') : r.event.cleared ? t('account.clearedMark') : null]
-                            .filter(Boolean)
-                            .join(' · ')}
+                          {formatDay(g.day)}
                         </Text>
+                        <Amount minor={sign(g.net)} signed variant="caption" />
                       </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Amount minor={sign(r.line)} signed />
-                        <Text variant="caption" tone="textSecondary" testID={`running-${r.event.id}`}>
-                          {fmt(sign(r.running))}
-                        </Text>
-                      </View>
-                    </Pressable>
+                      <Card style={{ padding: 0 }}>
+                        {g.rows.map((r, i) => (
+                          <RegisterLine key={r.event.id} row={r} sign={sign} theme={theme} first={i === 0} onOpen={() => router.setParams({ tx: r.event.id })} />
+                        ))}
+                      </Card>
+                    </View>
                   ))}
-                </Card>
+                </View>
               )
+            ) : tab === 'holdings' ? (
+              <HoldingsTab account={account} />
             ) : tab === 'value' ? (
               <Card testID="value-list" style={{ gap: sp['spacing-sm'] }}>
                 {revalued(snapshot, account.id).length === 0 ? (
@@ -234,7 +232,7 @@ export function AccountScreen() {
         )}
       </ScrollView>
       {account && sheet === 'import' ? (
-        <ImportSheet
+        <AccountImportSheet
           account={account}
           initialText={dropped}
           onClose={() => {
@@ -258,6 +256,49 @@ export function AccountScreen() {
 
 const fmt = (minor: bigint) => formatNaira(minor);
 
+function RegisterLine({
+  row,
+  sign,
+  theme,
+  first,
+  onOpen,
+}: {
+  row: RegisterRow;
+  sign: (v: bigint) => bigint;
+  theme: { border: string };
+  first: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <Pressable
+      testID={`reg-${row.event.id}`}
+      accessibilityRole="button"
+      onPress={onOpen}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp['spacing-md'],
+        padding: sp['spacing-md'],
+        borderTopWidth: first ? 0 : 1,
+        borderTopColor: theme.border,
+      }}
+    >
+      <View style={{ flex: 1, gap: sp['spacing-xxs'] }}>
+        <Text>{row.title}</Text>
+        <Text variant="caption" tone="textSecondary">
+          {[row.event.reconciledBy ? t('account.locked') : row.event.cleared ? t('account.clearedMark') : null].filter(Boolean).join(' · ')}
+        </Text>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <Amount minor={sign(row.line)} signed />
+        <Text variant="caption" tone="textSecondary" testID={`running-${row.event.id}`}>
+          {fmt(sign(row.running))}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 function Details({ account }: { account: Account }) {
   const { snapshot } = useWorkspace();
   const history = (snapshot?.reconciles ?? []).filter((r) => r.accountId === account.id);
@@ -272,6 +313,8 @@ function Details({ account }: { account: Account }) {
       {line(t('accounts.institution'), account.institution ?? t('account.none'))}
       {line(t('accounts.last4'), account.last4 ? t('accounts.masked', { last4: account.last4 }) : t('account.none'))}
       {line(t('account.currency'), account.currency)}
+      {line(t('account.bankConnection'), t('account.notConnected'))}
+      {line(t('account.importSettings'), account.importMapping ? t('account.importRemembered') : t('account.importDefault'))}
       <Text variant="heading-sm" accessibilityRole="header">
         {t('account.reconcileHistory')}
       </Text>
@@ -279,7 +322,7 @@ function Details({ account }: { account: Account }) {
         <Text tone="textSecondary">{t('account.noReconciles')}</Text>
       ) : (
         history.map((r) => (
-          <View key={r.id} testID={`reconcile-${r.id}`} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-md'] }}>
+          <View key={r.id} testID={`reconcile-${r.id}`} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-md'], flexWrap: 'wrap' }}>
             <Text>{formatDay(r.statementDate)}</Text>
             <Amount minor={BigInt(r.statementBalance)} />
             <Text tone="textSecondary">{r.adjustment === '0' ? t('account.noAdjustment') : t('account.adjusted', { amount: fmt(BigInt(r.adjustment)) })}</Text>
@@ -287,140 +330,5 @@ function Details({ account }: { account: Account }) {
         ))
       )}
     </Card>
-  );
-}
-
-function EditAccountSheet({ account, onClose }: { account: Account; onClose: () => void }) {
-  const { repo } = useWorkspace();
-  const toast = useToast();
-  const [name, setName] = useState(account.name);
-  const [institution, setInstitution] = useState(account.institution ?? '');
-  const [last4, setLast4] = useState(account.last4 ?? '');
-  const last4Ok = last4 === '' || /^\d{4}$/.test(last4);
-  const save = async () => {
-    await repo.updateAccount({ ...account, name: name.trim(), institution: institution.trim() || undefined, last4: last4 || undefined });
-    toast.show(t('common.saved'));
-    onClose();
-  };
-  return (
-    <Sheet
-      visible
-      testID="edit-account-sheet"
-      title={t('account.edit')}
-      onClose={onClose}
-      footer={
-        <Footer>
-          <Button kind="secondary" label={t('common.cancel')} onPress={onClose} />
-          <Button testID="edit-account-save" label={t('account.saveChanges')} disabled={!name.trim() || !last4Ok} onPress={() => void save()} />
-        </Footer>
-      }
-    >
-      <View style={{ gap: sp['spacing-lg'] }}>
-        <TextInput testID="edit-account-name" label={t('accounts.name')} value={name} onChangeText={setName} />
-        <TextInput label={`${t('accounts.institution')} ${t('common.optional')}`} value={institution} onChangeText={setInstitution} />
-        <TextInput
-          testID="edit-account-last4"
-          label={`${t('accounts.last4')} ${t('common.optional')}`}
-          value={last4}
-          onChangeText={(v) => setLast4(v.replace(/\D/g, '').slice(0, 4))}
-          keyboardType="number-pad"
-          error={last4Ok ? null : t('accounts.last4Invalid')}
-        />
-      </View>
-    </Sheet>
-  );
-}
-
-function UpdateValueSheet({ account, current, onClose }: { account: Account; current: bigint; onClose: () => void }) {
-  const { repo } = useWorkspace();
-  const toast = useToast();
-  const [value, setValue] = useState<{ text: string; minor: bigint | null }>({ text: '', minor: null });
-  const [date, setDate] = useState(today());
-  const [error, setError] = useState<string | null>(null);
-  const save = async () => {
-    if (value.minor === null) return;
-    const r = await repo.updateValue(account.id, value.minor, date);
-    if (!r.ok) return setError(ledgerMessage(r.error));
-    toast.show(t('account.valueSaved'));
-    onClose();
-  };
-  return (
-    <Sheet
-      visible
-      testID="value-sheet"
-      title={t('account.updateValue')}
-      onClose={onClose}
-      footer={
-        <Footer>
-          <Button kind="secondary" label={t('common.cancel')} onPress={onClose} />
-          <Button testID="value-save" label={t('account.saveValue')} disabled={value.minor === null} onPress={() => void save()} />
-        </Footer>
-      }
-    >
-      <View style={{ gap: sp['spacing-lg'] }}>
-        <Text tone="textSecondary">{t('account.currentValue', { amount: fmt(current) })}</Text>
-        <AmountInput testID="value-amount" label={t('account.newValue')} value={value.text} onChange={(text, minor) => setValue({ text, minor })} />
-        <DatePicker label={t('account.valueDate')} value={date} onChange={setDate} />
-        <Text variant="caption" tone="textSecondary">
-          {t('account.valueNote')}
-        </Text>
-        {error ? <InlineError message={error} /> : null}
-      </View>
-    </Sheet>
-  );
-}
-
-function ArchiveSheet({ account, balance, snapshot, onClose }: { account: Account; balance: bigint; snapshot: Snapshot; onClose: () => void }) {
-  const { repo } = useWorkspace();
-  const router = useRouter();
-  const toast = useToast();
-  const others = snapshot.accounts.filter((a) => a.id !== account.id && !a.archived);
-  const [moveTo, setMoveTo] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const needsMove = balance !== 0n;
-  const archive = async () => {
-    const r = await repo.archiveAccount(account.id, today(), moveTo ?? undefined);
-    if (!r.ok) return setError(ledgerMessage(r.error));
-    toast.show(t('account.archived'));
-    onClose();
-    router.push('/accounts');
-  };
-  if (!needsMove) {
-    return (
-      <Confirm
-        visible
-        title={t('account.archiveTitle')}
-        body={t('account.archiveBody')}
-        confirmLabel={t('account.archive')}
-        onConfirm={() => void archive()}
-        onCancel={onClose}
-      />
-    );
-  }
-  return (
-    <Sheet
-      visible
-      testID="archive-sheet"
-      title={t('account.archiveTitle')}
-      onClose={onClose}
-      footer={
-        <Footer>
-          <Button kind="secondary" label={t('common.cancel')} onPress={onClose} />
-          <Button testID="archive-save" label={t('account.moveAndArchive')} disabled={!moveTo} onPress={() => void archive()} />
-        </Footer>
-      }
-    >
-      <View style={{ gap: sp['spacing-lg'] }}>
-        <Text>{t('account.archiveMoveBody', { amount: fmt(balance < 0n ? -balance : balance) })}</Text>
-        <Select
-          testID="archive-move-to"
-          label={t('account.moveTo')}
-          options={others.map((a) => ({ value: a.id, label: a.name }))}
-          value={moveTo}
-          onChange={setMoveTo}
-        />
-        {error ? <InlineError message={error} /> : null}
-      </View>
-    </Sheet>
   );
 }
