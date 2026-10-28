@@ -167,6 +167,8 @@
   "status.waiting": "{count} waiting to sync",
   "status.offline": "Offline",
   "dashboard.title": "Dashboard",
+
+  "chart.viewAsTable": "View as table",
   "date.month.1": "Jan",
   "date.month.2": "Feb",
   "date.month.3": "Mar",
