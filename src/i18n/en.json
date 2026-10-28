@@ -204,7 +204,7 @@
   "ledger.error.split_mismatch": "The parts must add up to the total.",
   "ledger.error.transfer_accounts": "Choose two different accounts.",
   "ledger.error.already_reversed": "This transaction was already changed on another device",
-  "ledger.error.reconciled": "Unlock this transaction before changing it. It was reconciled.",
+  "ledger.error.reconciled": "Remove the reconcile lock before changing this transaction.",
   "ledger.error.not_positive": "Enter an amount above ₦0.00.",
   "ledger.error.wrong_account_kind": "Choose a different account.",
 
@@ -230,8 +230,8 @@
   "reconcile.tick": "Cleared",
   "reconcile.untick": "Not cleared",
   "panel.locked": "Reconciled",
-  "panel.unlock": "Unlock to change",
-  "panel.unlockDone": "Unlocked",
+  "panel.unlock": "Remove lock to change",
+  "panel.unlockDone": "Lock removed",
 
   "nav.transactions": "Transactions",
   "nav.accounts": "Accounts",
