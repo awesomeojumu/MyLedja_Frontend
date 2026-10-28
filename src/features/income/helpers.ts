@@ -147,7 +147,7 @@ export function unmatchedEvents(snapshot: Snapshot, month: string) {
   );
 }
 
-function isInvestmentIncomeEvent(snapshot: Snapshot, e: { lines: { ledgerAccountId: string; amountMinor: bigint }[] }): boolean {
+export function isInvestmentIncomeEvent(snapshot: Snapshot, e: { lines: { ledgerAccountId: string; amountMinor: bigint }[] }): boolean {
   const interest = snapshot.chart.system('interest_earned')?.id;
   const gain = snapshot.chart.system('investment_gain_loss')?.id;
   for (const l of e.lines) {

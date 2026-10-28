@@ -74,4 +74,26 @@ describe('Income page (F2.2)', () => {
     );
     expect(screen.getByTestId('income-chart')).toBeTruthy();
   });
+
+  it('P13-26: mark received opens match picker', async () => {
+    const { sync, repo } = await seeded();
+    const snap = await repo.load();
+    const stream = snap.incomeStreams[0]!;
+    await repo.addTransaction({
+      kind: 'income',
+      accountId: snap.accounts[0]!.id,
+      categoryId: snap.categories.find((c) => c.kind === 'income')!.id,
+      amount: 32_000_000n,
+      date: '2026-10-15',
+    });
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <IncomeScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId(`income-record-${stream.id}`));
+    expect(screen.getByText(t('income.matchPickTitle'))).toBeTruthy();
+    expect(screen.getByTestId('income-match-create')).toBeTruthy();
+  });
 });
