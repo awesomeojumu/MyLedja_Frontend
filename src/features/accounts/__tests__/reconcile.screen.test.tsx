@@ -85,7 +85,7 @@ describe('Reconcile', () => {
     await fireEvent.changeText(screen.getByTestId('reconcile-statement'), '812300');
     await fireEvent.press(screen.getByTestId('reconcile-finish'));
     expect(await screen.findByText(t('reconcile.adjustConfirm'))).toBeTruthy();
-    await fireEvent.press(screen.getByText(t('reconcile.adjustConfirm')));
+    await fireEvent.press(screen.getByTestId('reconcile-adjust'));
     await waitFor(async () => expect(ledgerBalance(id('GTBank'), (await repo.load()).events)).toBe(81_230_000n));
     const after = await repo.load();
     const totals = periodTotals(after.events);
