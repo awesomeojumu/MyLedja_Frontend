@@ -57,6 +57,17 @@ describe('ApiClient (F0.7)', () => {
     expect(await session.getRefreshToken()).toBeNull();
   });
 
+  it('a refresh that fails with a server error keeps the session', async () => {
+    const session = createMemorySessionStore();
+    await session.setRefreshToken('old');
+    const { transport } = recorder((req) =>
+      req.path === '/v1/auth/refresh' ? { status: 503, body: null } : { status: 401, body: { code: 'expired', message: '' } },
+    );
+    const client = new ApiClient(transport, session, noSleep);
+    await expect(client.request('GET', '/v1/me')).rejects.toBeInstanceOf(ApiError);
+    expect(await session.getRefreshToken()).toBe('old');
+  });
+
   it('gives up on the network after its retries', async () => {
     const transport: Transport = async () => {
       throw new NetworkError();

@@ -99,17 +99,20 @@ export class ApiClient {
     const refreshToken = await this.session.getRefreshToken();
     const cookie = await this.session.hasCookieSession();
     if (!refreshToken && !cookie) return false;
-    const res = await this.transport({
-      method: 'POST',
-      path: '/v1/auth/refresh',
-      headers: { [CSRF_HEADER]: '1' },
-      body: refreshToken ? { refreshToken } : {},
-      withCredentials: cookie,
-    });
-    if (res.status !== 200) {
+    const res = await this.withRetries(() =>
+      this.transport({
+        method: 'POST',
+        path: '/v1/auth/refresh',
+        headers: { [CSRF_HEADER]: '1' },
+        body: refreshToken ? { refreshToken } : {},
+        withCredentials: cookie,
+      }),
+    );
+    if (res.status === 401 || res.status === 403) {
       await this.signOut();
       return false;
     }
+    if (res.status !== 200) return false;
     const tokens = res.body as Tokens;
     this.accessToken = tokens.accessToken;
     if (tokens.refreshToken) await this.session.setRefreshToken(tokens.refreshToken);
