@@ -29,6 +29,8 @@ import { useGlobalSearchParams, useRouter } from 'expo-router';
 
 import { useAddTransaction } from './AddTransaction';
 import { BulkEditSheet } from './BulkEditSheet';
+import { ExportTransactionsSheet } from './ExportTransactionsSheet';
+import { TransferMatchSheet } from './TransferMatchSheet';
 import { FiltersSheet } from './FiltersSheet';
 import { TransactionPanel } from './TransactionPanel';
 import { applyFilters, countActive, emptyFilters, filterChips, removeChip, type TxFilters } from './filters';
@@ -63,6 +65,8 @@ export function TransactionsScreen() {
   const [filters, setFilters] = useState<TxFilters>(emptyFilters());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [transferMatchOpen, setTransferMatchOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +155,8 @@ export function TransactionsScreen() {
           onPress={() => setFiltersOpen(true)}
         />
         <Button testID="tx-select" kind="secondary" label={t('tx.select')} onPress={() => setSelectMode((v) => !v)} />
+        <Button testID="tx-export" kind="secondary" label={t('tx.export')} onPress={() => setExportOpen(true)} />
+        <Button testID="tx-transfer-match" kind="secondary" label={t('tx.transferMatch')} onPress={() => setTransferMatchOpen(true)} />
         <Button testID="tx-add" label={t('tx.add')} onPress={() => add.open('expense')} />
       </View>
       {chips.length > 0 ? (
@@ -237,7 +243,10 @@ export function TransactionsScreen() {
                             <MoreHorizontal size={18} color={theme.textSecondary} />
                           </Pressable>
                         )}
-                        items={[{ key: 'delete', label: t('tx.delete'), onPress: () => void remove(row) }]}
+                        items={[
+                          { key: 'open', label: t('panel.title'), onPress: () => router.setParams({ tx: row.event.id }) },
+                          { key: 'delete', label: t('tx.delete'), onPress: () => void remove(row) },
+                        ]}
                       />
                     ) : null}
                   </View>
@@ -254,6 +263,8 @@ export function TransactionsScreen() {
       {bulkOpen && snapshot ? (
         <BulkEditSheet snapshot={snapshot} count={selected.size} onClose={() => setBulkOpen(false)} onApply={runBulk} />
       ) : null}
+      {exportOpen && snapshot ? <ExportTransactionsSheet snapshot={snapshot} onClose={() => setExportOpen(false)} /> : null}
+      {transferMatchOpen && snapshot ? <TransferMatchSheet snapshot={snapshot} onClose={() => setTransferMatchOpen(false)} /> : null}
     </AppFrame>
   );
 }

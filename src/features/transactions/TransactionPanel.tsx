@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Amount, AmountInput, Button, DatePicker, InlineError, Panel, PillTag, Select, Text, TextInput, useToast } from '@/design/components';
+import { Amount, AmountInput, Button, DatePicker, InlineError, Panel, PillTag, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import type { Snapshot, TransactionInput, TxEvent } from '@/data/workspace/repository';
@@ -45,6 +45,7 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
   const event = snapshot?.events.find((e) => e.id === id);
   const [editing, setEditing] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!snapshot || !event) return null;
@@ -118,6 +119,10 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
 
         <NotesField key={event.id} event={event} />
 
+        {event.notes?.startsWith('receipt:') || event.notes?.startsWith('http') ? (
+          <Button kind="link" testID="panel-receipt" label={t('panel.viewReceipt')} onPress={() => setReceiptOpen(true)} />
+        ) : null}
+
         {event.type === 'expense' ? (
           <View style={{ gap: sp['spacing-sm'] }} testID="panel-connected">
             <Text variant="heading-sm" accessibilityRole="header">
@@ -164,6 +169,9 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
           <Button kind="secondary" testID="panel-delete" label={t('tx.delete')} onPress={() => void remove()} />
         ) : null}
       </View>
+      <Sheet visible={receiptOpen} title={t('panel.receiptTitle')} onClose={() => setReceiptOpen(false)} testID="panel-receipt-sheet">
+        <Text>{event.notes?.replace(/^receipt:/, '') ?? t('panel.receiptEmpty')}</Text>
+      </Sheet>
     </Panel>
   );
 }
