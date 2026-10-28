@@ -2,14 +2,32 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Amount, Button, Card, EmptyState, InlineError, Placeholder, Select, Sheet, Text, TextInput, AmountInput } from '@/design/components';
+import {
+  Amount,
+  Button,
+  Card,
+  Confirm,
+  EmptyState,
+  InlineError,
+  Placeholder,
+  Select,
+  Sheet,
+  Text,
+  TextInput,
+  AmountInput,
+  formatDay,
+} from '@/design/components';
 import tokens from '@/design/tokens.json';
+import { useTheme } from '@/design/ThemeProvider';
+import type { PersonDebt } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
-import { debtRows, debtTotals, type DebtFilter } from './helpers';
+import { DebtsPaymentSheet } from './DebtsPaymentSheet';
+import { debtOriginalAmount, debtProgress, nextInstallment } from './schedule';
+import { debtRows, debtTotals, findRecentPayment, type DebtFilter } from './helpers';
 
 const sp = tokens.spacing;
 const FILTERS: DebtFilter[] = ['all', 'owedToMe', 'iOwe', 'settled'];
@@ -17,27 +35,40 @@ const FILTERS: DebtFilter[] = ['all', 'owedToMe', 'iOwe', 'settled'];
 export function DebtsScreen() {
   const { snapshot, repo } = useWorkspace();
   const router = useRouter();
+  const theme = useTheme();
+  const onDate = today();
   const [filter, setFilter] = useState<DebtFilter>('all');
   const [lendOpen, setLendOpen] = useState(false);
   const [borrowOpen, setBorrowOpen] = useState(false);
+  const [payDebt, setPayDebt] = useState<PersonDebt | null>(null);
+  const [payBalance, setPayBalance] = useState<bigint>(0n);
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{ accountId: string; principal: bigint; interest: bigint } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const rows = useMemo(() => (snapshot ? debtRows(snapshot, filter, today()) : null), [snapshot, filter]);
-  const totals = rows ? debtTotals(debtRows(snapshot!, 'all', today())) : null;
+  const rows = useMemo(() => (snapshot ? debtRows(snapshot, filter, onDate) : null), [snapshot, filter, onDate]);
+  const totals = rows && snapshot ? debtTotals(debtRows(snapshot, 'all', onDate)) : null;
   const bankLoans = useMemo(() => snapshot?.accounts.filter((a) => a.type === 'loan' && !a.archived) ?? [], [snapshot]);
+
+  async function saveListPayment(debt: PersonDebt, balance: bigint, input: { accountId: string; principal: bigint; interest: bigint; force?: boolean }) {
+    setError(null);
+    const dup = snapshot ? findRecentPayment(debt.id, snapshot, input.principal, onDate) : null;
+    if (dup && !input.force) {
+      setDuplicateConfirm({ ...input });
+      return;
+    }
+    const r = await repo.recordDebtPayment(debt.id, { accountId: input.accountId, amount: input.principal, date: onDate, interest: input.interest });
+    if (!r.ok) setError(ledgerMessage(r.error));
+    else setPayDebt(null);
+  }
 
   return (
     <AppFrame title={t('debts.title')}>
       {totals ? (
-        <Card style={{ marginBottom: sp['spacing-md'], gap: sp['spacing-xs'] }}>
-          <Text tone="textSecondary">
-            {t('debts.theyOwe')}: <Amount minor={totals.owedToMe} variant="caption" /> · {t('debts.iOwe')}:{' '}
-            <Amount minor={totals.iOwe} variant="caption" />
-          </Text>
-          <Text variant="heading-sm">
-            {t('debts.net')}: <Amount minor={totals.net} variant="heading-sm" />
-          </Text>
-        </Card>
+        <View testID="debts-summary" style={{ flexDirection: 'row', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'] }}>
+          <SummaryTile label={t('debts.theyOwe')} amount={totals.owedToMe} />
+          <SummaryTile label={t('debts.iOwe')} amount={totals.iOwe} />
+          <SummaryTile label={t('debts.net')} amount={totals.net} emphasize />
+        </View>
       ) : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'] }}>
         {FILTERS.map((f) => (
@@ -61,6 +92,51 @@ export function DebtsScreen() {
         <EmptyState title={t('debts.emptyTitle')} body={t('debts.emptyBody')} actionLabel={t('debts.iLent')} onAction={() => setLendOpen(true)} />
       ) : (
         <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }}>
+          {rows.map(({ debt, balance }) => {
+            const original = snapshot ? debtOriginalAmount(debt.id, snapshot) : 0n;
+            const progress = snapshot ? debtProgress(debt.id, snapshot, balance) : 0;
+            const next = snapshot ? nextInstallment(debt, snapshot, onDate) : null;
+            return (
+              <Card key={debt.id} testID={`debt-row-${debt.id}`} style={{ gap: sp['spacing-sm'] }}>
+                <Pressable accessibilityRole="button" onPress={() => router.push(`/debts/${debt.id}`)}>
+                  <Text variant="heading-sm">{debt.name}</Text>
+                  <Text tone="textSecondary">{debt.direction === 'owedToMe' ? t('debts.theyOweLabel') : t('debts.iOweLabel')}</Text>
+                  {original > 0n ? (
+                    <Text tone="textSecondary">
+                      <Amount minor={balance} variant="caption" /> {t('debts.of')} <Amount minor={original} variant="caption" />
+                    </Text>
+                  ) : (
+                    <Amount minor={balance} />
+                  )}
+                  {original > 0n ? (
+                    <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.border, overflow: 'hidden', marginVertical: sp['spacing-xs'] }}>
+                      <View style={{ height: 8, width: `${Math.round(progress * 100)}%`, backgroundColor: theme.primaryFill }} />
+                    </View>
+                  ) : null}
+                  {next ? (
+                    <Text variant="caption" tone="textSecondary">
+                      {t('debts.dueLabel', { date: formatDay(next.dueDate) })}
+                    </Text>
+                  ) : null}
+                </Pressable>
+                {debt.status === 'open' ? (
+                  <Button
+                    testID={`debt-pay-${debt.id}`}
+                    kind="secondary"
+                    label={t('debts.recordPayment')}
+                    onPress={() => {
+                      setPayBalance(balance);
+                      setPayDebt(debt);
+                    }}
+                  />
+                ) : (
+                  <Text variant="caption" tone="textSecondary">
+                    {t('debts.settled')}
+                  </Text>
+                )}
+              </Card>
+            );
+          })}
           {bankLoans.length > 0 ? (
             <Card testID="debts-bank-loans" style={{ gap: sp['spacing-sm'] }}>
               <Text variant="heading-sm">{t('debts.bankLoansTitle')}</Text>
@@ -72,22 +148,6 @@ export function DebtsScreen() {
               ))}
             </Card>
           ) : null}
-          {rows.map(({ debt, balance }) => (
-            <Pressable key={debt.id} testID={`debt-row-${debt.id}`} accessibilityRole="button" onPress={() => router.push(`/debts/${debt.id}`)}>
-              <Card style={{ gap: sp['spacing-xs'] }}>
-                <Text variant="heading-sm">{debt.name}</Text>
-                <Text tone="textSecondary">{debt.direction === 'owedToMe' ? t('debts.theyOweLabel') : t('debts.iOweLabel')}</Text>
-                <Amount minor={balance} />
-                {debt.status === 'open' ? (
-                  <Button testID={`debt-pay-${debt.id}`} kind="secondary" label={t('debts.recordPayment')} onPress={() => router.push(`/debts/${debt.id}`)} />
-                ) : (
-                  <Text variant="caption" tone="textSecondary">
-                    {t('debts.settled')}
-                  </Text>
-                )}
-              </Card>
-            </Pressable>
-          ))}
         </ScrollView>
       )}
       {lendOpen && snapshot ? (
@@ -116,7 +176,38 @@ export function DebtsScreen() {
           }}
         />
       ) : null}
+      {payDebt && snapshot ? (
+        <DebtsPaymentSheet
+          max={payBalance}
+          snapshot={snapshot}
+          onClose={() => setPayDebt(null)}
+          onSave={(input) => saveListPayment(payDebt, payBalance, input)}
+        />
+      ) : null}
+      <Confirm
+        visible={duplicateConfirm !== null && payDebt !== null}
+        title={t('debts.duplicateTitle')}
+        body={t('debts.duplicateBody', { date: onDate })}
+        confirmLabel={t('debts.duplicateConfirm')}
+        onConfirm={() => {
+          if (!duplicateConfirm || !payDebt) return;
+          void saveListPayment(payDebt, payBalance, { ...duplicateConfirm, force: true });
+          setDuplicateConfirm(null);
+        }}
+        onCancel={() => setDuplicateConfirm(null)}
+      />
     </AppFrame>
+  );
+}
+
+function SummaryTile({ label, amount, emphasize }: { label: string; amount: bigint; emphasize?: boolean }) {
+  return (
+    <Card style={{ flex: 1, gap: sp['spacing-xs'], minWidth: 100 }}>
+      <Text variant="caption" tone="textSecondary">
+        {label}
+      </Text>
+      <Amount minor={amount} variant={emphasize ? 'heading-sm' : 'body-tabular'} />
+    </Card>
   );
 }
 

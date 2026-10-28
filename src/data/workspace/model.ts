@@ -225,6 +225,11 @@ export type PersonDebt = {
   status: 'open' | 'settled';
   nextDueDate?: string;
   notes?: string;
+  /** Instalment plan (DESIGN popup #36). */
+  scheduleInstallmentCount?: number;
+  scheduleAmountMinor?: string;
+  scheduleEvery?: 'week' | 'month';
+  scheduleFirstDue?: string;
 };
 
 export type DebtEntry = {
