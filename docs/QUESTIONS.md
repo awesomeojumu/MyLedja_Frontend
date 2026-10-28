@@ -155,3 +155,15 @@ Format and rules: build plan section 14. Each open question stops only the task 
   - Sync: an in-place change made before the record's own create has synced now counts this device's unsent writes in its base version, so it no longer conflicts with itself.
 - Answer:
 - Status: open
+
+## Q-17: Phase 1 decisions for Reconcile
+- Task: F1.6
+- Raised by: frontend agent
+- Documents: DESIGN.md page 10, TECH-SPEC 6.2 E9, case 20
+- Decisions taken so as not to block:
+  - Finish with a remaining difference posts one E9 adjustment against Adjustments (case 20). The confirm shows the UI difference; the posted delta uses `reconcileDelta` on the full ledger balance through the statement date.
+  - Locked (reconciled) events refuse correction and delete until Unlock clears `reconciledBy` in place.
+  - Cancel asks "Leave without finishing?" on every platform for now; iOS edge-swipe disable and Android back wiring wait for device tests (P10-06).
+  - The Account route moved to `accounts/[id]/index` so `/accounts/:id/reconcile` can nest beside it.
+- Answer:
+- Status: open

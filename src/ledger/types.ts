@@ -66,6 +66,7 @@ export type LedgerErrorCode =
   | 'split_mismatch'
   | 'transfer_accounts'
   | 'already_reversed'
+  | 'reconciled'
   | 'not_positive'
   | 'wrong_account_kind';
 

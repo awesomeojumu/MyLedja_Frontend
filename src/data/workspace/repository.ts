@@ -13,6 +13,8 @@ import {
   Chart,
   checkEvent,
   ledgerBalance,
+  reconcileDelta,
+  shownBalance,
   systemAccounts,
   type ExpensePart,
   type LedgerAccount,
@@ -221,6 +223,7 @@ export class WorkspaceRepository {
     const snapshot = await this.load();
     const original = snapshot.events.find((e) => e.id === id);
     if (!original) return { ok: false, error: 'missing_lines' };
+    if (original.reconciledBy) return { ok: false, error: 'reconciled' };
     return this.postEvent(snapshot.chart, snapshot.events, { type: 'reversal', date, lines: buildReversal(original), reversalOf: id });
   }
 
@@ -237,6 +240,7 @@ export class WorkspaceRepository {
     const original = snapshot.events.find((e) => e.id === id);
     if (!original) return { ok: false, error: 'missing_lines' };
     if (original.status === 'reversed') return { ok: false, error: 'already_reversed' };
+    if (original.reconciledBy) return { ok: false, error: 'reconciled' };
     const lines = this.linesFor(snapshot.chart, input);
     if (!lines.ok) return lines;
     const replacementId = this.newId();
@@ -391,6 +395,81 @@ export class WorkspaceRepository {
     if (!rec) return;
     const data = { ...(rec.data as StoredEvent), ...meta };
     await this.engine.save({ ...rec, data }, 'event.meta', { collection: 'events', id, data }, rec.version);
+  }
+
+  /** P10-05: unlock a reconciled event so it can be corrected again. */
+  async unlockEvent(id: string): Promise<void> {
+    const rec = await this.store.read('events', id);
+    if (!rec) return;
+    const current = rec.data as StoredEvent;
+    const data = { ...current, reconciledBy: undefined };
+    await this.engine.save({ ...rec, data }, 'event.unlock', { collection: 'events', id, data }, rec.version);
+  }
+
+  /**
+   * Finish a reconcile (P10): lock the ticked events, optionally post an E9 adjustment for the
+   * remaining difference, and keep the bank's statement balance apart from the calculated one.
+   */
+  async finishReconcile(input: {
+    accountId: string;
+    statementDate: string;
+    statementBalance: bigint;
+    eventIds: string[];
+    withAdjustment: boolean;
+  }): Promise<Result<Reconcile>> {
+    const snapshot = await this.load();
+    const account = snapshot.accounts.find((a) => a.id === input.accountId);
+    const ledger = snapshot.chart.get(input.accountId);
+    if (!account || !ledger) return { ok: false, error: 'missing_lines' };
+
+    const calculated = ledgerBalance(input.accountId, snapshot.events, input.statementDate);
+    let adjustment = 0n;
+    if (input.withAdjustment) {
+      const shown = shownBalance(ledger, calculated);
+      const delta = reconcileDelta(ledger, input.statementBalance, shown);
+      if (delta !== 0n) {
+        const lines = buildAdjustment(snapshot.chart, { accountId: input.accountId, delta, against: 'adjustments' });
+        if (!lines.ok) return lines;
+        const posted = await this.postEvent(snapshot.chart, snapshot.events, {
+          type: 'balance_adjustment',
+          date: input.statementDate,
+          lines: lines.value,
+        });
+        if (!posted.ok) return posted;
+        adjustment = delta;
+      }
+    }
+
+    const reconcileId = this.newId();
+    const after = await this.load();
+    const calculatedAfter = ledgerBalance(input.accountId, after.events, input.statementDate);
+    for (const id of input.eventIds) {
+      await this.setEventMeta(id, { cleared: true, reconciledBy: reconcileId });
+    }
+    if (input.withAdjustment && adjustment !== 0n) {
+      const adj = after.events.find(
+        (e) =>
+          e.type === 'balance_adjustment' &&
+          e.status === 'posted' &&
+          e.date === input.statementDate &&
+          e.lines.some((l) => l.ledgerAccountId === input.accountId) &&
+          !e.reconciledBy,
+      );
+      if (adj) await this.setEventMeta(adj.id, { cleared: true, reconciledBy: reconcileId });
+    }
+
+    const reconcile: Reconcile = {
+      id: reconcileId,
+      accountId: input.accountId,
+      statementDate: input.statementDate,
+      statementBalance: input.statementBalance.toString(),
+      calculatedBalance: calculatedAfter.toString(),
+      adjustment: adjustment.toString(),
+      finishedAt: new Date().toISOString(),
+    };
+    const { id, ...data } = reconcile;
+    await this.put('reconciles', id, data, 'reconcile.finish');
+    return { ok: true, value: reconcile };
   }
 
   private linesFor(chart: Chart, input: TransactionInput): Result<{ lines: Line[]; splitTotal?: bigint }> {
