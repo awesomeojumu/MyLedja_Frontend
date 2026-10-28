@@ -26,7 +26,7 @@ async function seeded() {
 }
 
 describe('Debts page (F2.4)', () => {
-  it('P15-01: shows owed totals', async () => {
+  it('P15-01: shows summary tiles', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -35,6 +35,7 @@ describe('Debts page (F2.4)', () => {
       { sync },
     );
     expect(screen.getByText(t('debts.title'))).toBeTruthy();
+    expect(screen.getByTestId('debts-summary')).toBeTruthy();
     expect(screen.getByTestId('debts-lent')).toBeTruthy();
   });
 

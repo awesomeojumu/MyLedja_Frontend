@@ -1218,6 +1218,21 @@ export class WorkspaceRepository {
     return { ok: true, value: posted.value };
   }
 
+  async updatePersonDebt(debt: PersonDebt): Promise<void> {
+    const { id, ...data } = debt;
+    await this.put('debts', id, data, 'debt.update');
+  }
+
+  async markPersonDebtSettled(debtId: string): Promise<Result<void>> {
+    const snapshot = await this.load();
+    const debt = snapshot.debts.find((d) => d.id === debtId);
+    if (!debt || debt.status !== 'open') return { ok: false, error: 'missing_lines' };
+    const balance = this.debtBalance(debt, snapshot);
+    if (balance > 0n) return { ok: false, error: 'not_positive' };
+    await this.updatePersonDebt({ ...debt, status: 'settled' });
+    return { ok: true, value: undefined };
+  }
+
   async refreshBillNotifications(): Promise<void> {
     const snapshot = await this.load();
     const today = workspaceToday();
