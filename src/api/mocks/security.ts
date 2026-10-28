@@ -46,6 +46,12 @@ export function createSecurityMock() {
     if (req.method === 'POST' && /\/exports\/transactions$/.test(req.path)) return needsRecheck() ?? ok({ filename: 'myledja-transactions.csv', mimeType: 'text/csv', content: 'Date,Type,Account,Category,Payee,Amount,Currency,Notes,Status' });
     if (req.method === 'POST' && /\/backups$/.test(req.path)) return needsRecheck() ?? ok({ filename: 'myledja-backup.json', mimeType: 'application/json', content: '{}' });
     if (req.method === 'DELETE' && req.path.startsWith('/v1/me/passkeys/')) return ok(null, 204);
+    // Phase 4 with the mock adapter: AI and banks are off, statements can't be read without the real API.
+    const path = req.path.split('?')[0]!;
+    if (req.method === 'GET' && /\/ai$/.test(path)) return ok({ available: { claude: false, gemini: false }, consent: { categorize: false, statements: false, healthAdvice: false, updatedAt: null } });
+    if (req.method === 'PUT' && /\/ai\/consent$/.test(path)) return ok({ available: { claude: false, gemini: false }, consent: { ...(req.body as object), updatedAt: new Date().toISOString() } });
+    if (req.method === 'GET' && /\/banking\/links$/.test(path)) return ok({ links: [], available: false });
+    if (req.method === 'POST' && /\/imports\/statement$/.test(path)) return { status: 400, body: { code: 'statement_unreadable', message: "MyLedja couldn't find transactions in this statement. Turn on AI statement reading in Settings, or upload a CSV." } };
     return null;
   };
 }

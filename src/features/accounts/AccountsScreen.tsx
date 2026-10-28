@@ -1,3 +1,4 @@
+import { bankConnectAvailable } from '@/features/banking/monoConnect';
 import { useRouter } from 'expo-router';
 import { ChevronDown, ChevronUp, MoreHorizontal } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
@@ -108,7 +109,9 @@ export function AccountsScreen() {
             {summary ? <Amount testID="net-worth" minor={summary.worth} variant="display-md" /> : <Placeholder width={180} height={36} />}
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
-            <Button testID="connect-bank" kind="secondary" label={t('accounts.connect')} onPress={() => setConnectOpen(true)} />
+            {bankConnectAvailable() ? (
+              <Button testID="connect-bank" kind="secondary" label={t('accounts.connect')} onPress={() => setConnectOpen(true)} />
+            ) : null}
             <Button
               testID="accounts-sort"
               kind="secondary"

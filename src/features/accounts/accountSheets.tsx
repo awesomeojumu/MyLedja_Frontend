@@ -1,5 +1,10 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+
+import { aiApi } from '@/api/ai';
+import { ApiError } from '@/api/client';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { openMonoConnect } from '@/features/banking/monoConnect';
 import { View } from 'react-native';
 
 import {
@@ -166,9 +171,35 @@ export function AddAccountSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Popup #16 stub — Connect bank (Phase 4 full flow). */
+/** Popup #16 Connect bank: choose the MyLedja account, then Mono's secure screen; new transactions go to review. */
 export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
-  const steps = [t('accounts.connect.step1'), t('accounts.connect.step2'), t('accounts.connect.step3'), t('accounts.connect.step4')];
+  const { snapshot } = useWorkspace();
+  const { client, user } = useAuth();
+  const toast = useToast();
+  const api = useMemo(() => aiApi(client), [client]);
+  const accounts = (snapshot?.accounts ?? []).filter((a) => !a.archived && ['bank', 'savings', 'wallet', 'card'].includes(a.type));
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const connect = async () => {
+    if (!user || !accountId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const code = await openMonoConnect();
+      if (!code) return;
+      const link = await api.linkBank(user.workspaceId, { accountId, code });
+      toast.show(t('accounts.connect.linked', { bank: link.institution }));
+      await api.syncBank(user.workspaceId, link.id).catch(() => null);
+      onClose();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.body.message : t('accounts.connect.failed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Sheet
       visible
@@ -177,18 +208,23 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       footer={
         <Footer>
-          <Button kind="secondary" label={t('common.close')} onPress={onClose} />
+          <Button label={t('accounts.connect.continue')} onPress={() => void connect()} disabled={busy || !accountId} />
         </Footer>
       }
     >
       <View style={{ gap: sp['spacing-md'] }}>
-        <Text tone="textSecondary">{t('accounts.connect.phaseNote')}</Text>
-        {steps.map((body, i) => (
-          <View key={i} style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
-            <Text tone="textSecondary">{i + 1}.</Text>
-            <Text style={{ flex: 1 }}>{body}</Text>
-          </View>
-        ))}
+        <Text tone="textSecondary">{t('accounts.connect.body')}</Text>
+        <Select
+          testID="connect-bank-account"
+          label={t('accounts.connect.account')}
+          options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+          value={accountId}
+          onChange={setAccountId}
+        />
+        <Text variant="caption" tone="textSecondary">
+          {t('accounts.connect.review')}
+        </Text>
+        {error ? <InlineError message={error} /> : null}
       </View>
     </Sheet>
   );

@@ -139,8 +139,6 @@ const LOCAL_ONLY = new Set([
   'settings.update',
   'budget.template.save',
   'payee.delete',
-  'rule.update',
-  'rule.delete',
   'notification.create',
   'notification.read',
   'notification.snooze',
@@ -907,7 +905,8 @@ export class WorkspaceRepository {
 
   async saveRule(rule: TransactionRule): Promise<void> {
     const { id, ...data } = rule;
-    await this.put('rules', id, data, 'rule.update');
+    const { deleted: _d, ...body } = data as typeof data & { deleted?: boolean };
+    await this.put('rules', id, data, 'rule.update', undefined, { type: 'rule.upsert', targetId: id, payload: body });
   }
 
   async createRule(
@@ -929,7 +928,7 @@ export class WorkspaceRepository {
     const snapshot = await this.load();
     const rule = snapshot.rules.find((r) => r.id === ruleId);
     if (!rule) return;
-    await this.put('rules', ruleId, { ...rule, deleted: true, enabled: false }, 'rule.delete');
+    await this.put('rules', ruleId, { ...rule, deleted: true, enabled: false }, 'rule.delete', undefined, { type: 'rule.delete', targetId: ruleId, payload: {} });
   }
 
   async reorderRules(ruleId: string, direction: 'up' | 'down'): Promise<void> {

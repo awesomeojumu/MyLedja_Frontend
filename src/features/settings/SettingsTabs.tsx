@@ -19,7 +19,6 @@ import {
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import {
-  DEFAULT_AI_PREFS,
   DEFAULT_BUDGET_TYPES_SHOWN,
   DEFAULT_DEVICE_SYNC,
   type BudgetTypesShown,
@@ -33,6 +32,9 @@ import Constants from 'expo-constants';
 
 import { ApiError } from '@/api/client';
 import type { ActivityEvent, DeviceSession, SecurityStatus } from '@/api/security';
+import { type AiConsent, type AiSettings, aiApi, type BankLink } from '@/api/ai';
+import { ConnectBankSheet } from '@/features/accounts/accountSheets';
+import { bankConnectAvailable } from '@/features/banking/monoConnect';
 import { formatDay } from '@/design/components/overlays';
 import { passkeysAvailable } from '@/features/auth/passkey';
 
@@ -51,41 +53,48 @@ import {
 const sp = tokens.spacing;
 
 export function AiTab() {
-  const { snapshot, repo } = useWorkspace();
+  const { client, user } = useAuth();
   const toast = useToast();
-  const prefs = { ...DEFAULT_AI_PREFS, ...snapshot?.settings.aiPrefs };
+  const api = useMemo(() => aiApi(client), [client]);
+  const [settings, setSettings] = useState<AiSettings | null>(null);
+  const workspaceId = user?.workspaceId;
 
-  const save = async (next: typeof prefs) => {
-    if (!snapshot) return;
-    await repo.updateSettings({ ...snapshot.settings, aiPrefs: next });
-    toast.show(t('common.saved'));
+  useEffect(() => {
+    if (!workspaceId) return;
+    api.settings(workspaceId).then(setSettings, () => setSettings(null));
+  }, [api, workspaceId]);
+
+  const save = async (key: keyof AiConsent, on: boolean) => {
+    if (!settings || !workspaceId) return;
+    const { updatedAt: _u, ...consent } = settings.consent;
+    try {
+      setSettings(await api.setConsent(workspaceId, { ...consent, [key]: on }));
+      toast.show(t('common.saved'));
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.body.message : t('errors.network'));
+    }
   };
 
+  const on = settings && (settings.available.claude || settings.available.gemini);
+  const rows: { key: keyof AiConsent; label: TextKey; detail: TextKey }[] = [
+    { key: 'categorize', label: 'settings.ai.suggestCategories', detail: 'settings.ai.suggestCategoriesDetail' },
+    { key: 'statements', label: 'settings.ai.readStatements', detail: 'settings.ai.readStatementsDetail' },
+    { key: 'healthAdvice', label: 'settings.ai.healthAdvice', detail: 'settings.ai.healthAdviceDetail' },
+  ];
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-ai">
       <Text tone="textSecondary">{t('settings.ai.body')}</Text>
-      <Card style={{ gap: sp['spacing-sm'] }}>
-        <Switch
-          testID="settings-ai-suggest"
-          label={t('settings.ai.suggestCategories')}
-          value={prefs.suggestCategories}
-          onChange={(suggestCategories) => void save({ ...prefs, suggestCategories })}
-        />
-        <Text variant="caption" tone="textSecondary">
-          {t('settings.ai.suggestCategoriesDetail')}
-        </Text>
-      </Card>
-      <Card style={{ gap: sp['spacing-sm'] }}>
-        <Switch
-          testID="settings-ai-statements"
-          label={t('settings.ai.readStatements')}
-          value={prefs.readStatements}
-          onChange={(readStatements) => void save({ ...prefs, readStatements })}
-        />
-        <Text variant="caption" tone="textSecondary">
-          {t('settings.ai.readStatementsDetail')}
-        </Text>
-      </Card>
+      {settings && !on ? <Banner message={t('settings.ai.unavailable')} /> : null}
+      {on
+        ? rows.map((r) => (
+            <Card key={r.key} style={{ gap: sp['spacing-sm'] }}>
+              <Switch testID={`settings-ai-${r.key}`} label={t(r.label)} value={settings.consent[r.key]} onChange={(v) => void save(r.key, v)} />
+              <Text variant="caption" tone="textSecondary">
+                {t(r.detail)}
+              </Text>
+            </Card>
+          ))
+        : null}
     </ScrollView>
   );
 }
@@ -219,30 +228,82 @@ export function CurrenciesTabDeep() {
 
 export function BanksTab() {
   const { snapshot } = useWorkspace();
-  const router = useRouter();
-  const banks = useMemo(
-    () => snapshot?.accounts.filter((a) => !a.archived && (a.type === 'bank' || a.institution)) ?? [],
-    [snapshot],
-  );
+  const { client, user } = useAuth();
+  const toast = useToast();
+  const api = useMemo(() => aiApi(client), [client]);
+  const [links, setLinks] = useState<BankLink[] | null>(null);
+  const [available, setAvailable] = useState(false);
+  const [connect, setConnect] = useState(false);
+  const workspaceId = user?.workspaceId;
+  const accountName = (id: string) => snapshot?.accounts.find((a) => a.id === id)?.name ?? '';
+
+  const load = useCallback(() => {
+    if (!workspaceId) return;
+    api.bankLinks(workspaceId).then(
+      (r) => {
+        setLinks(r.links);
+        setAvailable(r.available);
+      },
+      () => setLinks([]),
+    );
+  }, [api, workspaceId]);
+  useEffect(load, [load]);
+
+  const run = (action: () => Promise<void>) => void action().catch((e: unknown) => toast.show(e instanceof ApiError ? e.body.message : t('errors.network')));
 
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-banks">
       <Text tone="textSecondary">{t('settings.banks.body')}</Text>
-      {banks.map((a) => (
-        <Card key={a.id} style={{ gap: sp['spacing-sm'] }} testID={`settings-bank-${a.id}`}>
-          <Text variant="heading-sm">{a.name}</Text>
-          <Text tone="textSecondary">{a.institution ?? t('settings.banks.manualAccount')}</Text>
+      {links && links.length === 0 ? <Text tone="textSecondary">{t('settings.banks.none')}</Text> : null}
+      {(links ?? []).map((l) => (
+        <Card key={l.id} style={{ gap: sp['spacing-sm'] }} testID={`settings-bank-${l.id}`}>
+          <Text variant="heading-sm">{l.last4 ? t('settings.banks.ending', { bank: l.institution, last4: l.last4 }) : l.institution}</Text>
+          <Text tone="textSecondary">{accountName(l.accountId)}</Text>
           <Text variant="caption" tone="textSecondary">
-            {t('settings.banks.lastSync', { when: t('settings.banks.syncNever') })}
+            {l.status === 'needs_reauth'
+              ? t('settings.banks.needsReauth')
+              : t('settings.banks.lastSync', { when: l.lastSyncedAt ? formatDay(l.lastSyncedAt.slice(0, 10)) : t('settings.banks.syncNever') })}
           </Text>
           <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
-            <Button testID={`settings-bank-sync-${a.id}`} kind="secondary" label={t('settings.banks.syncNow')} onPress={() => {}} disabled />
-            <Button testID={`settings-bank-reconnect-${a.id}`} kind="secondary" label={t('settings.banks.reconnect')} onPress={() => router.push(`/accounts/${a.id}`)} />
+            <Button
+              testID={`settings-bank-sync-${l.id}`}
+              kind="secondary"
+              label={t('settings.banks.syncNow')}
+              onPress={() =>
+                run(async () => {
+                  const r = await api.syncBank(workspaceId!, l.id);
+                  toast.show(r.newTransactions ? t('settings.banks.synced', { count: String(r.newTransactions) }) : t('settings.banks.upToDate'));
+                  load();
+                })
+              }
+            />
+            <Button
+              kind="secondary"
+              label={t('settings.banks.disconnect')}
+              onPress={() =>
+                run(async () => {
+                  await api.disconnectBank(workspaceId!, l.id);
+                  toast.show(t('settings.banks.disconnected'));
+                  load();
+                })
+              }
+            />
           </View>
         </Card>
       ))}
-      <Button testID="settings-connect-bank" label={t('settings.banks.connect')} onPress={() => router.push('/accounts')} />
-      <Banner message={t('settings.banks.laterPhase')} />
+      {available && bankConnectAvailable() ? (
+        <Button testID="settings-connect-bank" label={t('settings.banks.connect')} onPress={() => setConnect(true)} />
+      ) : (
+        <Banner message={t('settings.banks.unavailable')} />
+      )}
+      {connect ? (
+        <ConnectBankSheet
+          onClose={() => {
+            setConnect(false);
+            load();
+          }}
+        />
+      ) : null}
     </ScrollView>
   );
 }

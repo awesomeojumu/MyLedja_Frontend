@@ -240,6 +240,17 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
       };
       return rec('income_streams', id, data);
     }
+    case 'rules':
+      return rec('rules', id, {
+        enabled: d.enabled === true,
+        stage: d.stage,
+        order: num(d.order) ?? 0,
+        matchMode: d.matchMode,
+        conditions: d.conditions ?? [],
+        actions: d.actions ?? [],
+        matchedCount: num(d.matchedCount) ?? 0,
+        lastUsedAt: str(d.lastUsedAt),
+      });
     default:
       return null;
   }
