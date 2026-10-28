@@ -49,7 +49,7 @@ describe.each([lightTheme, darkTheme])('$name theme meets WCAG AA', (theme: Them
 });
 
 describe('size classes (DESIGN.md 3.1)', () => {
-  it.each([
+  it.each<[number, string]>([
     [375, 'phone'],
     [800, 'tablet'],
     [1100, 'desktop'],
