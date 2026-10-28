@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+# The api:sync header records the contract's sha256, which the generic-api-key rule misreads as a key.
+[allowlist]
+description = "openapi.json hash in generated API types"
+paths = ['''src/api/types\.ts$''']
+regexes = ['''^[0-9a-f]{64}\.?$''']
+condition = "AND"
