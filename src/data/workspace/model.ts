@@ -206,6 +206,32 @@ export type RecurringOccurrence = {
 
 export type IncomeStreamKind = 'regular' | 'variable' | 'irregular' | 'passive';
 
+export type IncomeAmountKind = 'exact' | 'approximate' | 'range';
+
+export type IncomeRecordMode = 'takeHome' | 'gross';
+
+export type IncomeDeductionKind = 'paye' | 'pension' | 'nhf' | 'other';
+
+/** PAYE → Taxes, pension/NHF → accounts (DESIGN §9.4). */
+export type IncomeDeduction = {
+  kind: IncomeDeductionKind;
+  amountMinor?: string;
+  percent?: number;
+  label?: string;
+  targetAccountId?: string;
+  targetCategoryId?: string;
+};
+
+export type IncomeRouting = {
+  goalId?: string;
+  categoryId?: string;
+  amountMinor?: string;
+  percent?: number;
+  restToBudget?: boolean;
+};
+
+export type IncomeReminder = 'none' | 'sameDay' | '1' | '3' | '7';
+
 export type IncomeStream = {
   id: string;
   name: string;
@@ -217,6 +243,14 @@ export type IncomeStream = {
   countInBudget: boolean;
   /** For tax-class report (P13-08). */
   taxClass?: string;
+  amountKind?: IncomeAmountKind;
+  rangeMinMinor?: string;
+  rangeMaxMinor?: string;
+  recordMode?: IncomeRecordMode;
+  grossMinor?: string;
+  deductions?: IncomeDeduction[];
+  routing?: IncomeRouting[];
+  reminder?: IncomeReminder;
 };
 
 export type DebtDirection = 'owedToMe' | 'iOwe';

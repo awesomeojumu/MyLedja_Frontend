@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
 
 import { WorkspaceRepository } from '@/data/workspace/repository';
 import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
@@ -22,11 +22,21 @@ async function seeded() {
     monthlyTakeHome: null,
     skippedSteps: [],
   });
+  await repo.addIncomeStream({
+    name: 'Salary',
+    kind: 'regular',
+    expectedMinor: '64000000',
+    accountId: (await repo.load()).accounts[0]!.id,
+    categoryId: (await repo.load()).categories.find((c) => c.kind === 'income')!.id,
+    rule: { every: 'month', on: 27 },
+    countInBudget: true,
+    taxClass: 'PAYE',
+  });
   return { sync, repo };
 }
 
 describe('Income page (F2.2)', () => {
-  it('P13-01: shows expected and received summary', async () => {
+  it('P13-01: shows summary tiles and add stream', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -36,5 +46,32 @@ describe('Income page (F2.2)', () => {
     );
     expect(screen.getByText(t('income.title'))).toBeTruthy();
     expect(screen.getByTestId('income-add')).toBeTruthy();
+    expect(screen.getByTestId('income-summary')).toBeTruthy();
+    expect(screen.getAllByText('Salary').length).toBeGreaterThan(0);
+  });
+
+  it('P13-08: opens deep add stream form with routing section', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <IncomeScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('income-add'));
+    expect(screen.getByTestId('income-add-sheet')).toBeTruthy();
+    expect(screen.getByText(t('income.sectionRouting'))).toBeTruthy();
+    expect(screen.getByTestId('income-record-mode')).toBeTruthy();
+  });
+
+  it('P13-07: shows 12-month chart when streams exist', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <IncomeScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(screen.getByTestId('income-chart')).toBeTruthy();
   });
 });
