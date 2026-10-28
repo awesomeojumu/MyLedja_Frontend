@@ -56,9 +56,30 @@ describe('event builders give exact lines', () => {
     expect(buildExpense(chart, { accountId: 'bank', parts: [{ categoryId: 'salary', amount: 1n }] })).toEqual({ ok: false, error: 'wrong_account_kind' });
   });
 
-  it('E6 refuses the same account twice and different currencies', () => {
+  it('E6 refuses the same account twice; E7 needs the arrived amount', () => {
     expect(buildTransfer(chart, { fromId: 'bank', toId: 'bank', amount: 1n })).toEqual({ ok: false, error: 'transfer_accounts' });
     expect(buildTransfer(chart, { fromId: 'bank', toId: 'usd', amount: 1n })).toEqual({ ok: false, error: 'currency_mismatch' });
+  });
+
+  it('E7 transfer between currencies balances each side through fx-clearing', () => {
+    const r = buildTransfer(chart, { fromId: 'bank', toId: 'usd', amount: 18600000n, toAmount: 12000n });
+    expect(r).toEqual({
+      ok: true,
+      value: [
+        { ledgerAccountId: 'ws:fx_clearing', amountMinor: 18600000n, currency: 'NGN' },
+        { ledgerAccountId: 'bank', amountMinor: -18600000n, currency: 'NGN' },
+        { ledgerAccountId: 'usd', amountMinor: 12000n, currency: 'USD' },
+        { ledgerAccountId: 'ws:fx_clearing', amountMinor: -12000n, currency: 'USD' },
+      ],
+    });
+    if (!r.ok) throw new Error();
+    expect(
+      checkEvent(
+        chart,
+        { id: 'fx', operationId: 'fx', type: 'transfer', date: '2026-10-01', status: 'posted', lines: r.value },
+        new Map(),
+      ).ok,
+    ).toBe(true);
   });
 
   it('E8 on a liability credits the account', () => {

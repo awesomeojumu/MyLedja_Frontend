@@ -116,8 +116,8 @@ Format and rules: build plan section 14. Each open question stops only the task 
 - Documents: TECH-SPEC 6.12 says both repos keep the same file and CI compares hashes.
 - Options: A. The frontend's `test/fixtures/ledger-cases.json` is the first copy; the backend adopts it byte for byte. B. The backend writes it (B1.5) and the frontend copies it.
 - Recommendation: A for now, so F1.2 isn't blocked. If the backend's B1.5 file differs, the frontend takes the backend's copy and updates its runner. The cross-repo hash step is added to CI once the backend file exists on `backend`. The fx-clearing account is shown as "Currency exchange" if it ever appears in a list.
-- Answer:
-- Status: open
+- Answer: Agent decision under the owner's delegation, 28 Oct 2026: **B**. The backend owns `test/fixtures/ledger-cases.json`; the frontend copies it with `npm run cases:sync` (from `../myledja_backend/test/fixtures/` by default) and keeps the same `.sha256`. `npm run cases:check` pins the local hash and, when the sibling checkout is present, fails on cross-repo drift. Change the file in both repos in the same PR pair (BUILD-PLAN 1.3). Fx-clearing stays labelled "Currency exchange" in the app.
+- Status: answered
 
 ## Q-14: Local store engines before the device prototypes
 - Task: F1.1 (prototypes T0.3, T0.4, T0.5)
