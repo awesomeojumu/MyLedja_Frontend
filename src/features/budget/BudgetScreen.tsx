@@ -15,10 +15,8 @@ import {
   Popover,
   Select,
   SegmentedControl,
-  Switch,
   Sheet,
   Text,
-  TextInput,
   useToast,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
@@ -78,7 +76,6 @@ export function BudgetScreen() {
   const [coverOpen, setCoverOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [editNote, setEditNote] = useState('');
   const [monthSpan, setMonthSpan] = useState<'1' | '3'>('1');
   const [groupBy, setGroupBy] = useState<BudgetGroupBy>('groups');
   const [error, setError] = useState<string | null>(null);
@@ -252,7 +249,6 @@ export function BudgetScreen() {
                             setEditId(cat.id);
                             setEditText((Number(row.assigned) / 100).toString());
                             setEditMinor(row.assigned);
-                            setEditNote('');
                           }}
                           style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
                         >
@@ -342,20 +338,6 @@ export function BudgetScreen() {
               }}
             />
           </View>
-        ) : null}
-        {editId && snapshot ? (
-          <>
-            <Switch
-              testID="budget-edit-carry"
-              label={t('budget.carryOver')}
-              value={snapshot.categories.find((c) => c.id === editId)?.carryOver ?? false}
-              onChange={(carryOver) => {
-                const cat = snapshot.categories.find((c) => c.id === editId);
-                if (cat) void repo.updateCategory({ ...cat, carryOver });
-              }}
-            />
-            <TextInput testID="budget-edit-note" label={t('budget.editNote')} value={editNote} onChangeText={setEditNote} />
-          </>
         ) : null}
       </Sheet>
 

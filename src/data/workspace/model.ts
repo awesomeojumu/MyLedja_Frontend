@@ -186,6 +186,13 @@ export type Recurring = {
   startDate: string;
   endDate?: string;
   autoCreate?: boolean;
+  /** DESIGN #25 — stop after this many occurrences (optional; endDate also ends the series). */
+  endAfterCount?: number;
+  /** Days before due: 0 = on the day, 1, 3, or 7. */
+  reminderDays?: number;
+  /** DESIGN #25 — hide amount on lock screen (default on). */
+  hideAmountOnLock?: boolean;
+  cancelled?: boolean;
 };
 
 export type RecurringOccurrence = {

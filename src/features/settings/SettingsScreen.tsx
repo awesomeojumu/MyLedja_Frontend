@@ -357,14 +357,11 @@ function CurrenciesTab() {
 
 function WorkspaceTab() {
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [roleOpen, setRoleOpen] = useState(false);
   return (
     <View style={{ gap: sp['spacing-md'] }}>
       <PlaceholderTab bodyKey="settings.workspace.body" />
       <Button testID="settings-invite" label={t('settings.workspace.invite')} onPress={() => setInviteOpen(true)} />
-      <Button testID="settings-change-role" kind="secondary" label={t('settings.workspace.changeRole')} onPress={() => setRoleOpen(true)} />
       <InviteMemberSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} />
-      <ChangeRoleSheet visible={roleOpen} onClose={() => setRoleOpen(false)} />
     </View>
   );
 }

@@ -34,7 +34,7 @@ export function billsForMonth(snapshot: Snapshot, month: string, today: string, 
   const dueSoonEnd = addDays(today, dueSoonDays);
   const rows: BillRow[] = [];
   for (const recurring of snapshot.recurring) {
-    if (recurring.kind === 'income') continue;
+    if (recurring.cancelled || recurring.kind === 'income') continue;
     const dueDate = dueDateInMonth(recurring.rule, month);
     if (!dueDate || dueDate < recurring.startDate) continue;
     if (recurring.endDate && dueDate > recurring.endDate) continue;
@@ -161,7 +161,7 @@ export function findRecurringSuggestions(snapshot: Snapshot, month: string): Fin
 export type ScheduleRow = {
   recurring: Recurring;
   nextDate: string | null;
-  status: 'missed' | 'due' | 'upcoming' | 'scheduled';
+  status: 'missed' | 'due' | 'upcoming' | 'scheduled' | 'cancelled';
 };
 
 function ruleLabel(rule: RecurrenceRule): string {
@@ -183,11 +183,21 @@ function nextDueOnOrAfter(recurring: Recurring, from: string, horizonMonths = 14
 }
 
 /** DESIGN page 12 tab "All schedules". */
-export function allScheduleRows(snapshot: Snapshot, today: string, search = ''): ScheduleRow[] {
+export function allScheduleRows(snapshot: Snapshot, today: string, search = '', includeCancelled = false): ScheduleRow[] {
   const q = search.trim().toLowerCase();
   const rows: ScheduleRow[] = [];
   for (const recurring of snapshot.recurring) {
-    if (q && !recurring.name.toLowerCase().includes(q)) continue;
+    if (recurring.cancelled && !includeCancelled) continue;
+    const payee = recurring.payeeId ? snapshot.payees.find((p) => p.id === recurring.payeeId)?.name : '';
+    const account = snapshot.accounts.find((a) => a.id === recurring.accountId)?.name ?? '';
+    if (q) {
+      const hay = `${recurring.name} ${payee} ${account}`.toLowerCase();
+      if (!hay.includes(q)) continue;
+    }
+    if (recurring.cancelled) {
+      rows.push({ recurring, nextDate: null, status: 'cancelled' });
+      continue;
+    }
     const nextDate = nextDueOnOrAfter(recurring, today);
     let status: ScheduleRow['status'] = 'scheduled';
     if (nextDate) {
@@ -198,7 +208,7 @@ export function allScheduleRows(snapshot: Snapshot, today: string, search = ''):
     }
     rows.push({ recurring, nextDate, status });
   }
-  const order: Record<ScheduleRow['status'], number> = { missed: 0, due: 1, upcoming: 2, scheduled: 3 };
+  const order: Record<ScheduleRow['status'], number> = { missed: 0, due: 1, upcoming: 2, scheduled: 3, cancelled: 4 };
   return rows.sort((a, b) => {
     const sa = order[a.status] - order[b.status];
     if (sa !== 0) return sa;
