@@ -7,6 +7,7 @@ type Schemas = components['schemas'];
 export type AiSettings = Schemas['AiSettings'];
 export type StatementImport = Schemas['StatementImport'];
 export type BankLink = Schemas['BankLink'];
+export type ServerImport = Schemas['Import'];
 export type AiConsent = { categorize: boolean; statements: boolean; healthAdvice: boolean };
 
 /** Settings › AI features, statement reading and bank connections (build plan F4.1, F4.3). */
@@ -18,10 +19,19 @@ export function aiApi(client: ApiClient) {
     uploadStatement: (workspaceId: string, body: { accountId: string; fileName: string; fileBase64: string; useAi: boolean }) =>
       client.request<StatementImport>('POST', `/v1/workspaces/${workspaceId}/imports/statement`, body),
     bankLinks: (workspaceId: string) => client.request<{ links: BankLink[]; available: boolean }>('GET', `/v1/workspaces/${workspaceId}/banking/links`),
-    linkBank: (workspaceId: string, body: { accountId: string; code: string }) =>
+    linkBank: (workspaceId: string, body: { accountId: string; code: string; historyDays: 30 | 90 | 180 | 365 }) =>
       client.request<BankLink>('POST', `/v1/workspaces/${workspaceId}/banking/mono/link`, body),
     syncBank: (workspaceId: string, linkId: string) =>
       client.request<{ import: StatementImport | null; newTransactions: number }>('POST', `/v1/workspaces/${workspaceId}/banking/links/${linkId}/sync`),
+    reauthBank: (workspaceId: string, linkId: string) =>
+      client.request<{ reauthToken: string }>('POST', `/v1/workspaces/${workspaceId}/banking/links/${linkId}/reauth`),
+    bankReconnected: (workspaceId: string, linkId: string) =>
+      client.request<BankLink>('POST', `/v1/workspaces/${workspaceId}/banking/links/${linkId}/reconnected`),
+    /** Bank syncs waiting for review on one account (P15-07, P25-05). */
+    pendingImports: (workspaceId: string, accountId: string) =>
+      client.request<{ imports: ServerImport[] }>('GET', `/v1/workspaces/${workspaceId}/imports?status=mapped&accountId=${accountId}`),
+    importReviewed: (workspaceId: string, importId: string) =>
+      client.request<ServerImport>('POST', `/v1/workspaces/${workspaceId}/imports/${importId}/reviewed`),
     disconnectBank: (workspaceId: string, linkId: string) => client.request<null>('DELETE', `/v1/workspaces/${workspaceId}/banking/links/${linkId}`),
   };
 }

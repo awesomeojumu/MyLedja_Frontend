@@ -16,6 +16,7 @@ import { ledgerMessage } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
 import { suggestMoneyBack } from '@/features/debts/moneyBack';
+import { ruleChangeFor } from '@/features/rules/ruleEngine';
 
 import { importRulesApplied } from './helpers';
 
@@ -45,7 +46,7 @@ async function pickFile(): Promise<Picked | null> {
 }
 
 /** Statement rows from the API as CSV text, so they go through the same mapping and review as a CSV. */
-function statementCsv(rows: StatementImport['rows']): string {
+export function statementCsv(rows: StatementImport['rows']): string {
   const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const amount = (minor: string) => {
     const neg = minor.startsWith('-');
@@ -146,10 +147,20 @@ export function AccountImportSheet({
         payeeName: row.payee,
         movement: row.amount < 0n ? 'expense' : 'income',
       })[0];
+      // The person's rules first, then the payee's usual category (P25-05).
+      const fromRules = ruleChangeFor(snapshot.rules, {
+        payeeName: payee?.name ?? row.payee,
+        description: row.payee,
+        amountMinor: amountAbs,
+        accountId: account.id,
+        categoryId: '',
+        notes: '',
+        date: row.date,
+      });
       return {
         row,
         duplicate: isDuplicate(row, account.id, snapshot.events, payeeNames),
-        suggested: payee?.defaultCategoryId,
+        suggested: fromRules.categoryId ?? payee?.defaultCategoryId,
         moneyBack,
       };
     });

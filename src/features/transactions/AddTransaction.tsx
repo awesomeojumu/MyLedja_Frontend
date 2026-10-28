@@ -22,6 +22,7 @@ import {
 import tokens from '@/design/tokens.json';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import type { Snapshot, TransactionInput } from '@/data/workspace/repository';
+import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
@@ -103,6 +104,22 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
   const [accountId, setAccountId] = useState<string | null>(prefill.accountId ?? (snapshot ? lastUsedAccount(snapshot) : null));
   const [toId, setToId] = useState<string | null>(null);
   const [date, setDate] = useState(prefill.date ?? today());
+
+  /** A rule's category, else the payee's usual one, fills an empty category (A-03, P25-05). */
+  const suggestCategory = (name: string, payeeCategory?: string, replace = false) => {
+    if (!snapshot || (categoryId && !replace)) return;
+    const fromRules = ruleChangeFor(snapshot.rules, {
+      payeeName: name,
+      description: name,
+      amountMinor: amount.minor ?? 0n,
+      accountId: accountId ?? '',
+      categoryId: '',
+      notes: '',
+      date,
+    }).categoryId;
+    const pick = fromRules ?? payeeCategory;
+    if (pick && categories.some((c) => c.id === pick)) setCategoryId(pick);
+  };
   const [notes, setNotes] = useState('');
   const [split, setSplit] = useState(false);
   const [repeats, setRepeats] = useState(false);
@@ -299,7 +316,7 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
             </>
           ) : (
             <>
-              <TextInput testID="add-payee" label={t('add.payee')} value={payee} onChangeText={setPayee} />
+              <TextInput testID="add-payee" label={t('add.payee')} value={payee} onChangeText={setPayee} onBlur={() => payee.trim() && suggestCategory(payee.trim())} />
               {recentPayees.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'] }}>
                   {recentPayees.map((p) => (
@@ -309,7 +326,7 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
                       selected={payee === p.name}
                       onPress={() => {
                         setPayee(p.name);
-                        if (p.defaultCategoryId && categories.some((c) => c.id === p.defaultCategoryId)) setCategoryId(p.defaultCategoryId);
+                        suggestCategory(p.name, p.defaultCategoryId, true);
                       }}
                     />
                   ))}

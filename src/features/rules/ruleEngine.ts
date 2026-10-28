@@ -144,3 +144,24 @@ export function previewRuleChange(
   }
   return change;
 }
+
+/**
+ * What the person's rules change on a new or imported transaction (P25-05), in run order: first, normal, last.
+ * Later rules override earlier ones; notes add up. The server applies the same rules to imports and bank sync.
+ */
+export function ruleChangeFor(
+  rules: TransactionRule[],
+  input: Omit<RuleEventContext, 'eventId' | 'type'>,
+): { categoryId?: string; payeeName?: string; notes?: string } {
+  const ctx: RuleEventContext = { ...input, eventId: '', type: '' };
+  const change: { categoryId?: string; payeeName?: string; notes?: string } = {};
+  for (const rule of orderedRules(rules)) {
+    if ((rule as TransactionRule & { deleted?: boolean }).deleted || !ruleMatches(ctx, rule)) continue;
+    for (const a of rule.actions) {
+      if (a.kind === 'setCategory' && a.value) change.categoryId = a.value;
+      if (a.kind === 'renamePayee' && a.value.trim()) change.payeeName = a.value.trim();
+      if (a.kind === 'addNote' && a.value.trim()) change.notes = [change.notes, a.value.trim()].filter(Boolean).join('. ');
+    }
+  }
+  return change;
+}

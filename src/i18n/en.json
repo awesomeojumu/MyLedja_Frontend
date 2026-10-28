@@ -1632,8 +1632,13 @@
   "settings.banks.needsReauth": "Reconnect this bank to keep syncing.",
   "settings.banks.none": "No banks connected yet.",
   "settings.banks.unavailable": "Bank connections aren't available here yet. Import a statement from Accounts instead.",
-  "settings.ai.healthAdvice": "Reword Health advice",
-  "settings.ai.healthAdviceDetail": "Rewords the advice MyLedja has already chosen. No amounts or scores are sent.",
   "settings.ai.unavailable": "AI features aren't available yet.",
-  "settings.banks.ending": "{bank} ••{last4}"
+  "settings.banks.ending": "{bank} ••{last4}",
+  "account.bankReview": "{count} new bank transactions to review",
+  "account.bankReviewAction": "Review",
+  "accounts.connect.history": "How far back to import",
+  "accounts.connect.historyDays": "Last {days} days",
+  "settings.banks.consentUntil": "Consent until {date}",
+  "settings.banks.consentOngoing": "Consent ongoing until you disconnect",
+  "settings.banks.reconnected": "Bank reconnected"
 }

@@ -179,6 +179,7 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
   const api = useMemo(() => aiApi(client), [client]);
   const accounts = (snapshot?.accounts ?? []).filter((a) => !a.archived && ['bank', 'savings', 'wallet', 'card'].includes(a.type));
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
+  const [historyDays, setHistoryDays] = useState<30 | 90 | 180 | 365>(90);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -189,7 +190,7 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
     try {
       const code = await openMonoConnect();
       if (!code) return;
-      const link = await api.linkBank(user.workspaceId, { accountId, code });
+      const link = await api.linkBank(user.workspaceId, { accountId, code, historyDays });
       toast.show(t('accounts.connect.linked', { bank: link.institution }));
       await api.syncBank(user.workspaceId, link.id).catch(() => null);
       onClose();
@@ -220,6 +221,13 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
           options={accounts.map((a) => ({ value: a.id, label: a.name }))}
           value={accountId}
           onChange={setAccountId}
+        />
+        <Select
+          testID="connect-bank-history"
+          label={t('accounts.connect.history')}
+          options={([30, 90, 180, 365] as const).map((d) => ({ value: String(d), label: t('accounts.connect.historyDays', { days: String(d) }) }))}
+          value={String(historyDays)}
+          onChange={(v) => setHistoryDays(Number(v) as 30 | 90 | 180 | 365)}
         />
         <Text variant="caption" tone="textSecondary">
           {t('accounts.connect.review')}

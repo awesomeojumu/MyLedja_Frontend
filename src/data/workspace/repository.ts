@@ -3,6 +3,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type { SetupBody } from '@/api/auth';
 import { formatDay } from '@/design/components/overlays';
 import { resolveTemplateLineAmount } from '@/features/budget/helpers';
+import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import type { RemoteOperation } from '../sync/mapOperation';
 import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
 import { t, type TextKey } from '@/i18n';
@@ -414,7 +415,22 @@ export class WorkspaceRepository {
       lines = buildTransfer(chart, { fromId: input.fromId, toId: input.toId, amount: input.amount });
     }
     if (!lines.ok) return lines;
-    const payeeName = input.kind === 'transfer' ? undefined : input.payeeName?.trim();
+    // Rules rename the payee and add notes as the transaction is saved (P25-05); the category was already offered.
+    const amount = input.kind === 'expense' ? input.parts.reduce((s, p) => s + p.amount, 0n) : input.amount;
+    const fromRules =
+      input.kind === 'transfer'
+        ? {}
+        : ruleChangeFor(snapshot.rules, {
+            payeeName: input.payeeName?.trim() ?? '',
+            description: input.payeeName?.trim() ?? '',
+            amountMinor: amount,
+            accountId: input.accountId,
+            categoryId: input.kind === 'expense' ? (input.parts[0]?.categoryId ?? '') : input.categoryId,
+            notes: input.notes ?? '',
+            date: input.date,
+          });
+    const payeeName = input.kind === 'transfer' ? undefined : (fromRules.payeeName ?? input.payeeName?.trim());
+    const notes = [input.notes?.trim(), fromRules.notes].filter(Boolean).join('. ') || undefined;
     const payeeId = payeeName
       ? await this.payeeFor(
           snapshot.payees,
@@ -428,7 +444,7 @@ export class WorkspaceRepository {
       lines: lines.value,
       splitTotal,
       payeeId,
-      notes: input.notes?.trim() || undefined,
+      notes,
     });
   }
 

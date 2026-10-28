@@ -41,8 +41,7 @@
         {
           "faceIDPermission": "MyLedja uses Face ID to unlock the app when app lock is on."
         }
-      ],
-      "expo-screen-capture"
+      ]
     ]
   }
 }

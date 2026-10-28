@@ -9,7 +9,7 @@ import { config } from '@/config';
  */
 const SCRIPT = 'https://connect.withmono.com/connect.js';
 
-type MonoWidget = { setup: () => void; open: () => void };
+type MonoWidget = { setup: () => void; open: () => void; reauthorise?: (token: string) => void };
 type MonoCtor = new (opts: { key: string; onSuccess: (r: { code: string }) => void; onClose?: () => void }) => MonoWidget;
 
 export function bankConnectAvailable(): boolean {
@@ -29,8 +29,8 @@ function loadScript(): Promise<MonoCtor> {
   });
 }
 
-/** Opens Mono's screen; resolves with the code, or null if the person closed it. */
-export async function openMonoConnect(): Promise<string | null> {
+/** Opens Mono's screen; resolves with the code, or null if the person closed it. A reauth token reconnects a lapsed bank. */
+export async function openMonoConnect(reauthToken?: string): Promise<string | null> {
   if (!config.monoPublicKey) return null;
   const Mono = await loadScript();
   return new Promise((resolve) => {
@@ -45,7 +45,8 @@ export async function openMonoConnect(): Promise<string | null> {
         if (!done) resolve(null);
       },
     });
-    widget.setup();
+    if (reauthToken && widget.reauthorise) widget.reauthorise(reauthToken);
+    else widget.setup();
     widget.open();
   });
 }

@@ -34,7 +34,7 @@ import { ApiError } from '@/api/client';
 import type { ActivityEvent, DeviceSession, SecurityStatus } from '@/api/security';
 import { type AiConsent, type AiSettings, aiApi, type BankLink } from '@/api/ai';
 import { ConnectBankSheet } from '@/features/accounts/accountSheets';
-import { bankConnectAvailable } from '@/features/banking/monoConnect';
+import { bankConnectAvailable, openMonoConnect } from '@/features/banking/monoConnect';
 import { formatDay } from '@/design/components/overlays';
 import { passkeysAvailable } from '@/features/auth/passkey';
 
@@ -80,7 +80,7 @@ export function AiTab() {
   const rows: { key: keyof AiConsent; label: TextKey; detail: TextKey }[] = [
     { key: 'categorize', label: 'settings.ai.suggestCategories', detail: 'settings.ai.suggestCategoriesDetail' },
     { key: 'statements', label: 'settings.ai.readStatements', detail: 'settings.ai.readStatementsDetail' },
-    { key: 'healthAdvice', label: 'settings.ai.healthAdvice', detail: 'settings.ai.healthAdviceDetail' },
+    // Health advice joins when Health ships (Phase 5, DESIGN principle 12).
   ];
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-ai">
@@ -265,6 +265,11 @@ export function BanksTab() {
               ? t('settings.banks.needsReauth')
               : t('settings.banks.lastSync', { when: l.lastSyncedAt ? formatDay(l.lastSyncedAt.slice(0, 10)) : t('settings.banks.syncNever') })}
           </Text>
+          <Text variant="caption" tone="textSecondary">
+            {l.consentExpiresAt
+              ? t('settings.banks.consentUntil', { date: formatDay(l.consentExpiresAt.slice(0, 10)) })
+              : t('settings.banks.consentOngoing')}
+          </Text>
           <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
             <Button
               testID={`settings-bank-sync-${l.id}`}
@@ -278,6 +283,23 @@ export function BanksTab() {
                 })
               }
             />
+            {bankConnectAvailable() ? (
+              <Button
+                testID={`settings-bank-reconnect-${l.id}`}
+                kind="secondary"
+                label={t('settings.banks.reconnect')}
+                onPress={() =>
+                  run(async () => {
+                    const { reauthToken } = await api.reauthBank(workspaceId!, l.id);
+                    if (await openMonoConnect(reauthToken)) {
+                      await api.bankReconnected(workspaceId!, l.id);
+                      toast.show(t('settings.banks.reconnected'));
+                      load();
+                    }
+                  })
+                }
+              />
+            ) : null}
             <Button
               kind="secondary"
               label={t('settings.banks.disconnect')}
