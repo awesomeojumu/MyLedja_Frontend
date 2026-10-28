@@ -9,6 +9,18 @@ export function nextMonth(month: string): string {
   return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
 }
 
+export function prevMonth(month: string): string {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
+/** `count` months ending at `end`, oldest first. */
+export function monthsEndingAt(end: string, count: number): string[] {
+  const out: string[] = [end];
+  for (let i = 1; i < count; i += 1) out.unshift(prevMonth(out[0]!));
+  return out;
+}
+
 /** Pending events don't count; a reversal cancels its original, so both stay in the sums. */
 const counts = (e: MoneyEvent) => e.status !== 'pending';
 

@@ -50,6 +50,10 @@ export type ImportMapping = {
   hasHeader: boolean;
 };
 
+/** DESIGN.md page 6/7: Fixed / Flexible / Non-monthly / Savings. */
+export const BUDGET_TYPES = ['fixed', 'flexible', 'nonMonthly', 'savings'] as const;
+export type BudgetType = (typeof BUDGET_TYPES)[number];
+
 export type Category = {
   id: string;
   name: string;
@@ -57,11 +61,32 @@ export type Category = {
   group: string;
   /** For starter categories, the catalogue key; the name follows the person's edits. */
   key?: TextKey;
+  /** Hide from the Budget page (P07-05). */
   hidden: boolean;
   countInBudget: boolean;
+  order: number;
+  budgetType: BudgetType;
+  /** Tracking style: leftover carries when on (TECH-SPEC 6.6). */
+  carryOver: boolean;
+  /** Soft-deleted after reassignment (Q-18); filtered out of the snapshot. */
+  deleted?: boolean;
 };
 
 export type Payee = { id: string; name: string; defaultCategoryId?: string };
+
+export type BudgetStyle = 'tracking' | 'envelope';
+
+/** Workspace preferences chosen in Welcome and Settings (Phase 1 subset). */
+export type WorkspaceSettings = {
+  budgetStyle: BudgetStyle;
+  currency: string;
+  weekStart: 'monday' | 'sunday' | 'saturday';
+};
+
+/** Planned amount for one category in one month, stored as kobo string. */
+export type BudgetAssign = { categoryId: string; month: string; amountMinor: string };
+
+export const budgetAssignId = (categoryId: string, month: string) => `${categoryId}:${month}`;
 
 export type StoredLine = { a: string; m: string; c: string };
 

@@ -39,17 +39,22 @@ import {
   type Payee,
   type Reconcile,
   type StoredEvent,
+  type WorkspaceSettings,
+  budgetAssignId,
 } from './model';
 
 export type TxEvent = MoneyEvent & EventMeta;
 
 export type Snapshot = {
   workspaceId: string;
+  settings: WorkspaceSettings;
   accounts: Account[];
   categories: Category[];
   payees: Payee[];
   events: TxEvent[];
   reconciles: Reconcile[];
+  /** categoryId:month → assigned kobo */
+  assigns: Map<string, bigint>;
   /** Events made on this device that haven't synced yet. */
   waiting: Set<string>;
   chart: Chart;
@@ -81,30 +86,55 @@ export class WorkspaceRepository {
   ) {}
 
   async load(): Promise<Snapshot> {
-    const [accounts, categories, payees, events, outbox, reconciles] = await Promise.all([
+    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows] = await Promise.all([
       this.store.list('accounts'),
       this.store.list('categories'),
       this.store.list('payees'),
       this.store.list('events'),
       this.store.outbox(),
       this.store.list('reconciles'),
+      this.store.list('settings'),
+      this.store.list('budget_assigns'),
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
     const accountList = accounts.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id })).sort((a, b) => a.order - b.order);
-    const categoryList = categories.map((r) => ({ ...(r.data as Omit<Category, 'id'>), id: r.id }));
+    const categoryList = categories
+      .map((r) => {
+        const data = r.data as Omit<Category, 'id'>;
+        return {
+          ...data,
+          id: r.id,
+          order: data.order ?? 0,
+          budgetType: data.budgetType ?? 'flexible',
+          carryOver: data.carryOver ?? false,
+        } satisfies Category;
+      })
+      .filter((c) => !c.deleted)
+      .sort((a, b) => a.order - b.order);
     const eventList = events
       .map((r) => fromStored(r.id, String(r.data.operationId ?? r.id), r.data as StoredEvent, reversedIds.has(r.id)))
       .sort((a, b) => (a.date === b.date ? b.id.localeCompare(a.id) : b.date.localeCompare(a.date)));
     const waiting = new Set(
       outbox.filter((o) => (o.payload as { collection?: string }).collection === 'events').map((o) => String((o.payload as { id: string }).id)),
     );
+    const settingsRow = settingsRows.find((r) => r.id === 'workspace');
+    const settings: WorkspaceSettings = settingsRow
+      ? (settingsRow.data as WorkspaceSettings)
+      : { budgetStyle: 'tracking', currency: 'NGN', weekStart: 'monday' };
+    const assigns = new Map<string, bigint>();
+    for (const r of assignRows) {
+      const d = r.data as { categoryId: string; month: string; amountMinor: string };
+      assigns.set(budgetAssignId(d.categoryId, d.month), BigInt(d.amountMinor));
+    }
     return {
       workspaceId: this.workspaceId,
+      settings,
       accounts: accountList,
       categories: categoryList,
       payees: payees.map((r) => ({ ...(r.data as Omit<Payee, 'id'>), id: r.id })),
       events: eventList,
       reconciles: reconciles.map((r) => ({ ...(r.data as Omit<Reconcile, 'id'>), id: r.id })).sort((a, b) => b.statementDate.localeCompare(a.statementDate)),
+      assigns,
       waiting,
       chart: this.chartFor(accountList, categoryList),
     };
@@ -131,7 +161,17 @@ export class WorkspaceRepository {
       await this.put(
         'categories',
         this.newId(),
-        { name: c.name, kind: 'expense', group: c.group, key, hidden: false, countInBudget: true, order: i },
+        {
+          name: c.name,
+          kind: 'expense',
+          group: c.group,
+          key,
+          hidden: false,
+          countInBudget: true,
+          order: i,
+          budgetType: 'flexible',
+          carryOver: false,
+        },
         'category.create',
       );
     }
@@ -139,10 +179,26 @@ export class WorkspaceRepository {
       await this.put(
         'categories',
         this.newId(),
-        { name: t(key), kind: 'income', group: 'group.income', key, hidden: false, countInBudget: key !== 'cat.gift' },
+        {
+          name: t(key),
+          kind: 'income',
+          group: 'group.income',
+          key,
+          hidden: false,
+          countInBudget: key !== 'cat.gift',
+          order: body.categories.length + STARTER_INCOME.indexOf(key),
+          budgetType: 'flexible',
+          carryOver: false,
+        },
         'category.create',
       );
     }
+    await this.put(
+      'settings',
+      'workspace',
+      { budgetStyle: body.budgetStyle, currency: body.currency, weekStart: body.weekStart },
+      'settings.update',
+    );
     for (const a of body.accounts) {
       const type = (a.type in ACCOUNT_KIND_INFO ? a.type : 'other') as AccountKind;
       await this.addAccount({ name: a.name, type, openingBalance: BigInt(a.openingBalance), openingDate: a.openingDate });
@@ -470,6 +526,102 @@ export class WorkspaceRepository {
     const { id, ...data } = reconcile;
     await this.put('reconciles', id, data, 'reconcile.finish');
     return { ok: true, value: reconcile };
+  }
+
+  assigned(categoryId: string, month: string, snapshot: Snapshot): bigint {
+    return snapshot.assigns.get(budgetAssignId(categoryId, month)) ?? 0n;
+  }
+
+  async setAssigned(categoryId: string, month: string, amount: bigint): Promise<void> {
+    const id = budgetAssignId(categoryId, month);
+    await this.put('budget_assigns', id, { categoryId, month, amountMinor: amount.toString() }, 'budget.assign');
+  }
+
+  /** P06-06: move planned money between categories in the same month. */
+  async moveAssigned(fromId: string, toId: string, month: string, amount: bigint): Promise<Result> {
+    if (amount <= 0n || fromId === toId) return { ok: false, error: 'not_positive' };
+    const snapshot = await this.load();
+    const from = this.assigned(fromId, month, snapshot);
+    if (from < amount) return { ok: false, error: 'not_positive' };
+    await this.setAssigned(fromId, month, from - amount);
+    await this.setAssigned(toId, month, this.assigned(toId, month, snapshot) + amount);
+    return { ok: true, value: undefined };
+  }
+
+  /** P06-07: raise each overspent category's plan by taking from another category. */
+  async coverOverspending(month: string, covers: { overspentId: string; fromId: string; amount: bigint }[]): Promise<Result> {
+    for (const cover of covers) {
+      if (cover.amount <= 0n) continue;
+      const moved = await this.moveAssigned(cover.fromId, cover.overspentId, month, cover.amount);
+      if (!moved.ok) return moved;
+    }
+    return { ok: true, value: undefined };
+  }
+
+  async updateCategory(category: Category): Promise<void> {
+    const { id, ...data } = category;
+    await this.put('categories', id, data, 'category.update');
+  }
+
+  async updateSettings(settings: WorkspaceSettings): Promise<void> {
+    await this.put('settings', 'workspace', settings, 'settings.update');
+  }
+
+  /**
+   * P07-06: move this category's transactions to another, then soft-delete it.
+   * Each move is a correction (TECH-SPEC 6.3).
+   */
+  async deleteCategory(categoryId: string, moveToId: string, _date: string): Promise<Result> {
+    if (categoryId === moveToId) return { ok: false, error: 'not_positive' };
+    const snapshot = await this.load();
+    const category = snapshot.categories.find((c) => c.id === categoryId);
+    const target = snapshot.categories.find((c) => c.id === moveToId);
+    if (!category || !target || category.kind !== target.kind) return { ok: false, error: 'missing_lines' };
+
+    const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+    // Reload after each correction so we never correct an already-reversed event.
+    for (;;) {
+      const current = await this.load();
+      const event = current.events.find(
+        (e) =>
+          e.status === 'posted' &&
+          (e.type === 'expense' || e.type === 'income') &&
+          e.lines.some((l) => l.ledgerAccountId === categoryId),
+      );
+      if (!event) break;
+      const money = event.lines.find((l) => accountIds.has(l.ledgerAccountId));
+      const part = event.lines.find((l) => l.ledgerAccountId === categoryId);
+      if (!money || !part) break;
+      const amount = part.amountMinor < 0n ? -part.amountMinor : part.amountMinor;
+      if (amount === 0n) break;
+      const input: TransactionInput =
+        category.kind === 'expense'
+          ? {
+              kind: 'expense',
+              accountId: money.ledgerAccountId,
+              parts: event.lines
+                .filter((l) => !accountIds.has(l.ledgerAccountId))
+                .map((l) => ({
+                  categoryId: l.ledgerAccountId === categoryId ? moveToId : l.ledgerAccountId,
+                  amount: l.amountMinor < 0n ? -l.amountMinor : l.amountMinor,
+                })),
+              date: event.date,
+              notes: event.notes,
+            }
+          : {
+              kind: 'income',
+              accountId: money.ledgerAccountId,
+              categoryId: moveToId,
+              amount,
+              date: event.date,
+              notes: event.notes,
+            };
+      const corrected = await this.correctTransaction(event.id, input);
+      if (!corrected.ok) return corrected;
+    }
+
+    await this.updateCategory({ ...category, deleted: true, hidden: true });
+    return { ok: true, value: undefined };
   }
 
   private linesFor(chart: Chart, input: TransactionInput): Result<{ lines: Line[]; splitTotal?: bigint }> {

@@ -167,3 +167,20 @@ Format and rules: build plan section 14. Each open question stops only the task 
   - The Account route moved to `accounts/[id]/index` so `/accounts/:id/reconcile` can nest beside it.
 - Answer:
 - Status: open
+
+## Q-18: Phase 1 decisions for Budget and Category
+- Task: F1.7
+- Raised by: frontend agent
+- Documents: DESIGN.md pages 6–7, TECH-SPEC 6.6, build plan P06 / P07
+- Decisions taken so as not to block:
+  - `budgetStyle` (and currency / weekStart) live in a local `settings` collection record id `workspace`, seeded from Welcome. Settings › Budget can overwrite the same record later (P26).
+  - Assigned amounts are `budget_assigns` rows keyed `categoryId:month` with `amountMinor` as a kobo string. Move money and Cover overspending only change those assigns.
+  - Tracking carry-over is a boolean on the category (`carryOver`), default off. Envelope always carries per TECH-SPEC 6.6.
+  - Category soft-delete: reassign expense/income events via corrections, then set `deleted` + `hidden` so the category drops from the snapshot. Refunds and other event types are left for a later pass.
+  - Budget type (Fixed / Flexible / Non-monthly / Savings) is stored on the category; icon picker is deferred (name / group / type / hide ship in Phase 1).
+  - Templates, 3-month columns, copy-last-month and fill-from-averages stay Phase 2 (P06-10).
+  - Phone bottom bar order is Home · Transactions · (+) · Budget · Accounts until Plan ships (DESIGN 3.3).
+  - Monthly take-home from Welcome does not auto-fill plans in Phase 1; people type Planned on the Budget page.
+  - Category chart shows twelve months of spending (BarChart, gold on the current month) with a planned hint for this month; case 23 carry-over stays in ledger tests.
+- Answer:
+- Status: open
