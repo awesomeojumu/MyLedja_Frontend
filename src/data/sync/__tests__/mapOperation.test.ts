@@ -63,7 +63,7 @@ describe('mapOperation', () => {
         result: null,
         current: { id: 'evt1', version: 3, amount: '1' },
         error: { message: 'already changed' },
-      }),
+      }, 'transaction.correct', 'ws'),
     ).toMatchObject({
       status: 'conflict',
       record: { id: 'evt1', version: 3 },
@@ -75,7 +75,7 @@ describe('mapOperation', () => {
         id: 'evt1',
         op: 'upsert',
         doc: { id: 'evt1', type: 'expense' },
-      }),
+      }, 'ws'),
     ).toMatchObject({
       seq: 12,
       op: 'upsert',

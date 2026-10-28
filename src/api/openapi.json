@@ -2498,6 +2498,12 @@
               ]
             }
           },
+          "goalId": {
+            "description": "E19: spending from a goal earmark. Budget activity ignores this expense (TECH-SPEC 6.6).",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
           "date": {
             "type": "string",
             "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
@@ -2712,6 +2718,14 @@
               "null"
             ]
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "allocate",
+              "spend"
+            ],
+            "description": "allocate = E18 earmark; spend = E19 spending from the goal."
+          },
           "version": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -2725,6 +2739,7 @@
           "amount",
           "fromAccountId",
           "transactionId",
+          "kind",
           "version"
         ],
         "additionalProperties": false
@@ -2786,7 +2801,7 @@
           },
           "linkToken": {
             "type": "string",
-            "description": "Send as `googleLinkToken` with a password sign-in to link Google."
+            "description": "Send as `googleLinkToken` with a password sign-in, or with a recovery email code, to link Google (TECH-SPEC 5.8)."
           }
         },
         "required": [
@@ -4713,6 +4728,7 @@
               "goal.create",
               "goal.update",
               "goal.allocate",
+              "goal.spend",
               "debt.lend",
               "debt.borrow",
               "debt.payment",
@@ -4753,6 +4769,16 @@
                 "type": "null"
               }
             ]
+          },
+          "transactionIds": {
+            "description": "Ids the device made for the transactions this operation posts, in posting order (a correction: reversal, then new).",
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
           },
           "createdAt": {
             "type": "string",
@@ -5921,6 +5947,85 @@
           "startDate"
         ]
       },
+      "SpendFromGoalBody": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
+            "description": "YYYY-MM-DD in the workspace time zone."
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?(0|[1-9]\\d{0,17})$",
+            "description": "Whole minor units (kobo) as a string, for example \"1845000\" for ₦18,450.00."
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "accountId": {
+            "description": "Defaults to the goal account.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "payeeId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "amount",
+          "categoryId"
+        ]
+      },
+      "SpendFromGoalResult": {
+        "type": "object",
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
+          },
+          "allocation": {
+            "$ref": "#/components/schemas/GoalAllocation"
+          },
+          "transactionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "goal",
+          "allocation",
+          "transactionId"
+        ],
+        "additionalProperties": false
+      },
       "SyncPushResult": {
         "type": "object",
         "properties": {
@@ -6112,13 +6217,41 @@
                   "string",
                   "null"
                 ]
+              },
+              "goalId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "debtId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "scheduleId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "holdingId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
               "refundOf",
               "reversalOf",
               "reversedBy",
-              "correctionOf"
+              "correctionOf",
+              "goalId",
+              "debtId",
+              "scheduleId",
+              "holdingId"
             ],
             "additionalProperties": false
           },
@@ -6248,6 +6381,31 @@
               "null"
             ]
           },
+          "system": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "opening_balances",
+                  "adjustments",
+                  "revaluation",
+                  "fx_clearing",
+                  "interest_earned",
+                  "investment_income",
+                  "investment_gain",
+                  "interest_and_charges",
+                  "fees",
+                  "taxes",
+                  "written_off",
+                  "investment_loss"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the line is on a system account, such as opening_balances."
+          },
           "amount": {
             "type": "string",
             "pattern": "^-?(0|[1-9]\\d{0,17})$",
@@ -6261,6 +6419,7 @@
           "ledgerAccountId",
           "accountId",
           "categoryId",
+          "system",
           "amount",
           "currency"
         ],
@@ -7090,7 +7249,7 @@
           "Auth"
         ],
         "summary": "Continue with Google",
-        "description": "A new email creates an account. An email that already has a password answers 409 google_link_needed; sign in once with the password and `googleLinkToken` to link. 404 google_off when Google sign-in is not set up.",
+        "description": "A new email creates an account. An email that already has a password answers 409 google_link_needed; link by signing in once with the password and `googleLinkToken`, or with a recovery email code and `googleLinkToken`. 404 google_off when Google sign-in is not set up.",
         "security": [],
         "parameters": [
           {
@@ -7516,7 +7675,7 @@
           "Auth"
         ],
         "summary": "Sign in with email and password",
-        "description": "Wrong details give 401 \"Email or password is wrong\". After five failures, 429 with retryAfterSeconds (60, growing). An unverified account gives 403 email_not_verified and a new code is sent.",
+        "description": "Wrong details give 401 \"Email or password is wrong\". After five failures, 429 with retryAfterSeconds (60, growing). An unverified account gives 403 email_not_verified and a new code is sent. To link Google after `google_link_needed`, send `googleLinkToken` with the password, or with a recovery `code` from POST /v1/auth/recover (no password).",
         "security": [],
         "parameters": [
           {
@@ -7542,8 +7701,12 @@
                   },
                   "password": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 200
+                  },
+                  "code": {
+                    "description": "Recovery email code. With `googleLinkToken`, proves ownership of an existing password account without the password (B0.8 / TECH-SPEC 5.8).",
+                    "type": "string",
+                    "pattern": "^\\d{6}$"
                   },
                   "staySignedIn": {
                     "default": false,
@@ -7562,8 +7725,7 @@
                   }
                 },
                 "required": [
-                  "email",
-                  "password"
+                  "email"
                 ]
               }
             }
@@ -13078,6 +13240,126 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Goal"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input was refused; `field` names the field and `message` can be shown beside it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the details are wrong",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not in a workspace you belong to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspaceId}/goals/{goalId}/spend": {
+      "post": {
+        "operationId": "spendFromGoal",
+        "tags": [
+          "Goals"
+        ],
+        "summary": "Spend from a goal earmark (E19)",
+        "description": "Posts an expense linked by goalId and lowers the earmark. Budget category activity ignores this spend (TECH-SPEC 6.2 E19, 6.6).",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "x-min-role": "editor",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "goalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "X-Operation-Id",
+            "in": "header",
+            "required": true,
+            "description": "A UUID made on the device. Retries reuse it, and the server runs the change once.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpendFromGoalBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpendFromGoalResult"
                 }
               }
             }

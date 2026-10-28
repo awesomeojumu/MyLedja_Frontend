@@ -9,7 +9,7 @@ import {
   type BackendOperation,
   type BackendOperationResult,
 } from './mapOperation';
-import type { ChangesPage, Operation, OperationResult, SyncTransport } from './types';
+import type { Change, ChangesPage, Operation, OperationResult, SyncTransport } from './types';
 
 type PushResponse = { results: BackendOperationResult[]; seq: string };
 type PullResponse = {
@@ -39,12 +39,19 @@ export class HttpSyncTransport implements SyncTransport {
     const accounts = await this.options.accounts();
     const mapped: BackendOperation[] = [];
     const early: OperationResult[] = [];
+    const typeOf = new Map<string, string>();
     for (const op of operations) {
       const next = toBackendOperation(op, accounts);
       if ('reject' in next) {
         early.push({ operationId: op.operationId, status: 'rejected', error: next.reject });
         continue;
       }
+      if ('local' in next) {
+        // The server derives this write from another operation in the same action.
+        early.push({ operationId: op.operationId, status: 'applied' });
+        continue;
+      }
+      typeOf.set(next.operationId, next.type);
       mapped.push(next);
     }
     if (mapped.length === 0) return early;
@@ -55,7 +62,7 @@ export class HttpSyncTransport implements SyncTransport {
       { deviceId: this.options.deviceId, operations: mapped },
       { operationId: mapped[0]!.operationId },
     );
-    const fromServer = res.results.map((r) => fromBackendResult(r));
+    const fromServer = res.results.map((r) => fromBackendResult(r, typeOf.get(r.operationId) ?? '', workspaceId));
     return [...early, ...fromServer];
   }
 
@@ -69,7 +76,7 @@ export class HttpSyncTransport implements SyncTransport {
     if (res.reset) {
       return { changes: [], lastSeq: 0, hasMore: false, reset: true };
     }
-    const changes = res.changes.map(fromBackendChange);
+    const changes = res.changes.map((c) => fromBackendChange(c, workspaceId)).filter((c): c is Change => c !== null);
     return {
       changes,
       lastSeq: Number(res.nextSince),
