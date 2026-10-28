@@ -75,6 +75,15 @@ describe('P04 Welcome', () => {
     expect(screen.getByTestId('week-monday')).toBeChecked();
   });
 
+  it('P04-05 shows a bank badge when the account name matches', async () => {
+    await renderWelcome();
+    await fireEvent.press(screen.getByTestId('continue'));
+    await fireEvent.press(screen.getByTestId('continue'));
+    await fireEvent.changeText(screen.getByTestId('account-name-0'), 'GTBank Current');
+    expect(screen.getByTestId('institution-0')).toBeTruthy();
+    expect(screen.getByText('GTBank')).toBeTruthy();
+  });
+
   it('P04-02, P04-05 to P04-08: accounts, categories, style, then "You\'re set up"', async () => {
     const calls = await renderWelcome();
     await fireEvent.press(screen.getByTestId('continue'));
