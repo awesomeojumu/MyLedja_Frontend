@@ -130,6 +130,78 @@ export function buildRefund(
   return ok([line(account.value, input.amount), line(category, -input.amount)]);
 }
 
+/** E15: Dr receivable · Cr bank. */
+export function buildLend(chart: Chart, input: { receivableId: string; accountId: string; amount: bigint }): LedgerResult<Line[]> {
+  if (input.amount <= 0n) return fail('not_positive');
+  const receivable = ofKind(chart, input.receivableId, 'asset');
+  if (!receivable.ok) return receivable;
+  const account = moneyAccount(chart, input.accountId);
+  if (!account.ok) return account;
+  return ok([line(receivable.value, input.amount), line(account.value, -input.amount)]);
+}
+
+/** E13 (person): Dr bank · Cr payable. */
+export function buildLoanProceeds(chart: Chart, input: { payableId: string; accountId: string; amount: bigint }): LedgerResult<Line[]> {
+  if (input.amount <= 0n) return fail('not_positive');
+  const payable = ofKind(chart, input.payableId, 'liability');
+  if (!payable.ok) return payable;
+  const account = moneyAccount(chart, input.accountId);
+  if (!account.ok) return account;
+  return ok([line(account.value, input.amount), line(payable.value, -input.amount)]);
+}
+
+/** E16: Dr bank · Cr receivable · Cr interest (optional). */
+export function buildCollect(
+  chart: Chart,
+  input: { receivableId: string; accountId: string; principal: bigint; interest?: bigint },
+): LedgerResult<Line[]> {
+  if (input.principal <= 0n) return fail('not_positive');
+  const receivable = ofKind(chart, input.receivableId, 'asset');
+  if (!receivable.ok) return receivable;
+  const account = moneyAccount(chart, input.accountId);
+  if (!account.ok) return account;
+  const interest = input.interest ?? 0n;
+  if (interest < 0n) return fail('not_positive');
+  const lines: Line[] = [line(account.value, input.principal + interest), line(receivable.value, -input.principal)];
+  if (interest > 0n) {
+    const earned = systemAccount(chart, 'interest_earned');
+    if (!earned.ok) return earned;
+    lines.push(line(earned.value, -interest));
+  }
+  return ok(lines);
+}
+
+/** E14 (person): Dr payable · Dr interest expense · Cr bank. */
+export function buildLoanRepayment(
+  chart: Chart,
+  input: { payableId: string; accountId: string; principal: bigint; interest?: bigint },
+): LedgerResult<Line[]> {
+  if (input.principal <= 0n) return fail('not_positive');
+  const payable = ofKind(chart, input.payableId, 'liability');
+  if (!payable.ok) return payable;
+  const account = moneyAccount(chart, input.accountId);
+  if (!account.ok) return account;
+  const interest = input.interest ?? 0n;
+  if (interest < 0n) return fail('not_positive');
+  const lines: Line[] = [line(payable.value, input.principal), line(account.value, -(input.principal + interest))];
+  if (interest > 0n) {
+    const charges = systemAccount(chart, 'interest_and_charges');
+    if (!charges.ok) return charges;
+    lines.push(line(charges.value, interest));
+  }
+  return ok(lines);
+}
+
+/** E17: Dr written off · Cr receivable. */
+export function buildWriteOff(chart: Chart, input: { receivableId: string; amount: bigint }): LedgerResult<Line[]> {
+  if (input.amount <= 0n) return fail('not_positive');
+  const receivable = ofKind(chart, input.receivableId, 'asset');
+  if (!receivable.ok) return receivable;
+  const loss = systemAccount(chart, 'written_off');
+  if (!loss.ok) return loss;
+  return ok([line(loss.value, input.amount), line(receivable.value, -input.amount)]);
+}
+
 /** E25: the original's lines with every sign flipped. */
 export function buildReversal(original: MoneyEvent): Line[] {
   return original.lines.map((l) => ({ ...l, amountMinor: -l.amountMinor }));

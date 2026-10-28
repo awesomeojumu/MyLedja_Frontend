@@ -2,7 +2,12 @@ import type { Goal } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 
 export function goalSaved(goalId: string, snapshot: Snapshot): bigint {
-  return snapshot.allocations.filter((a) => a.goalId === goalId).reduce((s, a) => s + BigInt(a.amountMinor), 0n);
+  return snapshot.allocations
+    .filter((a) => a.goalId === goalId)
+    .reduce((s, a) => {
+      const amount = BigInt(a.amountMinor);
+      return a.kind === 'spend' ? s - amount : s + amount;
+    }, 0n);
 }
 
 export function goalProgress(saved: bigint, target: bigint): number {

@@ -20,7 +20,7 @@ import {
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import type { Goal } from '@/data/workspace/model';
-import type { Snapshot } from '@/data/workspace/repository';
+import type { Snapshot, WorkspaceRepository } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
@@ -37,6 +37,7 @@ export function GoalsScreen() {
   const [addOpen, setAddOpen] = useState(false);
   const [selected, setSelected] = useState<Goal | null>(null);
   const [allocateGoal, setAllocateGoal] = useState<Goal | null>(null);
+  const [spendGoal, setSpendGoal] = useState<Goal | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const toast = useToast();
@@ -104,7 +105,34 @@ export function GoalsScreen() {
         />
       ) : null}
       {selected && snapshot ? (
-        <GoalDetailSheet goal={selected} snapshot={snapshot} onClose={() => setSelected(null)} saved={goalCards(snapshot, today()).find((c) => c.goal.id === selected.id)!} />
+        <GoalDetailSheet
+          goal={selected}
+          snapshot={snapshot}
+          repo={repo}
+          onClose={() => setSelected(null)}
+          saved={goalCards(snapshot, today()).find((c) => c.goal.id === selected.id)!}
+          onSpend={() => {
+            setSpendGoal(selected);
+            setSelected(null);
+          }}
+        />
+      ) : null}
+      {spendGoal && snapshot ? (
+        <SpendFromGoalSheet
+          goal={spendGoal}
+          snapshot={snapshot}
+          onClose={() => setSpendGoal(null)}
+          onSave={async (input) => {
+            setError(null);
+            const r = await repo.spendFromGoal(spendGoal.id, input);
+            if (!r.ok) {
+              setError(ledgerMessage(r.error));
+              return;
+            }
+            toast.show(t('goals.spendSaved'));
+            setSpendGoal(null);
+          }}
+        />
       ) : null}
     </AppFrame>
   );
@@ -224,16 +252,120 @@ function AllocateSheet({
   );
 }
 
-function GoalDetailSheet({ goal, snapshot, saved, onClose }: { goal: Goal; snapshot: Snapshot; saved: GoalCard; onClose: () => void }) {
+function GoalDetailSheet({
+  goal,
+  snapshot,
+  repo,
+  saved,
+  onClose,
+  onSpend,
+}: {
+  goal: Goal;
+  snapshot: Snapshot;
+  repo: WorkspaceRepository;
+  saved: GoalCard;
+  onClose: () => void;
+  onSpend: () => void;
+}) {
+  const toast = useToast();
+  const [scheduleAmount, setScheduleAmount] = useState(goal.scheduleAmountMinor ? formatNaira(BigInt(goal.scheduleAmountMinor)) : '');
+  const [scheduleMinor, setScheduleMinor] = useState<bigint | null>(goal.scheduleAmountMinor ? BigInt(goal.scheduleAmountMinor) : null);
+  const [scheduleDay, setScheduleDay] = useState(goal.scheduleDayOfMonth ? String(goal.scheduleDayOfMonth) : '');
   const list = snapshot.allocations.filter((a) => a.goalId === goal.id).sort((a, b) => b.date.localeCompare(a.date));
   return (
-    <Sheet visible title={goal.name} onClose={onClose} testID="goal-detail-sheet">
+    <Sheet
+      visible
+      title={goal.name}
+      onClose={onClose}
+      testID="goal-detail-sheet"
+      footer={
+        goal.status === 'active' ? (
+          <Button testID="goal-spend" kind="secondary" label={t('goals.spendFromGoal')} onPress={onSpend} />
+        ) : undefined
+      }
+    >
       <Amount minor={saved.saved} /> {t('goals.of')} <Amount minor={saved.target} />
+      {goal.scheduleAmountMinor ? (
+        <Text variant="caption" tone="textSecondary">
+          {t('goals.scheduleTitle')}: {formatNaira(BigInt(goal.scheduleAmountMinor))} · {t('goals.scheduleDay')} {goal.scheduleDayOfMonth}
+        </Text>
+      ) : null}
       {list.map((a) => (
         <Text key={a.id} variant="caption" tone="textSecondary">
-          {formatDay(a.date)} · <Amount minor={BigInt(a.amountMinor)} variant="caption" />
+          {formatDay(a.date)} · {a.kind === 'spend' ? '-' : ''}
+          <Amount minor={BigInt(a.amountMinor)} variant="caption" />
         </Text>
       ))}
+      {goal.status === 'active' ? (
+        <>
+          <Text variant="heading-sm">{t('goals.scheduleTitle')}</Text>
+          <AmountInput
+            testID="goal-schedule-amount"
+            label={t('goals.scheduleAmount')}
+            value={scheduleAmount}
+            onChange={(text, minor) => {
+              setScheduleAmount(text);
+              setScheduleMinor(minor);
+            }}
+          />
+          <TextInput testID="goal-schedule-day" label={t('goals.scheduleDay')} value={scheduleDay} onChangeText={setScheduleDay} keyboardType="number-pad" />
+          <Button
+            testID="goal-schedule-save"
+            kind="secondary"
+            label={t('panel.save')}
+            onPress={() =>
+              void repo
+                .updateGoal({
+                  ...goal,
+                  scheduleAmountMinor: scheduleMinor && scheduleMinor > 0n ? scheduleMinor.toString() : undefined,
+                  scheduleDayOfMonth: scheduleDay ? Math.min(31, Math.max(1, Number(scheduleDay))) : undefined,
+                })
+                .then(() => toast.show(t('goals.scheduleSaved')))
+            }
+          />
+        </>
+      ) : null}
+    </Sheet>
+  );
+}
+
+function SpendFromGoalSheet({
+  goal,
+  snapshot,
+  onClose,
+  onSave,
+}: {
+  goal: Goal;
+  snapshot: Snapshot;
+  onClose: () => void;
+  onSave: (input: { accountId: string; categoryId: string; amount: bigint; date: string }) => Promise<void>;
+}) {
+  const [amountText, setAmountText] = useState('');
+  const [amountMinor, setAmountMinor] = useState<bigint | null>(null);
+  const [accountId, setAccountId] = useState(goal.accountId);
+  const [categoryId, setCategoryId] = useState(snapshot.categories.find((c) => c.kind === 'expense')?.id ?? '');
+  const accounts = snapshot.accounts.filter((a) => !a.archived).map((a) => ({ value: a.id, label: a.name }));
+  const categories = snapshot.categories.filter((c) => c.kind === 'expense').map((c) => ({ value: c.id, label: c.name }));
+
+  return (
+    <Sheet
+      visible
+      title={t('goals.spendTitle')}
+      onClose={onClose}
+      testID="goal-spend-sheet"
+      footer={
+        <Button
+          testID="goal-spend-save"
+          label={t('panel.save')}
+          disabled={amountMinor === null || amountMinor <= 0n || !categoryId}
+          onPress={() => void onSave({ accountId, categoryId, amount: amountMinor!, date: today() })}
+        />
+      }
+    >
+      <Text tone="textSecondary">{t('goals.spendCaption')}</Text>
+      <AmountInput testID="goal-spend-amount" label={t('add.amount')} value={amountText} onChange={(text, minor) => { setAmountText(text); setAmountMinor(minor); }} />
+      <Select testID="goal-spend-category" label={t('goals.spendCategory')} options={categories} value={categoryId} onChange={setCategoryId} />
+      <Select testID="goal-spend-account" label={t('add.account')} options={accounts} value={accountId} onChange={setAccountId} />
     </Sheet>
   );
 }

@@ -36,7 +36,12 @@ export type EventType =
   | 'opening_balance'
   | 'balance_adjustment'
   | 'refund'
-  | 'reversal';
+  | 'reversal'
+  | 'lend'
+  | 'collect'
+  | 'loan_proceeds'
+  | 'loan_repayment'
+  | 'write_off';
 
 export type EventStatus = 'pending' | 'posted' | 'reversed';
 
