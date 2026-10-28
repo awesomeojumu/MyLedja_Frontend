@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
@@ -42,6 +43,7 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
   const { repo, snapshot } = useWorkspace();
   const toast = useToast();
   const theme = useTheme();
+  const router = useRouter();
   const event = snapshot?.events.find((e) => e.id === id);
   const [editing, setEditing] = useState(false);
   const [refunding, setRefunding] = useState(false);
@@ -98,7 +100,18 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
 
         {event.status === 'posted' && (event.type === 'expense' || event.type === 'income' || event.type === 'transfer') ? (
           editing ? (
-            <EditForm snapshot={snapshot} event={event} amount={amount} onDone={() => setEditing(false)} onError={setError} onSaved={onClose} />
+            <EditForm
+              snapshot={snapshot}
+              event={event}
+              amount={amount}
+              onDone={() => setEditing(false)}
+              onError={setError}
+              onSaved={(nextId) => {
+                setEditing(false);
+                // A correction replaces this event; keep the panel open on the new version.
+                router.setParams({ tx: nextId });
+              }}
+            />
           ) : (
             <Button kind="secondary" testID="panel-edit" label={t('panel.edit')} onPress={() => setEditing(true)} />
           )
@@ -185,7 +198,7 @@ function EditForm({
   amount: bigint;
   onDone: () => void;
   onError: (m: string | null) => void;
-  onSaved: () => void;
+  onSaved: (nextId: string) => void;
 }) {
   const { repo } = useWorkspace();
   const toast = useToast();
@@ -221,8 +234,7 @@ function EditForm({
     if (!r.ok) return onError(ledgerMessage(r.error));
     onError(null);
     toast.show(t('common.saved'));
-    onDone();
-    onSaved();
+    onSaved(r.value.id);
   };
 
   return (
