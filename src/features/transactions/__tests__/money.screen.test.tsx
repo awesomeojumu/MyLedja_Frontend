@@ -196,7 +196,7 @@ describe('Accounts', () => {
   it('adds an account with only the last 4 digits and an opening balance that is not income', async () => {
     const { sync, repo } = await seeded();
     await show(<AccountsScreen />, sync);
-    await fireEvent.press(await screen.findByTestId('add-account'));
+    await fireEvent.press(await screen.findByTestId('accounts-add'));
     await fireEvent.press(screen.getByTestId('type-wallet'));
     await fireEvent.changeText(screen.getByTestId('account-name'), 'Kuda');
     await fireEvent.changeText(screen.getByTestId('account-last4'), '12345678');
