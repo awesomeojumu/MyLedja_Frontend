@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { t } from '@/i18n';
 import tokens from '../tokens.json';
@@ -21,13 +21,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const phone = useSizeClass() === 'phone';
   const [items, setItems] = useState<ToastItem[]>([]);
   const nextId = useRef(1);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const timer of pending) clearTimeout(timer);
+    };
+  }, []);
 
   const dismiss = useCallback((id: number) => setItems((all) => all.filter((x) => x.id !== id)), []);
   const show = useCallback(
     (message: string, onUndo?: () => void) => {
       const id = nextId.current++;
       setItems((all) => [...all, { id, message, onUndo }].slice(-MAX));
-      setTimeout(() => dismiss(id), onUndo ? TOAST_UNDO_MS : TOAST_MS);
+      const timer = setTimeout(() => {
+        timers.current.delete(timer);
+        dismiss(id);
+      }, onUndo ? TOAST_UNDO_MS : TOAST_MS);
+      timers.current.add(timer);
     },
     [dismiss],
   );

@@ -2,8 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Eye, EyeOff, LayoutDashboard, LogOut, Menu } from 'lucide-react-native';
-import { Banner, StatusPill, Text } from '@/design/components';
+import { ArrowLeftRight, Eye, EyeOff, LayoutDashboard, LogOut, Menu, Plus, Wallet } from 'lucide-react-native';
+import { Banner, Button, StatusPill, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useDesign, useTheme } from '@/design/ThemeProvider';
@@ -11,11 +11,16 @@ import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { useSyncStatus } from '@/data/sync/SyncProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
 import { SHIPPED_PAGES, type NavItem } from './navigation';
 
 const c = tokens.color;
 const sp = tokens.spacing;
-const ICONS = { dashboard: LayoutDashboard };
+const ICONS = {
+  dashboard: LayoutDashboard,
+  transactions: ArrowLeftRight,
+  accounts: Wallet,
+};
 const onSidebarMuted = `${c['on-primary']}B3`;
 const onSidebarSection = `${c['on-primary']}99`;
 
@@ -42,7 +47,12 @@ function PrivacyToggle({ color }: { color: string }) {
       aria-checked={privacy}
       accessibilityLabel={privacy ? t('nav.privacyOff') : t('nav.privacyOn')}
       onPress={() => setPrivacy(!privacy)}
-      style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+      style={{
+        minWidth: 44,
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
     >
       <Icon size={18} color={color} />
     </Pressable>
@@ -53,8 +63,36 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
   const router = useRouter();
   const pathname = usePathname();
   const { user, signOut } = useAuth();
+  const add = useOptionalAddTransaction();
   return (
     <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
+      {add && !compact ? (
+        <View style={{ marginBottom: sp['spacing-md'] }}>
+          <Button
+            testID="sidebar-add"
+            label={t('nav.add')}
+            onPress={() => {
+              add.open('expense');
+              onNavigate?.();
+            }}
+          />
+        </View>
+      ) : null}
+      {add && compact ? (
+        <Pressable
+          testID="rail-add"
+          accessibilityRole="button"
+          accessibilityLabel={t('nav.add')}
+          onPress={() => add.open('expense')}
+          style={{
+            minHeight: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Plus size={20} color={c['on-primary']} />
+        </Pressable>
+      ) : null}
       {compact ? null : (
         <View style={{ gap: sp['spacing-md'], marginBottom: sp['spacing-lg'] }}>
           <Text variant="heading-sm" style={{ color: c['on-primary'], fontFamily: 'Inter_400Regular' }}>
@@ -62,8 +100,15 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
           </Text>
           <View
             testID="workspace-switcher"
-            accessibilityLabel={t('nav.workspace', { name: user?.workspaceName ?? '' })}
-            style={{ borderRadius: tokens.radius['rounded-md'], borderWidth: 1, borderColor: c['primary-deep'], padding: sp['spacing-sm'] }}
+            accessibilityLabel={t('nav.workspace', {
+              name: user?.workspaceName ?? '',
+            })}
+            style={{
+              borderRadius: tokens.radius['rounded-md'],
+              borderWidth: 1,
+              borderColor: c['primary-deep'],
+              padding: sp['spacing-sm'],
+            }}
           >
             <Text variant="caption" style={{ color: c['on-primary'] }}>
               {user?.workspaceName ?? ''}
@@ -102,8 +147,20 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
         );
       })}
       <View style={{ flex: 1 }} />
-      <View style={{ gap: sp['spacing-sm'], alignItems: compact ? 'center' : 'stretch' }}>
-        <View style={{ flexDirection: compact ? 'column' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp['spacing-sm'] }}>
+      <View
+        style={{
+          gap: sp['spacing-sm'],
+          alignItems: compact ? 'center' : 'stretch',
+        }}
+      >
+        <View
+          style={{
+            flexDirection: compact ? 'column' : 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: sp['spacing-sm'],
+          }}
+        >
           <ConnectionPill />
           <PrivacyToggle color={c['on-primary']} />
         </View>
@@ -115,10 +172,20 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
             await signOut();
             router.replace('/sign-in');
           }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'], minHeight: 44, paddingHorizontal: sp['spacing-md'] }}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: sp['spacing-md'],
+            minHeight: 44,
+            paddingHorizontal: sp['spacing-md'],
+          }}
         >
           <LogOut size={18} color={onSidebarMuted} />
-          {compact ? null : <Text variant="caption" style={{ color: onSidebarSection }}>{t('nav.signOut')}</Text>}
+          {compact ? null : (
+            <Text variant="caption" style={{ color: onSidebarSection }}>
+              {t('nav.signOut')}
+            </Text>
+          )}
         </Pressable>
       </View>
     </View>
@@ -129,28 +196,65 @@ function BottomBar() {
   const router = useRouter();
   const pathname = usePathname();
   const theme = useTheme();
+  const add = useOptionalAddTransaction();
+  const items = SHIPPED_PAGES.map((item) => {
+    const active = isActive(pathname, item);
+    const Icon = ICONS[item.icon];
+    const label = t(item.phoneLabel ?? item.label);
+    return (
+      <Pressable
+        key={item.key}
+        accessibilityRole="link"
+        accessibilityState={{ selected: active }}
+        accessibilityLabel={label}
+        onPress={() => router.push(item.href)}
+        style={{
+          minWidth: 64,
+          minHeight: 48,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: sp['spacing-xxs'],
+        }}
+      >
+        <Icon size={18} color={active ? theme.link : theme.textSecondary} />
+        <Text variant="micro" tone={active ? 'link' : 'textSecondary'}>
+          {label}
+        </Text>
+      </Pressable>
+    );
+  });
+  const plus = add ? (
+    <Pressable
+      key="add"
+      testID="bottom-add"
+      accessibilityRole="button"
+      accessibilityLabel={t('nav.add')}
+      onPress={() => add.open('expense')}
+      style={{
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.primaryFill,
+      }}
+    >
+      <Plus size={22} color={theme.onPrimaryFill} />
+    </Pressable>
+  ) : null;
+  const middle = Math.ceil(items.length / 2);
   return (
-    <View testID="bottom-bar" accessibilityRole="tablist" style={{ height: tokens.frame['bottom-bar'], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' }}>
-      {SHIPPED_PAGES.map((item) => {
-        const active = isActive(pathname, item);
-        const Icon = ICONS[item.icon];
-        const label = t(item.phoneLabel ?? item.label);
-        return (
-          <Pressable
-            key={item.key}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={label}
-            onPress={() => router.push(item.href)}
-            style={{ minWidth: 64, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: sp['spacing-xxs'] }}
-          >
-            <Icon size={18} color={active ? theme.link : theme.textSecondary} />
-            <Text variant="micro" tone={active ? 'link' : 'textSecondary'}>
-              {label}
-            </Text>
-          </Pressable>
-        );
-      })}
+    <View
+      testID="bottom-bar"
+      role="navigation"
+      style={{
+        height: tokens.frame['bottom-bar'],
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+      }}
+    >
+      {[...items.slice(0, middle), plus, ...items.slice(middle)]}
     </View>
   );
 }
@@ -170,7 +274,13 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
           <Banner testID="offline-banner" message={t('common.offline')} />
         </View>
       ) : null}
-      <View nativeID="main" style={{ flex: 1, padding: phone ? sp['spacing-lg'] : sp['spacing-xl'] }}>
+      <View
+        nativeID="main"
+        style={{
+          flex: 1,
+          padding: phone ? sp['spacing-lg'] : sp['spacing-xl'],
+        }}
+      >
         {phone ? null : (
           <Text variant="display-md" accessibilityRole="header" style={{ marginBottom: sp['spacing-xl'] }}>
             {title}
@@ -184,7 +294,13 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
   if (!phone) {
     return (
       <View testID={`frame-${size === 'tablet' ? 'rail' : 'sidebar'}`} style={{ flex: 1, flexDirection: 'row' }}>
-        <View style={{ width: navWidth, backgroundColor: c['brand-dark-900'], padding: sp['spacing-md'] }}>
+        <View
+          style={{
+            width: navWidth,
+            backgroundColor: c['brand-dark-900'],
+            padding: sp['spacing-md'],
+          }}
+        >
           <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom', 'left']}>
             <SidebarList compact={size === 'tablet'} />
           </SafeAreaView>
@@ -196,13 +312,27 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
 
   return (
     <SafeAreaView testID="frame-phone" style={{ flex: 1, backgroundColor: theme.card }} edges={['top']}>
-      <View style={{ height: tokens.frame['top-bar'], flexDirection: 'row', alignItems: 'center', paddingHorizontal: sp['spacing-sm'], borderBottomWidth: 1, borderColor: theme.border }}>
+      <View
+        style={{
+          height: tokens.frame['top-bar'],
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: sp['spacing-sm'],
+          borderBottomWidth: 1,
+          borderColor: theme.border,
+        }}
+      >
         <Pressable
           testID="open-drawer"
           accessibilityRole="button"
           accessibilityLabel={t('nav.menu')}
           onPress={() => setDrawer(true)}
-          style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+          style={{
+            minWidth: 44,
+            minHeight: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
           <Menu size={18} color={theme.textSecondary} />
         </Pressable>
@@ -212,12 +342,26 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
         <PrivacyToggle color={theme.textSecondary} />
       </View>
       {content}
-      <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.card, borderTopWidth: 1, borderColor: theme.border }}>
+      <SafeAreaView
+        edges={['bottom']}
+        style={{
+          backgroundColor: theme.card,
+          borderTopWidth: 1,
+          borderColor: theme.border,
+        }}
+      >
         <BottomBar />
       </SafeAreaView>
       <Modal visible={drawer} transparent animationType="fade" onRequestClose={() => setDrawer(false)}>
         <View style={{ flex: 1, flexDirection: 'row' }}>
-          <View testID="drawer" style={{ width: 280, backgroundColor: c['brand-dark-900'], padding: sp['spacing-md'] }}>
+          <View
+            testID="drawer"
+            style={{
+              width: 280,
+              backgroundColor: c['brand-dark-900'],
+              padding: sp['spacing-md'],
+            }}
+          >
             <SafeAreaView style={{ flex: 1 }}>
               <SidebarList compact={false} onNavigate={() => setDrawer(false)} />
             </SafeAreaView>

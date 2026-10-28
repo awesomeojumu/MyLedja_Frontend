@@ -9,6 +9,9 @@ import { t, type TextKey } from '@/i18n';
 import { toWire } from '@/money';
 import { GradientMeshBackdrop } from '@/features/auth/AuthFrame';
 import { useAuth } from '@/features/auth/AuthProvider';
+import type { SetupBody } from '@/api/auth';
+import { useSync } from '@/data/sync/SyncProvider';
+import { WorkspaceRepository } from '@/data/workspace/repository';
 import { ACCOUNT_TYPES, STARTER_GROUPS, WEEK_STARTS, type AccountType } from './starter';
 
 type AccountRow = { name: string; type: AccountType; amountText: string; minor: bigint | null; date: string };
@@ -24,6 +27,7 @@ export function WelcomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { api, user, setUser } = useAuth();
+  const sync = useSync();
   const [step, setStep] = useState(1);
   const [skipped, setSkipped] = useState<number[]>([]);
   const [workspaceName, setWorkspaceName] = useState(t('welcome.step1.default'));
@@ -60,7 +64,7 @@ export function WelcomeScreen() {
       const categories = STARTER_GROUPS.flatMap(({ group, categories: keys }) =>
         keys.filter((k) => !off.has(k)).map((k) => ({ key: k, group, name: t(k) })),
       );
-      const updated = await api.finishSetup(user.workspaceId, {
+      const body: SetupBody = {
         workspaceName: skip.includes(1) ? t('welcome.step1.default') : workspaceName.trim(),
         currency: 'NGN',
         weekStart,
@@ -73,7 +77,9 @@ export function WelcomeScreen() {
         budgetStyle: style,
         monthlyTakeHome: takeHome.minor === null ? null : toWire(takeHome.minor),
         skippedSteps: skip,
-      });
+      };
+      const updated = await api.finishSetup(user.workspaceId, body);
+      await new WorkspaceRepository(sync.store, sync.engine, updated.workspaceId).seedFromSetup(body);
       setUser(updated);
       setStep(6);
     } catch {
