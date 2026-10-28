@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Expo and builds
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+
+# Native folders made by `expo prebuild` (remove these two lines if you keep them in Git)
+/ios/
+/android/
+
+# Signing keys and certificates
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Environment: real values stay local, templates are shared
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Local data, tests, logs
+.data/
+coverage/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
