@@ -19,3 +19,6 @@ export {
   StatusPill,
   useReduceMotion,
 } from './primitives';
+export { LogomarkLoader, SegmentedControl, Switch, Tabs, type Option } from './controls';
+export { DatePicker, formatDay, Menu, Panel, Popover, Select, type MenuItem } from './overlays';
+export { GradientBand, GradientMesh } from './GradientMesh';

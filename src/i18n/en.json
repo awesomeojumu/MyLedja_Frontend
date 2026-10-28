@@ -2,7 +2,6 @@
   "app.name": "MyLedja",
   "app.byPlanexi": "by Planexi",
   "app.brandLine": "Where is my money? Where is it going? Where is it supposed to go?",
-
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.back": "Back",
@@ -21,11 +20,9 @@
   "common.offline": "You're offline. Changes will sync when you're back.",
   "common.lastUpdated": "Last updated {time}",
   "common.howCalculated": "How this is worked out",
-
   "money.privacyLabel": "Amount hidden",
   "money.unreadable": "Enter an amount in naira, for example 25000",
   "money.placeholder": "for example 25000",
-
   "dev.configTitle": "MyLedja can't start",
   "dev.configBody": "Set {names} in your .env file, then restart the dev server.",
   "dev.menuTitle": "Developer",
@@ -33,7 +30,6 @@
   "dev.apiMock": "Mock",
   "dev.apiLocal": "Local",
   "dev.apiStaging": "Staging",
-
   "errors.network": "We couldn't reach MyLedja. Check your connection and try again.",
   "errors.generic": "We couldn't do this. Check your connection and try again. Your changes are still here.",
   "errors.emailInvalid": "Enter your email, for example ada@example.com",
@@ -44,11 +40,9 @@
   "errors.passwordsDiffer": "The two passwords don't match",
   "errors.termsRequired": "Tick the box to agree to the terms",
   "errors.workspaceNameRequired": "Add a name",
-
   "auth.offline": "You need a connection to sign in. Nothing has been sent.",
   "auth.email": "Email",
   "auth.password": "Password",
-
   "signIn.title": "Welcome back",
   "signIn.forgot": "Forgot?",
   "signIn.submit": "Sign in",
@@ -60,7 +54,6 @@
   "signIn.wrong": "Email or password is wrong",
   "signIn.wait": "Wait 1 minute",
   "signIn.waitCountdown": "Try again in {seconds} seconds",
-
   "signUp.title": "Create your account",
   "signUp.name": "Name",
   "signUp.terms": "I agree to the {terms} and {privacy}",
@@ -91,7 +84,6 @@
   "signUp.termsTitle": "Terms",
   "signUp.privacyTitle": "Privacy",
   "signUp.legalPending": "The full text appears here once it's published.",
-
   "recover.title": "Recover your account",
   "recover.submit": "Send code",
   "recover.sent": "If an account exists for this email, we've sent a code",
@@ -101,7 +93,6 @@
   "recover.doneTitle": "Password changed. Other devices have been signed out.",
   "recover.toSignIn": "Go to sign in",
   "recover.backToSignIn": "Back to sign in",
-
   "welcome.stepOf": "Step {n} of 5",
   "welcome.step1.title": "Your space",
   "welcome.step1.label": "What should we call this?",
@@ -145,7 +136,6 @@
   "welcome.done.title": "You're set up",
   "welcome.done.dashboard": "Go to dashboard",
   "welcome.done.add": "Add transaction",
-
   "group.home": "Home",
   "group.gettingAround": "Getting around",
   "group.food": "Food",
@@ -163,7 +153,6 @@
   "cat.familySupport": "Support to family",
   "cat.tithe": "Tithe",
   "cat.offering": "Offering",
-
   "nav.dashboard": "Dashboard",
   "nav.home": "Home",
   "nav.add": "Add",
@@ -174,13 +163,26 @@
   "nav.workspace": "Workspace: {name}",
   "nav.signOut": "Sign out",
   "nav.skipToContent": "Skip to content",
-
   "status.synced": "Synced",
   "status.waiting": "{count} waiting to sync",
   "status.offline": "Offline",
-
   "dashboard.title": "Dashboard",
-
+  "date.month.1": "Jan",
+  "date.month.2": "Feb",
+  "date.month.3": "Mar",
+  "date.month.4": "Apr",
+  "date.month.5": "May",
+  "date.month.6": "Jun",
+  "date.month.7": "Jul",
+  "date.month.8": "Aug",
+  "date.month.9": "Sep",
+  "date.month.10": "Oct",
+  "date.month.11": "Nov",
+  "date.month.12": "Dec",
+  "date.previousMonth": "Previous month",
+  "date.nextMonth": "Next month",
+  "date.day": "{d} {month} {y}",
+  "date.monthYear": "{month} {y}",
   "ledger.system.opening_balances": "Opening balances",
   "ledger.system.adjustments": "Adjustments",
   "ledger.system.revaluation": "Revaluation",

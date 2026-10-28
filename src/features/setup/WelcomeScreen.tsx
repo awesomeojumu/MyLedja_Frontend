@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BackHandler, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AmountInput, Button, Card, InlineError, PillTag, Text, TextInput } from '@/design/components';
+import { AmountInput, Button, DatePicker, Card, InlineError, PillTag, Text, TextInput } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import { t, type TextKey } from '@/i18n';
@@ -168,7 +168,7 @@ export function WelcomeScreen() {
                       value={a.amountText}
                       onChange={(amountText, minor) => update({ amountText, minor })}
                     />
-                    <TextInput label={t('welcome.step3.date')} value={a.date} onChangeText={(date) => update({ date })} />
+                    <DatePicker label={t('welcome.step3.date')} value={a.date} onChange={(date) => update({ date })} weekStartsOn={weekStart === 'sunday' ? 0 : weekStart === 'saturday' ? 6 : 1} />
                     {accounts.length > 1 ? (
                       <Button kind="link" label={t('welcome.step3.remove')} onPress={() => setAccounts((all) => all.filter((_, j) => j !== i))} />
                     ) : null}
