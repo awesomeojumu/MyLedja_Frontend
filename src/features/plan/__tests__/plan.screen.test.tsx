@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react-native';
+import { screen, fireEvent } from '@testing-library/react-native';
 
 import { WorkspaceRepository } from '@/data/workspace/repository';
 import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
@@ -6,6 +6,7 @@ import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
 import { PlanScreen } from '../PlanScreen';
+import { planSummaryStrip, billsForMonth } from '../recurrence';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 
@@ -22,11 +23,40 @@ async function seeded() {
     monthlyTakeHome: null,
     skippedSteps: [],
   });
+  await repo.addRecurring({
+    kind: 'bill',
+    name: 'Rent',
+    amountMinor: '25000000',
+    accountId: (await repo.load()).accounts[0]!.id,
+    categoryId: (await repo.load()).categories.find((c) => c.kind === 'expense')!.id,
+    rule: { every: 'month', on: 1 },
+    startDate: '2026-10-01',
+  });
   return { sync, repo };
 }
 
-describe('Plan page (F2.1)', () => {
-  it('P12-01: shows summary for the month', async () => {
+describe('Plan page (DESIGN.md page 12)', () => {
+  it('P12-01: four-column summary strip', async () => {
+    const { sync, repo } = await seeded();
+    const s = await repo.load();
+    const rows = billsForMonth(s, '2026-10', '2026-10-28', 7);
+    const strip = planSummaryStrip(s, '2026-10', rows);
+    expect(strip.goingOut).toBeGreaterThan(0n);
+
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <PlanScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(screen.getByTestId('plan-summary-strip')).toBeTruthy();
+    expect(screen.getByTestId('plan-coming-in')).toBeTruthy();
+    expect(screen.getByTestId('plan-going-out')).toBeTruthy();
+    expect(screen.getByTestId('plan-left-after')).toBeTruthy();
+    expect(screen.getByTestId('plan-missed')).toBeTruthy();
+  });
+
+  it('P12-05: list and calendar toggle', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -34,7 +64,7 @@ describe('Plan page (F2.1)', () => {
       </WorkspaceProvider>,
       { sync },
     );
-    expect(screen.getByText(t('plan.title'))).toBeTruthy();
-    expect(screen.getByText(t('plan.summaryTitle', { month: '2026-10' }))).toBeTruthy();
+    await fireEvent.press(screen.getByText(t('plan.viewCalendar')));
+    expect(screen.getByTestId('plan-calendar')).toBeTruthy();
   });
 });
