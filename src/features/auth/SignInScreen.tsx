@@ -9,7 +9,7 @@ import { useOnline } from '@/lib/useOnline';
 import { AuthFrame } from './AuthFrame';
 import { useAuth } from './AuthProvider';
 import { GoogleSignInButton } from './GoogleSignInButton';
-import { googleSignInEnabled, runGoogleSignIn } from './googleSignIn';
+import { loadGoogleSignIn, runGoogleSignIn } from './googleSignIn';
 import { EMAIL_PATTERN } from './password';
 
 export function SignInScreen({ now = () => Date.now() }: { now?: () => number }) {
@@ -24,9 +24,18 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
   const [busy, setBusy] = useState(false);
   const [waitUntil, setWaitUntil] = useState<number | null>(null);
   const [, setTick] = useState(0);
-  const showGoogle = googleSignInEnabled();
+  const [showGoogle, setShowGoogle] = useState(false);
 
   const secondsLeft = waitUntil ? Math.max(0, Math.ceil((waitUntil - now()) / 1000)) : 0;
+  useEffect(() => {
+    let alive = true;
+    void loadGoogleSignIn(api).then((g) => {
+      if (alive) setShowGoogle(g.enabled);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [api]);
   useEffect(() => {
     if (!waitUntil) return;
     const id = setInterval(() => {

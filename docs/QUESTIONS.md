@@ -30,12 +30,12 @@ Format and rules: build plan section 14. Each open question stops only the task 
 - Status: decided
 
 ## Q-4: "Continue with Google" has no client id the app can read
-- Task: F0.9 (P01-03, P02-05)
+- Task: F0.9 (P01-03, P02-05), F0.2
 - Raised by: frontend agent
-- Documents: DESIGN.md pages 1 and 2; TECH-SPEC 2.2 (only three `EXPO_PUBLIC_` variables) and 2.3 rule 3 (an unset service is hidden, not broken); build plan T0.2 and B0.8
-- Options: A, add an optional `EXPO_PUBLIC_GOOGLE_CLIENT_ID` (and per-platform ids if T0.2 needs them). B, the app fetches the public client id from the API at start.
-- Recommendation: A, optional, after prototype T0.2. The button is hidden until then.
-- Answer: Owner, 28 Oct 2026: A. Add an optional `EXPO_PUBLIC_GOOGLE_CLIENT_ID` after prototype T0.2; the button stays hidden until then.
+- Documents: DESIGN.md pages 1 and 2; TECH-SPEC 2.2 (only three `EXPO_PUBLIC_` variables) and 2.3 rules 3–5; build plan T0.2 and B0.8; backend Q-B5
+- Options: A, add an optional `EXPO_PUBLIC_GOOGLE_CLIENT_ID` (and per-platform ids if T0.2 needs them). B, the app fetches the public client id from `GET /v1/public-config`.
+- Recommendation: B. Backend already exposes `google.clientId` / `google.enabled` on public-config; no new `EXPO_PUBLIC_` name (TECH-SPEC 2.2 / Never-do #1). Button stays hidden while `google.enabled` is false. If T0.2 needs separate iOS/Android ids, those become optional backend variables (2.3 rule 4), still served via public-config.
+- Answer: Supersedes the 28 Oct 2026 A decision. Agent under owner delegation for compliance §5 A.3 (28 Oct 2026): **B**. Use public-config only; do not add `EXPO_PUBLIC_GOOGLE_CLIENT_ID`.
 - Status: decided
 
 ## Q-5: Sign out before Settings exists

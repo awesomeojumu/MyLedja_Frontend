@@ -11,7 +11,7 @@ import { AuthFrame } from './AuthFrame';
 import { AuthStepPanel } from './AuthStepPanel';
 import { useAuth } from './AuthProvider';
 import { GoogleSignInButton } from './GoogleSignInButton';
-import { googleSignInEnabled, runGoogleSignIn } from './googleSignIn';
+import { loadGoogleSignIn, runGoogleSignIn } from './googleSignIn';
 import { checkPassword, EMAIL_PATTERN } from './password';
 import { PasswordStrength } from './PasswordStrength';
 
@@ -34,7 +34,17 @@ export function SignUpScreen() {
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
   const [session, setSession] = useState<SessionResponse | null>(null);
   const [busy, setBusy] = useState(false);
-  const showGoogle = googleSignInEnabled();
+  const [showGoogle, setShowGoogle] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void loadGoogleSignIn(api).then((g) => {
+      if (alive) setShowGoogle(g.enabled);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [api]);
 
   useEffect(() => {
     if (step !== 'code' || resendIn <= 0) return;
