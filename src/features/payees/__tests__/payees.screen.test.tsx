@@ -93,8 +93,7 @@ describe('Payees page', () => {
     await fireEvent.press(screen.getByTestId('payees-merge'));
     await fireEvent.press(screen.getByTestId('payees-merge-keep'));
     await fireEvent.press(screen.getByRole('radio', { name: 'Shoprite' }));
-    await fireEvent.press(screen.getByTestId('payees-merge-from'));
-    await fireEvent.press(screen.getByRole('radio', { name: 'Corner shop' }));
+    await fireEvent.press(screen.getByTestId(`payees-merge-${corner.id}`));
     await fireEvent.press(screen.getByTestId('payees-merge-save'));
     await waitFor(async () => {
       const after = await repo.load();

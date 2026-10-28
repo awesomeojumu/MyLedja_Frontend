@@ -78,7 +78,34 @@ export type Payee = {
   defaultCategoryId?: string;
   /** Bank import names that map here (P24-03). */
   aliases?: string[];
+  /** Optional logo (local URI or remote); DESIGN page 24. */
+  logoUri?: string;
   deleted?: boolean;
+};
+
+/** Transaction sorting rules (DESIGN page 25, TECH-SPEC rules collection). */
+export type RuleStage = 'first' | 'normal' | 'last';
+
+export type RuleConditionField = 'payee' | 'description' | 'amount' | 'account' | 'category' | 'notes' | 'date';
+
+export type RuleConditionOp = 'contains' | 'equals' | 'lessThan' | 'greaterThan' | 'before' | 'after';
+
+export type RuleCondition = { field: RuleConditionField; op: RuleConditionOp; value: string };
+
+export type RuleActionKind = 'setCategory' | 'renamePayee' | 'addNote';
+
+export type RuleAction = { kind: RuleActionKind; value: string };
+
+export type TransactionRule = {
+  id: string;
+  enabled: boolean;
+  stage: RuleStage;
+  order: number;
+  matchMode: 'all' | 'any';
+  conditions: RuleCondition[];
+  actions: RuleAction[];
+  matchedCount: number;
+  lastUsedAt?: string;
 };
 
 export type BudgetStyle = 'tracking' | 'envelope';

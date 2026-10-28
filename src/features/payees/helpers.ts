@@ -1,5 +1,6 @@
 import type { Payee } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
+import { rulesForPayee } from '@/features/rules/ruleEngine';
 import { monthOf } from '@/ledger';
 
 export type PayeeRow = {
@@ -8,7 +9,10 @@ export type PayeeRow = {
   spentThisYear: bigint;
   lastUsed: string | null;
   defaultCategoryName: string;
+  rulesCount: number;
 };
+
+export type PayeeSort = 'name' | 'mostUsed' | 'mostSpent';
 
 export function payeeRows(snapshot: Snapshot, year: number): PayeeRow[] {
   const catName = (id?: string) => snapshot.categories.find((c) => c.id === id)?.name ?? '';
@@ -27,18 +31,51 @@ export function payeeRows(snapshot: Snapshot, year: number): PayeeRow[] {
     }
     stats.set(e.payeeId, cur);
   }
-  return snapshot.payees
-    .map((payee) => {
-      const s = stats.get(payee.id) ?? { count: 0, spent: 0n, last: null };
-      return {
-        payee,
-        txCount: s.count,
-        spentThisYear: s.spent,
-        lastUsed: s.last,
-        defaultCategoryName: catName(payee.defaultCategoryId),
-      };
-    })
-    .sort((a, b) => a.payee.name.localeCompare(b.payee.name));
+  return snapshot.payees.map((payee) => {
+    const s = stats.get(payee.id) ?? { count: 0, spent: 0n, last: null };
+    return {
+      payee,
+      txCount: s.count,
+      spentThisYear: s.spent,
+      lastUsed: s.last,
+      defaultCategoryName: catName(payee.defaultCategoryId),
+      rulesCount: rulesForPayee(snapshot.rules, payee).length,
+    };
+  });
+}
+
+export function sortPayeeRows(rows: PayeeRow[], sort: PayeeSort): PayeeRow[] {
+  const copy = [...rows];
+  if (sort === 'mostUsed') {
+    copy.sort((a, b) => b.txCount - a.txCount || a.payee.name.localeCompare(b.payee.name));
+  } else if (sort === 'mostSpent') {
+    copy.sort((a, b) => {
+      if (a.spentThisYear === b.spentThisYear) return a.payee.name.localeCompare(b.payee.name);
+      return a.spentThisYear > b.spentThisYear ? -1 : 1;
+    });
+  } else {
+    copy.sort((a, b) => a.payee.name.localeCompare(b.payee.name));
+  }
+  return copy;
+}
+
+export function payeeTransactions(snapshot: Snapshot, payeeId: string, limit = 12) {
+  const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+  return snapshot.events
+    .filter((e) => e.status === 'posted' && e.payeeId === payeeId && e.type !== 'transfer')
+    .slice(0, limit)
+    .map((e) => {
+      const categoryLine = e.lines.find((l) => !accountIds.has(l.ledgerAccountId));
+      const category = snapshot.categories.find((c) => c.id === categoryLine?.ledgerAccountId)?.name ?? '';
+      const amount = e.lines
+        .filter((l) => accountIds.has(l.ledgerAccountId))
+        .reduce((s, l) => s + l.amountMinor, 0n);
+      return { id: e.id, date: e.date, category, amount };
+    });
+}
+
+export function mergeTransactionCount(snapshot: Snapshot, mergeIds: string[]): number {
+  return snapshot.events.filter((e) => e.payeeId && mergeIds.includes(e.payeeId)).length;
 }
 
 export function yearOf(iso: string): number {

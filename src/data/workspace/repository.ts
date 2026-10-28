@@ -57,7 +57,10 @@ import {
   type IncomeStream,
   type Payee,
   type Reconcile,
+  type RuleAction,
+  type RuleStage,
   type StoredEvent,
+  type TransactionRule,
   type WorkspaceSettings,
   budgetAssignId,
 } from './model';
@@ -85,6 +88,7 @@ export type Snapshot = {
   debtEntries: DebtEntry[];
   notifications: AppNotification[];
   budgetTemplates: BudgetTemplate[];
+  rules: TransactionRule[];
   /** Events made on this device that haven't synced yet. */
   waiting: Set<string>;
   chart: Chart;
@@ -104,6 +108,12 @@ function billDueInMonth(rule: RecurrenceRule, month: string): string | null {
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const day = rule.on === 31 ? last : Math.min(rule.on, last);
   return `${month}-${String(day).padStart(2, '0')}`;
+}
+
+const STAGE_RANK: Record<RuleStage, number> = { first: 0, normal: 1, last: 2 };
+
+function stageOrder(stage: RuleStage): number {
+  return STAGE_RANK[stage];
 }
 
 export type TransactionInput =
@@ -128,7 +138,7 @@ export class WorkspaceRepository {
   ) {}
 
   async load(): Promise<Snapshot> {
-    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows] =
+    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows, ruleRows] =
       await Promise.all([
       this.store.list('accounts'),
       this.store.list('categories'),
@@ -147,6 +157,7 @@ export class WorkspaceRepository {
       this.store.list('debt_entries'),
       this.store.list('notifications'),
       this.store.list('budget_templates'),
+      this.store.list('rules'),
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
     const accountList = accounts.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id })).sort((a, b) => a.order - b.order);
@@ -219,6 +230,24 @@ export class WorkspaceRepository {
         .map((r) => ({ ...(r.data as Omit<AppNotification, 'id'>), id: r.id }))
         .filter((n) => !n.snoozedUntil || n.snoozedUntil <= workspaceToday()),
       budgetTemplates: templateRows.map((r) => ({ ...(r.data as Omit<BudgetTemplate, 'id'>), id: r.id })),
+      rules: ruleRows
+        .map((r) => {
+          const d = r.data as Omit<TransactionRule, 'id'> & { deleted?: boolean };
+          if (d.deleted) return null;
+          return {
+            ...d,
+            id: r.id,
+            matchedCount: d.matchedCount ?? 0,
+            order: d.order ?? 0,
+            matchMode: d.matchMode ?? 'all',
+            conditions: d.conditions ?? [],
+            actions: d.actions ?? [],
+            enabled: d.enabled ?? true,
+            stage: d.stage ?? 'normal',
+          } satisfies TransactionRule;
+        })
+        .filter((r): r is TransactionRule => r !== null)
+        .sort((a, b) => (a.stage === b.stage ? a.order - b.order : stageOrder(a.stage) - stageOrder(b.stage))),
       waiting,
       chart: this.chartFor(accountList, categoryList, debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id }))),
     };
@@ -780,6 +809,96 @@ export class WorkspaceRepository {
     for (const id of ids) {
       const p = merged.find((m) => m.id === id)!;
       await this.put('payees', id, { ...p, deleted: true }, 'payee.delete');
+    }
+    return { ok: true, value: undefined };
+  }
+
+  async saveRule(rule: TransactionRule): Promise<void> {
+    const { id, ...data } = rule;
+    await this.put('rules', id, data, 'rule.update');
+  }
+
+  async createRule(
+    input: Omit<TransactionRule, 'id' | 'matchedCount' | 'order'> & { order?: number },
+  ): Promise<TransactionRule> {
+    const snapshot = await this.load();
+    const stageRules = snapshot.rules.filter((r) => r.stage === input.stage);
+    const rule: TransactionRule = {
+      ...input,
+      id: this.newId(),
+      matchedCount: 0,
+      order: input.order ?? stageRules.length,
+    };
+    await this.saveRule(rule);
+    return rule;
+  }
+
+  async deleteRule(ruleId: string): Promise<void> {
+    const snapshot = await this.load();
+    const rule = snapshot.rules.find((r) => r.id === ruleId);
+    if (!rule) return;
+    await this.put('rules', ruleId, { ...rule, deleted: true, enabled: false }, 'rule.delete');
+  }
+
+  async reorderRules(ruleId: string, direction: 'up' | 'down'): Promise<void> {
+    const snapshot = await this.load();
+    const rule = snapshot.rules.find((r) => r.id === ruleId);
+    if (!rule) return;
+    const sameStage = snapshot.rules.filter((r) => r.stage === rule.stage).sort((a, b) => a.order - b.order);
+    const index = sameStage.findIndex((r) => r.id === ruleId);
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    const other = sameStage[swapIndex];
+    if (!other) return;
+    await this.saveRule({ ...rule, order: other.order });
+    await this.saveRule({ ...other, order: rule.order });
+  }
+
+  async runRule(ruleId: string, range: { from?: string; to?: string }): Promise<Result<{ changed: number }>> {
+    const snapshot = await this.load();
+    const rule = snapshot.rules.find((r) => r.id === ruleId);
+    if (!rule || !rule.enabled) return { ok: false, error: 'missing_lines' };
+    const { previewMatches } = await import('@/features/rules/ruleEngine');
+    const matches = previewMatches(snapshot, rule, range.from, range.to);
+    let changed = 0;
+    for (const ctx of matches) {
+      const applied = await this.applyRuleActions(ctx.eventId, rule.actions);
+      if (applied.ok) changed += 1;
+    }
+    if (changed > 0) {
+      await this.saveRule({ ...rule, matchedCount: rule.matchedCount + changed, lastUsedAt: workspaceToday() });
+    }
+    return { ok: true, value: { changed } };
+  }
+
+  async runRules(ruleIds: string[], range: { from?: string; to?: string }): Promise<Result<{ changed: number }>> {
+    let total = 0;
+    for (const id of ruleIds) {
+      const r = await this.runRule(id, range);
+      if (!r.ok) return r;
+      total += r.value.changed;
+    }
+    return { ok: true, value: { changed: total } };
+  }
+
+  private async applyRuleActions(eventId: string, actions: RuleAction[]): Promise<Result> {
+    const snapshot = await this.load();
+    const event = snapshot.events.find((e) => e.id === eventId);
+    if (!event) return { ok: false, error: 'missing_lines' };
+    for (const action of actions) {
+      if (action.kind === 'setCategory' && (event.type === 'expense' || event.type === 'income')) {
+        const r = await this.bulkSetCategory([eventId], action.value);
+        if (!r.ok) return r;
+      }
+      if (action.kind === 'renamePayee' && action.value.trim()) {
+        const payeeId = await this.payeeFor(snapshot.payees, action.value.trim());
+        const moved = await this.setEventPayee(eventId, payeeId);
+        if (!moved.ok) return moved;
+      }
+      if (action.kind === 'addNote' && action.value.trim()) {
+        const note = action.value.trim();
+        const merged = event.notes ? `${event.notes}; ${note}` : note;
+        await this.updateNotes(eventId, merged);
+      }
     }
     return { ok: true, value: undefined };
   }

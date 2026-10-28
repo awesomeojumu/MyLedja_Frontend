@@ -32,6 +32,7 @@ function stubSnapshot(): Snapshot {
     debtEntries: [],
     notifications: [],
     budgetTemplates: [],
+    rules: [],
     waiting: new Set(),
     chart: {} as unknown as Snapshot['chart'],
   };
