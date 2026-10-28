@@ -4,13 +4,17 @@ import { View } from 'react-native';
 import { Button, Card, InlineError, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
-import { budgetCategories } from '@/features/budget/helpers';
+import { budgetCategories, monthLabel } from '@/features/budget/helpers';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
 const sp = tokens.spacing;
 
 type LineDraft = { categoryId: string; amountText: string };
+
+function ruleLabel(amountMinor: bigint): string {
+  return t('budget.templatesRuleMonthly', { amount: formatNaira(amountMinor) });
+}
 
 export function TemplatesSheet({
   visible,
@@ -36,6 +40,7 @@ export function TemplatesSheet({
     return template.lines.map((line) => ({
       name: snapshot.categories.find((c) => c.id === line.categoryId)?.name ?? '',
       amount: BigInt(line.amountMinor),
+      rule: ruleLabel(BigInt(line.amountMinor)),
     }));
   }, [snapshot, selectedId]);
 
@@ -73,7 +78,14 @@ export function TemplatesSheet({
       onClose={onClose}
       title={t('budget.templatesTitle')}
       testID="budget-templates-sheet"
-      footer={<Button testID="budget-templates-apply" label={t('budget.templatesApply')} onPress={apply} disabled={!selectedId} />}
+      footer={
+        <Button
+          testID="budget-templates-apply"
+          label={t('budget.templatesApplyMonth', { month: monthLabel(month) })}
+          onPress={apply}
+          disabled={!selectedId}
+        />
+      }
     >
       {error ? <InlineError message={error} /> : null}
       {snapshot.budgetTemplates.length > 0 ? (
@@ -89,8 +101,8 @@ export function TemplatesSheet({
         <Card testID="budget-templates-preview" style={{ gap: sp['spacing-xs'] }}>
           <Text variant="heading-sm">{t('budget.templatesPreview')}</Text>
           {preview.map((row) => (
-            <View key={row.name} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text>{row.name}</Text>
+            <View key={row.name} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-sm'] }}>
+              <Text style={{ flex: 1 }}>{row.rule}</Text>
               <Text>{formatNaira(row.amount)}</Text>
             </View>
           ))}
