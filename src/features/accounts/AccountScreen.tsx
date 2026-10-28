@@ -29,12 +29,11 @@ import { ledgerBalance } from '@/ledger';
 
 import { AccountImportSheet } from './AccountImportSheet';
 import { ArchiveSheet, EditAccountSheet, UpdateValueSheet } from './accountSheets';
-import { groupRegisterByDay, hasValueTab, isInvestmentAccount } from './helpers';
-import { HoldingsTab } from './HoldingsTab';
+import { groupRegisterByDay, hasValueTab } from './helpers';
 
 const sp = tokens.spacing;
 
-type Tab = 'transactions' | 'holdings' | 'value' | 'details';
+type Tab = 'transactions' | 'value' | 'details';
 export type RegisterRow = Row & { line: bigint; running: bigint };
 
 /** Rows that touch the account, newest first, with the balance after each (P09-01). */
@@ -87,7 +86,6 @@ export function AccountScreen() {
   const dayGroups = useMemo(() => groupRegisterByDay(rows), [rows]);
   const balance = snapshot && account ? ledgerBalance(account.id, snapshot.events) : 0n;
   const owes = account ? ACCOUNT_KIND_INFO[account.type].ledger === 'liability' : false;
-  const investment = account ? isInvestmentAccount(account.type) : false;
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined' || !account) return;
@@ -125,7 +123,6 @@ export function AccountScreen() {
   const split = clearedSplit(rows);
   const tabs: { value: Tab; label: string }[] = [
     { value: 'transactions', label: t('account.tab.transactions') },
-    ...(investment ? [{ value: 'holdings' as const, label: t('account.tab.holdings') }] : []),
     ...(account && hasValueTab(account.type) ? [{ value: 'value' as const, label: t('account.tab.value') }] : []),
     { value: 'details', label: t('account.tab.details') },
   ];
@@ -210,8 +207,6 @@ export function AccountScreen() {
                   ))}
                 </View>
               )
-            ) : tab === 'holdings' ? (
-              <HoldingsTab account={account} />
             ) : tab === 'value' ? (
               <Card testID="value-list" style={{ gap: sp['spacing-sm'] }}>
                 {revalued(snapshot, account.id).length === 0 ? (

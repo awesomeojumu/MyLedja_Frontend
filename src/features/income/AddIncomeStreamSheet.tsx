@@ -25,6 +25,7 @@ import type {
 } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { t } from '@/i18n';
+import { toInputText } from '@/money';
 
 import { takeHomeMinor, TAX_CLASS_PRESETS } from './helpers';
 
@@ -265,7 +266,7 @@ function DeductionRow({
   onChange: (row: IncomeDeduction) => void;
   onRemove: () => void;
 }) {
-  const [amountText, setAmountText] = useState(row.amountMinor ?? '');
+  const [amountText, setAmountText] = useState(row.amountMinor ? toInputText(BigInt(row.amountMinor)) : '');
   const [pct, setPct] = useState(row.percent !== undefined ? String(row.percent) : '');
   return (
     <View style={{ gap: sp['spacing-xs'], borderWidth: 1, borderColor: tokens.color.hairline, borderRadius: tokens.radius['rounded-sm'], padding: sp['spacing-sm'] }}>
@@ -301,6 +302,8 @@ function RoutingRow({
   onChange: (row: IncomeRouting) => void;
   onRemove: () => void;
 }) {
+  const [amountText, setAmountText] = useState(row.amountMinor ? toInputText(BigInt(row.amountMinor)) : '');
+  const [pct, setPct] = useState(row.percent !== undefined ? String(row.percent) : '');
   if (row.restToBudget) {
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -309,8 +312,6 @@ function RoutingRow({
       </View>
     );
   }
-  const [amountText, setAmountText] = useState(row.amountMinor ?? '');
-  const [pct, setPct] = useState(row.percent !== undefined ? String(row.percent) : '');
   return (
     <View style={{ gap: sp['spacing-xs'], borderWidth: 1, borderColor: tokens.color.hairline, borderRadius: tokens.radius['rounded-sm'], padding: sp['spacing-sm'] }}>
       <Select label={t('income.routingGoal')} options={[{ value: '', label: t('income.routingNone') }, ...goals]} value={row.goalId ?? ''} onChange={(v) => onChange({ ...row, goalId: v || undefined, categoryId: undefined })} />

@@ -83,6 +83,11 @@ export class HttpSyncTransport implements SyncTransport {
 export class SwitchingSyncTransport implements SyncTransport {
   constructor(public inner: SyncTransport) {}
 
+  /** Swaps the transport the engine talks to (mock, or the real API once signed in). */
+  use(inner: SyncTransport) {
+    this.inner = inner;
+  }
+
   postOperations(operations: Operation[]) {
     return this.inner.postOperations(operations);
   }

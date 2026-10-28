@@ -95,6 +95,16 @@ describe('WorkspaceRepository', () => {
     expect(ledgerBalance(r.value.id, s.events)).toBe(-84_000_000n);
   });
 
+  it('matches a bill to an expense already recorded, once', async () => {
+    const { repo, id } = await setup();
+    const tx = await repo.addTransaction({ kind: 'expense', accountId: id('GTBank'), parts: [{ categoryId: id('Rent'), amount: 10_000_000n }], date: '2026-10-05' });
+    if (!tx.ok) throw new Error();
+    const bill = await repo.addRecurring({ kind: 'bill', name: 'Rent', amountMinor: '10000000', accountId: id('GTBank'), categoryId: id('Rent'), rule: { every: 'month', on: 5 }, startDate: '2026-10-01' });
+    const matched = await repo.matchBillToEvent(bill.id, '2026-10-05', tx.value.id);
+    expect(matched.ok && matched.value).toMatchObject({ status: 'paid', amountMinor: '10000000', eventId: tx.value.id });
+    expect(await repo.matchBillToEvent(bill.id, '2026-10-05', tx.value.id)).toEqual({ ok: false, error: 'already_reversed' });
+  });
+
   it('syncs what it saved', async () => {
     const { engine, server, store } = await setup();
     await engine.sync();

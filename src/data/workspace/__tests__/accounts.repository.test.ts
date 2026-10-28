@@ -30,7 +30,6 @@ async function setup() {
     accounts: [
       { name: 'GTBank', type: 'bank', openingBalance: '81230000', openingDate: '2026-10-01' },
       { name: 'OPay', type: 'wallet', openingBalance: '0', openingDate: '2026-10-01' },
-      { name: 'House', type: 'property', openingBalance: '3000000000', openingDate: '2026-10-01' },
       { name: 'Card', type: 'card', openingBalance: '5000000', openingDate: '2026-10-01' },
     ],
     categories: [{ key: 'cat.market', group: 'group.food', name: 'Market' }],
@@ -38,6 +37,8 @@ async function setup() {
     monthlyTakeHome: null,
     skippedSteps: [],
   });
+  // Welcome offers only everyday accounts; property is added afterwards (DESIGN page 8).
+  await repo.addAccount({ name: 'House', type: 'property', openingBalance: 3_000_000_000n, openingDate: '2026-10-01' });
   const s = await repo.load();
   const id = (name: string) => [...s.accounts, ...s.categories].find((x) => x.name === name)!.id;
   return { repo, id };

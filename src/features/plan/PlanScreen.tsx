@@ -14,12 +14,10 @@ import {
   Placeholder,
   Popover,
   SegmentedControl,
-  Select,
   Sheet,
   StatusPill,
   Text,
   TextInput,
-  AmountInput,
   formatDay,
   useToast,
 } from '@/design/components';
@@ -444,7 +442,6 @@ function AllSchedulesTable({
   onSearch,
   showCancelled,
   onToggleCancelled,
-  onEdit,
   onOpenMenu,
 }: {
   rows: ScheduleRow[];
@@ -453,7 +450,6 @@ function AllSchedulesTable({
   onSearch: (q: string) => void;
   showCancelled: boolean;
   onToggleCancelled: () => void;
-  onEdit: (rec: Recurring) => void;
   onOpenMenu: (rec: Recurring) => void;
 }) {
   return (

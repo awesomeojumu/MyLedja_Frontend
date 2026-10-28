@@ -7,9 +7,9 @@ import { t } from '@/i18n';
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
 import { NotificationsScreen } from '../NotificationsScreen';
 
-jest.mock('expo-router', () => require('../../../../test/helpers/router'));
-
 import { router } from 'expo-router';
+
+jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 
 async function seeded() {
   const sync = memorySync();

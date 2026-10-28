@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Button, Checkbox, Confirm, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
@@ -17,13 +17,16 @@ export function InviteMemberSheet({ visible, onClose }: { visible: boolean; onCl
   const [role, setRole] = useState<(typeof INVITE_ROLES)[number]>('editor');
   const [note, setNote] = useState('');
 
-  useEffect(() => {
+  // Clear the form when the sheet closes.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (!visible) {
       setEmail('');
       setRole('editor');
       setNote('');
     }
-  }, [visible]);
+  }
 
   return (
     <Sheet
@@ -251,13 +254,16 @@ export function ExchangeRateSheet({
   const [date, setDate] = useState('');
   const [rate, setRate] = useState('');
 
-  useEffect(() => {
+  // Start empty each time the sheet opens.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (visible) {
       setCurrency('USD');
       setDate('');
       setRate('');
     }
-  }, [visible]);
+  }
 
   return (
     <Sheet
@@ -300,13 +306,16 @@ export function ApiKeySheet({ visible, onClose }: { visible: boolean; onClose: (
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const key = useMemo(() => (createdKey ? createdKey : null), [createdKey]);
 
-  useEffect(() => {
+  // Clear the form and the shown key when the sheet closes.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (!visible) {
       setName('');
       setAccess('read');
       setCreatedKey(null);
     }
-  }, [visible]);
+  }
 
   return (
     <Sheet
@@ -367,9 +376,11 @@ export function EditCategorySheet({
   onSave: (c: Category) => Promise<void>;
 }) {
   const [name, setName] = useState(category?.name ?? '');
-  useEffect(() => {
+  const [shownId, setShownId] = useState(category?.id);
+  if (category?.id !== shownId) {
+    setShownId(category?.id);
     setName(category?.name ?? '');
-  }, [category]);
+  }
   if (!category) return null;
   return (
     <Sheet

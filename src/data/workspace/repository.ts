@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from 'uuid';
 
 import type { SetupBody } from '@/api/auth';
 import { formatDay } from '@/design/components/overlays';
+import { resolveTemplateLineAmount } from '@/features/budget/helpers';
 import { t, type TextKey } from '@/i18n';
 import {
   buildAdjustment,
@@ -757,7 +758,6 @@ export class WorkspaceRepository {
     const snapshot = await this.load();
     const template = snapshot.budgetTemplates.find((t) => t.id === templateId);
     if (!template) return;
-    const { resolveTemplateLineAmount } = require('@/features/budget/helpers') as typeof import('@/features/budget/helpers');
     for (const line of template.lines) {
       const amount = resolveTemplateLineAmount(snapshot, month, line);
       if (amount > 0n) await this.setAssigned(line.categoryId, month, amount);
@@ -1165,30 +1165,6 @@ export class WorkspaceRepository {
     await this.put('recurring', id, data, 'recurring.update');
   }
 
-  /** Link an existing expense to a bill occurrence (DESIGN #26). */
-  async matchBillToEvent(recurringId: string, dueDate: string, eventId: string): Promise<Result<RecurringOccurrence>> {
-    const snapshot = await this.load();
-    const bill = snapshot.recurring.find((r) => r.id === recurringId);
-    if (!bill) return { ok: false, error: 'missing_lines' };
-    const occId = `${recurringId}:${dueDate}`;
-    const existing = snapshot.occurrences.find((o) => o.id === occId);
-    if (existing?.status === 'paid') return { ok: false, error: 'already_reversed' };
-    const event = snapshot.events.find((e) => e.id === eventId && e.status === 'posted');
-    if (!event || event.type !== 'expense') return { ok: false, error: 'missing_lines' };
-    const accountIds = new Set(snapshot.accounts.map((a) => a.id));
-    const amount = event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + (l.amountMinor < 0n ? -l.amountMinor : l.amountMinor), 0n);
-    const occurrence: RecurringOccurrence = {
-      id: occId,
-      recurringId,
-      dueDate,
-      amountMinor: amount.toString(),
-      status: 'paid',
-      eventId,
-    };
-    await this.put('occurrences', occId, { recurringId, dueDate, amountMinor: amount.toString(), status: 'paid', eventId }, 'occurrence.paid');
-    return { ok: true, value: occurrence };
-  }
-
   async markBillPaid(
     recurringId: string,
     dueDate: string,
@@ -1232,7 +1208,8 @@ export class WorkspaceRepository {
     const occId = `${recurringId}:${dueDate}`;
     if (snapshot.occurrences.some((o) => o.id === occId && o.status === 'paid')) return { ok: false, error: 'already_reversed' };
     const accountIds = new Set(snapshot.accounts.map((a) => a.id));
-    const amountMinor = event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + l.amountMinor, 0n);
+    // An expense credits the account it was paid from, so the money that left is minus the account lines.
+    const amountMinor = -event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + l.amountMinor, 0n);
     if (amountMinor <= 0n) return { ok: false, error: 'not_positive' };
     const occurrence: RecurringOccurrence = {
       id: occId,

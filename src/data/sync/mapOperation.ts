@@ -1,5 +1,4 @@
-import type { Account } from '@/data/workspace/model';
-import type { StoredEvent } from '@/data/workspace/model';
+import type { Account, StoredEvent } from '@/data/workspace/model';
 import { ACCOUNT_KIND_INFO } from '@/data/workspace/model';
 
 import type { LocalRecord, Operation, OperationResult } from './types';

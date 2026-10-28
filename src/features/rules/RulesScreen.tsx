@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useGlobalSearchParams } from 'expo-router';
 import { MoreHorizontal } from 'lucide-react-native';
@@ -24,7 +24,7 @@ import type { TransactionRule } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { orderedRules } from '@/features/rules/ruleEngine';
-import { ledgerMessage, today } from '@/features/transactions/helpers';
+import { ledgerMessage } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
 import { RULE_STAGES, newBlankRule, ruleSentence, showRuleStages, stageTitle } from './helpers';
@@ -43,7 +43,6 @@ function matchesRule(rule: TransactionRule, query: string, snapshot: Parameters<
 export function RulesScreen() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
-  const theme = useTheme();
   const size = useSizeClass();
   const twoCol = size === 'wide' || size === 'desktop';
   const params = useGlobalSearchParams<{ edit?: string }>();
@@ -64,11 +63,15 @@ export function RulesScreen() {
     setEditRule(created);
   };
 
-  useEffect(() => {
-    if (!snapshot || !params.edit) return;
+  // Open the rule named in the link once it has loaded.
+  const [openedFromLink, setOpenedFromLink] = useState<string | null>(null);
+  if (snapshot && params.edit && params.edit !== openedFromLink) {
     const found = snapshot.rules.find((r) => r.id === params.edit);
-    if (found) setEditRule(found);
-  }, [snapshot, params.edit]);
+    if (found) {
+      setOpenedFromLink(params.edit);
+      setEditRule(found);
+    }
+  }
 
   const grouped = useMemo(() => {
     if (!rules) return null;

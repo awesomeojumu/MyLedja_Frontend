@@ -79,7 +79,7 @@ export function WelcomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const size = useSizeClass();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const { api, user, setUser } = useAuth();
   const sync = useSync();
   const [step, setStep] = useState(1);

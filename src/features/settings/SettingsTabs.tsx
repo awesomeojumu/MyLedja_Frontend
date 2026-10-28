@@ -23,7 +23,6 @@ import {
   DEFAULT_BUDGET_TYPES_SHOWN,
   DEFAULT_DEVICE_SYNC,
   type BudgetTypesShown,
-  type ExchangeRateEntry,
 } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';

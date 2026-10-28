@@ -169,9 +169,9 @@ export function resolveTemplateLineAmount(snapshot: Snapshot, month: string, lin
   if (kind === 'saveBy') {
     const target = meta.targetMinor ? BigInt(meta.targetMinor) : 0n;
     const targetMonth = meta.targetMonth;
-    if (!target || target <= month || target === month) return target;
-    const monthsLeft = monthsBetween(month, target);
-    if (monthsLeft <= 0) return 0n;
+    if (!target || !targetMonth || targetMonth <= month) return target;
+    // Spread over the months left, counting this one: ₦120,000.00 by December, from October, is ₦40,000.00 a month.
+    const monthsLeft = monthsBetween(month, targetMonth) + 1;
     return target / BigInt(monthsLeft);
   }
   if (line.amountMinor) return BigInt(line.amountMinor);

@@ -18,7 +18,7 @@ import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useDesign, useTheme } from '@/design/ThemeProvider';
 import { useSync } from '@/data/sync/SyncProvider';
-import { DEFAULT_NOTIFICATION_PREFS, type Category, type NotificationPrefs } from '@/data/workspace/model';
+import { DEFAULT_NOTIFICATION_PREFS, type Category } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { useAuth } from '@/features/auth/AuthProvider';

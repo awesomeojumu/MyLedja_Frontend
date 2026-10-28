@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { AmountInput, Button, Sheet, Switch, Text, TextInput } from '@/design/components';
@@ -6,7 +6,7 @@ import tokens from '@/design/tokens.json';
 import type { Category } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { t } from '@/i18n';
-import { formatNaira } from '@/money';
+import { formatNaira, toInputText } from '@/money';
 
 import {
   assignNoteOf,
@@ -45,14 +45,19 @@ export function EditAmountSheet({
   const [carryOver, setCarryOver] = useState(false);
   const [note, setNote] = useState('');
 
-  useEffect(() => {
-    if (!visible || !categoryId) return;
-    const assigned = assignedOf(snapshot, categoryId, month);
-    setEditText((Number(assigned) / 100).toString());
-    setEditMinor(assigned);
-    setCarryOver(category?.carryOver ?? false);
-    setNote(assignNoteOf(snapshot, categoryId, month));
-  }, [visible, categoryId, category, month, snapshot]);
+  // Fill the form each time it opens for a category and month (not on every snapshot refresh).
+  const openKey = visible && categoryId ? `${categoryId}:${month}` : null;
+  const [filledFor, setFilledFor] = useState<string | null>(null);
+  if (openKey !== filledFor) {
+    setFilledFor(openKey);
+    if (openKey && categoryId) {
+      const assigned = assignedOf(snapshot, categoryId, month);
+      setEditText(toInputText(assigned));
+      setEditMinor(assigned);
+      setCarryOver(category?.carryOver ?? false);
+      setNote(assignNoteOf(snapshot, categoryId, month));
+    }
+  }
 
   const templateAmount = useMemo(
     () => (categoryId ? templateAmountForCategory(snapshot, categoryId, month) : null),
@@ -100,7 +105,7 @@ export function EditAmountSheet({
             onPress={() => {
               const v = assignedOf(snapshot, categoryId, prevMonth(month));
               setEditMinor(v);
-              setEditText((Number(v) / 100).toString());
+              setEditText(toInputText(v));
             }}
           />
           <Button
@@ -109,7 +114,7 @@ export function EditAmountSheet({
             onPress={() => {
               const v = threeMonthAverage(snapshot, categoryId, month);
               setEditMinor(v);
-              setEditText((Number(v) / 100).toString());
+              setEditText(toInputText(v));
             }}
           />
           {templateAmount !== null ? (
@@ -119,7 +124,7 @@ export function EditAmountSheet({
               label={t('budget.quickTemplate', { amount: formatNaira(templateAmount) })}
               onPress={() => {
                 setEditMinor(templateAmount);
-                setEditText((Number(templateAmount) / 100).toString());
+                setEditText(toInputText(templateAmount));
               }}
             />
           ) : null}

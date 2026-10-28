@@ -39,6 +39,7 @@ describe('income mark received (#26)', () => {
       [
         {
           id: 'e1',
+          operationId: 'e1',
           type: 'income',
           status: 'posted',
           date: '2026-10-27',

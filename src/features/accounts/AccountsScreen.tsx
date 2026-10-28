@@ -198,7 +198,7 @@ export function AccountsScreen() {
               }}
               style={{ paddingVertical: sp['spacing-sm'], paddingHorizontal: sp['spacing-md'] }}
             >
-              <Text tone={sort === o.value ? 'primary' : undefined}>{o.label}</Text>
+              <Text tone={sort === o.value ? 'link' : undefined}>{o.label}</Text>
             </Pressable>
           ))}
         </View>
