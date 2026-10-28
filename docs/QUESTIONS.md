@@ -26,7 +26,7 @@ Format and rules: build plan section 14. Each open question stops only the task 
 - Documents: build plan 1.1 (contract first, from the backend), TECH-SPEC 5.3 and 8 (endpoints named, shapes not)
 - Options: A, the backend adopts the provisional paths and shapes in `src/api/auth.ts` and the `X-Operation-Id` header. B, the backend publishes its own and the app follows with `npm run api:sync`.
 - Recommendation: B, as the plan says. The app talks only to the mock adapter until `openapi.json` exists; the screens won't change, only `src/api/auth.ts`.
-- Answer: Owner, 28 Oct 2026: B. The backend worker publishes the contract on `backend`; the app switches its auth shapes when it lands.
+- Answer: the backend published `openapi.json` (backend PR #4, its Q-B2), keeping these paths with additions. `src/api/openapi.json` and `src/api/types.ts` now come from it, `src/api/auth.ts` takes its types from them, and the mock follows the same shapes (code-sent answers, 204s, `accessTokenExpiresIn`, null refresh token for web cookie sessions).
 - Status: answered
 
 ## Q-4: "Continue with Google" has no client id the app can read

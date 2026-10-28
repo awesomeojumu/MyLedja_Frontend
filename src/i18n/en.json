@@ -185,7 +185,6 @@
   "date.nextMonth": "Next month",
   "date.day": "{d} {month} {y}",
   "date.monthYear": "{month} {y}",
-
   "ledger.system.opening_balances": "Opening balances",
   "ledger.system.adjustments": "Adjustments",
   "ledger.system.revaluation": "Revaluation",
