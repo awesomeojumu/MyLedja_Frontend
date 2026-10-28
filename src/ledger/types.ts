@@ -1,18 +1,20 @@
 /** TECH-SPEC 6.1: the six kinds of ledger account. */
 export type LedgerKind = 'asset' | 'liability' | 'income' | 'expense' | 'equity' | 'loss';
 
-/** System accounts every workspace has (B1.1). */
+/** System accounts every workspace has (B1.1 / TECH-SPEC 6.1). */
 export type SystemAccount =
   | 'opening_balances'
   | 'adjustments'
   | 'revaluation'
   | 'fx_clearing'
   | 'interest_earned'
+  | 'investment_income'
+  | 'investment_gain'
   | 'interest_and_charges'
   | 'fees'
   | 'taxes'
   | 'written_off'
-  | 'investment_gain_loss';
+  | 'investment_loss';
 
 export type LedgerAccount = {
   id: string;
@@ -41,7 +43,8 @@ export type EventType =
   | 'collect'
   | 'loan_proceeds'
   | 'loan_repayment'
-  | 'write_off';
+  | 'write_off'
+  | 'salary_gross';
 
 export type EventStatus = 'pending' | 'posted' | 'reversed';
 

@@ -149,9 +149,10 @@ export function unmatchedEvents(snapshot: Snapshot, month: string) {
 
 export function isInvestmentIncomeEvent(snapshot: Snapshot, e: { lines: { ledgerAccountId: string; amountMinor: bigint }[] }): boolean {
   const interest = snapshot.chart.system('interest_earned')?.id;
-  const gain = snapshot.chart.system('investment_gain_loss')?.id;
+  const income = snapshot.chart.system('investment_income')?.id;
+  const gain = snapshot.chart.system('investment_gain')?.id;
   for (const l of e.lines) {
-    if (l.ledgerAccountId === interest || l.ledgerAccountId === gain) return true;
+    if (l.ledgerAccountId === interest || l.ledgerAccountId === income || l.ledgerAccountId === gain) return true;
   }
   return false;
 }
@@ -159,7 +160,8 @@ export function isInvestmentIncomeEvent(snapshot: Snapshot, e: { lines: { ledger
 export function investmentIncomeForMonth(snapshot: Snapshot, month: string): InvestmentIncomeRow[] {
   const rows: InvestmentIncomeRow[] = [];
   const interest = snapshot.chart.system('interest_earned')?.id;
-  const gain = snapshot.chart.system('investment_gain_loss')?.id;
+  const income = snapshot.chart.system('investment_income')?.id;
+  const gain = snapshot.chart.system('investment_gain')?.id;
   for (const e of snapshot.events) {
     if (e.status !== 'posted' || e.type !== 'income' || monthOf(e.date) !== month) continue;
     let amount = 0n;
@@ -169,7 +171,7 @@ export function investmentIncomeForMonth(snapshot: Snapshot, month: string): Inv
         amount += -l.amountMinor;
         kind = 'interest';
       }
-      if (l.ledgerAccountId === gain && l.amountMinor < 0n) {
+      if ((l.ledgerAccountId === income || l.ledgerAccountId === gain) && l.amountMinor < 0n) {
         amount += -l.amountMinor;
         kind = 'gain';
       }

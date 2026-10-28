@@ -80,16 +80,33 @@ export function buildExpense(chart: Chart, input: { accountId: string; parts: Ex
   return ok(lines);
 }
 
-/** E4 and E6: Dr the account money goes to, Cr the one it leaves. Exactly two lines. */
-export function buildTransfer(chart: Chart, input: { fromId: string; toId: string; amount: bigint }): LedgerResult<Line[]> {
+/**
+ * E4 and E6: Dr the account money goes to, Cr the one it leaves. Exactly two lines.
+ * E7 (two currencies): each side balances through fx-clearing; `toAmount` is required.
+ */
+export function buildTransfer(
+  chart: Chart,
+  input: { fromId: string; toId: string; amount: bigint; toAmount?: bigint },
+): LedgerResult<Line[]> {
   if (input.amount <= 0n) return fail('not_positive');
   if (input.fromId === input.toId) return fail('transfer_accounts');
   const from = moneyAccount(chart, input.fromId);
   if (!from.ok) return from;
   const to = moneyAccount(chart, input.toId);
   if (!to.ok) return to;
-  if (from.value.currency !== to.value.currency) return fail('currency_mismatch');
-  return ok([line(to.value, input.amount), line(from.value, -input.amount)]);
+  if (from.value.currency === to.value.currency) {
+    if (input.toAmount !== undefined) return fail('currency_mismatch');
+    return ok([line(to.value, input.amount), line(from.value, -input.amount)]);
+  }
+  if (input.toAmount === undefined || input.toAmount <= 0n) return fail('currency_mismatch');
+  const fx = systemAccount(chart, 'fx_clearing');
+  if (!fx.ok) return fx;
+  return ok([
+    { ledgerAccountId: fx.value.id, amountMinor: input.amount, currency: from.value.currency },
+    line(from.value, -input.amount),
+    line(to.value, input.toAmount),
+    { ledgerAccountId: fx.value.id, amountMinor: -input.toAmount, currency: to.value.currency },
+  ]);
 }
 
 /** E8: the amount is what you have (asset) or what you owe (liability), as a positive figure. */
@@ -183,12 +200,13 @@ export function buildLoanRepayment(
   if (!account.ok) return account;
   const interest = input.interest ?? 0n;
   if (interest < 0n) return fail('not_positive');
-  const lines: Line[] = [line(payable.value, input.principal), line(account.value, -(input.principal + interest))];
+  const lines: Line[] = [line(payable.value, input.principal)];
   if (interest > 0n) {
     const charges = systemAccount(chart, 'interest_and_charges');
     if (!charges.ok) return charges;
     lines.push(line(charges.value, interest));
   }
+  lines.push(line(account.value, -(input.principal + interest)));
   return ok(lines);
 }
 
@@ -200,6 +218,44 @@ export function buildWriteOff(chart: Chart, input: { receivableId: string; amoun
   const loss = systemAccount(chart, 'written_off');
   if (!loss.ok) return loss;
   return ok([line(loss.value, input.amount), line(receivable.value, -input.amount)]);
+}
+
+/** E24: Dr take-home · Dr taxes · Dr pension · Dr NHF · Cr income (gross). Parts must add up to gross. */
+export function buildSalaryGross(
+  chart: Chart,
+  input: {
+    accountId: string;
+    categoryId: string;
+    gross: bigint;
+    takeHome: bigint;
+    paye: bigint;
+    pensionAccountId: string;
+    pension: bigint;
+    nhfAccountId: string;
+    nhf: bigint;
+  },
+): LedgerResult<Line[]> {
+  if (input.gross <= 0n || input.takeHome <= 0n || input.paye < 0n || input.pension < 0n || input.nhf < 0n) {
+    return fail('not_positive');
+  }
+  if (input.takeHome + input.paye + input.pension + input.nhf !== input.gross) return fail('split_mismatch');
+  const cash = moneyAccount(chart, input.accountId);
+  if (!cash.ok) return cash;
+  const income = ofKind(chart, input.categoryId, 'income');
+  if (!income.ok) return income;
+  const pension = ofKind(chart, input.pensionAccountId, 'asset');
+  if (!pension.ok) return pension;
+  const nhf = ofKind(chart, input.nhfAccountId, 'asset');
+  if (!nhf.ok) return nhf;
+  const taxes = systemAccount(chart, 'taxes');
+  if (!taxes.ok) return taxes;
+  return ok([
+    line(cash.value, input.takeHome),
+    line(taxes.value, input.paye),
+    line(pension.value, input.pension),
+    line(nhf.value, input.nhf),
+    line(income.value, -input.gross),
+  ]);
 }
 
 /** E25: the original's lines with every sign flipped. */

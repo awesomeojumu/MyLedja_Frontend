@@ -9,11 +9,13 @@ export const SYSTEM_ACCOUNTS: Record<SystemAccount, LedgerKind> = {
   revaluation: 'equity',
   fx_clearing: 'equity',
   interest_earned: 'income',
+  investment_income: 'income',
+  investment_gain: 'income',
   interest_and_charges: 'expense',
   fees: 'expense',
   taxes: 'expense',
   written_off: 'loss',
-  investment_gain_loss: 'income',
+  investment_loss: 'loss',
 };
 
 /** Seeding twice gives the same accounts: ids come from the system key. */
