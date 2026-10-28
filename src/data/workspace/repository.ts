@@ -177,6 +177,12 @@ export class WorkspaceRepository {
         ...raw?.notificationPrefs,
         billReminderDays: raw?.notificationPrefs?.billReminderDays ?? DEFAULT_NOTIFICATION_PREFS.billReminderDays,
       },
+      aiPrefs: raw?.aiPrefs,
+      carryOverDefault: raw?.carryOverDefault,
+      budgetTypesShown: raw?.budgetTypesShown,
+      exchangeRates: raw?.exchangeRates,
+      downloadDailyRates: raw?.downloadDailyRates,
+      deviceSync: raw?.deviceSync,
     };
     const assigns = new Map<string, bigint>();
     for (const r of assignRows) {

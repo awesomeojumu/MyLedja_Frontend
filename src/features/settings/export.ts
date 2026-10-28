@@ -27,3 +27,22 @@ export function exportTransactionsCsv(snapshot: Snapshot): string {
   }
   return lines.join('\n');
 }
+
+/** Full workspace backup for Settings › Import & export (DESIGN restore pair). */
+export function exportWorkspaceBackupJson(snapshot: Snapshot): string {
+  const payload = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    workspaceId: snapshot.workspaceId,
+    settings: snapshot.settings,
+    accounts: snapshot.accounts,
+    categories: snapshot.categories,
+    payees: snapshot.payees,
+    events: snapshot.events.map((e) => ({
+      ...e,
+      lines: e.lines.map((l) => ({ ...l, amountMinor: String(l.amountMinor) })),
+    })),
+    budgetAssigns: [...snapshot.assigns.entries()].map(([key, amountMinor]) => ({ key, amountMinor: String(amountMinor) })),
+  };
+  return JSON.stringify(payload, null, 2);
+}
