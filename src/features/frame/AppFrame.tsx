@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeftRight, Eye, EyeOff, LayoutDashboard, LogOut, Menu, Plus, Wallet } from 'lucide-react-native';
+import { ArrowLeftRight, Eye, EyeOff, LayoutDashboard, LogOut, Menu, PieChart, Plus, Wallet } from 'lucide-react-native';
 import { Banner, Button, StatusPill, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
@@ -19,6 +19,7 @@ const sp = tokens.spacing;
 const ICONS = {
   dashboard: LayoutDashboard,
   transactions: ArrowLeftRight,
+  budget: PieChart,
   accounts: Wallet,
 };
 const onSidebarMuted = `${c['on-primary']}B3`;
