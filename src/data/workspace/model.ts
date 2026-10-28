@@ -83,12 +83,19 @@ export type Payee = {
 
 export type BudgetStyle = 'tracking' | 'envelope';
 
+/** Popup #6 — card visibility and order (DESIGN.md page 5). */
+export type DashboardLayout = {
+  order: string[];
+  hidden: string[];
+};
+
 /** Workspace preferences chosen in Welcome and Settings (Phase 1 subset). */
 export type WorkspaceSettings = {
   budgetStyle: BudgetStyle;
   currency: string;
   weekStart: 'monday' | 'sunday' | 'saturday';
   checklistHidden?: boolean;
+  dashboardLayout?: DashboardLayout;
   notificationPrefs?: NotificationPrefs;
 };
 
