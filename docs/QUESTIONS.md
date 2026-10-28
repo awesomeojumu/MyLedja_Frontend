@@ -109,3 +109,22 @@ Format and rules: build plan section 14. Each open question stops only the task 
 - Recommendation: A. It paints the same everywhere; CSS background images don't reach react-native-web's views.
 - Answer: Agent decision under the owner's delegation, 28 Oct 2026: A. The 24 s drift is left for later; it's decoration and stays off under reduce motion anyway.
 - Status: answered
+
+## Q-13: The shared ledger-cases.json and its cross-repo hash check
+- Task: F1.2 (TECH-SPEC 6.12, 6.14)
+- Raised by: frontend agent
+- Documents: TECH-SPEC 6.12 says both repos keep the same file and CI compares hashes.
+- Options: A. The frontend's `test/fixtures/ledger-cases.json` is the first copy; the backend adopts it byte for byte. B. The backend writes it (B1.5) and the frontend copies it.
+- Recommendation: A for now, so F1.2 isn't blocked. If the backend's B1.5 file differs, the frontend takes the backend's copy and updates its runner. The cross-repo hash step is added to CI once the backend file exists on `backend`. The fx-clearing account is shown as "Currency exchange" if it ever appears in a list.
+- Answer:
+- Status: open
+
+## Q-14: Local store engines before the device prototypes
+- Task: F1.1 (prototypes T0.3, T0.4, T0.5)
+- Raised by: frontend agent
+- Documents: TECH-SPEC 9; build plan 4 (prototypes)
+- Options: A. Ship one key-value interface now, SQLite on phones and localStorage on web, and swap in SQLCipher and IndexedDB once T0.3 and T0.4 run on the reference phone. B. Wait for the prototypes.
+- Recommendation: A. Everything above the interface (outbox, sync engine, conflicts) is tested against memory and doesn't change. Encryption at rest on phones and web storage limits are the open parts. Until the backend publishes `/sync/operations` and `/changes`, the app syncs against an in-memory stand-in, so nothing leaves the device. Phones wake the sync when the app comes to the front; a network listener for phones is added with the device test.
+- Answer:
+- Status: open
+
