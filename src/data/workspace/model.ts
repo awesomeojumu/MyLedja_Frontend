@@ -83,6 +83,52 @@ export type Payee = {
 
 export type BudgetStyle = 'tracking' | 'envelope';
 
+/** Settings › AI features (DESIGN page 26). */
+export type AiFeaturePrefs = {
+  suggestCategories: boolean;
+  readStatements: boolean;
+};
+
+export const DEFAULT_AI_PREFS: AiFeaturePrefs = {
+  suggestCategories: true,
+  readStatements: false,
+};
+
+/** Manual or downloaded FX row (Settings › Currencies). */
+export type ExchangeRateEntry = {
+  id: string;
+  currency: string;
+  date: string;
+  rate: string;
+  source: 'manual' | 'download';
+};
+
+/** Which budget category types appear in the budget UI (Settings › Budget). */
+export type BudgetTypesShown = {
+  fixed: boolean;
+  flexible: boolean;
+  nonMonthly: boolean;
+  savings: boolean;
+};
+
+export const DEFAULT_BUDGET_TYPES_SHOWN: BudgetTypesShown = {
+  fixed: true,
+  flexible: true,
+  nonMonthly: true,
+  savings: true,
+};
+
+/** Settings › Devices & sync. */
+export type DeviceSyncPrefs = {
+  useLessData: boolean;
+  lastSyncedLabel?: string;
+};
+
+export const DEFAULT_DEVICE_SYNC: DeviceSyncPrefs = {
+  useLessData: false,
+  lastSyncedLabel: undefined,
+};
+
 /** Workspace preferences chosen in Welcome and Settings (Phase 1 subset). */
 export type WorkspaceSettings = {
   budgetStyle: BudgetStyle;
@@ -90,6 +136,12 @@ export type WorkspaceSettings = {
   weekStart: 'monday' | 'sunday' | 'saturday';
   checklistHidden?: boolean;
   notificationPrefs?: NotificationPrefs;
+  aiPrefs?: AiFeaturePrefs;
+  carryOverDefault?: boolean;
+  budgetTypesShown?: BudgetTypesShown;
+  exchangeRates?: ExchangeRateEntry[];
+  downloadDailyRates?: boolean;
+  deviceSync?: DeviceSyncPrefs;
 };
 
 /** Settings › Notifications (P26-05). */

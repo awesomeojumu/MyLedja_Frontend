@@ -1,84 +1,360 @@
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ScrollView, View } from 'react-native';
 
-import { Button, Confirm, Sheet, Text, TextInput, useToast } from '@/design/components';
+import { Button, Checkbox, Confirm, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
-import type { Category } from '@/data/workspace/model';
-import { t } from '@/i18n';
+import type { Category, ExchangeRateEntry } from '@/data/workspace/model';
+import { t, type TextKey } from '@/i18n';
 
 const sp = tokens.spacing;
+
+const INVITE_ROLES = ['viewer', 'editor', 'admin'] as const;
 
 /** DESIGN popup #50 — Invite member */
 export function InviteMemberSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const toast = useToast();
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('editor');
+  const [role, setRole] = useState<(typeof INVITE_ROLES)[number]>('editor');
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    if (!visible) {
+      setEmail('');
+      setRole('editor');
+      setNote('');
+    }
+  }, [visible]);
+
   return (
-    <Sheet visible={visible} title={t('settings.popup.inviteTitle')} onClose={onClose} testID="settings-invite-sheet" footer={<Button label={t('settings.popup.inviteSend')} onPress={() => { toast.show(t('common.saved')); onClose(); }} />}>
-      <TextInput label={t('settings.popup.inviteEmail')} value={email} onChangeText={setEmail} />
-      <TextInput label={t('settings.popup.inviteRole')} value={role} onChangeText={setRole} />
-      <TextInput label={t('settings.popup.inviteNote')} value="" onChangeText={() => {}} />
+    <Sheet
+      visible={visible}
+      title={t('settings.popup.inviteTitle')}
+      onClose={onClose}
+      testID="settings-invite-sheet"
+      footer={
+        <Button
+          label={t('settings.popup.inviteSend')}
+          disabled={!email.trim()}
+          onPress={() => {
+            toast.show(t('settings.popup.inviteSent'));
+            onClose();
+          }}
+        />
+      }
+    >
+      <TextInput testID="settings-invite-email" label={t('settings.popup.inviteEmail')} value={email} onChangeText={setEmail} keyboardType="email-address" autoComplete="email" />
+      <Select
+        testID="settings-invite-role"
+        label={t('settings.popup.inviteRole')}
+        value={role}
+        onChange={(v) => setRole(v as (typeof INVITE_ROLES)[number])}
+        options={INVITE_ROLES.map((r) => ({ value: r, label: t(`settings.workspace.role.${r}` as TextKey) }))}
+      />
+      <TextInput testID="settings-invite-note" label={t('settings.popup.inviteNote')} value={note} onChangeText={setNote} />
+    </Sheet>
+  );
+}
+
+/** #51 Change role */
+export function ChangeRoleSheet({
+  member,
+  visible,
+  onClose,
+}: {
+  member: { name: string; role: string } | null;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const toast = useToast();
+  const [role, setRole] = useState('editor');
+  if (!member) return null;
+  return (
+    <Sheet
+      visible={visible}
+      title={t('settings.popup.changeRoleTitle', { name: member.name })}
+      onClose={onClose}
+      testID="settings-change-role-sheet"
+      footer={
+        <Button
+          label={t('panel.save')}
+          onPress={() => {
+            toast.show(t('common.saved'));
+            onClose();
+          }}
+        />
+      }
+    >
+      <Text tone="textSecondary">{t('settings.popup.changeRoleBody')}</Text>
+      <Select
+        testID="settings-change-role-select"
+        label={t('settings.popup.inviteRole')}
+        value={role}
+        onChange={(v) => setRole(v)}
+        options={INVITE_ROLES.map((r) => ({ value: r, label: t(`settings.workspace.role.${r}` as TextKey) }))}
+      />
+      <Text variant="caption" tone="textSecondary">
+        {t('settings.workspace.rolesBody')}
+      </Text>
     </Sheet>
   );
 }
 
 /** #52 Set up two-factor */
 export function TwoFactorSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const toast = useToast();
+  const [code, setCode] = useState('');
+  const secret = 'JBSWY3DPEHPK3PXP';
   return (
-    <Sheet visible={visible} title={t('settings.popup.twoFactorTitle')} onClose={onClose} testID="settings-2fa-sheet">
+    <Sheet
+      visible={visible}
+      title={t('settings.popup.twoFactorTitle')}
+      onClose={onClose}
+      testID="settings-2fa-sheet"
+      footer={
+        <Button
+          label={t('settings.popup.twoFactorConfirm')}
+          disabled={code.trim().length !== 6}
+          onPress={() => {
+            toast.show(t('common.saved'));
+            onClose();
+          }}
+        />
+      }
+    >
       <Text tone="textSecondary">{t('settings.popup.twoFactorBody')}</Text>
-      <TextInput label={t('settings.popup.twoFactorCode')} value="" onChangeText={() => {}} keyboardType="number-pad" />
+      <View style={{ alignItems: 'center', padding: sp['spacing-md'], borderRadius: tokens.radius['rounded-md'], borderWidth: 1, borderColor: tokens.color.hairline }}>
+        <Text variant="caption" tone="textSecondary">
+          {t('settings.popup.twoFactorQrPlaceholder')}
+        </Text>
+      </View>
+      <Text variant="caption" tone="textSecondary">
+        {secret}
+      </Text>
+      <Button kind="secondary" label={t('settings.popup.twoFactorCopyKey')} onPress={() => toast.show(t('settings.popup.twoFactorCopied'))} />
+      <TextInput testID="settings-2fa-code" label={t('settings.popup.twoFactorCode')} value={code} onChangeText={setCode} keyboardType="number-pad" maxLength={6} />
     </Sheet>
   );
 }
 
+const BACKUP_CODES = ['8f3a-91bc', '2d44-aa01', 'c91e-0044', '11ab-9982', '77ce-5510', '0044-bb21', 'aa99-1200', '5510-88fd', '3321-cc90', 'eedd-4411'];
+
 /** #53 Backup codes */
 export function BackupCodesSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const toast = useToast();
+  const [saved, setSaved] = useState(false);
   return (
-    <Sheet visible={visible} title={t('settings.popup.backupCodesTitle')} onClose={onClose} testID="settings-backup-codes-sheet">
+    <Sheet
+      visible={visible}
+      title={t('settings.popup.backupCodesTitle')}
+      onClose={onClose}
+      testID="settings-backup-codes-sheet"
+      footer={
+        <Button
+          label={t('settings.popup.backupCodesDone')}
+          disabled={!saved}
+          onPress={() => {
+            onClose();
+            setSaved(false);
+          }}
+        />
+      }
+    >
       <Text tone="textSecondary">{t('settings.popup.backupCodesBody')}</Text>
+      <ScrollView style={{ maxHeight: 200 }}>
+        {BACKUP_CODES.map((c) => (
+          <Text key={c} style={{ fontFamily: 'monospace' }}>
+            {c}
+          </Text>
+        ))}
+      </ScrollView>
+      <Button kind="secondary" label={t('settings.popup.backupCodesCopy')} onPress={() => toast.show(t('settings.popup.backupCodesCopied'))} />
+      <Checkbox testID="settings-backup-saved" label={t('settings.popup.backupCodesSaved')} checked={saved} onChange={setSaved} />
     </Sheet>
   );
 }
 
 /** #54 Add passkey */
 export function PasskeySheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const toast = useToast();
+  const [name, setName] = useState('');
   return (
-    <Sheet visible={visible} title={t('settings.popup.passkeyTitle')} onClose={onClose} testID="settings-passkey-sheet">
-      <TextInput label={t('settings.popup.passkeyName')} value="" onChangeText={() => {}} />
+    <Sheet
+      visible={visible}
+      title={t('settings.popup.passkeyTitle')}
+      onClose={onClose}
+      testID="settings-passkey-sheet"
+      footer={
+        <Button
+          label={t('settings.popup.passkeyAdd')}
+          disabled={!name.trim()}
+          onPress={() => {
+            toast.show(t('settings.popup.passkeyPrompt'));
+            onClose();
+            setName('');
+          }}
+        />
+      }
+    >
+      <Text tone="textSecondary">{t('settings.popup.passkeyBody')}</Text>
+      <TextInput testID="settings-passkey-name" label={t('settings.popup.passkeyName')} value={name} onChangeText={setName} />
     </Sheet>
   );
 }
 
 /** #55 Restore backup */
 export function RestoreBackupSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [open, setOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const toast = useToast();
+
+  const pickFile = () => {
+    setSummary(t('settings.popup.restoreSummary'));
+    setConfirmOpen(true);
+  };
+
   return (
     <>
-      <Sheet visible={visible} title={t('settings.popup.restoreTitle')} onClose={onClose} testID="settings-restore-sheet" footer={<Button kind="secondary" label={t('settings.popup.restorePick')} onPress={() => setOpen(true)} />}>
+      <Sheet
+        visible={visible}
+        title={t('settings.popup.restoreTitle')}
+        onClose={onClose}
+        testID="settings-restore-sheet"
+        footer={<Button kind="secondary" label={t('settings.popup.restorePick')} onPress={pickFile} />}
+      >
         <Text tone="textSecondary">{t('settings.popup.restoreBody')}</Text>
+        {summary ? <Text variant="caption" tone="textSecondary">{summary}</Text> : null}
       </Sheet>
-      <Confirm visible={open} title={t('settings.popup.restoreConfirmTitle')} body={t('settings.popup.restoreConfirmBody')} confirmLabel={t('settings.popup.restoreConfirm')} onConfirm={() => { setOpen(false); onClose(); }} onCancel={() => setOpen(false)} />
+      <Confirm
+        visible={confirmOpen}
+        title={t('settings.popup.restoreConfirmTitle')}
+        body={t('settings.popup.restoreConfirmBody')}
+        confirmLabel={t('settings.popup.restoreConfirm')}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          toast.show(t('settings.popup.restoreStarted'));
+          onClose();
+          setSummary(null);
+        }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </>
   );
 }
 
-/** #56 API key / exchange rate (two forms) */
-export function ExchangeRateSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+/** #56 Exchange rate */
+export function ExchangeRateSheet({
+  visible,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSave: (entry: Omit<ExchangeRateEntry, 'id'>) => void | Promise<void>;
+}) {
   const toast = useToast();
+  const [currency, setCurrency] = useState('USD');
+  const [date, setDate] = useState('');
+  const [rate, setRate] = useState('');
+
+  useEffect(() => {
+    if (visible) {
+      setCurrency('USD');
+      setDate('');
+      setRate('');
+    }
+  }, [visible]);
+
   return (
-    <Sheet visible={visible} title={t('settings.popup.exchangeTitle')} onClose={onClose} testID="settings-exchange-sheet" footer={<Button label={t('panel.save')} onPress={() => { toast.show(t('common.saved')); onClose(); }} />}>
-      <TextInput label={t('settings.popup.exchangeCurrency')} value="USD" onChangeText={() => {}} />
-      <TextInput label={t('settings.popup.exchangeRate')} value="" onChangeText={() => {}} keyboardType="decimal-pad" />
+    <Sheet
+      visible={visible}
+      title={t('settings.popup.exchangeTitle')}
+      onClose={onClose}
+      testID="settings-exchange-sheet"
+      footer={
+        <Button
+          label={t('panel.save')}
+          disabled={!rate.trim()}
+          onPress={() => {
+            void Promise.resolve(
+              onSave({
+                currency: currency.trim() || 'USD',
+                date: date.trim() || new Intl.DateTimeFormat('en-CA').format(new Date()),
+                rate: rate.trim(),
+                source: 'manual',
+              }),
+            ).then(() => {
+              toast.show(t('common.saved'));
+              onClose();
+            });
+          }}
+        />
+      }
+    >
+      <TextInput testID="settings-exchange-currency" label={t('settings.popup.exchangeCurrency')} value={currency} onChangeText={setCurrency} />
+      <TextInput testID="settings-exchange-date" label={t('settings.popup.exchangeDate')} value={date} onChangeText={setDate} placeholder="2026-10-28" />
+      <TextInput testID="settings-exchange-rate" label={t('settings.popup.exchangeRate')} value={rate} onChangeText={setRate} keyboardType="decimal-pad" />
     </Sheet>
   );
 }
 
+/** #56 API key */
 export function ApiKeySheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [access, setAccess] = useState<'read' | 'readWrite'>('read');
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const key = useMemo(() => (createdKey ? createdKey : null), [createdKey]);
+
+  useEffect(() => {
+    if (!visible) {
+      setName('');
+      setAccess('read');
+      setCreatedKey(null);
+    }
+  }, [visible]);
+
   return (
-    <Sheet visible={visible} title={t('settings.popup.apiKeyTitle')} onClose={onClose} testID="settings-api-key-sheet">
-      <TextInput label={t('settings.popup.apiKeyName')} value="" onChangeText={() => {}} />
-      <Text tone="textSecondary">{t('settings.popup.apiKeyHint')}</Text>
+    <Sheet
+      visible={visible}
+      title={t('settings.popup.apiKeyTitle')}
+      onClose={onClose}
+      testID="settings-api-key-sheet"
+      footer={
+        key ? (
+          <Button label={t('common.close')} onPress={onClose} />
+        ) : (
+          <Button
+            label={t('settings.popup.apiKeyCreate')}
+            disabled={!name.trim()}
+            onPress={() => setCreatedKey(`mlj_${Math.random().toString(36).slice(2, 18)}`)}
+          />
+        )
+      }
+    >
+      {key ? (
+        <>
+          <Text tone="textSecondary">{t('settings.popup.apiKeyShownOnce')}</Text>
+          <Text selectable style={{ fontFamily: 'monospace' }}>
+            {key}
+          </Text>
+          <Button kind="secondary" label={t('settings.popup.apiKeyCopy')} onPress={() => toast.show(t('settings.popup.apiKeyCopied'))} />
+        </>
+      ) : (
+        <>
+          <TextInput testID="settings-api-key-name" label={t('settings.popup.apiKeyName')} value={name} onChangeText={setName} />
+          <Select
+            testID="settings-api-key-access"
+            label={t('settings.popup.apiKeyAccess')}
+            value={access}
+            onChange={(v) => setAccess(v as 'read' | 'readWrite')}
+            options={[
+              { value: 'read', label: t('settings.popup.apiKeyRead') },
+              { value: 'readWrite', label: t('settings.popup.apiKeyReadWrite') },
+            ]}
+          />
+          <Text tone="textSecondary">{t('settings.popup.apiKeyHint')}</Text>
+        </>
+      )}
     </Sheet>
   );
 }
@@ -96,6 +372,9 @@ export function EditCategorySheet({
   onSave: (c: Category) => Promise<void>;
 }) {
   const [name, setName] = useState(category?.name ?? '');
+  useEffect(() => {
+    setName(category?.name ?? '');
+  }, [category]);
   if (!category) return null;
   return (
     <Sheet
@@ -106,6 +385,9 @@ export function EditCategorySheet({
       footer={<Button label={t('panel.save')} onPress={() => void onSave({ ...category, name: name.trim() || category.name }).then(onClose)} />}
     >
       <TextInput testID="settings-edit-cat-name" label={t('settings.categories.name')} value={name} onChangeText={setName} />
+      <Text variant="caption" tone="textSecondary">
+        {t('settings.popup.editCategoryHint')}
+      </Text>
     </Sheet>
   );
 }
@@ -135,10 +417,10 @@ export function DeleteCategorySheet({
   );
 }
 
-export function PlaceholderTab({ bodyKey }: { bodyKey: string }) {
+export function PlaceholderTab({ bodyKey }: { bodyKey: TextKey }) {
   return (
     <View style={{ gap: sp['spacing-md'] }}>
-      <Text tone="textSecondary">{t(bodyKey as 'settings.ai.body')}</Text>
+      <Text tone="textSecondary">{t(bodyKey)}</Text>
     </View>
   );
 }
