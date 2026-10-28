@@ -1,0 +1,118 @@
+import { Pressable, View } from 'react-native';
+
+import { Amount, Button, LineChart, Menu, Panel, Text, formatDay } from '@/design/components';
+import tokens from '@/design/tokens.json';
+import type { Snapshot, WorkspaceRepository } from '@/data/workspace/repository';
+import { t } from '@/i18n';
+import { formatNaira } from '@/money';
+
+import { type GoalCard, goalProgressPoints } from './helpers';
+
+const sp = tokens.spacing;
+
+export function GoalPanel({
+  card,
+  snapshot,
+  repo,
+  today,
+  onClose,
+  onEdit,
+  onSchedule,
+  onSpend,
+  onAllocate,
+}: {
+  card: GoalCard;
+  snapshot: Snapshot;
+  repo: WorkspaceRepository;
+  today: string;
+  onClose: () => void;
+  onEdit: () => void;
+  onSchedule: () => void;
+  onSpend: () => void;
+  onAllocate: () => void;
+}) {
+  const { goal } = card;
+  const category = goal.categoryId ? snapshot.categories.find((c) => c.id === goal.categoryId)?.name : undefined;
+  const allocations = snapshot.allocations.filter((a) => a.goalId === goal.id).sort((a, b) => b.date.localeCompare(a.date));
+  const progress = goalProgressPoints(goal.id, snapshot, today);
+  const pct = Math.round(card.progress * 100);
+
+  const menuItems = [
+    { key: 'edit', label: t('goals.editGoal'), onPress: onEdit },
+    goal.status === 'paused'
+      ? { key: 'resume', label: t('goals.resumeGoal'), onPress: () => void repo.updateGoal({ ...goal, status: 'active' }) }
+      : { key: 'pause', label: t('goals.pauseGoal'), onPress: () => void repo.updateGoal({ ...goal, status: 'paused' }) },
+    goal.status === 'active'
+      ? { key: 'done', label: t('goals.markDone'), onPress: () => void repo.updateGoal({ ...goal, status: 'completed' }) }
+      : null,
+    { key: 'schedule', label: t('goals.schedulePopupTitle'), onPress: onSchedule },
+  ].filter(Boolean) as { key: string; label: string; onPress: () => void }[];
+
+  return (
+    <Panel visible title={goal.name} onClose={onClose} testID="goal-detail-panel">
+      <View style={{ gap: sp['spacing-lg'] }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ gap: sp['spacing-xs'], flex: 1 }}>
+            <Text variant="heading-sm">
+              <Amount minor={card.saved} variant="heading-sm" /> {t('goals.of')} <Amount minor={card.target} variant="heading-sm" />
+            </Text>
+            <Text variant="caption" tone="textSecondary">
+              {t('goals.percentProgress', { percent: String(pct) })}
+            </Text>
+          </View>
+          <Menu
+            testID="goal-panel-menu"
+            trigger={(open) => (
+              <Pressable accessibilityRole="button" accessibilityLabel={t('common.options')} onPress={open} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <Text variant="heading-md">⋯</Text>
+              </Pressable>
+            )}
+            items={menuItems}
+          />
+        </View>
+
+        {progress.length > 1 || (progress.length === 1 && progress[0]!.value > 0n) ? (
+          <LineChart testID="goal-progress-chart" title={t('goals.panelProgress')} columns={[t('goals.panelProgressDate'), t('goals.panelProgressSaved')]} rows={progress} />
+        ) : null}
+
+        <View style={{ gap: sp['spacing-sm'] }}>
+          <Text variant="heading-sm">{t('goals.panelAllocations')}</Text>
+          {allocations.length === 0 ? (
+            <Text tone="textSecondary">{t('goals.noAllocations')}</Text>
+          ) : (
+            allocations.map((a) => (
+              <Text key={a.id} variant="caption" tone="textSecondary">
+                {formatDay(a.date)} · {a.kind === 'spend' ? '−' : '+'}
+                {formatNaira(BigInt(a.amountMinor))}
+              </Text>
+            ))
+          )}
+        </View>
+
+        <View style={{ gap: sp['spacing-xs'] }}>
+          <Text variant="heading-sm">{t('goals.scheduleTitle')}</Text>
+          {goal.scheduleAmountMinor && goal.scheduleDayOfMonth ? (
+            <Text tone="textSecondary">{t('goals.scheduleCaption', { amount: formatNaira(BigInt(goal.scheduleAmountMinor)), day: String(goal.scheduleDayOfMonth) })}</Text>
+          ) : (
+            <Text tone="textSecondary">{t('goals.scheduleEmpty')}</Text>
+          )}
+          <Button testID="goal-panel-schedule" kind="secondary" label={t('goals.editSchedule')} onPress={onSchedule} />
+        </View>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-md'] }}>
+          <Text tone="textSecondary">{t('goals.linkedCategory')}</Text>
+          <Text style={{ flexShrink: 1, textAlign: 'right' }}>{category ?? t('goals.noCategory')}</Text>
+        </View>
+
+        <Text tone="textSecondary">{t('goals.inAccount', { name: card.accountName })}</Text>
+
+        {goal.status === 'active' ? (
+          <View style={{ gap: sp['spacing-sm'] }}>
+            <Button testID="goal-panel-allocate" kind="secondary" label={t('goals.addMoney')} onPress={onAllocate} />
+            <Button testID="goal-spend" kind="secondary" label={t('goals.spendFromGoal')} onPress={onSpend} />
+          </View>
+        ) : null}
+      </View>
+    </Panel>
+  );
+}

@@ -1,5 +1,9 @@
+import type { Point } from '@/design/components';
+import { formatDay } from '@/design/components';
 import type { Goal } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
+
+export type GoalStatusKind = 'onTrack' | 'behind' | 'done' | 'paused';
 
 export function goalSaved(goalId: string, snapshot: Snapshot): bigint {
   return snapshot.allocations
@@ -62,4 +66,48 @@ export function activeGoals(cards: GoalCard[]) {
 
 export function completedGoals(cards: GoalCard[]) {
   return cards.filter((c) => c.goal.status === 'completed');
+}
+
+/** DESIGN page 14 status pill: On track, Behind, Done, or Paused. */
+export function goalStatusKind(card: GoalCard, today: string): GoalStatusKind {
+  if (card.goal.status === 'completed') return 'done';
+  if (card.goal.status === 'paused') return 'paused';
+  if (card.goal.targetDate && card.goal.targetDate < today && card.saved < card.target) return 'behind';
+  const monthly = card.monthly;
+  const sched = card.goal.scheduleAmountMinor ? BigInt(card.goal.scheduleAmountMinor) : null;
+  if (monthly && sched !== null && sched < monthly) return 'behind';
+  return 'onTrack';
+}
+
+export function statusPillFor(kind: GoalStatusKind): { labelKey: 'goals.onTrack' | 'goals.behind' | 'goals.done' | 'goals.paused'; pill: 'pending' | 'due-soon' | 'done' | 'problem' } {
+  switch (kind) {
+    case 'done':
+      return { labelKey: 'goals.done', pill: 'done' };
+    case 'behind':
+      return { labelKey: 'goals.behind', pill: 'due-soon' };
+    case 'paused':
+      return { labelKey: 'goals.paused', pill: 'problem' };
+    default:
+      return { labelKey: 'goals.onTrack', pill: 'pending' };
+  }
+}
+
+/** Cumulative saved amount after each allocation (DESIGN #30 progress line). */
+export function goalProgressPoints(goalId: string, snapshot: Snapshot, today: string): Point[] {
+  const rows = snapshot.allocations.filter((a) => a.goalId === goalId).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  let running = 0n;
+  const points: Point[] = [];
+  for (const row of rows) {
+    const amount = BigInt(row.amountMinor);
+    running = row.kind === 'spend' ? running - amount : running + amount;
+    points.push({ label: formatDay(row.date), value: running });
+  }
+  if (points.length === 0) points.push({ label: formatDay(today), value: 0n });
+  return points;
+}
+
+export function gridColumns(size: 'phone' | 'tablet' | 'desktop' | 'wide'): number {
+  if (size === 'wide' || size === 'desktop') return 3;
+  if (size === 'tablet') return 2;
+  return 1;
 }

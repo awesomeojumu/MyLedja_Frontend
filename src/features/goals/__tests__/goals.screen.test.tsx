@@ -87,7 +87,7 @@ describe('Goals page (F2.3)', () => {
       </WorkspaceProvider>,
       { sync },
     );
-    await fireEvent.press(screen.getByTestId('goals-toggle'));
+    await fireEvent.press(screen.getByText(t('goals.completed')));
     expect(await screen.findByText(t('goals.done'))).toBeTruthy();
   });
 });
