@@ -16,7 +16,7 @@ import {
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useDesign, useTheme } from '@/design/ThemeProvider';
-import type { Category } from '@/data/workspace/model';
+import { DEFAULT_NOTIFICATION_PREFS, type Category, type NotificationPrefs } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -26,18 +26,19 @@ import { exportTransactionsCsv } from './export';
 
 const sp = tokens.spacing;
 
-export type SettingsTab = 'general' | 'budget' | 'categories' | 'importExport';
+export type SettingsTab = 'general' | 'budget' | 'categories' | 'importExport' | 'notifications';
 
 const TABS: { id: SettingsTab; label: TextKey }[] = [
   { id: 'general', label: 'settings.tab.general' },
   { id: 'budget', label: 'settings.tab.budget' },
   { id: 'categories', label: 'settings.tab.categories' },
   { id: 'importExport', label: 'settings.tab.importExport' },
+  { id: 'notifications', label: 'settings.tab.notifications' },
 ];
 
 function tabFromParam(raw: string | string[] | undefined): SettingsTab | null {
   const v = Array.isArray(raw) ? raw[0] : raw;
-  if (v === 'general' || v === 'budget' || v === 'categories' || v === 'importExport') return v;
+  if (v === 'general' || v === 'budget' || v === 'categories' || v === 'importExport' || v === 'notifications') return v;
   return null;
 }
 
@@ -114,6 +115,7 @@ export function SettingsScreen() {
           {tab === 'budget' ? <BudgetTab /> : null}
           {tab === 'categories' ? <CategoriesTab /> : null}
           {tab === 'importExport' ? <ImportExportTab /> : null}
+          {tab === 'notifications' ? <NotificationsTab /> : null}
         </View>
       </View>
     </AppFrame>
@@ -299,5 +301,37 @@ function ImportExportTab() {
         }}
       />
     </View>
+  );
+}
+
+function NotificationsTab() {
+  const { snapshot, repo } = useWorkspace();
+  const toast = useToast();
+  const prefs = snapshot?.settings.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS;
+
+  const save = async (next: NotificationPrefs) => {
+    if (!snapshot) return;
+    await repo.updateSettings({ ...snapshot.settings, notificationPrefs: next });
+    toast.show(t('common.saved'));
+  };
+
+  return (
+    <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-notifications">
+      <Text tone="textSecondary">{t('settings.notifications.intro')}</Text>
+      <Switch testID="settings-notify-bills" label={t('settings.notifications.bills')} value={prefs.bills} onChange={(bills) => void save({ ...prefs, bills })} />
+      <Switch testID="settings-notify-budget" label={t('settings.notifications.budget')} value={prefs.budget} onChange={(budget) => void save({ ...prefs, budget })} />
+      <Switch testID="settings-notify-goals" label={t('settings.notifications.goals')} value={prefs.goals} onChange={(goals) => void save({ ...prefs, goals })} />
+      <Switch testID="settings-notify-debts" label={t('settings.notifications.debts')} value={prefs.debts} onChange={(debts) => void save({ ...prefs, debts })} />
+      <Switch testID="settings-notify-income" label={t('settings.notifications.income')} value={prefs.income} onChange={(income) => void save({ ...prefs, income })} />
+      <Switch
+        testID="settings-notify-hide-amounts"
+        label={t('settings.notifications.hideAmounts')}
+        value={prefs.hideAmountsOnLockScreen}
+        onChange={(hideAmountsOnLockScreen) => void save({ ...prefs, hideAmountsOnLockScreen })}
+      />
+      <Text variant="caption" tone="textSecondary">
+        {t('settings.notifications.quietHoursHint')}
+      </Text>
+    </ScrollView>
   );
 }

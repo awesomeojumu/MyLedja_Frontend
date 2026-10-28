@@ -89,4 +89,20 @@ describe('Settings (F1.10)', () => {
     expect(csv).toContain('Date,Type,Payee');
     expect(csv).toContain('Shoprite');
   });
+
+  it('P26-05: notifications toggles persist', async () => {
+    const { sync, repo } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-notifications'));
+    expect(screen.getByTestId('settings-notifications')).toBeTruthy();
+    await fireEvent(screen.getByTestId('settings-notify-bills'), 'onChange', false);
+    await waitFor(async () => {
+      expect((await repo.load()).settings.notificationPrefs?.bills).toBe(false);
+    });
+  });
 });
