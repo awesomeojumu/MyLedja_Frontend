@@ -31,7 +31,6 @@ export function WorkspaceSwitcher({ onNavigate, light }: { onNavigate?: () => vo
       <Pressable
         testID="workspace-switcher"
         accessibilityRole="button"
-        accessibilityLabel={t('nav.workspace', { name })}
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen(true)}
         style={{
