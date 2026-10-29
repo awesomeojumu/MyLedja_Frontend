@@ -78,10 +78,15 @@ export function BudgetScreen() {
     cover?: string;
     months?: string;
     group?: string;
+    templates?: string;
   }>();
 
   const [month, setMonth] = useState(() => monthOf(today()));
-  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const templatesOpen = params.templates === '1';
+  const setTemplatesOpen = (open: boolean) => {
+    if (open) router.setParams({ templates: '1' });
+    else router.setParams({ templates: undefined });
+  };
   const [menuOpen, setMenuOpen] = useState(false);
   const [rowMenuId, setRowMenuId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

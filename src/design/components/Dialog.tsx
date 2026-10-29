@@ -182,6 +182,7 @@ export function Confirm({
                   backgroundColor: theme.card,
                   flexDirection: 'row',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   gap: tokens.spacing['spacing-sm'],
                   opacity: pressed ? 0.9 : 1,
                   transform: pressed ? [{ scale: 0.98 }] : undefined,

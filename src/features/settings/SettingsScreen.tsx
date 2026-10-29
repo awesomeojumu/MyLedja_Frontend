@@ -42,19 +42,39 @@ import {
 } from './SettingsTabs';
 import { DeleteCategorySheet, EditCategorySheet, type CategoryDraft } from '@/features/budget/CategorySheets';
 import { monthOf } from '@/ledger';
+import { ChangeEmailSheet, useRecheck } from './SecuritySheets';
 import { settingsTabShipped, type SettingsTabId } from './shipped';
 
 const sp = tokens.spacing;
 
 export type SettingsTab = SettingsTabId;
 
-const TABS: { id: SettingsTab; label: TextKey }[] = [
+/** Phase when the tab ships (TB11-1). Currencies/Advanced wait for Phase 5 / later. */
+const TAB_PHASE: Record<SettingsTab, number> = {
+  general: 1,
+  budget: 1,
+  categories: 1,
+  importExport: 1,
+  help: 1,
+  notifications: 2,
+  security: 3,
+  devices: 3,
+  workspace: 3,
+  ai: 4,
+  banks: 4,
+  currencies: 5,
+  advanced: 99,
+};
+
+const SHIPPED_PHASE = 4;
+
+const ALL_TABS: { id: SettingsTab; label: TextKey }[] = [
   { id: 'general', label: 'settings.tab.general' },
   { id: 'budget', label: 'settings.tab.budget' },
   { id: 'categories', label: 'settings.tab.categories' },
-  { id: 'importExport', label: 'settings.tab.importExport' },
   { id: 'notifications', label: 'settings.tab.notifications' },
   { id: 'security', label: 'settings.tab.security' },
+  { id: 'importExport', label: 'settings.tab.importExport' },
   { id: 'devices', label: 'settings.tab.devices' },
   { id: 'workspace', label: 'settings.tab.workspace' },
   { id: 'ai', label: 'settings.tab.ai' },
@@ -63,15 +83,14 @@ const TABS: { id: SettingsTab; label: TextKey }[] = [
   { id: 'advanced', label: 'settings.tab.advanced' },
   { id: 'help', label: 'settings.tab.help' },
 ];
+const TABS = ALL_TABS.filter((tab) => TAB_PHASE[tab.id] <= SHIPPED_PHASE);
 
 /** Accept addendum aliases: data → importExport, sync → devices (TB-11). */
 function tabFromParam(raw: string | string[] | undefined): SettingsTab | null {
   const v = Array.isArray(raw) ? raw[0] : raw;
   if (!v) return null;
-  const alias: Record<string, SettingsTab> = {
-    data: 'importExport',
-    sync: 'devices',
-  };
+  // Addendum aliases: ?tab=sync → devices, ?tab=data → importExport
+  const alias: Record<string, SettingsTab> = { sync: 'devices', data: 'importExport' };
   const id = (alias[v] ?? v) as SettingsTab;
   return TABS.some((t) => t.id === id) && settingsTabShipped(id) ? id : null;
 }
@@ -178,8 +197,10 @@ function GeneralTab() {
   const toast = useToast();
   const router = useRouter();
   const phone = useSizeClass() === 'phone';
+  const recheck = useRecheck();
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const name = nameDraft ?? user?.name ?? '';
+  const [emailOpen, setEmailOpen] = useState(false);
   const [signOutWarn, setSignOutWarn] = useState<{ count: number } | null>(null);
   const photoUri = snapshot?.settings.profilePhotoUri ?? null;
   const haptics = snapshot?.settings.hapticsEnabled ?? true;
@@ -269,8 +290,10 @@ function GeneralTab() {
         onBlur={() => void saveProfileName()}
       />
 
-      <TextInput testID="settings-email" label={t('settings.general.email')} value={user?.email ?? ''} readOnly />
-      {/* Change email is Phase 3 (PU-61); affordance listed for later workers. */}
+      <Card style={{ gap: sp['spacing-sm'] }} testID="settings-email-card">
+        <Text tone="textSecondary">{user?.email ?? ''}</Text>
+        <Button testID="settings-change-email" kind="secondary" label={t('settings.general.changeEmail')} onPress={() => setEmailOpen(true)} />
+      </Card>
 
       {/* Language picker hidden while English is the only option (PU-63). */}
 
@@ -327,6 +350,8 @@ function GeneralTab() {
         onCancel={() => setSignOutWarn(null)}
         onConfirm={() => void doSignOut()}
       />
+      <ChangeEmailSheet visible={emailOpen} onClose={() => setEmailOpen(false)} guard={recheck.guard} />
+      {recheck.sheet}
     </ScrollView>
   );
 }
@@ -564,11 +589,11 @@ function NotificationsTab() {
       {prefs.bills ? (
         <View style={{ gap: sp['spacing-sm'], paddingLeft: sp['spacing-sm'] }}>
           <Text variant="heading-sm">{t('settings.notifications.billReminders')}</Text>
-          {[1, 3, 7].map((day) => (
+          {[0, 1, 3, 7].map((day) => (
             <Checkbox
               key={day}
               testID={`settings-notify-bill-day-${day}`}
-              label={reminderLabel(day)}
+              label={day === 0 ? t('settings.notifications.remindOnDay') : reminderLabel(day)}
               checked={prefs.billReminderDays.includes(day)}
               onChange={(checked) => toggleReminderDay(day, checked)}
             />
@@ -576,6 +601,12 @@ function NotificationsTab() {
         </View>
       ) : null}
       <Switch testID="settings-notify-budget" label={t('settings.notifications.budget')} value={prefs.budget} onChange={(budget) => void save({ ...prefs, budget })} />
+      <Switch
+        testID="settings-notify-budget-over"
+        label={t('settings.notifications.budgetOver')}
+        value={prefs.budget}
+        onChange={(budget) => void save({ ...prefs, budget })}
+      />
       <Switch testID="settings-notify-goals" label={t('settings.notifications.goals')} value={prefs.goals} onChange={(goals) => void save({ ...prefs, goals })} />
       <Switch testID="settings-notify-debts" label={t('settings.notifications.debts')} value={prefs.debts} onChange={(debts) => void save({ ...prefs, debts })} />
       <Switch testID="settings-notify-income" label={t('settings.notifications.income')} value={prefs.income} onChange={(income) => void save({ ...prefs, income })} />

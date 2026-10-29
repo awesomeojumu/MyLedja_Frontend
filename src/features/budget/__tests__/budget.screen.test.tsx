@@ -211,17 +211,18 @@ describe('Category page', () => {
     expect(screen.getByTestId('category-edit-save')).toBeDisabled();
   });
 
-  it('P06-10: templates preview and apply', async () => {
+  it('P06-10 / PU09: templates preview fills and apply', async () => {
     const { sync, repo, id } = await seeded();
-    const tpl = await repo.saveBudgetTemplate('Monthly basics', [
-      { categoryId: id('Market'), amountMinor: '40000000' },
-      { categoryId: id('Fuel'), amountMinor: '30000000' },
+    await repo.saveBudgetTemplate('Monthly plan', [
+      { categoryId: id('Market'), amountMinor: '40000000', ruleKind: 'monthly' },
+      { categoryId: id('Fuel'), amountMinor: '30000000', ruleKind: 'monthly' },
     ]);
     await renderWithProviders(wrap(<BudgetScreen />), { sync });
     await fireEvent.press(await screen.findByTestId('budget-templates'));
     expect(screen.getByTestId('budget-templates-sheet')).toBeTruthy();
-    await fireEvent(screen.getByTestId('budget-templates-pick'), 'onChange', tpl.id);
-    expect(await screen.findByTestId('budget-templates-preview')).toBeTruthy();
+    expect(await screen.findByTestId(`budget-templates-fill-${id('Market')}`)).toBeTruthy();
+    expect(screen.getByTestId('budget-templates-total')).toBeTruthy();
+    await fireEvent(screen.getByTestId('budget-templates-replace'), 'onChange', true);
     await fireEvent.press(screen.getByTestId('budget-templates-apply'));
     await waitFor(async () => {
       expect((await repo.load()).assigns.get(`${id('Market')}:2026-10`)).toBe(40_000_000n);

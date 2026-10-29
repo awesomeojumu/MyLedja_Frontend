@@ -253,4 +253,17 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
     expect(await screen.findByText(t('sync.signOutWarnTitle'))).toBeTruthy();
     expect(screen.getByText(t('sync.signOutWarnBody', { count: waiting }))).toBeTruthy();
   });
+  it('TB11-1: Currencies (Phase 5) and Advanced are hidden until their phase ships', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(screen.queryByTestId('settings-tab-currencies')).toBeNull();
+    expect(screen.queryByTestId('settings-tab-advanced')).toBeNull();
+    expect(screen.getByTestId('settings-tab-security')).toBeTruthy();
+    expect(screen.getByTestId('settings-tab-devices')).toBeTruthy();
+  });
 });

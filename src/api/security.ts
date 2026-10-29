@@ -27,6 +27,8 @@ export function securityApi(client: ApiClient) {
       client.request<SessionResponse>('POST', '/v1/auth/passkey', body, { auth: false }),
     recheck: (body: { password?: string; challengeToken?: string; response?: Record<string, unknown> }) =>
       client.request<SecurityStatus>('POST', '/v1/auth/recheck', body),
+    /** Google-only accounts confirm sensitive actions without a password (PU-57). */
+    recheckGoogle: () => client.request<SecurityStatus>('POST', '/v1/auth/recheck/google'),
     recheckPasskeyOptions: () => client.request<PasskeyOptions>('POST', '/v1/auth/recheck/passkey-options'),
     status: () => client.request<SecurityStatus>('GET', '/v1/me/security'),
     twoFactorSetup: () => client.request<TwoFactorSetup>('POST', '/v1/me/two-factor/setup'),
@@ -40,7 +42,12 @@ export function securityApi(client: ApiClient) {
     sessions: () => client.request<{ sessions: DeviceSession[] }>('GET', '/v1/me/sessions'),
     signOutSession: (id: string) => client.request<null>('DELETE', `/v1/me/sessions/${id}`),
     signOutOthers: () => client.request<{ signedOut: number }>('POST', '/v1/auth/sign-out-others'),
-    changePassword: (body: { currentPassword: string; newPassword: string }) => client.request<null>('POST', '/v1/me/password', body),
+    changePassword: (body: { currentPassword: string; newPassword: string; signOutOtherDevices?: boolean }) =>
+      client.request<null>('POST', '/v1/me/password', body),
+    /** PU-61 step 1: send a 6-digit code to the new address. */
+    requestEmailChange: (email: string) => client.request<null>('POST', '/v1/me/email/request', { email }),
+    /** PU-61 step 2: confirm with the code from the new address. */
+    confirmEmailChange: (email: string, code: string) => client.request<{ email: string }>('POST', '/v1/me/email/confirm', { email, code }),
     activity: (workspaceId: string, q: { before?: string; action?: string } = {}) => {
       const params = new URLSearchParams({ limit: '50', ...(q.before ? { before: q.before } : {}), ...(q.action ? { action: q.action } : {}) });
       return client.request<{ events: ActivityEvent[]; nextBefore: string | null }>('GET', `/v1/workspaces/${workspaceId}/activity?${params.toString()}`);
@@ -48,7 +55,8 @@ export function securityApi(client: ApiClient) {
     exportCsv: (workspaceId: string) => client.request<ExportFile>('POST', `/v1/workspaces/${workspaceId}/exports/transactions`),
     backup: (workspaceId: string) => client.request<ExportFile>('POST', `/v1/workspaces/${workspaceId}/backups`),
     restorePreview: (content: string) => client.request<RestorePreview>('POST', '/v1/me/restore/preview', { content }),
-    restore: (content: string) => client.request<Restored>('POST', '/v1/me/restore', { content }),
+    restore: (content: string, workspaceName?: string) =>
+      client.request<Restored>('POST', '/v1/me/restore', { content, ...(workspaceName ? { workspaceName } : {}) }),
     deleteAccount: () => client.request<{ deletingWorkspaces: number }>('POST', '/v1/me/delete'),
   };
 }

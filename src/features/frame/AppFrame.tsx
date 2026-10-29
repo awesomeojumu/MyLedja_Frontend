@@ -11,9 +11,10 @@ import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { useSyncStatus } from '@/data/sync/SyncProvider';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { CommandBar, CommandSearchButton } from '@/features/command/CommandBar';
 import { NotificationsBell } from '@/features/notifications/NotificationsBell';
 import { SyncIssuesBanner } from '@/features/sync/SyncIssues';
-import { useAuth } from '@/features/auth/AuthProvider';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
 import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, PHONE_BOTTOM_PAGES, type NavItem } from './navigation';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
@@ -384,6 +385,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
           </SafeAreaView>
         </View>
         {content}
+        <CommandBar />
       </View>
     );
   }
@@ -417,6 +419,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
         <Text variant="heading-lg" accessibilityRole="header" style={{ flex: 1, textAlign: 'center' }}>
           {title}
         </Text>
+        <CommandSearchButton />
         <NotificationsBell items={snapshot?.notifications ?? []} />
         <PrivacyToggle color={theme.textSecondary} />
       </View>
@@ -453,6 +456,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
           />
         </View>
       </Modal>
+      <CommandBar />
     </SafeAreaView>
   );
 }

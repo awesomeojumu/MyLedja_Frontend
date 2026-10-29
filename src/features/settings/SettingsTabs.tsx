@@ -42,6 +42,7 @@ import { ApiKeySheet, ChangeRoleSheet, ExchangeRateSheet, InviteMemberSheet } fr
 import {
   BackupCodesSheet,
   ChangePasswordSheet,
+  DeleteAccountSheet,
   PasskeySheet,
   RestoreBackupSheet,
   saveText,
@@ -353,10 +354,13 @@ export function BanksTab() {
 type MemberRow = { id: string; name: string; email: string; role: string; lastActive: string };
 
 export function WorkspaceTabDeep() {
-  const { snapshot } = useWorkspace();
+  const { snapshot, repo } = useWorkspace();
   const { user } = useAuth();
+  const toast = useToast();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [roleMember, setRoleMember] = useState<MemberRow | null>(null);
+  const [name, setName] = useState(snapshot?.settings.workspaceName ?? user?.workspaceName ?? 'Personal');
+  const [timeZone, setTimeZone] = useState(snapshot?.settings.timeZone ?? 'Africa/Lagos');
   const members: MemberRow[] = useMemo(
     () => [
       {
@@ -370,9 +374,37 @@ export function WorkspaceTabDeep() {
     [user],
   );
 
+  const saveWorkspace = async (patch: { workspaceName?: string; timeZone?: string }) => {
+    if (!snapshot) return;
+    await repo.updateSettings({ ...snapshot.settings, ...patch });
+    toast.show(t('common.saved'));
+  };
+
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-workspace">
-      <TextInput testID="settings-workspace-name" label={t('settings.workspace.name')} value={snapshot?.workspaceId ?? ''} readOnly />
+      <TextInput
+        testID="settings-workspace-name"
+        label={t('settings.workspace.name')}
+        value={name}
+        onChangeText={setName}
+        onBlur={() => {
+          const trimmed = name.trim();
+          if (trimmed && trimmed !== snapshot?.settings.workspaceName) void saveWorkspace({ workspaceName: trimmed });
+        }}
+      />
+      <Select
+        testID="settings-workspace-timezone"
+        label={t('settings.workspace.timeZone')}
+        value={timeZone}
+        onChange={(tz) => {
+          setTimeZone(tz);
+          void saveWorkspace({ timeZone: tz });
+        }}
+        options={[
+          { value: 'Africa/Lagos', label: 'Africa/Lagos' },
+          { value: 'UTC', label: 'UTC' },
+        ]}
+      />
       <Select
         testID="settings-workspace-type"
         label={t('settings.workspace.type')}
@@ -416,9 +448,11 @@ export function SecurityTabDeep() {
   const [error, setError] = useState<string | null>(null);
   const [twoFa, setTwoFa] = useState(false);
   const [codes, setCodes] = useState<string[] | null>(null);
+  const [codesRegenerated, setCodesRegenerated] = useState(false);
   const [passkey, setPasskey] = useState(false);
   const [password, setPassword] = useState(false);
   const [turnOff, setTurnOff] = useState(false);
+  const [removePasskeyId, setRemovePasskeyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     api.status().then(setStatus, () => setError(t('settings.security.loadFailed')));
@@ -432,9 +466,12 @@ export function SecurityTabDeep() {
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-security">
       <Text tone="textSecondary">{t('settings.security.body')}</Text>
       {error ? <Banner message={error} /> : null}
-      {status?.hasPassword !== false ? (
-        <Button testID="settings-password" kind="secondary" label={t('settings.security.changePassword')} onPress={() => setPassword(true)} />
-      ) : null}
+      <Button
+        testID="settings-password"
+        kind="secondary"
+        label={status?.hasPassword === false ? t('settings.security.setPassword') : t('settings.security.changePassword')}
+        onPress={() => setPassword(true)}
+      />
 
       <Text variant="heading-sm">{t('settings.security.twoFactor')}</Text>
       <Card style={{ gap: sp['spacing-sm'] }}>
@@ -448,7 +485,12 @@ export function SecurityTabDeep() {
               testID="settings-backup-codes"
               kind="secondary"
               label={t('settings.security.newBackupCodes')}
-              onPress={() => void act(async () => setCodes((await api.newBackupCodes()).backupCodes))}
+              onPress={() =>
+                void act(async () => {
+                  setCodesRegenerated(true);
+                  setCodes((await api.newBackupCodes()).backupCodes);
+                })
+              }
             />
             <Button testID="settings-2fa-off" kind="secondary" label={t('settings.security.turnOffTwoFactor')} onPress={() => setTurnOff(true)} />
           </>
@@ -470,17 +512,7 @@ export function SecurityTabDeep() {
                     {t('settings.security.addedOn', { date: formatDay(p.createdAt.slice(0, 10)) })}
                   </Text>
                 </View>
-                <Button
-                  kind="link"
-                  label={t('settings.security.removePasskey')}
-                  onPress={() =>
-                    void act(async () => {
-                      await api.passkeyRemove(p.id);
-                      toast.show(t('settings.security.passkeyRemoved'));
-                      load();
-                    })
-                  }
-                />
+                <Button kind="link" label={t('settings.security.removePasskey')} onPress={() => setRemovePasskeyId(p.id)} />
               </View>
             ))}
             <Button testID="settings-passkey" kind="secondary" label={t('settings.security.passkey')} onPress={() => setPasskey(true)} />
@@ -510,7 +542,14 @@ export function SecurityTabDeep() {
           load();
         }}
       />
-      <BackupCodesSheet codes={codes} onClose={() => setCodes(null)} />
+      <BackupCodesSheet
+        codes={codes}
+        regenerated={codesRegenerated}
+        onClose={() => {
+          setCodes(null);
+          setCodesRegenerated(false);
+        }}
+      />
       <PasskeySheet
         visible={passkey}
         onClose={() => setPasskey(false)}
@@ -519,7 +558,12 @@ export function SecurityTabDeep() {
           load();
         }}
       />
-      <ChangePasswordSheet visible={password} onClose={() => setPassword(false)} />
+      <ChangePasswordSheet
+        visible={password}
+        onClose={() => setPassword(false)}
+        guard={recheck.guard}
+        googleOnly={status?.hasPassword === false}
+      />
       <Confirm
         visible={turnOff}
         title={t('settings.security.turnOffTitle')}
@@ -534,6 +578,23 @@ export function SecurityTabDeep() {
           });
         }}
         onCancel={() => setTurnOff(false)}
+      />
+      <Confirm
+        visible={removePasskeyId !== null}
+        title={t('settings.security.removePasskeyTitle')}
+        body={t('settings.security.removePasskeyBody')}
+        confirmLabel={t('settings.security.removePasskey')}
+        onConfirm={() => {
+          const id = removePasskeyId;
+          setRemovePasskeyId(null);
+          if (!id) return;
+          void act(async () => {
+            await api.passkeyRemove(id);
+            toast.show(t('settings.security.passkeyRemoved'));
+            load();
+          });
+        }}
+        onCancel={() => setRemovePasskeyId(null)}
       />
       {recheck.sheet}
     </ScrollView>
@@ -660,7 +721,8 @@ export function DevicesTab() {
   const toast = useToast();
   const online = useOnline();
   const prefs = { ...DEFAULT_DEVICE_SYNC, ...snapshot?.settings.deviceSync };
-  const waiting = snapshot?.waiting.size ?? 0;
+  const waitingIds = snapshot ? [...snapshot.waiting] : [];
+  const waiting = waitingIds.length;
 
   const saveDevice = async (deviceSync: typeof prefs) => {
     if (!snapshot) return;
@@ -680,7 +742,23 @@ export function DevicesTab() {
         <Text variant="caption" tone="textSecondary">
           {t('settings.devices.waiting', { count: String(waiting) })}
         </Text>
-        <Button testID="settings-sync-now" label={t('settings.devices.syncNow')} onPress={() => toast.show(t('settings.devices.syncStarted'))} />
+        {waitingIds.length > 0 ? (
+          <View style={{ gap: sp['spacing-xs'] }} testID="settings-sync-waiting-list">
+            {waitingIds.slice(0, 8).map((id) => (
+              <Text key={id} variant="caption" tone="textSecondary">
+                {id}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+        <Button
+          testID="settings-sync-now"
+          label={t('settings.devices.syncNow')}
+          onPress={() => {
+            toast.show(t('settings.devices.syncStarted'));
+            void repo.refreshBillNotifications();
+          }}
+        />
       </Card>
       <Text variant="heading-sm">{t('settings.devices.offlineCopy')}</Text>
       <Text tone="textSecondary">{t('settings.devices.offlineSize')}</Text>
@@ -777,20 +855,13 @@ export function ImportExportTabDeep() {
       <View style={{ marginTop: sp['spacing-lg'] }}>
         <Button testID="settings-delete-account" kind="secondary" label={t('settings.importExport.deleteAccount')} onPress={() => setDeleteOpen(true)} />
       </View>
-      <Confirm
+      <DeleteAccountSheet
         visible={deleteOpen}
-        title={t('settings.importExport.deleteAccountTitle')}
-        body={t('settings.importExport.deleteAccountBody')}
-        confirmLabel={t('settings.importExport.deleteAccountConfirm')}
-        onConfirm={() => {
-          setDeleteOpen(false);
-          void run(async () => {
-            await api.deleteAccount();
-            toast.show(t('settings.importExport.deleteAccountQueued'));
-            await signOut();
-          });
+        onClose={() => setDeleteOpen(false)}
+        guard={recheck.guard}
+        onDeleted={async () => {
+          await signOut();
         }}
-        onCancel={() => setDeleteOpen(false)}
       />
       {recheck.sheet}
     </ScrollView>
