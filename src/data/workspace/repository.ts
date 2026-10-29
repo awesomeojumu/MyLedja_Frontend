@@ -1345,7 +1345,7 @@ export class WorkspaceRepository {
       },
       'category.delete',
       undefined,
-      { type: 'category.delete', targetId: categoryId, payload: { moveTo: moveToId } },
+      { type: 'category.delete', targetId: categoryId, payload: { moveTo: moveToId, undoId } },
     );
     return { ok: true, value: { undoId } };
   }

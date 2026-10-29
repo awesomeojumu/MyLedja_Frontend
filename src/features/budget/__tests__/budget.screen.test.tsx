@@ -285,6 +285,12 @@ describe('Category page', () => {
     };
     const row = (await store.store.list('categories')).find((x) => x.id === market && x.data.deleted);
     expect(row?.data.deletion?.undoId).toBeTruthy();
+    // Sync payload must carry the same undoId the toast holds (BE honors client token).
+    const outbox = await sync.store.outbox();
+    const deleteOp = outbox.find((o) => o.type === 'category.delete');
+    expect((deleteOp?.payload as { remote?: { payload?: { undoId?: string } } })?.remote?.payload?.undoId).toBe(
+      row!.data.deletion!.undoId,
+    );
     await repo.undoDeleteCategory(row!.data.deletion!.undoId!, '2026-10-15');
     await waitFor(async () => {
       expect((await repo.load()).categories.some((c) => c.id === market)).toBe(true);
