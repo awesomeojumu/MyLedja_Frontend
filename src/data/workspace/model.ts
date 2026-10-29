@@ -162,6 +162,9 @@ export const DEFAULT_DEVICE_SYNC: DeviceSyncPrefs = {
   lastSyncedLabel: undefined,
 };
 
+/** Settings › Categories and tags — tag list (DESIGN page 26). */
+export type WorkspaceTag = { id: string; name: string };
+
 /** Workspace preferences chosen in Welcome and Settings (Phase 1 subset). */
 export type WorkspaceSettings = {
   budgetStyle: BudgetStyle;
@@ -176,6 +179,12 @@ export type WorkspaceSettings = {
   exchangeRates?: ExchangeRateEntry[];
   downloadDailyRates?: boolean;
   deviceSync?: DeviceSyncPrefs;
+  /** Profile photo (local URI); shows in sidebar/drawer (PU-63). */
+  profilePhotoUri?: string | null;
+  /** Phone haptics (Settings › General). */
+  hapticsEnabled?: boolean;
+  /** Tags managed under Categories and tags. */
+  tags?: WorkspaceTag[];
 };
 
 /** Settings › Notifications (P26-05). */
