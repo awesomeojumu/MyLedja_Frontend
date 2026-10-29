@@ -92,3 +92,66 @@ export function rangeStart(range: '1M' | '3M' | '1Y' | 'All', today: string): st
   if (range === '1Y') dt.setUTCFullYear(dt.getUTCFullYear() - 1);
   return dt.toISOString().slice(0, 10);
 }
+
+
+/** FX converter from workspace rates (TECH-SPEC 6.5). */
+export type Converter = (amount: bigint, from: string, date: string) => bigint | null;
+
+export function converterFor(snapshot: Pick<Snapshot, 'settings'>): Converter {
+  const home = snapshot.settings.currency ?? 'NGN';
+  const rates = [...(snapshot.settings.exchangeRates ?? [])].sort((a, b) => b.date.localeCompare(a.date));
+  return (amount, from, date) => {
+    if (from === home) return amount;
+    const rate = rates.find((r) => r.currency === from && r.date <= date);
+    if (!rate) return null;
+    const n = Number(rate.rate);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return BigInt(Math.round(Number(amount) * n));
+  };
+}
+
+export type HoldingRow = {
+  holding: Holding;
+  position: { cost: bigint; value: bigint; unrealised: bigint; realised: bigint; units: number };
+  currency: string;
+};
+
+/** Holding rows for reports on a date. */
+export function holdingRows(snapshot: Pick<Snapshot, 'holdings' | 'lots' | 'prices' | 'events'>, date: string): HoldingRow[] {
+  return snapshot.holdings.map((holding) => {
+      const fig = holdingFigures(snapshot as Snapshot, holding, date);
+      return {
+        holding,
+        currency: holding.currency,
+        position: { cost: fig.cost, value: fig.value, unrealised: fig.gain, realised: 0n, units: fig.units },
+      };
+    });
+}
+
+export type Wealth = { total: bigint; partial: string[]; unrealised: bigint };
+
+/** Net worth on a date for reports (assets − debts + unrealised). */
+export function wealthAt(snapshot: Snapshot, date: string): Wealth {
+  const convert = converterFor(snapshot);
+  let total = 0n;
+  const partial = new Set<string>();
+  for (const a of snapshot.accounts.filter((x) => !x.archived)) {
+    const bal = ledgerBalance(
+      a.id,
+      snapshot.events.filter((e) => e.date <= date),
+    );
+    const v = convert(bal, a.currency ?? snapshot.settings.currency, date);
+    if (v === null) partial.add(a.currency ?? snapshot.settings.currency);
+    else total += v;
+  }
+  let unrealised = 0n;
+  for (const row of holdingRows(snapshot, date)) {
+    const v = convert(row.position.unrealised, row.currency, date);
+    if (v === null) partial.add(row.currency);
+    else {
+      unrealised += v;
+      total += v;
+    }
+  }
+  return { total, partial: [...partial].sort(), unrealised };
+}

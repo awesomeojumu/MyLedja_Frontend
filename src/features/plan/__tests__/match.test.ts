@@ -50,6 +50,8 @@ function stub(): Snapshot {
     holdings: [],
     lots: [],
     prices: [],
+    reportDashboards: [],
+    savedReports: [],
     waiting: new Set(),
     chart: {} as Snapshot['chart'],
   };
