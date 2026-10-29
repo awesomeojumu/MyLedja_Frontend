@@ -630,7 +630,7 @@
   "payees.mergeConfirm": "Merge payees",
   "payees.merged": "Payees merged",
   "payees.saved": "Payee saved",
-  "payees.mergeWith": "Merge with…",
+  "payees.mergeWith": "Merge with",
   "payees.deletePayee": "Delete payee",
   "payees.deleteTitle": "Delete {name}?",
   "payees.deleteBody": "This payee has no transactions and will be removed.",
@@ -2234,5 +2234,6 @@
   "common.edit": "Edit",
   "common.saveChanges": "Save changes",
   "settings.banks.disconnectTitle": "Disconnect this bank?",
-  "settings.banks.disconnectBody": "Transactions already imported stay. You can connect again later."
+  "settings.banks.disconnectBody": "Transactions already imported stay. You can connect again later.",
+  "settings.popup.deleteAccountTypedWord": "DELETE"
 }

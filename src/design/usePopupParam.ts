@@ -48,7 +48,15 @@ export function usePopupParam<TDraft>({
   useEffect(() => {
     if (!shouldOpen) return;
     let cancelled = false;
-    void openKeyValue()
+    let kv;
+    try {
+      kv = openKeyValue();
+    } catch {
+      setLoadedKey(draftKey);
+      setHydrated(true);
+      return;
+    }
+    void kv
       .get(draftKey)
       .then((rawDraft) => {
         if (cancelled) return;
@@ -75,7 +83,13 @@ export function usePopupParam<TDraft>({
     (next: TDraft | ((prev: TDraft) => TDraft)) => {
       setDraftState((prev) => {
         const value = typeof next === 'function' ? (next as (p: TDraft) => TDraft)(prev) : next;
-        if (shouldOpen) void openKeyValue().set([[draftKey, JSON.stringify(value)]]);
+        if (shouldOpen) {
+          try {
+            void openKeyValue().set([[draftKey, JSON.stringify(value)]]);
+          } catch {
+            /* ignore missing native store in tests */
+          }
+        }
         return value;
       });
     },
@@ -83,7 +97,11 @@ export function usePopupParam<TDraft>({
   );
 
   const close = useCallback(() => {
-    void openKeyValue().remove([draftKey]);
+    try {
+      void openKeyValue().remove([draftKey]);
+    } catch {
+      /* ignore */
+    }
     router.setParams({ [param]: undefined });
   }, [draftKey, param, router]);
 

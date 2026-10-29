@@ -47,7 +47,10 @@ async function show(screenEl: React.ReactElement, sync: ReturnType<typeof memory
 }
 
 async function typeAmount(testID: string, value: string) {
-  await fireEvent.changeText(screen.getByTestId(testID), value);
+  const field = screen.getByTestId(testID);
+  await fireEvent.changeText(field, value);
+  // PU00-2 / §1.1: amount errors appear after leave, not while typing.
+  await fireEvent(field, 'blur');
 }
 
 beforeEach(() => {

@@ -742,7 +742,7 @@ export function DeleteAccountSheet({
             <Button
               testID="delete-account-continue"
               label={t('settings.popup.deleteAccountContinue')}
-              disabled={typed !== 'DELETE'}
+              disabled={typed !== t('settings.popup.deleteAccountTypedWord')}
               onPress={() => setConfirmOpen(true)}
             />
           </Footer>
@@ -754,7 +754,14 @@ export function DeleteAccountSheet({
           label={t('settings.popup.deleteAccountDownload')}
           onPress={() => toast.show(t('settings.popup.deleteAccountDownloadHint'))}
         />
-        <TextInput testID="delete-account-type" label={t('settings.popup.deleteAccountType')} value={typed} onChangeText={setTyped} placeholder="DELETE" autoCapitalize="characters" />
+        <TextInput
+          testID="delete-account-type"
+          label={t('settings.popup.deleteAccountType')}
+          value={typed}
+          onChangeText={setTyped}
+          placeholder={t('settings.popup.deleteAccountTypedWord')}
+          autoCapitalize="characters"
+        />
         {error ? <InlineError message={error} /> : null}
       </Sheet>
       <Confirm
