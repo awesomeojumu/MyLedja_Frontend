@@ -52,7 +52,8 @@ export function securityApi(client: ApiClient) {
       const params = new URLSearchParams({ limit: '50', ...(q.before ? { before: q.before } : {}), ...(q.action ? { action: q.action } : {}) });
       return client.request<{ events: ActivityEvent[]; nextBefore: string | null }>('GET', `/v1/workspaces/${workspaceId}/activity?${params.toString()}`);
     },
-    exportCsv: (workspaceId: string) => client.request<ExportFile>('POST', `/v1/workspaces/${workspaceId}/exports/transactions`),
+    exportCsv: (workspaceId: string, body?: Record<string, unknown>) =>
+      client.request<ExportFile>('POST', `/v1/workspaces/${workspaceId}/exports/transactions`, body),
     backup: (workspaceId: string) => client.request<ExportFile>('POST', `/v1/workspaces/${workspaceId}/backups`),
     restorePreview: (content: string) => client.request<RestorePreview>('POST', '/v1/me/restore/preview', { content }),
     restore: (content: string, workspaceName?: string) =>

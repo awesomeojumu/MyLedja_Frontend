@@ -63,11 +63,11 @@ describe('PU-19 / TB-13 filter URL + chips', () => {
       ...emptyFilters(),
       dateFrom: '2026-10-01',
       dateTo: '2026-10-31',
-      categoryId: 'c1',
+      categoryIds: ['c1'],
       type: 'expense' as const,
       edited: true,
       hasReceipt: true,
-      tag: 'weekend',
+      tags: ['weekend'],
     };
     const params = filtersToParams(filters);
     expect(params).toMatchObject({
@@ -83,14 +83,23 @@ describe('PU-19 / TB-13 filter URL + chips', () => {
     expect(Object.keys(clearFilterParams()).length).toBeGreaterThan(5);
   });
 
+  it('multi-select CSV round-trips account and category ids', () => {
+    const filters = { accountIds: ['a1', 'a2'], categoryIds: ['c1', 'c2'], tags: ['food', 'weekend'] };
+    const params = filtersToParams(filters);
+    expect(params.account).toBe('a1,a2');
+    expect(params.category).toBe('c1,c2');
+    expect(params.tag).toBe('food,weekend');
+    expect(filtersFromParams(params)).toEqual(filters);
+  });
+
   it('TB13-1: removing one chip removes only that filter', () => {
     const snapshot = snapshotStub();
-    const filters = { dateFrom: '2026-10-01', dateTo: '2026-10-31', categoryId: 'c1', type: 'expense' as const };
+    const filters = { dateFrom: '2026-10-01', dateTo: '2026-10-31', categoryIds: ['c1'], type: 'expense' as const };
     const chips = filterChips(filters, snapshot);
     expect(chips.length).toBe(3);
     const withoutType = removeChip(filters, 'type');
     expect(withoutType.type).toBeUndefined();
-    expect(withoutType.categoryId).toBe('c1');
+    expect(withoutType.categoryIds).toEqual(['c1']);
     expect(withoutType.dateFrom).toBe('2026-10-01');
   });
 
@@ -101,9 +110,39 @@ describe('PU-19 / TB-13 filter URL + chips', () => {
     expect(range.dateFrom).toBe('2026-10-01');
     const edited = rows.filter((r) => applyFilters(r, { edited: true }, snapshot));
     expect(edited.map((r) => r.event.id)).toEqual(['e1']);
-    const tagged = rows.filter((r) => applyFilters(r, { tag: 'weekend' }, snapshot));
+    const tagged = rows.filter((r) => applyFilters(r, { tags: ['weekend'] }, snapshot));
     expect(tagged).toHaveLength(1);
     const withReceipt = rows.filter((r) => applyFilters(r, { hasReceipt: true }, snapshot));
     expect(withReceipt).toHaveLength(1);
+  });
+
+  it('type chips: debt / goal / investment connection filters', () => {
+    const snapshot = snapshotStub();
+    snapshot.events.push({
+      id: 'e3',
+      operationId: 'e3',
+      type: 'expense',
+      date: '2026-10-16',
+      status: 'posted',
+      debtId: 'd1',
+      lines: [
+        { ledgerAccountId: 'a1', amountMinor: -100n, currency: 'NGN' },
+        { ledgerAccountId: 'c1', amountMinor: 100n, currency: 'NGN' },
+      ],
+    });
+    snapshot.events.push({
+      id: 'e4',
+      operationId: 'e4',
+      type: 'investment_buy',
+      date: '2026-10-17',
+      status: 'posted',
+      lines: [
+        { ledgerAccountId: 'a1', amountMinor: -200n, currency: 'NGN' },
+        { ledgerAccountId: 'c1', amountMinor: 200n, currency: 'NGN' },
+      ],
+    });
+    const rows = rowsFor(snapshot);
+    expect(rows.filter((r) => applyFilters(r, { type: 'debt' }, snapshot)).map((r) => r.event.id)).toEqual(['e3']);
+    expect(rows.filter((r) => applyFilters(r, { type: 'investment' }, snapshot)).map((r) => r.event.id)).toEqual(['e4']);
   });
 });

@@ -31,6 +31,8 @@ import { suggestMoneyBack, type MoneyBackChoice, type MoneyBackSuggestion } from
 
 import { addDays, lastUsedAccount, ledgerMessage, today } from './helpers';
 import { AddMovementDoorSheet, type MovementDoor } from './AddMovementDoors';
+import { pickImageUri } from '@/features/payees/pickMedia';
+
 import { withReceipt } from './receiptMeta';
 import { withTags } from './tags';
 
@@ -529,7 +531,19 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
             <>
               <Switch testID="add-receipt" label={t('add.receipt')} value={attachReceipt} onChange={setAttachReceipt} />
               {attachReceipt ? (
-                <TextInput testID="add-receipt-link" label={t('add.receiptLink')} value={receiptLink} onChangeText={setReceiptLink} />
+                <View style={{ gap: sp['spacing-xs'] }}>
+                  <Button
+                    kind="secondary"
+                    testID="add-receipt-photo"
+                    label={t('panel.addPhoto')}
+                    onPress={() => {
+                      void pickImageUri().then((uri) => {
+                        if (uri) setReceiptLink(uri);
+                      });
+                    }}
+                  />
+                  <TextInput testID="add-receipt-link" label={t('add.receiptLink')} value={receiptLink} onChangeText={setReceiptLink} />
+                </View>
               ) : null}
             </>
           ) : null}

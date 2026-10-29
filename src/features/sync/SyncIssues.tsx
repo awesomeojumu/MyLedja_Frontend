@@ -11,7 +11,7 @@ import { t } from '@/i18n';
 const sp = tokens.spacing;
 
 /** Rejected outbox ops + money conflicts (TECH-SPEC 9.3–9.4, P11-12). */
-export function SyncIssuesBanner() {
+export function useSyncIssues() {
   const { store, engine, status } = useSync();
   const [open, setOpen] = useState(false);
   const [rejected, setRejected] = useState<QueuedOperation[]>([]);
@@ -31,12 +31,18 @@ export function SyncIssuesBanner() {
   }, [store]);
 
   const count = rejected.length + conflicts.length || status.rejected;
+
+  return { count, rejected, conflicts, open, setOpen, engine, store };
+}
+
+export function SyncIssuesBanner() {
+  const { count, rejected, conflicts, open, setOpen, engine, store } = useSyncIssues();
   if (count === 0) return null;
 
   return (
     <View style={{ paddingHorizontal: sp['spacing-md'], paddingTop: sp['spacing-md'] }}>
       <Pressable testID="sync-issues-banner" accessibilityRole="button" onPress={() => setOpen(true)}>
-        <Banner message={t('sync.issuesBanner', { count: Math.max(count, status.rejected) })} />
+        <Banner message={t('sync.issuesBanner', { count })} />
       </Pressable>
       {open ? (
         <SyncIssuesSheet
@@ -55,7 +61,7 @@ export function SyncIssuesBanner() {
   );
 }
 
-function SyncIssuesSheet({
+export function SyncIssuesSheet({
   rejected,
   conflicts,
   onClose,

@@ -27,9 +27,12 @@ export function aiApi(client: ApiClient) {
       client.request<{ reauthToken: string }>('POST', `/v1/workspaces/${workspaceId}/banking/links/${linkId}/reauth`),
     bankReconnected: (workspaceId: string, linkId: string) =>
       client.request<BankLink>('POST', `/v1/workspaces/${workspaceId}/banking/links/${linkId}/reconnected`),
-    /** Bank syncs waiting for review on one account (P15-07, P25-05). */
-    pendingImports: (workspaceId: string, accountId: string) =>
-      client.request<{ imports: ServerImport[] }>('GET', `/v1/workspaces/${workspaceId}/imports?status=mapped&accountId=${accountId}`),
+    /** Bank syncs waiting for review (P15-07, P25-05). Omit accountId for workspace-wide. */
+    pendingImports: (workspaceId: string, accountId?: string) => {
+      const q = new URLSearchParams({ status: 'mapped' });
+      if (accountId) q.set('accountId', accountId);
+      return client.request<{ imports: ServerImport[] }>('GET', `/v1/workspaces/${workspaceId}/imports?${q.toString()}`);
+    },
     importReviewed: (workspaceId: string, importId: string) =>
       client.request<ServerImport>('POST', `/v1/workspaces/${workspaceId}/imports/${importId}/reviewed`),
     disconnectBank: (workspaceId: string, linkId: string) => client.request<null>('DELETE', `/v1/workspaces/${workspaceId}/banking/links/${linkId}`),
