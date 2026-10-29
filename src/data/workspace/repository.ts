@@ -2,7 +2,7 @@ import { v7 as uuidv7 } from 'uuid';
 
 import type { SetupBody } from '@/api/auth';
 import { formatDay } from '@/design/components/overlays';
-import { resolveTemplateLineAmount } from '@/features/budget/helpers';
+import { budgetForMonth, resolveTemplateLineAmount, rowFor } from '@/features/budget/helpers';
 import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import type { RemoteOperation } from '../sync/mapOperation';
 import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
@@ -46,6 +46,7 @@ import {
   type AccountKind,
   type BudgetTemplate,
   type BudgetAssign,
+  type BudgetType,
   DEFAULT_NOTIFICATION_PREFS,
   type Category,
   type EventMeta,
@@ -154,14 +155,27 @@ const record = (collection: string, id: string, data: object, version = 0): Loca
   data: data as Record<string, unknown>,
 });
 
+type CategoryDeleteUndo = {
+  categoryId: string;
+  moveToId: string;
+  category: Category;
+  replacementEventIds: string[];
+  planMoves: { month: string; amount: bigint; note: string }[];
+};
+
 /** Reads and writes the workspace through the local store; every write is queued for sync. */
 export class WorkspaceRepository {
+  private readonly categoryDeleteUndos = new Map<string, CategoryDeleteUndo>();
+
   constructor(
     private readonly store: LocalStore,
     private readonly engine: SyncEngine,
     readonly workspaceId: string,
     private readonly newId: () => string = uuidv7,
   ) {}
+
+  /** Sentinel for envelope "Left to plan" when covering overspending (PU-10). */
+  static readonly LEFT_TO_PLAN = '__left_to_plan__';
 
   async load(): Promise<Snapshot> {
     const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows, ruleRows] =
@@ -774,21 +788,28 @@ export class WorkspaceRepository {
     });
   }
 
-  /** P06-06: move planned money between categories in the same month. */
+  /** P06-06 / PU-08: move available money between categories in the same month. */
   async moveAssigned(fromId: string, toId: string, month: string, amount: bigint): Promise<Result> {
     if (amount <= 0n || fromId === toId) return { ok: false, error: 'not_positive' };
     const snapshot = await this.load();
+    const available = rowFor(snapshot, month, fromId).available;
+    if (available < amount) return { ok: false, error: 'not_positive' };
     const from = this.assigned(fromId, month, snapshot);
-    if (from < amount) return { ok: false, error: 'not_positive' };
     await this.setAssigned(fromId, month, from - amount);
     await this.setAssigned(toId, month, this.assigned(toId, month, snapshot) + amount);
     return { ok: true, value: undefined };
   }
 
-  /** P06-07: raise each overspent category's plan by taking from another category. */
+  /** P06-07 / PU-10: raise each overspent category's plan by taking from another category (or left to plan). */
   async coverOverspending(month: string, covers: { overspentId: string; fromId: string; amount: bigint }[]): Promise<Result> {
     for (const cover of covers) {
       if (cover.amount <= 0n) continue;
+      if (cover.fromId === WorkspaceRepository.LEFT_TO_PLAN) {
+        const snapshot = await this.load();
+        if (budgetForMonth(snapshot, month).leftToPlan < cover.amount) return { ok: false, error: 'not_positive' };
+        await this.setAssigned(cover.overspentId, month, this.assigned(cover.overspentId, month, snapshot) + cover.amount);
+        continue;
+      }
       const moved = await this.moveAssigned(cover.fromId, cover.overspentId, month, cover.amount);
       if (!moved.ok) return moved;
     }
@@ -851,18 +872,29 @@ export class WorkspaceRepository {
     }
   }
 
-  async addCategory(input: { name: string; kind: 'income' | 'expense'; group: string }): Promise<Category> {
+  async addCategory(input: {
+    name: string;
+    kind: 'income' | 'expense';
+    group: string;
+    icon?: string | null;
+    budgetType?: BudgetType;
+    essential?: boolean;
+    hidden?: boolean;
+    carryOver?: boolean;
+  }): Promise<Category> {
     const snapshot = await this.load();
     const category: Category = {
       id: this.newId(),
       name: input.name.trim(),
       kind: input.kind,
       group: input.group,
-      hidden: false,
+      icon: input.icon ?? null,
+      hidden: input.hidden ?? false,
       countInBudget: input.kind === 'expense',
       order: snapshot.categories.length,
-      budgetType: 'flexible',
-      carryOver: false,
+      budgetType: input.budgetType ?? 'flexible',
+      carryOver: input.carryOver ?? snapshot.settings.carryOverDefault ?? false,
+      essential: input.essential ?? false,
     };
     const { id, ...data } = category;
     await this.put('categories', id, data, 'category.create');
@@ -1011,16 +1043,21 @@ export class WorkspaceRepository {
   }
 
   /**
-   * P07-06: move this category's transactions to another, then soft-delete it.
-   * Each move is a correction (TECH-SPEC 6.3).
+   * P07-06 / PU-12: move this category's transactions and plans to another, then soft-delete it.
+   * Each move is a correction (TECH-SPEC 6.3). Returns undoId for toast Undo.
    */
-  async deleteCategory(categoryId: string, moveToId: string, _date: string): Promise<Result> {
+  async deleteCategory(
+    categoryId: string,
+    moveToId: string,
+    _date: string,
+  ): Promise<Result<{ undoId: string }>> {
     if (categoryId === moveToId) return { ok: false, error: 'not_positive' };
     const snapshot = await this.load();
     const category = snapshot.categories.find((c) => c.id === categoryId);
     const target = snapshot.categories.find((c) => c.id === moveToId);
     if (!category || !target || category.kind !== target.kind) return { ok: false, error: 'missing_lines' };
 
+    const replacementEventIds: string[] = [];
     const accountIds = new Set(snapshot.accounts.map((a) => a.id));
     // Reload after each correction so we never correct an already-reversed event.
     for (;;) {
@@ -1061,9 +1098,75 @@ export class WorkspaceRepository {
             };
       const corrected = await this.correctTransaction(event.id, input);
       if (!corrected.ok) return corrected;
+      replacementEventIds.push(corrected.value.id);
     }
 
+    const planMoves: { month: string; amount: bigint; note: string }[] = [];
+    for (const [key, amount] of snapshot.assigns) {
+      if (!key.startsWith(`${categoryId}:`) || amount <= 0n) continue;
+      const month = key.slice(categoryId.length + 1);
+      const note = snapshot.assignNotes.get(key) ?? '';
+      planMoves.push({ month, amount, note });
+    }
+    for (const plan of planMoves) {
+      const snap = await this.load();
+      await this.setAssigned(moveToId, plan.month, this.assigned(moveToId, plan.month, snap) + plan.amount, { note: plan.note });
+      await this.setAssigned(categoryId, plan.month, 0n);
+    }
+
+    const undoId = this.newId();
+    this.categoryDeleteUndos.set(undoId, { categoryId, moveToId, category, replacementEventIds, planMoves });
     await this.updateCategory({ ...category, deleted: true, hidden: true });
+    return { ok: true, value: { undoId } };
+  }
+
+  /** PU12-3: restore a soft-deleted category and move transactions/plans back. */
+  async undoDeleteCategory(undoId: string, _date: string): Promise<Result> {
+    const data = this.categoryDeleteUndos.get(undoId);
+    if (!data) return { ok: false, error: 'missing_lines' };
+    await this.updateCategory({ ...data.category, deleted: false, hidden: data.category.hidden });
+    for (const plan of data.planMoves) {
+      const snap = await this.load();
+      const targetAmt = this.assigned(data.moveToId, plan.month, snap);
+      await this.setAssigned(data.moveToId, plan.month, targetAmt > plan.amount ? targetAmt - plan.amount : 0n);
+      await this.setAssigned(data.categoryId, plan.month, plan.amount, { note: plan.note });
+    }
+    for (const eventId of [...data.replacementEventIds].reverse()) {
+      const snap = await this.load();
+      const event = snap.events.find((e) => e.id === eventId);
+      if (!event || event.status !== 'posted') continue;
+      const accountIds = new Set(snap.accounts.map((a) => a.id));
+      const money = event.lines.find((l) => accountIds.has(l.ledgerAccountId));
+      if (!money) continue;
+      if (data.category.kind === 'expense') {
+        const parts = event.lines
+          .filter((l) => !accountIds.has(l.ledgerAccountId))
+          .map((l) => ({
+            categoryId: l.ledgerAccountId === data.moveToId ? data.categoryId : l.ledgerAccountId,
+            amount: l.amountMinor < 0n ? -l.amountMinor : l.amountMinor,
+          }));
+        await this.correctTransaction(eventId, {
+          kind: 'expense',
+          accountId: money.ledgerAccountId,
+          parts,
+          date: event.date,
+          notes: event.notes,
+        });
+      } else {
+        const amount = event.lines
+          .filter((l) => !accountIds.has(l.ledgerAccountId))
+          .reduce((s, l) => s + (l.amountMinor < 0n ? -l.amountMinor : l.amountMinor), 0n);
+        await this.correctTransaction(eventId, {
+          kind: 'income',
+          accountId: money.ledgerAccountId,
+          categoryId: data.categoryId,
+          amount,
+          date: event.date,
+          notes: event.notes,
+        });
+      }
+    }
+    this.categoryDeleteUndos.delete(undoId);
     return { ok: true, value: undefined };
   }
 

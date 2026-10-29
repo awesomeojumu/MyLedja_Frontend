@@ -37,7 +37,8 @@ import {
   TagsSection,
   WorkspaceTabDeep,
 } from './SettingsTabs';
-import { DeleteCategorySheet, EditCategorySheet } from './SettingsSheets';
+import { DeleteCategorySheet, EditCategorySheet, type CategoryDraft } from '@/features/budget/CategorySheets';
+import { monthOf } from '@/ledger';
 
 const sp = tokens.spacing;
 
@@ -280,10 +281,26 @@ function CategoriesTab() {
   const [editCat, setEditCat] = useState<Category | null>(null);
   const [deleteCat, setDeleteCat] = useState<Category | null>(null);
   const expense = useMemo(() => snapshot?.categories.filter((c) => c.kind === 'expense') ?? [], [snapshot]);
+  const month = monthOf(today());
 
   const saveCategory = async (category: Category) => {
     await repo.updateCategory(category);
-    toast.show(t('common.saved'));
+    toast.show(t('category.saved'));
+  };
+
+  const saveDraft = async (draft: CategoryDraft) => {
+    if (!editCat) return;
+    await saveCategory({
+      ...editCat,
+      name: draft.name,
+      group: draft.group,
+      kind: draft.kind,
+      budgetType: draft.budgetType,
+      icon: draft.icon,
+      essential: draft.essential,
+      hidden: draft.hidden,
+    });
+    setEditCat(null);
   };
 
   return (
@@ -311,23 +328,39 @@ function CategoriesTab() {
         onPress={async () => {
           await repo.addCategory({ name: newName.trim(), kind: 'expense', group: 'group.home' });
           setNewName('');
-          toast.show(t('common.saved'));
+          toast.show(t('category.saved'));
         }}
       />
       <TagsSection />
-      <EditCategorySheet category={editCat} visible={editCat !== null} onClose={() => setEditCat(null)} onSave={saveCategory} />
-      <DeleteCategorySheet
-        category={deleteCat}
-        visible={deleteCat !== null}
-        onClose={() => setDeleteCat(null)}
-        onConfirm={async () => {
-          if (!deleteCat || !snapshot) return;
-          const fallback = snapshot.categories.find((c) => c.kind === 'expense' && c.id !== deleteCat.id);
-          if (!fallback) return;
-          await repo.deleteCategory(deleteCat.id, fallback.id, today());
-          toast.show(t('common.saved'));
-        }}
-      />
+      {snapshot && editCat ? (
+        <EditCategorySheet
+          visible
+          category={editCat}
+          snapshot={snapshot}
+          onClose={() => setEditCat(null)}
+          onSave={saveDraft}
+          onDelete={() => {
+            setDeleteCat(editCat);
+            setEditCat(null);
+          }}
+        />
+      ) : null}
+      {snapshot && deleteCat ? (
+        <DeleteCategorySheet
+          visible
+          category={deleteCat}
+          snapshot={snapshot}
+          month={month}
+          onClose={() => setDeleteCat(null)}
+          onConfirm={async (moveTo) => {
+            const r = await repo.deleteCategory(deleteCat.id, moveTo, today());
+            if (!r.ok) return;
+            const undoId = r.value?.undoId;
+            toast.show(t('category.deleted'), undoId ? () => void repo.undoDeleteCategory(undoId, today()) : undefined);
+            setDeleteCat(null);
+          }}
+        />
+      ) : null}
     </ScrollView>
   );
 }
