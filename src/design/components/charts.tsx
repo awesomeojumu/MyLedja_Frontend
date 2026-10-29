@@ -330,8 +330,9 @@ export function LineChart({
               onPress={pick}
               onMoveShouldSetResponder={() => true}
               onResponderMove={pick}
-              accessibilityRole="adjustable"
-              accessibilityLabel={props.title}
+              // Pointer-only: inside the chart's image role; "View as table" gives the same numbers accessibly.
+              accessible={false}
+              focusable={false}
             >
               <Svg width={width} height={HEIGHT}>
                 <SvgLine x1={0} x2={width} y1={HEIGHT - 0.5} y2={HEIGHT - 0.5} stroke={theme.border} strokeWidth={1} />

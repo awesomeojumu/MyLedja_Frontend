@@ -23,7 +23,8 @@ test('P09-01, P09-02, P09-04: an account page, a CSV import and its Undo', async
   await signUpAndSetUp(page, `import-${isMobile ? 'phone' : 'desktop'}@example.test`);
   await addAccount(page, 'Zenith Current', '1000', isMobile);
   await page.getByRole('link', { name: /Zenith Current/ }).click();
-  await expect(page).toHaveURL(/\/accounts\/[\w-]+$/);
+  // Phone opens the Account page; wider screens show it beside the list (DESIGN.md page 8).
+  await expect(page).toHaveURL(/\/accounts(\/[\w-]+$|\?view=[\w-]+)/);
   await expect(page.getByTestId('account-balance')).toHaveText('₦1,000.00');
   await expectNoSeriousAxeIssues(page);
 

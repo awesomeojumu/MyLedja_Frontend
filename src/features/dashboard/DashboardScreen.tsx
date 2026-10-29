@@ -237,6 +237,8 @@ export function DashboardScreen() {
             <View
               testID="dashboard-checklist-bar"
               accessibilityRole="progressbar"
+              accessibilityLabel={t('dashboard.checklistProgress', { done, total: items.length })}
+              accessibilityValue={{ min: 0, max: items.length, now: done }}
               style={{ height: 6, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden' }}
             >
               <View style={{ height: 6, width: `${(done / items.length) * 100}%`, backgroundColor: theme.primaryFill }} />
@@ -317,6 +319,7 @@ export function DashboardScreen() {
                   <View
                     testID="dashboard-left-bar"
                     accessibilityRole="progressbar"
+                    accessibilityLabel={t('dashboard.ofPlanned', { amount: formatNaira(model.plannedTotal) })}
                     style={{ height: 6, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden', marginTop: sp['spacing-xs'] }}
                   >
                     <View
