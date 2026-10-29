@@ -274,12 +274,16 @@ function BarShape({
   );
 }
 
-/** A 2.2px primary line; the latest point is gold, which is that view's gold mark. Optional dashed `compare` (cost) and scrub readout (P18). */
+/**
+ * A 2.2px primary line; the latest point is gold, which is that view's gold mark. Optional dashed `compare`
+ * (cost) and scrub readout (P18); `filled` draws a closed area under the line (Report builder "area" chart).
+ */
 export function LineChart({
   goldLatest = true,
   compare,
+  filled = false,
   ...props
-}: Omit<Frame, 'children'> & { goldLatest?: boolean; compare?: bigint[] }) {
+}: Omit<Frame, 'children'> & { goldLatest?: boolean; compare?: bigint[]; filled?: boolean }) {
   const theme = useTheme();
   const { privacy } = useDesign();
   const [scrub, setScrub] = useState<number | null>(null);
@@ -309,6 +313,8 @@ export function LineChart({
           const i = Math.max(0, Math.min(props.rows.length - 1, Math.round((x - 4) / (step || 1))));
           setScrub(i);
         };
+        const first = pts[0];
+        const area = filled && pts.length > 1 && first && last ? `${d} L${last.x},${HEIGHT} L${first.x},${HEIGHT} Z` : null;
         return (
           <View style={{ gap: sp['spacing-xs'] }}>
             {activeRow ? (
@@ -329,6 +335,7 @@ export function LineChart({
             >
               <Svg width={width} height={HEIGHT}>
                 <SvgLine x1={0} x2={width} y1={HEIGHT - 0.5} y2={HEIGHT - 0.5} stroke={theme.border} strokeWidth={1} />
+                {area ? <Path testID="chart-area-fill" d={area} fill={c['primary-soft']} stroke="none" /> : null}
                 {comparePts.length > 1 ? (
                   <Path d={compareD} stroke={theme.textSecondary} strokeWidth={1.5} strokeDasharray="4 4" fill="none" />
                 ) : null}

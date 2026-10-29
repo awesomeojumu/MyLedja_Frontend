@@ -31,7 +31,7 @@ export function RangeBar({
   onChange,
   compare,
   onCompareChange,
-  /** When true, always show presets inline (e.g. already inside Report's phone Filters sheet). */
+  /** When true, always show presets inline (inside the Report Filters sheet or the Report builder's phone Edit sheet). */
   embedded = false,
 }: {
   range: DateRange;

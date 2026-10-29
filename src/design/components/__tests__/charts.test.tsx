@@ -67,6 +67,12 @@ describe('charts', () => {
     expect(screen.getAllByTestId('chart-latest').map((c) => c.props.fill)).toEqual([paint(tokens.color.gold)]);
   });
 
+  it('filled LineChart draws an area under the line', async () => {
+    await renderWithProviders(<LineChart testID="area" title="Spending fell from September" columns={columns} rows={rows} filled />);
+    await layout('area');
+    expect(screen.getByTestId('chart-area-fill')).toBeTruthy();
+  });
+
   it('a donut shows at most five shares and repeats each value as text, masked with privacy on', async () => {
     const six = Array.from({ length: 6 }, (_, i) => ({ label: `c${i}`, value: 100n }));
     await renderWithProviders(<DonutChart testID="donut" title="Spending fell from September" columns={columns} rows={six} total={600n} />, { privacy: true });

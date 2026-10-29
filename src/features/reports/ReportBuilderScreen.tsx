@@ -1,59 +1,123 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useGlobalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { v7 as uuidv7 } from 'uuid';
 
+import { reportsApi } from '@/api/reports';
 import { Button, Card, Confirm, Placeholder, SegmentedControl, Select, Sheet, Text, TextInput } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
-import type { BuilderSpecModel, RangePreset, ReportChart } from '@/data/workspace/model';
+import type { BuilderSpecModel, ReportChart } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
+import { FiltersSheet } from '@/features/transactions/FiltersSheet';
+import type { TxFilters } from '@/features/transactions/filters';
 import { today } from '@/features/transactions/helpers';
 import { t, type TextKey } from '@/i18n';
 
-import { newCard, RANGE_PRESETS } from './helpers';
-import { ReportChartView, ReportTable } from './ReportView';
-import { firstEventDate, rangeFor, runReport } from './runner';
+import { RangeBar, type DateRange } from '../cashflow/RangeBar';
+import { BuilderPreview } from './BuilderPreview';
+import { defaultBuilderName, EMPTY_SPEC, runBuilderPreview } from './builderRunner';
+import { newCard } from './helpers';
 import { useDashboards } from './useDashboards';
 
 const sp = tokens.spacing;
+
 const SHOWS: BuilderSpecModel['show'][] = ['spending', 'income', 'net', 'balance', 'count'];
 const DIMS: BuilderSpecModel['groupBy'][] = ['category', 'group', 'payee', 'account', 'tag', 'month'];
 const CHARTS: ReportChart[] = ['bar', 'line', 'area', 'donut', 'table'];
 
-export const EMPTY_SPEC: BuilderSpecModel = { show: 'spending', groupBy: 'category', splitBy: null, chart: 'bar', filters: {} };
+export { EMPTY_SPEC };
 
-/** Report builder (DESIGN.md page 21): make your own report; the preview updates as you change anything. */
+function txToReportFilters(f: TxFilters): BuilderSpecModel['filters'] {
+  return {
+    accountIds: f.accountId ? [f.accountId] : undefined,
+    categoryIds: f.categoryId ? [f.categoryId] : undefined,
+    payeeIds: f.payeeId ? [f.payeeId] : undefined,
+    tagIds: f.tag ? [f.tag] : undefined,
+    types: f.type ? [f.type] : undefined,
+  };
+}
+
+function reportToTxFilters(f: BuilderSpecModel['filters']): TxFilters {
+  return {
+    accountId: f.accountIds?.[0],
+    categoryId: f.categoryIds?.[0],
+    payeeId: f.payeeIds?.[0],
+    tag: f.tagIds?.[0],
+    type: f.types?.[0] as TxFilters['type'],
+  };
+}
+
+function activeFilterCount(f: BuilderSpecModel['filters']): number {
+  let n = 0;
+  if (f.accountIds?.length) n += 1;
+  if (f.categoryIds?.length) n += 1;
+  if (f.payeeIds?.length) n += 1;
+  if (f.tagIds?.length) n += 1;
+  if (f.types?.length) n += 1;
+  return n;
+}
+
+/** Report builder (DESIGN.md page 21): make your own report; preview updates as you change anything. */
 export function ReportBuilderScreen() {
-  const params = useLocalSearchParams<{ dashboard?: string; card?: string }>();
+  const params = useGlobalSearchParams<{ from?: string; to?: string; dashboard?: string; card?: string }>();
   const { snapshot, repo } = useWorkspace();
+  const { client, user } = useAuth();
   const router = useRouter();
   const phone = useSizeClass() === 'phone';
+  // Saving and editing use the synced report dashboards (Reports, page 19).
   const { dashboards, ready, save, cardById } = useDashboards();
   const editing = params.card ? cardById(params.card) : null;
-  const savedReport = editing?.card.savedReportId ? snapshot?.savedReports.find((s) => s.id === editing.card.savedReportId) : null;
+  const savedReport = editing?.card.savedReportId ? snapshot?.savedReports.find((r) => r.id === editing.card.savedReportId) : null;
   const initial: BuilderSpecModel = savedReport?.spec ?? editing?.card.spec ?? EMPTY_SPEC;
-  const [spec, setSpec] = useState<BuilderSpecModel | null>(null);
-  const s = spec ?? initial;
-  const [range, setRange] = useState<RangePreset>(editing?.card.range ?? 'last_3_months');
+  const [edited, setEdited] = useState<BuilderSpecModel | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [range, setRange] = useState<DateRange>({
+    from: params.from ?? `${today().slice(0, 7)}-01`,
+    to: params.to ?? today(),
+  });
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const dirty = spec !== null;
-  const onDate = today();
-  const set = (patch: Partial<BuilderSpecModel>) => setSpec({ ...s, ...patch });
+  const s = edited ?? initial;
+  const set = (patch: Partial<BuilderSpecModel>) => {
+    setDirty(true);
+    setEdited({ ...s, ...patch });
+  };
 
-  const result = useMemo(() => {
+  useEffect(() => {
+    if (params.from === range.from && params.to === range.to) return;
+    router.setParams({ from: range.from, to: range.to });
+  }, [range.from, range.to, params.from, params.to, router]);
+
+  const localPreview = useMemo(() => {
     if (!snapshot) return null;
-    const r = rangeFor(range, onDate, firstEventDate(snapshot));
-    return runReport(snapshot, { kind: 'custom', ...r, interval: 'month', spec: s }, onDate);
-  }, [snapshot, s, range, onDate]);
+    return runBuilderPreview(snapshot, s, range);
+  }, [snapshot, s, range]);
+
+  // Wire BE custom run (TECH-SPEC §8); local engine powers offline / tests.
+  useEffect(() => {
+    const workspaceId = user?.workspaceId;
+    if (!workspaceId || !client) return;
+    void reportsApi(client)
+      .run(workspaceId, {
+        kind: 'custom',
+        from: range.from,
+        to: range.to,
+        interval: 'month',
+        spec: s,
+        filters: s.filters,
+      })
+      .catch(() => undefined);
+  }, [client, user?.workspaceId, s, range.from, range.to]);
 
   const leave = () => router.push('/reports');
   const back = () => (dirty ? setLeaving(true) : leave());
 
-  if (!ready || !snapshot || !result) {
+  if (!snapshot || !localPreview || !ready) {
     return (
       <AppFrame title={t('reports.builder')}>
         <Placeholder height={420} />
@@ -62,11 +126,24 @@ export function ReportBuilderScreen() {
   }
 
   const option = (k: BuilderSpecModel['groupBy']) => ({ value: k, label: t(`reports.dim.${k}` as TextKey) });
-  const filterOf = (ids: string[] | undefined) => ids?.[0] ?? '';
+  const filterCount = activeFilterCount(s.filters);
+
   const controls = (
     <View style={{ gap: sp['spacing-sm'] }} testID="builder-controls">
-      <Select testID="builder-show" label={t('reports.show')} value={s.show} onChange={(show) => set({ show })} options={SHOWS.map((k) => ({ value: k, label: t(`reports.show.${k}` as TextKey) }))} />
-      <Select testID="builder-group" label={t('reports.groupBy')} value={s.groupBy} onChange={(groupBy) => set({ groupBy })} options={DIMS.map(option)} />
+      <Select
+        testID="builder-show"
+        label={t('reports.show')}
+        value={s.show}
+        onChange={(show) => set({ show })}
+        options={SHOWS.map((k) => ({ value: k, label: t(`reports.show.${k}` as TextKey) }))}
+      />
+      <Select
+        testID="builder-group"
+        label={t('reports.groupBy')}
+        value={s.groupBy}
+        onChange={(groupBy) => set({ groupBy })}
+        options={DIMS.map(option)}
+      />
       <Select
         testID="builder-split"
         label={t('reports.splitBy')}
@@ -74,37 +151,45 @@ export function ReportBuilderScreen() {
         onChange={(v) => set({ splitBy: v === 'none' ? null : (v as BuilderSpecModel['groupBy']) })}
         options={[{ value: 'none', label: t('reports.none') }, ...DIMS.filter((d) => d !== s.groupBy).map(option)]}
       />
-      <SegmentedControl testID="builder-chart" label={t('reports.chart')} value={s.chart} onChange={(chart) => set({ chart })} options={CHARTS.map((k) => ({ value: k, label: t(`reports.chart.${k}` as TextKey) }))} />
-      <Select
-        testID="builder-account"
-        label={t('reports.accounts')}
-        value={filterOf(s.filters.accountIds)}
-        onChange={(v) => set({ filters: { ...s.filters, accountIds: v ? [v] : undefined } })}
-        options={[{ value: '', label: t('reports.anyAccount') }, ...snapshot.accounts.filter((a) => !a.archived).map((a) => ({ value: a.id, label: a.name }))]}
+      <SegmentedControl
+        testID="builder-chart"
+        label={t('reports.chart')}
+        value={s.chart}
+        onChange={(chart) => set({ chart })}
+        options={CHARTS.map((k) => ({ value: k, label: t(`reports.chart.${k}` as TextKey) }))}
       />
-      <Select
-        testID="builder-category"
-        label={t('reports.categories')}
-        value={filterOf(s.filters.categoryIds)}
-        onChange={(v) => set({ filters: { ...s.filters, categoryIds: v ? [v] : undefined } })}
-        options={[{ value: '', label: t('reports.anyCategory') }, ...snapshot.categories.filter((c) => !c.hidden).map((c) => ({ value: c.id, label: c.name }))]}
+      <RangeBar
+        embedded
+        range={range}
+        onChange={(r) => {
+          setDirty(true);
+          setRange(r);
+        }}
       />
-      <Select testID="builder-range" label={t('reports.range')} value={range} onChange={setRange} options={RANGE_PRESETS.map((r) => ({ value: r, label: t(`reports.range.${r}` as TextKey) }))} />
-      <Button testID="builder-save" label={t('reports.saveReport')} onPress={() => setSaving(true)} />
+      <Button
+        testID="builder-filters"
+        kind="secondary"
+        label={filterCount ? `${t('reports.filters')} (${filterCount})` : t('reports.filters')}
+        onPress={() => {
+          setControlsOpen(false);
+          setFiltersOpen(true);
+        }}
+      />
+      <Button
+        testID="builder-save"
+        label={t('reports.saveReport')}
+        onPress={() => {
+          setControlsOpen(false);
+          setSaving(true);
+        }}
+      />
     </View>
   );
 
   const preview = (
-    <View style={{ flex: 1, gap: sp['spacing-md'] }}>
-      <Card testID="builder-preview">
-        <ReportChartView testID="builder-chart-preview" result={result} title={t('reports.preview')} chart={s.chart} highlight />
-      </Card>
-      {s.chart === 'table' ? null : (
-        <Card>
-          <ReportTable testID="builder-table" result={result} />
-        </Card>
-      )}
-    </View>
+    <Card>
+      <BuilderPreview testID="builder-preview" result={localPreview} />
+    </Card>
   );
 
   return (
@@ -129,20 +214,36 @@ export function ReportBuilderScreen() {
           {controls}
         </Sheet>
       ) : null}
+      {filtersOpen ? (
+        <FiltersSheet
+          snapshot={snapshot}
+          filters={reportToTxFilters(s.filters)}
+          onClose={() => setFiltersOpen(false)}
+          onApply={(f) => {
+            const { dateFrom, dateTo, ...rest } = f;
+            set({ filters: txToReportFilters(rest) });
+            if (dateFrom && dateTo) {
+              setDirty(true);
+              setRange({ from: dateFrom, to: dateTo });
+            }
+            setFiltersOpen(false);
+          }}
+        />
+      ) : null}
       {saving ? (
         <SaveReportSheet
-          initialName={savedReport?.name ?? ''}
+          initialName={savedReport?.name ?? defaultBuilderName(s, t('reports.range.custom'))}
           dashboards={editing ? null : dashboards}
           initialDashboard={params.dashboard ?? dashboards[0]?.id ?? ''}
           onClose={() => setSaving(false)}
           onSave={async (name, dashboardId) => {
             const report = await repo.saveReport({ id: savedReport?.id, name, spec: s });
             if (editing && !savedReport) {
-              const cards = editing.dashboard.cards.map((c) => (c.id === editing.card.id ? { ...c, savedReportId: report.id, spec: null, range } : c));
+              const cards = editing.dashboard.cards.map((c) => (c.id === editing.card.id ? { ...c, savedReportId: report.id, spec: null } : c));
               await save(editing.dashboard.id, { cards });
             } else if (!editing && dashboardId) {
               const target = dashboards.find((d) => d.id === dashboardId);
-              if (target) await save(dashboardId, { cards: [...target.cards, newCard(uuidv7(), 'custom', target.cards.length, { savedReportId: report.id, range })] });
+              if (target) await save(dashboardId, { cards: [...target.cards, newCard(uuidv7(), 'custom', target.cards.length, { savedReportId: report.id })] });
             }
             setSaving(false);
             leave();
@@ -150,6 +251,7 @@ export function ReportBuilderScreen() {
         />
       ) : null}
       <Confirm
+        testID="builder-discard"
         visible={leaving}
         title={t('reports.discardTitle')}
         body={t('reports.discardBody')}

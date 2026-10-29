@@ -236,7 +236,7 @@ describe('Report builder (F5.2)', () => {
     await page(sync, <ReportBuilderScreen />);
     await fireEvent.press(await screen.findByTestId('builder-show'));
     await fireEvent.press(screen.getByRole('radio', { name: t('reports.show.income') }));
-    expect(await screen.findByTestId('builder-table-total')).toHaveTextContent('₦2,000,000.00');
+    expect(await screen.findByTestId('builder-preview-table')).toHaveTextContent('₦2,000,000.00', { exact: false });
     await fireEvent.press(screen.getByTestId('builder-save'));
     await fireEvent.changeText(screen.getByTestId('save-report-name'), 'Pay');
     await fireEvent.press(screen.getByTestId('save-report-confirm'));
