@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ApiError } from '@/api/client';
 import { Banner, Button, CodeInput, InlineError, Text, TextInput } from '@/design/components';
@@ -10,7 +10,7 @@ import { useAuth } from './AuthProvider';
 import { checkPassword, EMAIL_PATTERN } from './password';
 import { PasswordStrength } from './PasswordStrength';
 
-export function RecoverScreen() {
+export function RecoverScreen({ now = () => Date.now() }: { now?: () => number }) {
   const router = useRouter();
   const { api } = useAuth();
   const online = useOnline();
@@ -21,26 +21,51 @@ export function RecoverScreen() {
   const [confirm, setConfirm] = useState('');
   const [errors, setErrors] = useState<Partial<Record<'email' | 'code' | 'password' | 'confirm' | 'form', string>>>({});
   const [busy, setBusy] = useState(false);
+  const [waitUntil, setWaitUntil] = useState<number | null>(null);
+  const [, setTick] = useState(0);
+
+  const secondsLeft = waitUntil ? Math.max(0, Math.ceil((waitUntil - now()) / 1000)) : 0;
+  useEffect(() => {
+    if (!waitUntil) return;
+    const id = setInterval(() => {
+      if (now() >= waitUntil) {
+        setWaitUntil(null);
+        setErrors((e) => (e.form === t('signIn.wait') ? { ...e, form: undefined } : e));
+      }
+      setTick((x) => x + 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [waitUntil, now]);
+
+  const applyRateLimit = (e: unknown) => {
+    if (e instanceof ApiError && e.status === 429) {
+      setWaitUntil(now() + (e.body.retryAfterSeconds ?? 60) * 1000);
+      setErrors({ form: t('signIn.wait') });
+      return true;
+    }
+    return false;
+  };
 
   const send = async () => {
     if (!EMAIL_PATTERN.test(email.trim())) {
       setErrors({ email: t('errors.emailInvalid') });
       return;
     }
-    if (!online) return;
+    if (!online || busy || secondsLeft > 0) return;
     setBusy(true);
     setErrors({});
     try {
       await api.recover({ email: email.trim() });
       setStep('reset');
-    } catch {
-      setErrors({ form: t('errors.network') });
+    } catch (e) {
+      if (!applyRateLimit(e)) setErrors({ form: t('errors.network') });
     } finally {
       setBusy(false);
     }
   };
 
   const save = async () => {
+    if (busy || secondsLeft > 0) return;
     const next: typeof errors = {};
     if (code.length !== 6) next.code = t('errors.codeIncomplete');
     if (!checkPassword(password).ok) next.password = t('errors.passwordWeak');
@@ -52,11 +77,19 @@ export function RecoverScreen() {
       await api.newPassword({ email: email.trim(), code, newPassword: password });
       setStep('done');
     } catch (e) {
-      setErrors(e instanceof ApiError && e.status === 400 ? { code: t('errors.codeInvalid') } : { form: t('errors.network') });
+      if (applyRateLimit(e)) {
+        /* wait copy set */
+      } else if (e instanceof ApiError && e.status === 400) {
+        setErrors({ code: t('errors.codeInvalid') });
+      } else {
+        setErrors({ form: t('errors.network') });
+      }
     } finally {
       setBusy(false);
     }
   };
+
+  const disabled = busy || !online || secondsLeft > 0;
 
   return (
     <AuthFrame>
@@ -85,9 +118,16 @@ export function RecoverScreen() {
                   keyboardType="email-address"
                   error={errors.email}
                   autoFocus
+                  returnKeyType="go"
+                  onSubmitEditing={() => void send()}
                 />
-                {errors.form ? <InlineError message={errors.form} /> : null}
-                <Button testID="send-code" kind="gradient" label={t('recover.submit')} onPress={send} disabled={busy || !online} fullWidth />
+                {errors.form ? <InlineError testID="recover-error" message={errors.form} /> : null}
+                {secondsLeft > 0 ? (
+                  <Text variant="caption" tone="textSecondary" accessibilityLiveRegion="polite">
+                    {t('signIn.waitCountdown', { seconds: secondsLeft })}
+                  </Text>
+                ) : null}
+                <Button testID="send-code" kind="gradient" label={t('recover.submit')} onPress={send} disabled={disabled} fullWidth />
               </>
             ) : (
               <>
@@ -102,6 +142,7 @@ export function RecoverScreen() {
                   autoComplete="new-password"
                   textContentType="newPassword"
                   error={errors.password}
+                  returnKeyType="next"
                 />
                 <PasswordStrength password={password} />
                 <TextInput
@@ -112,9 +153,16 @@ export function RecoverScreen() {
                   secure
                   autoComplete="new-password"
                   error={errors.confirm}
+                  returnKeyType="go"
+                  onSubmitEditing={() => void save()}
                 />
-                {errors.form ? <InlineError message={errors.form} /> : null}
-                <Button testID="save-password" kind="gradient" label={t('recover.save')} onPress={save} disabled={busy || !online} fullWidth />
+                {errors.form ? <InlineError testID="recover-error" message={errors.form} /> : null}
+                {secondsLeft > 0 ? (
+                  <Text variant="caption" tone="textSecondary" accessibilityLiveRegion="polite">
+                    {t('signIn.waitCountdown', { seconds: secondsLeft })}
+                  </Text>
+                ) : null}
+                <Button testID="save-password" kind="gradient" label={t('recover.save')} onPress={save} disabled={disabled} fullWidth />
               </>
             )}
             <Button kind="link" label={t('recover.backToSignIn')} onPress={() => router.replace('/sign-in')} />
