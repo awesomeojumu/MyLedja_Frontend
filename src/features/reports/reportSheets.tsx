@@ -1,10 +1,13 @@
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { reportsApi } from '@/api/reports';
 import { Button, Footer, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
-import type { ReportCardKind, ReportDashboard, SavedReport } from '@/data/workspace/model';
+import type { BuilderSpecModel, ReportCardKind, ReportDashboard, SavedReport } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { t } from '@/i18n';
 
 const sp = tokens.spacing;
@@ -28,6 +31,7 @@ export function AddReportSheet({
   onAdd: (kind: ReportCardKind, title: string) => void;
 }) {
   const { snapshot } = useWorkspace();
+  const router = useRouter();
   const saved = snapshot?.settings.savedReports ?? [];
   const groups = ['spending', 'planning', 'wealth', 'custom'] as const;
 
@@ -66,7 +70,15 @@ export function AddReportSheet({
             </View>
           );
         })}
-        <Button kind="secondary" label={t('reports.buildOwn')} onPress={onClose} />
+        <Button
+          testID="reports-build-own"
+          kind="secondary"
+          label={t('reports.buildOwn')}
+          onPress={() => {
+            onClose();
+            router.push('/reports/build');
+          }}
+        />
       </View>
     </Sheet>
   );
@@ -114,23 +126,30 @@ export function DashboardNameSheet({
   );
 }
 
-/** PU-43 Save report */
+/** PU-43 Save report — persists BuilderSpec when opened from the Report builder. */
 export function SaveReportSheet({
   defaultName,
   kind,
+  spec,
+  initialDashboard = '',
   onClose,
   onSave,
 }: {
   defaultName: string;
   kind: ReportCardKind;
+  /** Required when saving from the Report builder (P21-03). */
+  spec?: BuilderSpecModel;
+  initialDashboard?: string;
   onClose: () => void;
   onSave: (report: Omit<SavedReport, 'id'>) => void;
 }) {
   const { snapshot, repo } = useWorkspace();
+  const { client, user } = useAuth();
   const toast = useToast();
   const dashboards = snapshot?.settings.reportDashboards ?? [];
   const [name, setName] = useState(defaultName);
-  const [dashboardId, setDashboardId] = useState('');
+  const [dashboardId, setDashboardId] = useState(initialDashboard);
+  const [busy, setBusy] = useState(false);
 
   return (
     <Sheet
@@ -144,13 +163,52 @@ export function SaveReportSheet({
           <Button
             testID="save-report-confirm"
             label={t('reports.saveReport')}
-            disabled={!name.trim()}
+            disabled={!name.trim() || busy}
             onPress={() => {
-              void repo.saveSavedReport({ name: name.trim(), kind, dashboardId: dashboardId || undefined }).then(() => {
-                onSave({ name: name.trim(), kind, dashboardId: dashboardId || undefined });
-                toast.show(t('reports.reportSaved'));
-                onClose();
-              });
+              setBusy(true);
+              const payload: Omit<SavedReport, 'id'> = {
+                name: name.trim(),
+                kind,
+                dashboardId: dashboardId || undefined,
+                spec,
+              };
+              void repo
+                .saveSavedReport(payload)
+                .then(async (saved) => {
+                  const workspaceId = user?.workspaceId;
+                  if (workspaceId && client && spec) {
+                    try {
+                      await reportsApi(client).createSaved(workspaceId, {
+                        id: saved.id,
+                        name: saved.name,
+                        spec,
+                        dashboardId: saved.dashboardId,
+                      });
+                    } catch {
+                      /* local settings write already succeeded; BE sync can retry later */
+                    }
+                  }
+                  if (dashboardId) {
+                    const list = snapshot?.settings.reportDashboards ?? [];
+                    const target = list.find((d) => d.id === dashboardId);
+                    if (target) {
+                      await repo.saveReportDashboards(
+                        list.map((d) =>
+                          d.id === dashboardId
+                            ? {
+                                ...d,
+                                cards: [...d.cards, { id: `${saved.id}-card`, kind: 'custom' as const, title: saved.name }],
+                              }
+                            : d,
+                        ),
+                      );
+                    }
+                  }
+                  onSave(payload);
+                  toast.show(t('reports.reportSaved'));
+                  onClose();
+                })
+                .finally(() => setBusy(false));
             }}
           />
         </Footer>

@@ -226,11 +226,38 @@ export type ReportDashboard = {
   order: number;
 };
 
+/** Report builder chart kinds (DESIGN.md page 21). */
+export type ReportChart = 'bar' | 'line' | 'area' | 'donut' | 'table';
+
+export type ReportFiltersModel = {
+  accountIds?: string[];
+  categoryIds?: string[];
+  payeeIds?: string[];
+  tagIds?: string[];
+  types?: string[];
+};
+
+/** Report builder choices (DESIGN.md page 21 / TECH-SPEC BuilderSpec). */
+export type BuilderSpecModel = {
+  show: 'spending' | 'income' | 'net' | 'balance' | 'count';
+  groupBy: 'category' | 'group' | 'payee' | 'account' | 'tag' | 'month';
+  splitBy: 'category' | 'group' | 'payee' | 'account' | 'tag' | 'month' | null;
+  chart: ReportChart;
+  filters: ReportFiltersModel;
+};
+
+export type RangePreset = 'this_month' | 'last_month' | 'last_3_months' | 'this_year' | 'last_12_months' | 'all';
+
+/**
+ * Saved builder report (PU-43). `spec` is the builder definition (BE SavedReport).
+ * `kind` stays for tip Add-report Custom gallery compatibility.
+ */
 export type SavedReport = {
   id: string;
   name: string;
   kind: ReportCardKind;
   dashboardId?: string;
+  spec?: BuilderSpecModel;
 };
 
 /** Health settings (PU-44 / TECH-SPEC 6.10). */
