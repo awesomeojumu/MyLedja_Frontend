@@ -39,6 +39,8 @@ type CaseStep = {
   ref?: string;
   operation?: string;
   post?: Record<string, unknown>;
+  /** BE case 16: set a holding price without a ledger event. */
+  price?: { holdingId: string; price: string; date: string };
   correct?: string;
   input?: Record<string, unknown>;
   expectLines?: LineSpec[];
@@ -52,13 +54,15 @@ type LedgerCase = {
   steps: CaseStep[];
   budget?: { style: string; months: string[]; assigned: Record<string, Record<string, string>> };
   holdingsMark?: { account: string; units: string; pricePerUnit: string }[];
-  rates?: Record<string, { perUnit: string; unitMinor: string }>;
+  /** BE: naira per unit of each other currency as a string (e.g. USD: "1550"). */
+  rates?: Record<string, string | { perUnit: string; unitMinor: string }>;
   expect: {
     balances?: Record<string, string>;
     months?: Record<string, { income: string; spent: string; spentByCategory: Record<string, string> }>;
     netWorth?: string;
-    unrealised?: string;
+    unrealised?: string | Record<string, string>;
     partialWithoutRate?: string[];
+    withoutRates?: { netWorth: string; partial: string[] };
     eventCount?: number;
     statuses?: Record<string, string>;
     budget?: Record<
@@ -219,24 +223,39 @@ function linesFor(
       });
     case 'investment_buy':
       return buildInvestmentBuy(chart, {
-        holdingAccountId: input.holdingAccountId as string,
-        cashAccountId: input.cashAccountId as string,
+        holdingAccountId: (input.holdingAccountId ?? input.holdingId) as string,
+        cashAccountId: (input.cashAccountId ?? input.accountId) as string,
         units: input.units as string,
-        pricePerUnit: big(input.pricePerUnit),
+        pricePerUnit: big(input.pricePerUnit ?? input.price),
         fees: input.fees !== undefined ? big(input.fees) : 0n,
       });
     case 'investment_sell':
       return buildInvestmentSell(chart, {
-        holdingAccountId: input.holdingAccountId as string,
-        cashAccountId: input.cashAccountId as string,
+        holdingAccountId: (input.holdingAccountId ?? input.holdingId) as string,
+        cashAccountId: (input.cashAccountId ?? input.accountId) as string,
         units: input.units as string,
-        pricePerUnit: big(input.pricePerUnit),
+        pricePerUnit: big(input.pricePerUnit ?? input.price),
         fees: input.fees !== undefined ? big(input.fees) : 0n,
         costOfLots: big(input.costOfLots),
       });
     default:
       throw new Error(`Unknown post type ${type}`);
   }
+}
+
+type LotBook = { units: number; cost: bigint; remaining: number };
+
+function fifoCostOf(lots: LotBook[], units: number): bigint {
+  let left = units;
+  let cost = 0n;
+  for (const lot of lots) {
+    if (lot.remaining <= 0 || left <= 0) continue;
+    const take = Math.min(lot.remaining, left);
+    cost += (lot.cost * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(lot.units * 1e6));
+    lot.remaining -= take;
+    left -= take;
+  }
+  return cost;
 }
 
 function keyOfLine(chart: Chart, resolve: (t: string) => string, ledgerAccountId: string): string {
@@ -252,6 +271,8 @@ function run(c: LedgerCase) {
   let n = 0;
   const journal = new Journal(chart, [], () => `id-${++n}`);
   const events = new Map<string, string>();
+  const lots = new Map<string, LotBook[]>();
+  const marks = new Map<string, { units: string; pricePerUnit: string }>();
   for (const step of c.steps) {
     const operationId = step.operation ? `case-${c.id}-${step.operation}` : `op-${c.id}-${step.ref ?? n + 1}`;
     if (step.correct) {
@@ -284,17 +305,29 @@ function run(c: LedgerCase) {
       if (step.ref) events.set(step.ref, result.value.event.id);
       continue;
     }
-    if (!step.post) throw new Error(`case ${c.id}: step needs post or correct`);
-    const built = linesFor(chart, journal, resolve, events, step.post);
+    if (step.price) {
+      const holdingId = bindPost(step.price as unknown as Record<string, unknown>, resolve, events).holdingId as string;
+      const openUnits = (lots.get(holdingId) ?? []).reduce((s, l) => s + l.remaining, 0);
+      marks.set(holdingId, { units: String(openUnits), pricePerUnit: step.price.price });
+      continue;
+    }
+    if (!step.post) throw new Error(`case ${c.id}: step needs post, price or correct`);
+    const bound = bindPost(step.post, resolve, events);
+    let post = step.post;
+    if (bound.type === 'investment_sell' && bound.costOfLots === undefined) {
+      const holdingId = (bound.holdingId ?? bound.holdingAccountId) as string;
+      const cost = fifoCostOf(lots.get(holdingId) ?? [], Number(bound.units));
+      post = { ...step.post, costOfLots: cost.toString() };
+    }
+    const built = linesFor(chart, journal, resolve, events, post);
     const posted = built.ok
       ? journal.post({
           operationId,
-          type: (bindPost(step.post, resolve, events).type as NewEvent['type']),
-          date: bindPost(step.post, resolve, events).date as string,
+          type: bound.type as NewEvent['type'],
+          date: bound.date as string,
           lines: built.value,
-          refundOf: step.post.type === 'refund' ? (bindPost(step.post, resolve, events).refundOf as string) : undefined,
-          splitTotal:
-            Array.isArray(step.post.splits) && step.post.amount !== undefined ? big(step.post.amount) : undefined,
+          refundOf: bound.type === 'refund' ? (bound.refundOf as string) : undefined,
+          splitTotal: Array.isArray(bound.splits) && bound.amount !== undefined ? big(bound.amount) : undefined,
         })
       : built;
 
@@ -319,14 +352,22 @@ function run(c: LedgerCase) {
         })),
       ).toEqual(step.expectLines);
     }
+    if (posted.value.status === 'applied' && bound.type === 'investment_buy') {
+      const holdingId = (bound.holdingId ?? bound.holdingAccountId) as string;
+      const units = Number(bound.units);
+      const cost = posted.value.event.lines.find((l) => l.ledgerAccountId === holdingId)?.amountMinor ?? 0n;
+      const book = lots.get(holdingId) ?? [];
+      book.push({ units, cost, remaining: units });
+      lots.set(holdingId, book);
+    }
     if (step.ref) events.set(step.ref, posted.value.event.id);
   }
-  return { chart, journal, events, resolve };
+  return { chart, journal, events, resolve, marks };
 }
 
 describe('ledger-cases.json (TECH-SPEC 6.14)', () => {
   it.each(file.cases.map((c) => [c.id, c.title, c] as const))('case %s: %s', (_n, _title, c) => {
-    const { chart, journal, events, resolve } = run(c);
+    const { chart, journal, events, resolve, marks } = run(c);
     const all = journal.list();
     const totals = periodTotals(all);
     const e = c.expect;
@@ -348,21 +389,47 @@ describe('ledger-cases.json (TECH-SPEC 6.14)', () => {
       }).toEqual(want);
     }
     let unrealised = 0n;
+    const unrealisedBy: Record<string, string> = {};
     for (const mark of c.holdingsMark ?? []) {
       const account = chart.get(resolve(`@${mark.account}`))!;
       const cost = shownBalance(account, ledgerBalance(account.id, all));
-      unrealised += costOfPurchase(mark.units, BigInt(mark.pricePerUnit), 0n) - cost;
+      const u = costOfPurchase(mark.units, BigInt(mark.pricePerUnit), 0n) - cost;
+      unrealised += u;
+      unrealisedBy[mark.account] = u.toString();
     }
-    if (e.unrealised !== undefined) expect(unrealised.toString()).toBe(e.unrealised);
+    for (const [holdingId, mark] of marks) {
+      const account = chart.get(holdingId)!;
+      const cost = shownBalance(account, ledgerBalance(account.id, all));
+      const u = costOfPurchase(mark.units, BigInt(mark.pricePerUnit), 0n) - cost;
+      unrealised += u;
+      const key = file.accounts.find((a) => resolve(`@${a.key}`) === holdingId)?.key ?? holdingId;
+      unrealisedBy[key] = u.toString();
+    }
+    if (e.unrealised !== undefined) {
+      if (typeof e.unrealised === 'string') expect(unrealised.toString()).toBe(e.unrealised);
+      else expect(unrealisedBy).toEqual(e.unrealised);
+    }
     if (e.partialWithoutRate) {
       expect(netWorth(chart, all, '2026-12-31').partial).toEqual(e.partialWithoutRate);
     }
-    if (e.netWorth !== undefined) {
+    const toRates = (raw: Record<string, string | { perUnit: string; unitMinor: string }> | undefined) => {
       const rates: Record<string, { numerator: bigint; denominator: bigint }> = {};
-      for (const [ccy, rate] of Object.entries(c.rates ?? {})) {
-        rates[ccy] = { numerator: BigInt(rate.perUnit), denominator: BigInt(rate.unitMinor) };
+      for (const [ccy, rate] of Object.entries(raw ?? {})) {
+        if (typeof rate === 'string') {
+          // BE: naira per 1 major foreign unit; FE balances are already in minor units of that currency.
+          rates[ccy] = { numerator: BigInt(rate), denominator: 1n };
+        } else {
+          rates[ccy] = { numerator: BigInt(rate.perUnit), denominator: BigInt(rate.unitMinor) };
+        }
       }
-      expect((netWorth(chart, all, '2026-12-31', rates).total + unrealised).toString()).toBe(e.netWorth);
+      return rates;
+    };
+    if (e.netWorth !== undefined) {
+      expect((netWorth(chart, all, '2026-12-31', toRates(c.rates)).total + unrealised).toString()).toBe(e.netWorth);
+    }
+    if (e.withoutRates) {
+      const w = netWorth(chart, all, '2026-12-31', {});
+      expect({ netWorth: (w.total + unrealised).toString(), partial: w.partial }).toEqual(e.withoutRates);
     }
     if (e.eventCount !== undefined) expect(all).toHaveLength(e.eventCount);
     for (const [ref, status] of Object.entries(e.statuses ?? {})) {

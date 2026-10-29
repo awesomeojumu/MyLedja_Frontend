@@ -84,6 +84,28 @@ export function eventInputFromStored(
 
   switch (data.type) {
     case 'income':
+      // E22 dividends are stored locally as income with holdingId (BE DividendInput).
+      if (data.holdingId) {
+        if (data.investmentUnits) {
+          const holdingLine = real.find((l) => l.amountMinor > 0n);
+          if (!holdingLine) return null;
+          return {
+            type: 'dividend',
+            holdingId: data.holdingId,
+            amount: holdingLine.amountMinor.toString(),
+            reinvestedUnits: data.investmentUnits,
+            ...common,
+          };
+        }
+        if (!real[0]) return null;
+        return {
+          type: 'dividend',
+          holdingId: data.holdingId,
+          amount: real[0].amountMinor.toString(),
+          accountId: real[0].ledgerAccountId,
+          ...common,
+        };
+      }
       if (!real[0] || !cats[0]) return null;
       return {
         type: 'income',
@@ -179,6 +201,34 @@ export function eventInputFromStored(
         amount: real[0].amountMinor.toString(),
         ...common,
       };
+    case 'investment_buy': {
+      if (!data.holdingId || !data.investmentUnits || !data.investmentPriceMinor) return null;
+      const cash = real.find((l) => l.amountMinor < 0n);
+      if (!cash) return null;
+      return {
+        type: 'investment_buy',
+        holdingId: data.holdingId,
+        accountId: cash.ledgerAccountId,
+        units: data.investmentUnits,
+        price: data.investmentPriceMinor,
+        fees: data.investmentFeesMinor ?? '0',
+        ...common,
+      };
+    }
+    case 'investment_sell': {
+      if (!data.holdingId || !data.investmentUnits || !data.investmentPriceMinor) return null;
+      const cash = real.find((l) => l.amountMinor > 0n);
+      if (!cash) return null;
+      return {
+        type: 'investment_sell',
+        holdingId: data.holdingId,
+        accountId: cash.ledgerAccountId,
+        units: data.investmentUnits,
+        price: data.investmentPriceMinor,
+        fees: data.investmentFeesMinor ?? '0',
+        ...common,
+      };
+    }
     default:
       return null;
   }
@@ -220,6 +270,11 @@ const BE_TYPES = new Set([
   'income.stream.create',
   'income.stream.update',
   'income.mark_one_off',
+  'holding.create',
+  'holding.update',
+  'holding.prices',
+  'holding.archive',
+  'holding.price.delete',
 ]);
 
 /**

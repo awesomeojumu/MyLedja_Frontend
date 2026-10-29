@@ -5,6 +5,7 @@ import type {
   IncomeDeduction,
   IncomeDeductionKind,
   IncomeRouting,
+  HoldingType,
   IncomeStream,
   IncomeStreamKind,
   PersonDebt,
@@ -161,6 +162,10 @@ function eventFromServer(doc: Doc, workspaceId: string): StoredEvent & { operati
     debtId: str(links.debtId),
     recurringId: str(links.scheduleId),
     oneOff: doc.oneOff === true ? true : undefined,
+    holdingId: str(links.holdingId) ?? str(doc.holdingId),
+    investmentUnits: str((doc.investment as Doc | undefined)?.units),
+    investmentPriceMinor: str((doc.investment as Doc | undefined)?.price),
+    investmentFeesMinor: str((doc.investment as Doc | undefined)?.fees),
   };
 }
 
@@ -370,9 +375,54 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         matchedCount: num(d.matchedCount) ?? 0,
         lastUsedAt: str(d.lastUsedAt),
       });
+    case 'holdings': {
+      const type = holdingTypeFromServer(String(d.type));
+      return rec('holdings', id, {
+        name: String(d.name),
+        symbol: str(d.symbol) || undefined,
+        type,
+        accountId: String(d.accountId),
+        currency: String(d.currency ?? 'NGN'),
+        // BE: holding id is the ledger account id (TECH-SPEC 6.1).
+        ledgerAccountId: id,
+      });
+    }
+    case 'prices':
+      return rec('prices', id, {
+        holdingId: String(d.holdingId),
+        date: String(d.date),
+        priceMinor: String(d.price ?? d.priceMinor ?? '0'),
+      });
     default:
       return null;
   }
+}
+
+const HOLDING_TYPE_FROM: Record<string, HoldingType> = {
+  stock: 'stock',
+  fund: 'fund',
+  pension: 'pension',
+  crypto: 'crypto',
+  fixed_deposit: 'fixedDeposit',
+  fixedDeposit: 'fixedDeposit',
+  other: 'other',
+};
+
+const HOLDING_TYPE_TO: Record<HoldingType, string> = {
+  stock: 'stock',
+  fund: 'fund',
+  pension: 'pension',
+  crypto: 'crypto',
+  fixedDeposit: 'fixed_deposit',
+  other: 'other',
+};
+
+export function holdingTypeFromServer(type: string): HoldingType {
+  return HOLDING_TYPE_FROM[type] ?? 'other';
+}
+
+export function holdingTypeToServer(type: HoldingType): string {
+  return HOLDING_TYPE_TO[type] ?? 'other';
 }
 
 /* ---------- The app's Phase 2 records → API bodies ---------- */
