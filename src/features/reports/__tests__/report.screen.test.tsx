@@ -140,5 +140,16 @@ describe('Report screen (P20)', () => {
     await fireEvent.press(screen.getByTestId('report-filters'));
     expect(screen.getByTestId('report-filters-sheet')).toBeTruthy();
     expect(screen.getByTestId('report-interval')).toBeTruthy();
+    // Range presets must be INLINE in the Report sheet — not nested behind RangeBar's phone Filters.
+    expect(screen.getByTestId('range-presets')).toBeTruthy();
+    expect(screen.queryByTestId('range-filters')).toBeNull();
+  });
+
+  it('header back copy is ← Reports (DESIGN L1393)', async () => {
+    const { sync, card } = await seeded();
+    setParams({ id: card.id, from: '2026-10-01', to: '2026-10-31' });
+    await page(sync, <ReportScreen runner={async (_ws, body) => wireFor(body)} />);
+    await waitFor(() => expect(screen.getByTestId('report-back')).toBeTruthy());
+    expect(screen.getByTestId('report-back')).toHaveTextContent('← Reports');
   });
 });

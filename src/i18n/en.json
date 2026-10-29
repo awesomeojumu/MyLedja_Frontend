@@ -2256,7 +2256,7 @@
   "reports.kind.formula": "Formula",
   "reports.kind.note": "Note",
   "reports.kind.custom": "Custom report",
-  "reports.back": "Back to Reports",
+  "reports.back": "← Reports",
   "reports.exportCsv": "Export CSV",
   "reports.editInBuilder": "Edit in builder",
   "reports.duplicate": "Duplicate",

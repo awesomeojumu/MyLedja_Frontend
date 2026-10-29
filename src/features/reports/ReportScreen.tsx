@@ -199,6 +199,7 @@ export function ReportScreen({ runner }: { runner?: ReportRunner } = {}) {
         }}
         compare={compare}
         onCompareChange={setCompare}
+        embedded={phone}
       />
       <View style={{ flexDirection: phone ? 'column' : 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
         {canRegroup(card.kind) ? (
