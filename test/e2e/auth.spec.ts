@@ -30,8 +30,16 @@ test('sign in, sign out, recover the password', async ({ page, isMobile }) => {
   await signIn(page);
   await expect(page.getByRole('heading', { name: en['dashboard.title'] })).toBeVisible();
 
-  if (isMobile) await page.getByRole('button', { name: en['nav.menu'] }).click();
-  await page.getByRole('button', { name: en['nav.signOut'] }).click();
+  // Sign out lives on Settings › General (Q-5), not the sidebar.
+  if (isMobile) {
+    await page.getByRole('button', { name: en['nav.menu'] }).click();
+    await page.getByRole('dialog').getByRole('link', { name: en['nav.settings'], exact: true }).click();
+    // Phone Settings is a tab list first — open General for the sign-out control.
+    await page.getByTestId('settings-link-general').click();
+  } else {
+    await page.getByRole('link', { name: en['nav.settings'], exact: true }).locator('visible=true').first().click();
+  }
+  await page.getByTestId('settings-sign-out').click();
   await expect(page).toHaveURL(/\/sign-in$/);
 
   await page.getByRole('link', { name: en['signIn.forgot'] }).click();

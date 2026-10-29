@@ -322,13 +322,25 @@ export function DashboardScreen() {
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'center' }}>
-            <Pressable testID="dashboard-prev-month" accessibilityLabel={t('date.previousMonth')} onPress={() => setMonth(prevMonth(month))} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable
+              testID="dashboard-prev-month"
+              accessibilityRole="button"
+              accessibilityLabel={t('date.previousMonth')}
+              onPress={() => setMonth(prevMonth(month))}
+              style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
               <ChevronLeft size={20} color={theme.textSecondary} />
             </Pressable>
             <Text testID="dashboard-month" variant="heading-sm">
               {monthLabel(month)}
             </Text>
-            <Pressable testID="dashboard-next-month" accessibilityLabel={t('date.nextMonth')} onPress={() => setMonth(nextMonth(month))} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable
+              testID="dashboard-next-month"
+              accessibilityRole="button"
+              accessibilityLabel={t('date.nextMonth')}
+              onPress={() => setMonth(nextMonth(month))}
+              style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
               <ChevronRight size={20} color={theme.textSecondary} />
             </Pressable>
           </View>

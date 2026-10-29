@@ -146,6 +146,7 @@ export function PlanScreen() {
         >
           <Pressable
             testID="plan-prev-month"
+            accessibilityRole="button"
             accessibilityLabel={t('date.previousMonth')}
             onPress={() => setViewMonth(prevMonth(viewMonth))}
             style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -157,6 +158,7 @@ export function PlanScreen() {
           </Text>
           <Pressable
             testID="plan-next-month"
+            accessibilityRole="button"
             accessibilityLabel={t('date.nextMonth')}
             onPress={() => setViewMonth(nextMonth(viewMonth))}
             style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
