@@ -98,6 +98,38 @@ export function createAuthMock() {
       case 'POST /v1/auth/sign-out':
       case 'POST /v1/auth/sign-out-others':
         return noContent;
+      case 'POST /v1/auth/google': {
+        const idToken = b.idToken?.trim();
+        if (!idToken) return error(400, 'validation_failed', 'idToken is required', 'idToken');
+        // Mock: token "link:<email>" forces google_link_needed; any other non-empty token creates/signs in.
+        if (idToken.startsWith('link:')) {
+          const email = idToken.slice('link:'.length);
+          return error(409, 'google_link_needed', 'Sign in with your password to link Google', undefined, {
+            email,
+            linkToken: `link-token-${email}`,
+          });
+        }
+        const email = idToken.startsWith('email:') ? idToken.slice('email:'.length) : `google-${idToken.slice(0, 12)}@example.test`;
+        let u = users.get(email);
+        if (!u) {
+          u = {
+            id: `user-google-${users.size + 1}`,
+            name: 'Google User',
+            email,
+            password: '',
+            setupComplete: false,
+            workspaceId: `ws-google-${users.size + 1}`,
+            workspaceName: 'Personal',
+          };
+          users.set(email, u);
+        } else if (u.password) {
+          return error(409, 'google_link_needed', 'Sign in with your password to link Google', undefined, {
+            email: u.email,
+            linkToken: `link-token-${u.email}`,
+          });
+        }
+        return session(u, stay);
+      }
       case 'GET /v1/public-config':
         return ok({ env: 'development', google: { enabled: false, clientId: null }, services: { bankConnections: false, files: false, ai: false } });
       default: {
