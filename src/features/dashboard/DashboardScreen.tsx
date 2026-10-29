@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 
-import { Amount, BarChart, Button, Card, DonutChart, LineChart, Placeholder, StatusPill, Text, formatDay, useToast } from '@/design/components';
+import { Amount, BarChart, Button, Card, DonutChart, LineChart, Placeholder, ProgressRing, StatusPill, Text, formatDay, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import { useSizeClass } from '@/design/size';
@@ -11,6 +11,8 @@ import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { monthLabel, nextMonth, prevMonth } from '@/features/budget/helpers';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { adviceText, reasonText } from '@/features/health/HealthScreen';
+import { healthPage } from '@/features/health/helpers';
 import { today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
@@ -236,6 +238,8 @@ export function DashboardScreen() {
             </Card>
           </Pressable>
         );
+      case 'health':
+        return <HealthCard key={id} month={month} onOpen={() => router.push('/health')} />;
       case 'incomeVsSpending':
         return (
           <BarChart
@@ -417,6 +421,39 @@ function StatTile({
             {footnote}
           </Text>
         ) : null}
+      </Card>
+    </Pressable>
+  );
+}
+
+/** F5.5: score ring and one line of advice → Health. */
+function HealthCard({ month, onOpen }: { month: string; onOpen: () => void }) {
+  const { snapshot } = useWorkspace();
+  const onDate = today();
+  const page = useMemo(
+    () => (snapshot ? healthPage(snapshot, month < onDate.slice(0, 7) ? month : onDate.slice(0, 7), onDate, { history: false }) : null),
+    [snapshot, month, onDate],
+  );
+  if (!page) return null;
+  return (
+    <Pressable testID="dashboard-health" accessibilityRole="link" onPress={onOpen}>
+      <Card style={{ gap: sp['spacing-sm'] }}>
+        <Text variant="heading-sm">{t('dashboard.healthCard')}</Text>
+        {page.ready && page.score !== null ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'] }}>
+            <ProgressRing value={page.score / 100} label={t('health.scoreLabel', { score: String(page.score) })} />
+            <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
+              <Text variant="heading-md" testID="dashboard-health-score">
+                {String(page.score)}
+              </Text>
+              <Text tone="textSecondary">{reasonText(page) || (page.advice[0] ? adviceText(page.advice[0], formatNaira) : '')}</Text>
+            </View>
+          </View>
+        ) : (
+          <Text tone="textSecondary" testID="dashboard-health-not-ready">
+            {t('health.notReadyTitle')}
+          </Text>
+        )}
       </Card>
     </Pressable>
   );

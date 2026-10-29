@@ -11,9 +11,10 @@ import {
 } from '../layout';
 
 describe('dashboard layout', () => {
-  it('P05-08: defaults include all Phase 1–2 cards', () => {
-    expect(DEFAULT_DASHBOARD_LAYOUT.order.length).toBe(12);
-    expect(visibleDashboardCards(DEFAULT_DASHBOARD_LAYOUT)).toHaveLength(12);
+  it('P05-08: defaults include every card, with Health from Phase 5', () => {
+    expect(DEFAULT_DASHBOARD_LAYOUT.order.length).toBe(13);
+    expect(visibleDashboardCards(DEFAULT_DASHBOARD_LAYOUT)).toHaveLength(13);
+    expect(DEFAULT_DASHBOARD_LAYOUT.order.at(-1)).toBe('health');
   });
 
   it('merge keeps unknown ids out and appends new cards', () => {

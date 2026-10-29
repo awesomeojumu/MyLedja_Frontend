@@ -79,6 +79,8 @@ import {
   type ReportDashboard,
   type SavedReport,
   budgetAssignId,
+  normalizeHealthSettings,
+  DEFAULT_HEALTH_SETTINGS,
 } from './model';
 
 export type TxEvent = MoneyEvent & EventMeta;
@@ -270,7 +272,7 @@ export class WorkspaceRepository {
       hapticsEnabled: raw?.hapticsEnabled,
       tags: raw?.tags,
       dueSoonDays: raw?.dueSoonDays === 3 || raw?.dueSoonDays === 7 || raw?.dueSoonDays === 14 || raw?.dueSoonDays === 30 ? raw.dueSoonDays : undefined,
-      health: raw?.health,
+      health: raw?.health ? normalizeHealthSettings(raw.health) : undefined,
       reportDashboards: raw?.reportDashboards,
       savedReports: raw?.savedReports,
     };
@@ -2349,20 +2351,12 @@ export class WorkspaceRepository {
   }
 
   defaultHealthSettings(snapshot: Snapshot): HealthSettings {
-    const cashTypes = new Set(['bank', 'savings', 'cash', 'wallet']);
-    return (
-      snapshot.settings.health ?? {
-        cashAccountIds: snapshot.accounts.filter((a) => !a.archived && cashTypes.has(a.type)).map((a) => a.id),
-        emergencyMonths: 6,
-        countInvestmentsInRunway: false,
-        essentialCategoryIds: snapshot.categories.filter((c) => c.kind === 'expense' && c.budgetType === 'fixed').map((c) => c.id),
-      }
-    );
+    return normalizeHealthSettings(snapshot.settings.health) ?? { ...DEFAULT_HEALTH_SETTINGS };
   }
 
   async saveHealthSettings(health: HealthSettings): Promise<void> {
     const snapshot = await this.load();
-    await this.put('settings', 'workspace', { ...snapshot.settings, health }, 'settings.update');
+    await this.put('settings', 'workspace', { ...snapshot.settings, health: normalizeHealthSettings(health) }, 'settings.update');
   }
 
   async ensureReportDashboards(): Promise<ReportDashboard[]> {

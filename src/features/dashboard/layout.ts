@@ -16,6 +16,7 @@ export const DASHBOARD_CARD_IDS = [
   'recent',
   'goals',
   'debts',
+  'health',
 ] as const;
 
 export type DashboardCardId = (typeof DASHBOARD_CARD_IDS)[number];
@@ -43,6 +44,7 @@ const CARD_LABELS: Record<DashboardCardId, TextKey> = {
   recent: 'dashboard.card.recent',
   goals: 'dashboard.card.goals',
   debts: 'dashboard.card.debts',
+  health: 'dashboard.card.health',
 };
 
 export function dashboardCardLabel(id: DashboardCardId): TextKey {

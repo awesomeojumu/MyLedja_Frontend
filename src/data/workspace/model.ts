@@ -233,13 +233,30 @@ export type SavedReport = {
   dashboardId?: string;
 };
 
-/** Health settings (PU-44 / TECH-SPEC 6.10). */
+/** Health settings (PU-44 / TECH-SPEC 6.10). Matches BE `HealthSettings`. */
 export type HealthSettings = {
-  cashAccountIds: string[];
-  emergencyMonths: 3 | 6 | 12;
-  countInvestmentsInRunway: boolean;
-  essentialCategoryIds: string[];
+  /** Null/omit = bank, cash, wallet and savings (TECH-SPEC 6.10). */
+  cashAccountIds?: string[] | null;
+  targetMonths: 3 | 6 | 12;
+  countInvestments: boolean;
 };
+
+export const DEFAULT_HEALTH_SETTINGS: HealthSettings = { targetMonths: 6, countInvestments: false };
+
+/** Read pops-stub or BE-shaped health settings into the TECH-SPEC shape. */
+export function normalizeHealthSettings(raw: Partial<HealthSettings> & {
+  emergencyMonths?: 3 | 6 | 12;
+  countInvestmentsInRunway?: boolean;
+  essentialCategoryIds?: string[];
+} | null | undefined): HealthSettings {
+  if (!raw) return { ...DEFAULT_HEALTH_SETTINGS };
+  const target = raw.targetMonths ?? raw.emergencyMonths ?? 6;
+  return {
+    ...(raw.cashAccountIds !== undefined ? { cashAccountIds: raw.cashAccountIds } : {}),
+    targetMonths: (target === 3 || target === 12 ? target : 6) as 3 | 6 | 12,
+    countInvestments: raw.countInvestments ?? raw.countInvestmentsInRunway ?? false,
+  };
+}
 
 /** Which budget category types appear in the budget UI (Settings › Budget). */
 export type BudgetTypesShown = {
