@@ -1,4 +1,4 @@
-import { matchInstitution } from '../institutions';
+import { fromApiInstitutions, matchInstitution } from '../institutions';
 
 describe('matchInstitution', () => {
   it('matches GTBank from typed account names', () => {
@@ -12,5 +12,14 @@ describe('matchInstitution', () => {
 
   it('returns null for unrelated names', () => {
     expect(matchInstitution('Petty cash')).toBeNull();
+  });
+
+  it('uses API list when provided, including logoUrl', () => {
+    const list = fromApiInstitutions([
+      { id: 'gtbank', name: 'GTBank', aliases: ['GTCO'], logoUrl: 'https://cdn.example/gt.png' },
+    ]);
+    const hit = matchInstitution('GTCO Current', list);
+    expect(hit?.id).toBe('gtbank');
+    expect(hit?.logoUrl).toBe('https://cdn.example/gt.png');
   });
 });

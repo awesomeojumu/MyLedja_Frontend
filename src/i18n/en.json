@@ -150,7 +150,7 @@
   "welcome.step3.type": "Type",
   "welcome.step3.opening": "Opening balance (₦)",
   "welcome.step3.date": "Date",
-  "welcome.step3.another": "Another account",
+  "welcome.step3.another": "+ Another account",
   "welcome.step3.remove": "Remove account",
   "welcome.step3.later": "I'll connect my bank later",
   "welcome.step3.openingNote": "Opening balances aren't income.",

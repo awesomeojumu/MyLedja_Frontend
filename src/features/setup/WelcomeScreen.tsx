@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmountInput, Button, DatePicker, Card, InlineError, PillTag, Text, TextInput } from '@/design/components';
 import tokens from '@/design/tokens.json';
@@ -11,11 +11,12 @@ import { toWire } from '@/money';
 import { GradientMeshBackdrop } from '@/features/auth/AuthFrame';
 import { useAuth } from '@/features/auth/AuthProvider';
 import type { SetupBody } from '@/api/auth';
+import { successHaptic } from '@/features/budget/haptics';
 import { useSync } from '@/data/sync/SyncProvider';
 import { WorkspaceRepository } from '@/data/workspace/repository';
 import { WelcomeCurrencyPicker } from './WelcomeCurrencyPicker';
 import { WelcomeInstitutionBadge } from './WelcomeInstitutionBadge';
-import { matchInstitution } from './institutions';
+import { fromApiInstitutions, matchInstitution, NG_INSTITUTIONS, type Institution } from './institutions';
 import { ACCOUNT_TYPES, STARTER_GROUPS, WEEK_STARTS, type AccountType } from './starter';
 
 type AccountRow = { name: string; type: AccountType; amountText: string; minor: bigint | null; date: string };
@@ -77,6 +78,7 @@ function WelcomeFooter({
 
 export function WelcomeScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const theme = useTheme();
   const size = useSizeClass();
   const { width, height } = useWindowDimensions();
@@ -95,8 +97,24 @@ export function WelcomeScreen() {
   const [takeHome, setTakeHome] = useState<{ text: string; minor: bigint | null }>({ text: '', minor: null });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [institutions, setInstitutions] = useState<Institution[]>(NG_INSTITUTIONS);
 
   const accountGrid = size === 'tablet' && width > height;
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .listInstitutions()
+      .then((list) => {
+        if (!cancelled && list.institutions.length) setInstitutions(fromApiInstitutions(list.institutions));
+      })
+      .catch(() => {
+        /* offline: keep local fallback */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -108,6 +126,19 @@ export function WelcomeScreen() {
     });
     return () => sub.remove();
   }, [step]);
+
+  // iOS edge swipe / interactive pop → previous step, not out of setup (DESIGN Page 4 / P04-01).
+  useEffect(() => {
+    type BeforeRemove = { preventDefault: () => void };
+    const nav = navigation as unknown as {
+      addListener: (event: 'beforeRemove', cb: (e: BeforeRemove) => void) => () => void;
+    };
+    return nav.addListener('beforeRemove', (e) => {
+      if (step > 5) return;
+      e.preventDefault();
+      if (step > 1) setStep((s) => s - 1);
+    });
+  }, [navigation, step]);
 
   const amountsReadable =
     accounts.every((a) => a.amountText.trim() === '' || a.minor !== null) && (takeHome.text.trim() === '' || takeHome.minor !== null);
@@ -139,6 +170,7 @@ export function WelcomeScreen() {
         const updated = await api.finishSetup(user.workspaceId, body);
         await new WorkspaceRepository(sync.store, sync.engine, updated.workspaceId).seedFromSetup(body);
         setUser(updated);
+        successHaptic();
         setStep(6);
       } catch {
         setError(t('errors.generic'));
@@ -203,7 +235,7 @@ export function WelcomeScreen() {
           <View style={{ flexDirection: accountGrid ? 'row' : 'column', flexWrap: 'wrap', gap: sp['spacing-md'] }}>
             {accounts.map((a, i) => {
               const update = (patch: Partial<AccountRow>) => setAccounts((all) => all.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-              const institution = matchInstitution(a.name);
+              const institution = matchInstitution(a.name, institutions);
               return (
                 <Card key={i} style={{ gap: sp['spacing-md'], width: accountGrid ? '48%' : '100%' }}>
                   {institution ? <WelcomeInstitutionBadge institution={institution} testID={`institution-${i}`} /> : null}

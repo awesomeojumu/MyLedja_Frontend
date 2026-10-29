@@ -1,4 +1,5 @@
-import { StyleSheet } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { Animated, Easing, Platform, StyleSheet } from 'react-native';
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import tokens from '../tokens.json';
 
@@ -12,22 +13,56 @@ const BLOBS = [
   { id: 'gold', cx: '40%', cy: '28%', r: '30%', color: c.gold, opacity: 0.12 },
 ];
 
-/** Drawn with SVG so it paints the same on iOS, Android and web. Still on every platform for now. */
+/** Drawn with SVG so it paints the same on iOS, Android and web. Web drifts over motion-ambient; phones stay still. */
 export function GradientMesh() {
+  const drift = useMemo(() => new Animated.Value(0), []);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(drift, {
+          toValue: 1,
+          duration: tokens.motion['motion-ambient'] / 2,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(drift, {
+          toValue: 0,
+          duration: tokens.motion['motion-ambient'] / 2,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [drift]);
+
+  const translateX = drift.interpolate({ inputRange: [0, 1], outputRange: [0, 28] });
+  const translateY = drift.interpolate({ inputRange: [0, 1], outputRange: [0, 14] });
+
   return (
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none" testID="gradient-mesh-art">
-      <Defs>
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        Platform.OS === 'web' ? { transform: [{ translateX }, { translateY }, { scale: 1.08 }] } : null,
+      ]}
+    >
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none" testID="gradient-mesh-art">
+        <Defs>
+          {BLOBS.map((b) => (
+            <RadialGradient key={b.id} id={b.id} cx={b.cx} cy={b.cy} rx={b.r} ry={b.r} fx={b.cx} fy={b.cy} gradientUnits="objectBoundingBox">
+              <Stop offset="0" stopColor={b.color} stopOpacity={b.opacity} />
+              <Stop offset="1" stopColor={b.color} stopOpacity={0} />
+            </RadialGradient>
+          ))}
+        </Defs>
         {BLOBS.map((b) => (
-          <RadialGradient key={b.id} id={b.id} cx={b.cx} cy={b.cy} rx={b.r} ry={b.r} fx={b.cx} fy={b.cy} gradientUnits="objectBoundingBox">
-            <Stop offset="0" stopColor={b.color} stopOpacity={b.opacity} />
-            <Stop offset="1" stopColor={b.color} stopOpacity={0} />
-          </RadialGradient>
+          <Rect key={b.id} x="0" y="0" width="100%" height="100%" fill={`url(#${b.id})`} />
         ))}
-      </Defs>
-      {BLOBS.map((b) => (
-        <Rect key={b.id} x="0" y="0" width="100%" height="100%" fill={`url(#${b.id})`} />
-      ))}
-    </Svg>
+      </Svg>
+    </Animated.View>
   );
 }
 

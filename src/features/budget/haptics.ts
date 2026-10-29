@@ -9,3 +9,13 @@ export function warningHaptic(): void {
     /* unsupported */
   }
 }
+
+/** Success haptic on Welcome "You're set up" (DESIGN Page 4). No-op on web. */
+export function successHaptic(): void {
+  if (Platform.OS === 'web') return;
+  try {
+    Vibration.vibrate([0, 30, 40, 30]);
+  } catch {
+    /* unsupported */
+  }
+}
