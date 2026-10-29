@@ -325,13 +325,25 @@ export function toBackendOperation(op: Operation, accounts: Account[]): BackendO
         };
   }
 
-  if (op.type === 'category.create' || collection === 'categories') {
+  if (op.type === 'category.create' || (collection === 'categories' && op.type !== 'category.delete' && op.type !== 'category.undo_delete')) {
     const create = op.type.includes('create');
+    const type =
+      data.budgetType === 'nonMonthly' ? 'non_monthly' : typeof data.budgetType === 'string' ? data.budgetType : undefined;
+    const groupId = typeof data.group === 'string' && /^[0-9a-f-]{36}$/i.test(data.group) ? data.group : undefined;
     return create
       ? {
           operationId: op.operationId,
           type: 'category.create',
-          payload: { id, name: data.name, group: data.group, kind: data.kind },
+          payload: {
+            id,
+            name: data.name,
+            ...(groupId ? { groupId } : {}),
+            icon: data.icon ?? null,
+            type: type ?? null,
+            budgetable: data.countInBudget,
+            carryOver: data.carryOver === true,
+            essential: data.essential === true,
+          },
           createdAt: op.createdAt,
           schemaVersion: op.schemaVersion,
         }
@@ -339,7 +351,18 @@ export function toBackendOperation(op: Operation, accounts: Account[]): BackendO
           operationId: op.operationId,
           type: 'category.update',
           targetId: id,
-          payload: { baseVersion: op.baseVersion ?? 0, name: data.name },
+          payload: {
+            baseVersion: op.baseVersion ?? 0,
+            name: data.name,
+            ...(groupId ? { groupId } : {}),
+            icon: data.icon ?? null,
+            type: type ?? null,
+            hidden: data.hidden === true,
+            budgetable: data.countInBudget,
+            carryOver: data.carryOver === true,
+            essential: data.essential === true,
+            sortOrder: typeof data.order === 'number' ? data.order : undefined,
+          },
           baseVersion: op.baseVersion ?? null,
           createdAt: op.createdAt,
           schemaVersion: op.schemaVersion,

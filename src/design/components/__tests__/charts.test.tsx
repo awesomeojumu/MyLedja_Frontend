@@ -36,7 +36,7 @@ describe('charts', () => {
   it('draws over-plan bars in ruby and at most one gold bar', async () => {
     await renderWithProviders(<BarChart testID="bar" title="Spending fell from September" columns={columns} rows={rows} highlight={2} />);
     await layout('bar');
-    const fills = screen.getAllByTestId(/^chart-bar-/).map((p) => p.props.fill);
+    const fills = screen.getAllByTestId(/^chart-bar-\d+$/).map((p) => p.props.fill);
     expect(fills).toEqual([paint(tokens.color['primary-soft']), paint(tokens.color.ruby), paint(tokens.color.gold)]);
   });
 
@@ -44,7 +44,21 @@ describe('charts', () => {
     const many = Array.from({ length: 15 }, (_, i) => ({ label: `m${i}`, value: BigInt(i + 1) }));
     await renderWithProviders(<BarChart testID="bar" title="Spending fell from September" columns={columns} rows={many} />);
     await layout('bar');
-    expect(screen.getAllByTestId(/^chart-bar-/)).toHaveLength(12);
+    expect(screen.getAllByTestId(/^chart-bar-\d+$/)).toHaveLength(12);
+  });
+
+  it('draws planned outline bars and table shows planned + spent', async () => {
+    const dual = [
+      { label: 'Aug', value: 1_200_000n, planned: 1_500_000n },
+      { label: 'Sep', value: 2_000_000n, planned: 1_800_000n, over: true },
+      { label: 'Oct', value: 1_845_000n, planned: 2_000_000n },
+    ];
+    const dualCols: [string, string, string] = ['Month', 'Planned', 'Spent'];
+    await renderWithProviders(<BarChart testID="bar" title="Spending fell from September" columns={dualCols} rows={dual} highlight={2} />);
+    await layout('bar');
+    expect(screen.getByTestId('chart-bar-0-planned')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('switch', { name: t('chart.viewAsTable') }));
+    expect(within(screen.getByTestId('bar-table')).getByLabelText('Aug, planned ₦15,000.00, spent ₦12,000.00')).toBeTruthy();
   });
 
   it('marks only the latest line point in gold', async () => {

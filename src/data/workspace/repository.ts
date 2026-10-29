@@ -182,6 +182,7 @@ type CategoryDeleteUndo = {
   category: Category;
   replacementEventIds: string[];
   planMoves: { month: string; amount: bigint; note: string }[];
+  ruleIds: string[];
 };
 
 /** Reads and writes the workspace through the local store; every write is queued for sync. */
@@ -1266,8 +1267,8 @@ export class WorkspaceRepository {
   }
 
   /**
-   * P07-06 / PU-12: move this category's transactions and plans to another, then soft-delete it.
-   * Each move is a correction (TECH-SPEC 6.3). Returns undoId for toast Undo.
+   * P07-06 / PU-12: move this category's transactions, plans and rules to another, then soft-delete it.
+   * Each move is a correction (TECH-SPEC 6.3). Queues BE `category.delete` with durable undoId.
    */
   async deleteCategory(
     categoryId: string,
@@ -1337,22 +1338,99 @@ export class WorkspaceRepository {
       await this.setAssigned(categoryId, plan.month, 0n);
     }
 
+    const ruleIds: string[] = [];
+    for (const rule of snapshot.rules) {
+      if (!rule.actions.some((a) => a.kind === 'setCategory' && a.value === categoryId)) continue;
+      ruleIds.push(rule.id);
+      await this.saveRule({
+        ...rule,
+        actions: rule.actions.map((a) =>
+          a.kind === 'setCategory' && a.value === categoryId ? { ...a, value: moveToId } : a,
+        ),
+      });
+    }
+
     const undoId = this.newId();
-    this.categoryDeleteUndos.set(undoId, { categoryId, moveToId, category, replacementEventIds, planMoves });
-    await this.updateCategory({ ...category, deleted: true, hidden: true });
+    const undo: CategoryDeleteUndo = { categoryId, moveToId, category, replacementEventIds, planMoves, ruleIds };
+    this.categoryDeleteUndos.set(undoId, undo);
+    const { id: _id, ...catData } = category;
+    await this.put(
+      'categories',
+      categoryId,
+      {
+        ...catData,
+        deleted: true,
+        hidden: true,
+        deletion: {
+          undoId,
+          moveToId,
+          replacementEventIds,
+          planMoves: planMoves.map((p) => ({ month: p.month, amount: p.amount.toString(), note: p.note })),
+          ruleIds,
+        },
+      },
+      'category.delete',
+      undefined,
+      { type: 'category.delete', targetId: categoryId, payload: { moveTo: moveToId, undoId } },
+    );
     return { ok: true, value: { undoId } };
   }
 
-  /** PU12-3: restore a soft-deleted category and move transactions/plans back. */
+  /** PU12-3: restore a soft-deleted category and move transactions/plans/rules back. */
   async undoDeleteCategory(undoId: string, _date: string): Promise<Result> {
-    const data = this.categoryDeleteUndos.get(undoId);
-    if (!data) return { ok: false, error: 'missing_lines' };
-    await this.updateCategory({ ...data.category, deleted: false, hidden: data.category.hidden });
+    let data = this.categoryDeleteUndos.get(undoId);
+    if (!data) {
+      const rows = await this.store.list('categories');
+      const rec = rows.find((r) => {
+        const d = r.data as { deletion?: { undoId?: string }; deleted?: boolean };
+        return d.deletion?.undoId === undoId || (r.id === undoId && d.deleted);
+      });
+      if (!rec) return { ok: false, error: 'missing_lines' };
+      const raw = rec.data as Omit<Category, 'id'> & {
+        deletion?: {
+          undoId: string;
+          moveToId: string;
+          replacementEventIds: string[];
+          planMoves: { month: string; amount: string; note: string }[];
+          ruleIds: string[];
+        };
+      };
+      const del = raw.deletion;
+      if (!del) return { ok: false, error: 'missing_lines' };
+      data = {
+        categoryId: rec.id,
+        moveToId: del.moveToId,
+        category: { ...raw, id: rec.id },
+        replacementEventIds: del.replacementEventIds ?? [],
+        planMoves: (del.planMoves ?? []).map((p) => ({ month: p.month, amount: BigInt(p.amount), note: p.note })),
+        ruleIds: del.ruleIds ?? [],
+      };
+    }
+    const { id: _cid, ...catData } = data.category;
+    await this.put(
+      'categories',
+      data.categoryId,
+      { ...catData, deleted: false, hidden: data.category.hidden, deletion: null },
+      'category.undo_delete',
+      undefined,
+      { type: 'category.undo_delete', targetId: data.categoryId, payload: { undoId } },
+    );
     for (const plan of data.planMoves) {
       const snap = await this.load();
       const targetAmt = this.assigned(data.moveToId, plan.month, snap);
       await this.setAssigned(data.moveToId, plan.month, targetAmt > plan.amount ? targetAmt - plan.amount : 0n);
       await this.setAssigned(data.categoryId, plan.month, plan.amount, { note: plan.note });
+    }
+    for (const ruleId of data.ruleIds) {
+      const snap = await this.load();
+      const rule = snap.rules.find((r) => r.id === ruleId);
+      if (!rule) continue;
+      await this.saveRule({
+        ...rule,
+        actions: rule.actions.map((a) =>
+          a.kind === 'setCategory' && a.value === data!.moveToId ? { ...a, value: data!.categoryId } : a,
+        ),
+      });
     }
     for (const eventId of [...data.replacementEventIds].reverse()) {
       const snap = await this.load();
@@ -1365,7 +1443,7 @@ export class WorkspaceRepository {
         const parts = event.lines
           .filter((l) => !accountIds.has(l.ledgerAccountId))
           .map((l) => ({
-            categoryId: l.ledgerAccountId === data.moveToId ? data.categoryId : l.ledgerAccountId,
+            categoryId: l.ledgerAccountId === data!.moveToId ? data!.categoryId : l.ledgerAccountId,
             amount: l.amountMinor < 0n ? -l.amountMinor : l.amountMinor,
           }));
         await this.correctTransaction(eventId, {
@@ -1391,6 +1469,18 @@ export class WorkspaceRepository {
     }
     this.categoryDeleteUndos.delete(undoId);
     return { ok: true, value: undefined };
+  }
+
+  /** PU-11 "+ New group": create a category group locally and queue BE create. */
+  async createCategoryGroup(input: { name: string; kind: 'income' | 'expense' }): Promise<{ id: string; name: string; kind: 'income' | 'expense' }> {
+    const id = this.newId();
+    const name = input.name.trim();
+    const data = { name, kind: input.kind, order: 0 };
+    await this.put('category_groups', id, data, 'category_group.create', undefined, {
+      type: 'category_group.create',
+      payload: { id, name, kind: input.kind },
+    });
+    return { id, name, kind: input.kind };
   }
 
   async setEventPayee(eventId: string, payeeId: string): Promise<Result> {

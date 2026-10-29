@@ -61,6 +61,8 @@ export type CategoryDraft = {
   hidden: boolean;
 };
 
+const NEW_GROUP = '__new_group__';
+
 export function EditCategorySheet({
   visible,
   category,
@@ -69,6 +71,7 @@ export function EditCategorySheet({
   onClose,
   onSave,
   onDelete,
+  onCreateGroup,
 }: {
   visible: boolean;
   category: Category | null;
@@ -77,6 +80,7 @@ export function EditCategorySheet({
   onClose: () => void;
   onSave: (draft: CategoryDraft) => Promise<void>;
   onDelete?: () => void;
+  onCreateGroup?: (name: string, kind: 'income' | 'expense') => Promise<{ id: string; name: string }>;
 }) {
   const theme = useTheme();
   const seed = category;
@@ -92,6 +96,9 @@ export function EditCategorySheet({
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [filledFor, setFilledFor] = useState<string | null>(null);
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [extraGroups, setExtraGroups] = useState<{ value: string; label: string }[]>([]);
 
   const openKey = visible ? (seed?.id ?? (isNew ? 'new' : null)) : null;
   if (openKey !== filledFor) {
@@ -120,8 +127,12 @@ export function EditCategorySheet({
     essential !== (seed?.essential ?? false) ||
     hidden !== (seed?.hidden ?? false);
 
-  const groupOptions = GROUP_OPTIONS.map((g) => ({ value: g.value, label: t(g.labelKey) }));
+  const groupOptions = [
+    ...GROUP_OPTIONS.map((g) => ({ value: g.value, label: t(g.labelKey) })),
+    ...extraGroups,
+  ];
   if (!groupOptions.some((g) => g.value === group)) groupOptions.push({ value: group, label: group });
+  if (onCreateGroup) groupOptions.push({ value: NEW_GROUP, label: t('category.newGroup') });
 
   const icons = useMemo(() => {
     const q = iconQuery.trim().toLowerCase();
@@ -150,6 +161,23 @@ export function EditCategorySheet({
         essential,
         hidden,
       });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createGroup = async () => {
+    if (!onCreateGroup || !newGroupName.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await onCreateGroup(newGroupName.trim(), kind);
+      setExtraGroups((prev) => [...prev, { value: created.id, label: created.name }]);
+      setGroup(created.id);
+      setNewGroupOpen(false);
+      setNewGroupName('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
       setBusy(false);
     }
@@ -218,7 +246,38 @@ export function EditCategorySheet({
           })}
         </View>
 
-        <Select testID="category-edit-group" label={t('category.group')} options={groupOptions} value={group} onChange={setGroup} />
+        <Select
+          testID="category-edit-group"
+          label={t('category.group')}
+          options={groupOptions}
+          value={group}
+          onChange={(v) => {
+            if (v === NEW_GROUP) {
+              setNewGroupOpen(true);
+              return;
+            }
+            setGroup(v);
+          }}
+        />
+        {newGroupOpen ? (
+          <View testID="category-new-group" style={{ gap: sp['spacing-sm'] }}>
+            <TextInput
+              testID="category-new-group-name"
+              label={t('category.newGroupName')}
+              value={newGroupName}
+              onChangeText={setNewGroupName}
+            />
+            <Footer>
+              <Button kind="secondary" label={t('common.cancel')} onPress={() => setNewGroupOpen(false)} disabled={busy} />
+              <Button
+                testID="category-new-group-save"
+                label={t('category.newGroup')}
+                disabled={!newGroupName.trim() || busy}
+                onPress={() => void createGroup()}
+              />
+            </Footer>
+          </View>
+        ) : null}
 
         <SegmentedControl
           testID="category-edit-kind"

@@ -274,15 +274,71 @@ describe('Category page', () => {
     expect(screen.getByTestId('budget-menu-popover')).toBeTruthy();
   });
 
-  it('P07-04: Connected lists templates and plan note', async () => {
+  it('P07-04: Connected lists templates, plan note and rules', async () => {
     const { sync, repo, id } = await seeded();
     await repo.saveBudgetTemplate('Basics', [{ categoryId: id('Market'), amountMinor: '50000000', ruleKind: 'monthly' }]);
     await repo.setAssigned(id('Market'), '2026-10', 90_000_000n, { note: 'Keep weekly shop under control' });
+    const rule = await repo.createRule({
+      enabled: true,
+      stage: 'normal',
+      matchMode: 'all',
+      conditions: [{ field: 'payee', op: 'contains', value: 'Shoprite' }],
+      actions: [{ kind: 'setCategory', value: id('Market') }],
+    });
     setParams({ id: id('Market') });
     await renderWithProviders(wrap(<CategoryScreen />), { sync });
     expect(await screen.findByTestId('category-connected')).toBeTruthy();
     expect(screen.getByTestId('category-template-row')).toBeTruthy();
     expect(screen.getByTestId('category-plan-note')).toHaveTextContent('Keep weekly shop under control', { exact: false });
+    expect(screen.getByTestId(`category-rule-${rule.id}`)).toBeTruthy();
+  });
+
+  it('P07-03: See all opens Transactions filtered by category', async () => {
+    const { sync, id } = await seeded();
+    setParams({ id: id('Market') });
+    await renderWithProviders(wrap(<CategoryScreen />), { sync });
+    await fireEvent.press(await screen.findByTestId('category-see-all'));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/transactions',
+      params: { category: id('Market'), month: '2026-10' },
+    });
+  });
+
+  it('P07-06: delete moves transactions and undo restores the category', async () => {
+    const { sync, repo, id } = await seeded();
+    const market = id('Market');
+    const fuel = id('Fuel');
+    setParams({ id: market });
+    await renderWithProviders(wrap(<CategoryScreen />), { sync });
+    await fireEvent.press(await screen.findByTestId('category-edit'));
+    await fireEvent.press(screen.getByTestId('category-edit-delete'));
+    await fireEvent(screen.getByTestId('category-delete-move'), 'onChange', fuel);
+    await fireEvent.press(screen.getByTestId('category-delete-confirm'));
+    await waitFor(async () => {
+      expect((await repo.load()).categories.some((c) => c.id === market)).toBe(false);
+    });
+    const store = repo as unknown as {
+      store: { list: (c: string) => Promise<{ id: string; data: { deletion?: { undoId?: string }; deleted?: boolean } }[]> };
+    };
+    const row = (await store.store.list('categories')).find((x) => x.id === market && x.data.deleted);
+    expect(row?.data.deletion?.undoId).toBeTruthy();
+    // Sync payload must carry the same undoId the toast holds (BE honors client token).
+    const outbox = await sync.store.outbox();
+    const deleteOp = outbox.find((o) => o.type === 'category.delete');
+    expect((deleteOp?.payload as { remote?: { payload?: { undoId?: string } } })?.remote?.payload?.undoId).toBe(
+      row!.data.deletion!.undoId,
+    );
+    await repo.undoDeleteCategory(row!.data.deletion!.undoId!, '2026-10-15');
+    await waitFor(async () => {
+      expect((await repo.load()).categories.some((c) => c.id === market)).toBe(true);
+    });
+  });
+
+  it('header shows the category icon tile', async () => {
+    const { sync, id } = await seeded();
+    setParams({ id: id('Market') });
+    await renderWithProviders(wrap(<CategoryScreen />), { sync });
+    expect(await screen.findByTestId('category-icon-tile')).toBeTruthy();
   });
 
   it('P06-12: Edit amount template quick pick; carry switch when already on (PU-07)', async () => {
