@@ -233,9 +233,13 @@ function finding(now: bigint, before: bigint, measure: string, previousFrom: str
   return { key: `${measure}_${direction}`, amount: now, changeBasisPoints: change, previousFrom };
 }
 
-/** Assets, debts and unrealised gains on a date, and the month's adjustments and write-offs. */
-function worthOn(snapshot: Snapshot, facts: Fact[], date: string) {
+/**
+ * Assets, debts, unrealised gains, adjustments, write-offs and exchange-rate change on a date
+ * (TECH-SPEC 6.7 / 6.13). Exchange-rate change uses the previous date's rates on the same balances.
+ */
+function worthOn(snapshot: Snapshot, facts: Fact[], date: string, prevDate: string | null = null) {
   const convert = converterFor(snapshot);
+  const home = snapshot.settings.currency ?? 'NGN';
   const partial = new Set<string>();
   const balances = new Map<string, bigint>();
   let adjustments = 0n;
@@ -263,7 +267,31 @@ function worthOn(snapshot: Snapshot, facts: Fact[], date: string) {
     else debts -= v;
   }
   const unrealised = wealthAt(snapshot, date).unrealised;
-  return { assets, debts, unrealised, adjustments, writtenOff, partial: [...partial] };
+  let exchangeRateChange = 0n;
+  if (prevDate) {
+    for (const [id, raw] of balances) {
+      const a = snapshot.chart.get(id)!;
+      if (a.currency === home || raw === 0n) continue;
+      const now = convert(raw, a.currency, date);
+      const then = convert(raw, a.currency, prevDate);
+      if (now === null || then === null) {
+        partial.add(a.currency);
+        continue;
+      }
+      exchangeRateChange += now - then;
+    }
+    for (const row of holdingRows(snapshot, date)) {
+      if (row.currency === home || row.position.value === 0n) continue;
+      const now = convert(row.position.value, row.currency, date);
+      const then = convert(row.position.value, row.currency, prevDate);
+      if (now === null || then === null) {
+        partial.add(row.currency);
+        continue;
+      }
+      exchangeRateChange += now - then;
+    }
+  }
+  return { assets, debts, unrealised, adjustments, writtenOff, exchangeRateChange, partial: [...partial] };
 }
 
 /** Runs one report on the device's data. */
@@ -374,12 +402,18 @@ export function runReport(snapshot: Snapshot, input: ReportInput, today: string)
     }
     case 'net_worth': {
       const months = monthsBetween(from, to);
-      const points = months.map((m) => worthOn(snapshot, facts, minDate(monthBounds(m).to, minDate(to, today))));
+      const ends = months.map((m) => minDate(monthBounds(m).to, minDate(to, today)));
+      const points = ends.map((d, i) => worthOn(snapshot, facts, d, i > 0 ? ends[i - 1]! : null));
       const t = table(
-        ['assets', 'debts', 'unrealised', 'adjustments', 'written_off'].map((k) => ({ key: k, label: k })),
+        ['assets', 'debts', 'unrealised', 'adjustments', 'written_off', 'exchange_rate_change'].map((k) => ({ key: k, label: k })),
         months.map((m, i) => {
           const p = points[i]!;
-          return { key: m, label: m, values: [p.assets, p.debts, p.unrealised, p.adjustments, p.writtenOff], total: p.assets - p.debts + p.unrealised };
+          return {
+            key: m,
+            label: m,
+            values: [p.assets, p.debts, p.unrealised, p.adjustments, p.writtenOff, p.exchangeRateChange],
+            total: p.assets - p.debts + p.unrealised,
+          };
         }),
         true,
       );

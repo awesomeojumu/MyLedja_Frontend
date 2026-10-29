@@ -2402,5 +2402,8 @@
   "reports.about.formula": "A number from your own formula. You can use income, spending, net, assets, debts and net_worth.",
   "reports.about.note": "Your own text, shown on the dashboard.",
   "reports.about.custom": "A report you built: what it shows, grouped and split as you chose.",
-  "reports.shareAsImage": "Share as image"
+  "reports.shareAsImage": "Share as image",
+  "reports.col.exchange_rate_change": "Exchange-rate change",
+  "reports.print": "Print",
+  "reports.shareUnavailable": "Sharing is not available on this device"
 }

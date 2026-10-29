@@ -1,7 +1,9 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { ArrowDown, ArrowUp, Maximize2, MoreHorizontal, Star, Trash2 } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import ViewShot, { type ViewShotRef } from 'react-native-view-shot';
 
 import {
   Button,
@@ -35,14 +37,46 @@ import { useDashboards } from './useDashboards';
 
 const sp = tokens.spacing;
 
+/** DESIGN Page 19: tablet portrait = 6 columns, landscape/web = 12, phone = 1. */
+function gridColumns(size: ReturnType<typeof useSizeClass>, width: number, height: number): number {
+  if (size === 'phone') return 1;
+  if (size === 'tablet' && height >= width) return 6;
+  return 12;
+}
+
+/** Web print layout for the whole dashboard (DESIGN Page 19). */
+function ensurePrintStyles() {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  if (document.getElementById('reports-print-layout')) return;
+  const style = document.createElement('style');
+  style.id = 'reports-print-layout';
+  style.textContent = `
+    @media print {
+      body * { visibility: hidden !important; }
+      #reports-print-root, #reports-print-root * { visibility: visible !important; }
+      #reports-print-root {
+        position: absolute; left: 0; top: 0; width: 100%;
+        display: flex; flex-direction: row; flex-wrap: wrap;
+      }
+      #reports-print-root [data-report-card] {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      header, nav, [data-no-print] { display: none !important; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 /** Reports (DESIGN.md page 19): dashboards of report cards. */
 export function ReportsScreen() {
   const { snapshot } = useWorkspace();
   const router = useRouter();
   const toast = useToast();
   const size = useSizeClass();
+  const { width: winW, height: winH } = useWindowDimensions();
   const phone = size === 'phone';
-  const tablet = size === 'tablet';
+  const cols = gridColumns(size, winW, winH);
   const params = useGlobalSearchParams<{ dashboard?: string; from?: string; to?: string; addReport?: string }>();
   const { dashboards, ready, save, create, remove } = useDashboards();
   const [selected, setSelected] = useState<string | null>(null);
@@ -101,10 +135,14 @@ export function ReportsScreen() {
   };
 
   const colWidth = (w: number) => {
-    if (phone) return '100%';
-    // Tablet: 6-col portrait feel via max 50% when not full-width; web uses 12-col fractions.
-    if (tablet && w < 12) return '50%';
-    return `${(w / 12) * 100}%`;
+    if (cols <= 1) return '100%';
+    const span = Math.max(1, Math.min(cols, Math.round((w * cols) / 12)));
+    return `${(span / cols) * 100}%`;
+  };
+
+  const printDashboard = () => {
+    ensurePrintStyles();
+    if (Platform.OS === 'web' && typeof window !== 'undefined') window.print();
   };
 
   const header = (
@@ -136,7 +174,7 @@ export function ReportsScreen() {
           syncParams({ from: r.from, to: r.to });
         }}
       />
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], alignItems: 'center' }} data-no-print="">
         <View style={{ flex: 1 }} />
         <Button
           testID="reports-edit-layout"
@@ -152,6 +190,9 @@ export function ReportsScreen() {
             syncParams({ addReport: '1' });
           }}
         />
+        {Platform.OS === 'web' ? (
+          <Button testID="reports-print" kind="secondary" label={t('reports.print')} onPress={printDashboard} />
+        ) : null}
         <Menu
           testID="reports-menu"
           trigger={(open) => (
@@ -190,6 +231,9 @@ export function ReportsScreen() {
     ) : (
       <ScrollView>
         <View
+          id="reports-print-root"
+          nativeID="reports-print-root"
+          testID="reports-print-root"
           style={{
             flexDirection: phone ? 'column' : 'row',
             flexWrap: 'wrap',
@@ -203,6 +247,8 @@ export function ReportsScreen() {
             return (
               <View
                 key={card.id}
+                // @ts-expect-error web dataset for print CSS
+                dataSet={{ reportCard: '1' }}
                 style={{
                   width: colWidth(card.layout.w) as `${number}%` | '100%' | '50%',
                   padding: phone ? 0 : sp['spacing-sm'] / 2,
@@ -309,6 +355,8 @@ function ReportCard({
   onRemove: () => void;
 }) {
   const theme = useTheme();
+  const toast = useToast();
+  const shotRef = useRef<ViewShotRef>(null);
   const tool = (
     icon: typeof ArrowUp,
     label: string,
@@ -330,17 +378,23 @@ function ReportCard({
     </Pressable>
   );
 
+  /** DESIGN D9: share the card as an image through the system share sheet. */
   const shareCard = async () => {
-    if (!result) return;
-    const lines = [
-      title,
-      rangeCaption(result.range.from, result.range.to),
-      ...result.table.rows.map((r) => `${r.label}: ${r.total}`),
-    ];
-    await Share.share({ message: lines.join('\n'), title });
+    try {
+      const uri = await shotRef.current?.capture();
+      if (!uri) return;
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: title, UTI: 'public.png' });
+      } else {
+        toast.show(t('reports.shareUnavailable'));
+      }
+    } catch {
+      toast.show(t('reports.shareUnavailable'));
+    }
   };
 
   return (
+    <ViewShot ref={shotRef} options={{ format: 'png', quality: 1, result: 'tmpfile' }} style={{ flex: 1 }}>
     <Card testID={`report-card-${card.id}`} style={{ gap: sp['spacing-sm'], opacity: card.hidden ? 0.6 : 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-xs'] }}>
         <View style={{ flex: 1 }}>
@@ -417,6 +471,7 @@ function ReportCard({
         />
       ) : null}
     </Card>
+    </ViewShot>
   );
 }
 
