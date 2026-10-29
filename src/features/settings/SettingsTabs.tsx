@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { v7 as uuidv7 } from 'uuid';
 
 import {
   Banner,
@@ -22,6 +21,7 @@ import {
   DEFAULT_BUDGET_TYPES_SHOWN,
   DEFAULT_DEVICE_SYNC,
   type BudgetTypesShown,
+  type ExchangeRate,
 } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -165,17 +165,28 @@ export function CurrenciesTabDeep() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const [rateOpen, setRateOpen] = useState(false);
-  const rates = snapshot?.settings.exchangeRates ?? [];
+  const home = snapshot?.settings.currency ?? 'NGN';
+  // Synced rates and any kept in settings before rates synced (P26-14); newest first.
+  const rates = useMemo(() => [...(snapshot?.rates ?? [])].sort((a, b) => b.date.localeCompare(a.date) || a.currency.localeCompare(b.currency)), [snapshot]);
+  const legacy = snapshot?.settings.exchangeRates ?? [];
   const downloadDaily = snapshot?.settings.downloadDailyRates ?? false;
   const accountCurrencies = useMemo(() => {
     const set = new Set(snapshot?.accounts.map((a) => a.currency) ?? []);
     return [...set].sort();
   }, [snapshot]);
 
+  const remove = async (rate: ExchangeRate) => {
+    if (!snapshot) return;
+    const old = legacy.find((x) => x.id === rate.id);
+    if (old) await repo.updateSettings({ ...snapshot.settings, exchangeRates: legacy.filter((x) => x.id !== rate.id) });
+    else await repo.deleteExchangeRate(rate);
+    toast.show(t('settings.currencies.rateDeleted'));
+  };
+
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-currencies">
       <Text tone="textSecondary">{t('settings.currencies.body')}</Text>
-      <TextInput testID="settings-budget-currency" label={t('settings.currencies.budgetCurrency')} value={snapshot?.settings.currency ?? 'NGN'} readOnly />
+      <TextInput testID="settings-budget-currency" label={t('settings.currencies.budgetCurrency')} value={home} readOnly />
       <Text variant="heading-sm">{t('settings.currencies.accountCurrencies')}</Text>
       {accountCurrencies.length ? (
         accountCurrencies.map((c) => (
@@ -202,25 +213,24 @@ export function CurrenciesTabDeep() {
         <Text tone="textSecondary">{t('settings.currencies.noRates')}</Text>
       ) : (
         rates.map((row) => (
-          <Card key={row.id} testID={`settings-rate-${row.id}`}>
-            <Text>
-              {row.currency} · {row.date} · {row.rate}
-            </Text>
-            <Text variant="caption" tone="textSecondary">
-              {row.source === 'manual' ? t('settings.currencies.sourceManual') : t('settings.currencies.sourceDownload')}
-            </Text>
+          <Card key={row.id} testID={`settings-rate-${row.currency}-${row.date}`} style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'] }}>
+            <View style={{ flex: 1 }}>
+              <Text>{t('settings.currencies.rateRow', { currency: row.currency, rate: row.rate, home })}</Text>
+              <Text variant="caption" tone="textSecondary">
+                {formatDay(row.date)}, {legacy.find((x) => x.id === row.id)?.source === 'download' ? t('settings.currencies.sourceDownload') : t('settings.currencies.sourceManual')}
+              </Text>
+            </View>
+            <Button testID={`settings-rate-delete-${row.currency}-${row.date}`} kind="link" label={t('settings.currencies.deleteRate')} onPress={() => void remove(row)} />
           </Card>
         ))
       )}
       <Button testID="settings-add-rate" kind="secondary" label={t('settings.currencies.addRate')} onPress={() => setRateOpen(true)} />
       <ExchangeRateSheet
         visible={rateOpen}
+        home={home}
         onClose={() => setRateOpen(false)}
         onSave={async (entry) => {
-          if (!snapshot) return;
-          const next = [...rates, { ...entry, id: uuidv7() }];
-          await repo.updateSettings({ ...snapshot.settings, exchangeRates: next });
-          toast.show(t('common.saved'));
+          await repo.setExchangeRate({ currency: entry.currency, date: entry.date, rate: entry.rate });
         }}
       />
     </ScrollView>

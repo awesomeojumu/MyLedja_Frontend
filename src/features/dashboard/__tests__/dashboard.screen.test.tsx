@@ -94,6 +94,26 @@ describe('Dashboard', () => {
     expect(screen.getByText(t('dashboard.debtsCard'))).toBeTruthy();
   });
 
+  it('Phase 5: the Health card waits for two months; the Investments card shows the portfolio once there is a holding', async () => {
+    const { sync, repo } = await seeded();
+    await repo.addAccount({ name: 'Stanbic Shares', type: 'investment', openingBalance: 0n, openingDate: '2026-10-01' });
+    const s = await repo.load();
+    const broker = s.accounts.find((a) => a.name === 'Stanbic Shares')!.id;
+    const added = await repo.addHolding({ name: 'MTN Nigeria', type: 'stock', accountId: broker, date: '2026-10-10' });
+    if (!added.ok) throw new Error(added.error);
+    await repo.buyHolding({ holdingId: added.value.id, accountId: s.accounts[0]!.id, units: '100', price: 20000n, fees: 0n, date: '2026-10-10' });
+    await repo.setPrices('2026-10-20', [{ holdingId: added.value.id, price: 22000n }]);
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <DashboardScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(await screen.findByTestId('dashboard-health-not-ready')).toHaveTextContent(t('health.notReadyTitle'));
+    expect(screen.getByTestId('dashboard-investments-value')).toHaveTextContent('₦22,000.00');
+    expect(screen.getByTestId('dashboard-investments-gain')).toHaveTextContent(t('dashboard.investmentsGain', { amount: '+₦2,000.00', pct: '+10.0%' }));
+  });
+
   it('P05-08: Customize opens popup #6', async () => {
     const { sync } = await seeded();
     await renderWithProviders(

@@ -58,7 +58,7 @@ function liquid(snapshot: Snapshot, facts: Fact[], date: string, settings: Healt
 }
 
 /** The Health page for a month on the device's data (DESIGN.md page 23). */
-export function healthPage(snapshot: Snapshot, month: string, today: string): HealthPage {
+export function healthPage(snapshot: Snapshot, month: string, today: string, opts: { history?: boolean } = {}): HealthPage {
   const settings = healthSettingsOf(snapshot);
   const look = lookupOf(snapshot);
   const facts = factsOf(snapshot).filter((f) => f.date <= today);
@@ -140,7 +140,9 @@ export function healthPage(snapshot: Snapshot, month: string, today: string): He
 
   const { input, asOf } = inputFor(month);
   const h = health(input);
-  const earlier = new Map(Array.from({ length: 11 }, (_, i) => shiftMonth(month, i - 11)).map((m) => [m, health(inputFor(m).input)]));
+  // The Dashboard card needs only last month's score, for the change.
+  const back = opts.history === false ? 1 : 11;
+  const earlier = new Map(Array.from({ length: back }, (_, i) => shiftMonth(month, i - back)).map((m) => [m, health(inputFor(m).input)]));
   const history = [...earlier].map(([m, x]) => ({ month: m, score: x.score })).concat({ month, score: h.score });
   const before = history.at(-2)?.score ?? null;
   const scored = h.pillars.filter((p) => p.score !== null);
