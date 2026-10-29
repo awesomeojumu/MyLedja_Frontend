@@ -11,11 +11,11 @@ import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { useSyncStatus } from '@/data/sync/SyncProvider';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
-import { useAuth } from '@/features/auth/AuthProvider';
 import { NotificationsBell } from '@/features/notifications/NotificationsBell';
 import { SyncIssuesBanner } from '@/features/sync/SyncIssues';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
 import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, PHONE_BOTTOM_PAGES, type NavItem } from './navigation';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 const c = tokens.color;
 const sp = tokens.spacing;
@@ -75,7 +75,6 @@ function PrivacyToggle({ color }: { color: string }) {
 function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: () => void }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user } = useAuth();
   const add = useOptionalAddTransaction();
   return (
     <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
@@ -111,22 +110,7 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
           <Text variant="heading-sm" style={{ color: c['on-primary'], fontFamily: 'Inter_400Regular' }}>
             {t('app.name')}
           </Text>
-          <View
-            testID="workspace-switcher"
-            accessibilityLabel={t('nav.workspace', {
-              name: user?.workspaceName ?? '',
-            })}
-            style={{
-              borderRadius: tokens.radius['rounded-md'],
-              borderWidth: 1,
-              borderColor: c['primary-deep'],
-              padding: sp['spacing-sm'],
-            }}
-          >
-            <Text variant="caption" style={{ color: c['on-primary'] }}>
-              {user?.workspaceName ?? ''}
-            </Text>
-          </View>
+          <WorkspaceSwitcher light onNavigate={onNavigate} />
         </View>
       )}
       {SHIPPED_PAGES.map((item) => {

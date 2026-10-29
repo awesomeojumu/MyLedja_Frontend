@@ -1,3 +1,4 @@
+import { forwardRef, type ComponentRef } from 'react';
 import { Pressable, View, type PressableProps } from 'react-native';
 import tokens from '../tokens.json';
 import { useTheme } from '../ThemeProvider';
@@ -10,19 +11,27 @@ type Props = Omit<PressableProps, 'children'> & {
   kind?: ButtonKind;
   size?: 'md' | 'sm';
   fullWidth?: boolean;
+  /** Web: focus this control when mounted (PU02-3 Cancel on destructive confirms). */
+  autoFocus?: boolean;
 };
 
 const c = tokens.color;
 
-export function Button({ label, kind = 'primary-pill', size = 'md', fullWidth, disabled, style, ...rest }: Props) {
+export const Button = forwardRef<ComponentRef<typeof Pressable>, Props>(function Button(
+  { label, kind = 'primary-pill', size = 'md', fullWidth, disabled, style, autoFocus, ...rest },
+  ref,
+) {
   const theme = useTheme();
   const isLink = kind === 'link';
   return (
     <Pressable
+      ref={ref}
       accessibilityRole={isLink ? 'link' : 'button'}
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       hitSlop={isLink ? 12 : undefined}
+      // @ts-expect-error RN web supports autoFocus on Pressable
+      autoFocus={autoFocus}
       {...rest}
       style={(state) => {
         const pressed = state.pressed;
@@ -65,4 +74,4 @@ export function Button({ label, kind = 'primary-pill', size = 'md', fullWidth, d
       </View>
     </Pressable>
   );
-}
+});
