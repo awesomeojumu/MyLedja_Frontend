@@ -7,7 +7,15 @@ import { grossSplitParts } from '@/features/income/grossSplit';
 import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import { suggestedFirstBudget } from '@/features/setup/suggestedBudget';
 import type { RemoteOperation } from '../sync/mapOperation';
-import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
+import {
+  goalBody,
+  goalScheduleBody,
+  goalUpdateBody,
+  incomeStreamBody,
+  incomeStreamUpdateBody,
+  scheduleBody,
+  scheduleUpdateBody,
+} from '../sync/serverRecords';
 import { t, type TextKey } from '@/i18n';
 import {
   buildAdjustment,
@@ -1715,12 +1723,25 @@ export class WorkspaceRepository {
       await this.put('allocations', a.id, { ...a, deleted: true }, 'goal.allocation.clear', undefined, null);
     }
     const baseVersion = await this.versionOf('goals', goalId);
-    await this.put('goals', goalId, { ...goal, deleted: true }, 'goal.delete', undefined, {
+    await this.put('goals', goalId, { ...goal, deleted: true }, 'goal.delete', baseVersion, {
       type: 'goal.delete',
       targetId: goalId,
       payload: { baseVersion },
+      baseVersion,
     });
     return { ok: true, value: undefined };
+  }
+
+  /** PU-33: persist recurring allocation locally and via sync `goal.schedule` (PUT …/schedule). */
+  async setGoalSchedule(goal: Goal): Promise<void> {
+    const { id, ...data } = goal;
+    const baseVersion = await this.versionOf('goals', id);
+    await this.put('goals', id, data, 'goal.schedule', baseVersion, {
+      type: 'goal.schedule',
+      targetId: id,
+      payload: goalScheduleBody(data, baseVersion),
+      baseVersion,
+    });
   }
 
   /** E18: earmark money for a goal; transfer when the source account differs. */
@@ -1754,6 +1775,7 @@ export class WorkspaceRepository {
       amountMinor: input.amount.toString(),
       date: input.date,
       fromAccountId: fromId,
+      transactionId: transferId,
     };
     const { id, ...data } = allocation;
     await this.put('allocations', id, data, 'goal.allocate', undefined, {
@@ -1765,9 +1787,51 @@ export class WorkspaceRepository {
     const saved = this.savedForGoal(goalId, await this.load());
     const completed = saved >= BigInt(goal.targetMinor);
     if (completed) {
-      await this.updateGoal({ ...goal, status: 'completed' });
+      const completedAt = new Date().toISOString();
+      await this.updateGoal({ ...goal, status: 'completed', completedAt });
+      const noteId = `goal-reached:${goalId}`;
+      const existing = await this.store.read('notifications', noteId);
+      if (!existing) {
+        const notification: AppNotification = {
+          id: noteId,
+          createdAt: completedAt,
+          title: t('goals.reached'),
+          body: t('notifications.goalReached', { name: goal.name }),
+          category: 'goals',
+          read: false,
+        };
+        const { id: nid, ...noteData } = notification;
+        await this.put('notifications', nid, noteData, 'notification.create');
+      }
     }
     return { ok: true, value: { allocation, completed } };
+  }
+
+  /** PU-33 day runner: when auto-allocate is on and today matches the schedule, earmark without asking. */
+  async runGoalAutoAllocations(today = workspaceToday()): Promise<number> {
+    const snapshot = await this.load();
+    let count = 0;
+    for (const goal of snapshot.goals) {
+      if (goal.status !== 'active') continue;
+      if (!goal.scheduleAutoAllocate || !goal.scheduleAmountMinor || !goal.scheduleDayOfMonth) continue;
+      if (goal.scheduleStarts && goal.scheduleStarts > today) continue;
+      const [y, m, d] = today.split('-').map(Number);
+      const date = new Date(Date.UTC(y!, m! - 1, d!));
+      let due = false;
+      if (goal.scheduleEvery === 'week') {
+        due = date.getUTCDay() === Math.min(6, Math.max(0, goal.scheduleDayOfMonth));
+      } else {
+        const last = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+        const on = goal.scheduleDayOfMonth === 31 ? last : Math.min(goal.scheduleDayOfMonth, last);
+        due = d === on;
+      }
+      if (!due) continue;
+      const already = snapshot.allocations.some((a) => a.goalId === goal.id && a.date === today && a.kind !== 'spend');
+      if (already) continue;
+      const r = await this.allocateToGoal(goal.id, { amount: BigInt(goal.scheduleAmountMinor), date: today });
+      if (r.ok) count += 1;
+    }
+    return count;
   }
 
   debtBalance(debt: PersonDebt, snapshot: Snapshot, onDate?: string): bigint {
@@ -2451,6 +2515,7 @@ export class WorkspaceRepository {
       date: input.date,
       fromAccountId: input.accountId,
       kind: 'spend',
+      transactionId: posted.value.id,
     };
     const { id, ...data } = allocation;
     await this.put('allocations', id, data, 'goal.spend', undefined, {

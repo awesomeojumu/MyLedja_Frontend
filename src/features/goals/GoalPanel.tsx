@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { MoreHorizontal } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { GraduationCap, Home, Laptop, MoreHorizontal, PiggyBank, Plane, Target } from 'lucide-react-native';
 
 import { Amount, Button, Confirm, Icon, LineChart, Menu, Panel, StatusPill, Text, formatDay, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
@@ -10,6 +11,16 @@ import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
 import { type GoalCard, goalProgressPoints, goalStatusKind, statusPillFor } from './helpers';
+import { GOAL_URL } from './popupUrl';
+
+const PANEL_ICONS = {
+  target: Target,
+  piggy: PiggyBank,
+  home: Home,
+  laptop: Laptop,
+  plane: Plane,
+  school: GraduationCap,
+} as const;
 
 const sp = tokens.spacing;
 
@@ -36,6 +47,7 @@ export function GoalPanel({
 }) {
   const theme = useTheme();
   const toast = useToast();
+  const router = useRouter();
   const { goal } = card;
   const category = goal.categoryId ? snapshot.categories.find((c) => c.id === goal.categoryId)?.name : undefined;
   const allocations = snapshot.allocations.filter((a) => a.goalId === goal.id).sort((a, b) => b.date.localeCompare(a.date));
@@ -45,11 +57,37 @@ export function GoalPanel({
   const pill = statusPillFor(kind);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  const openAllocation = (allocationId: string, transactionId?: string, date?: string) => {
+    const linked =
+      (transactionId ? snapshot.events.find((e) => e.id === transactionId) : undefined) ??
+      snapshot.events.find((e) => e.goalId === goal.id && (!date || e.date === date));
+    if (linked) {
+      router.push({ pathname: '/transactions', params: { tx: linked.id, txn: linked.id } });
+      return;
+    }
+    // Same-account earmark has no event — open allocate sheet for this goal (PU-30).
+    router.setParams({ [GOAL_URL.allocate]: goal.id, allocation: allocationId });
+  };
+
+  const iconKey = (goal.icon ?? 'target') as keyof typeof PANEL_ICONS;
+  const Glyph = PANEL_ICONS[iconKey] ?? Target;
+  const schedulePaused = goal.scheduleAmountMinor && goal.scheduleAutoAllocate === false;
+
   const menuItems = [
     { key: 'edit', label: t('goals.editGoal'), onPress: onEdit },
-    goal.status === 'paused'
-      ? { key: 'resume', label: t('goals.resumeGoal'), onPress: () => void repo.updateGoal({ ...goal, status: 'active' }) }
-      : { key: 'pause', label: t('goals.pauseGoal'), onPress: () => void repo.updateGoal({ ...goal, status: 'paused' }) },
+    goal.scheduleAmountMinor
+      ? {
+          key: 'pause-schedule',
+          label: schedulePaused ? t('goals.resumeSchedule') : t('goals.pauseSchedule'),
+          onPress: () =>
+            void repo.setGoalSchedule({
+              ...goal,
+              scheduleAutoAllocate: schedulePaused ? true : false,
+            }),
+        }
+      : goal.status === 'paused'
+        ? { key: 'resume', label: t('goals.resumeGoal'), onPress: () => void repo.updateGoal({ ...goal, status: 'active' }) }
+        : { key: 'pause', label: t('goals.pauseGoal'), onPress: () => void repo.updateGoal({ ...goal, status: 'paused' }) },
     goal.status === 'active'
       ? {
           key: 'done',
@@ -67,10 +105,19 @@ export function GoalPanel({
         <View style={{ gap: sp['spacing-lg'] }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View style={{ gap: sp['spacing-xs'], flex: 1 }}>
-              <StatusPill label={t(pill.labelKey)} kind={pill.pill} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'] }}>
+                <Icon icon={Glyph} size="nav" color={theme.textSecondary} />
+                <StatusPill label={t(pill.labelKey)} kind={pill.pill} />
+              </View>
               <Text variant="heading-sm">
                 <Amount minor={card.saved} variant="heading-sm" /> {t('goals.of')} <Amount minor={card.target} variant="heading-sm" />
               </Text>
+              <View
+                testID="goal-panel-bar"
+                style={{ height: 8, borderRadius: 4, backgroundColor: theme.border, overflow: 'hidden', marginVertical: sp['spacing-xs'] }}
+              >
+                <View style={{ height: 8, width: `${pct}%`, backgroundColor: theme.primaryFill }} />
+              </View>
               <Text variant="caption" tone="textSecondary">
                 {t('goals.percentProgress', { percent: String(pct) })}
               </Text>
@@ -101,10 +148,19 @@ export function GoalPanel({
               <Text tone="textSecondary">{t('goals.noAllocations')}</Text>
             ) : (
               allocations.map((a) => (
-                <Text key={a.id} variant="caption" tone="textSecondary">
-                  {formatDay(a.date)} · {a.kind === 'spend' ? '−' : '+'}
-                  {formatNaira(BigInt(a.amountMinor))}
-                </Text>
+                <Pressable
+                  key={a.id}
+                  testID={`goal-allocation-${a.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('goals.panelAllocations')}
+                  onPress={() => openAllocation(a.id, a.transactionId, a.date)}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text variant="caption" tone="textSecondary">
+                    {formatDay(a.date)} · {a.kind === 'spend' ? '−' : '+'}
+                    {formatNaira(BigInt(a.amountMinor))}
+                  </Text>
+                </Pressable>
               ))
             )}
           </View>

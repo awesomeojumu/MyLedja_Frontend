@@ -24,6 +24,7 @@ import type { Goal } from '@/data/workspace/model';
 import type { Snapshot, WorkspaceRepository } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
+import { ledgerBalance } from '@/ledger';
 import { formatNaira } from '@/money';
 
 import { goalProgress, goalSaved, monthlyNeeded, reachesByDate } from './helpers';
@@ -67,7 +68,13 @@ export function AddGoalSheet({
   const [name, setName] = useState(existing?.name ?? initialName ?? '');
   const [amountText, setAmountText] = useState(existing ? formatNaira(BigInt(existing.targetMinor)) : '');
   const [amountMinor, setAmountMinor] = useState<bigint | null>(existing ? BigInt(existing.targetMinor) : null);
-  const [accountId, setAccountId] = useState(existing?.accountId ?? '');
+  const defaultAccountId =
+    existing?.accountId ??
+    snapshot.accounts.find((a) => !a.archived && a.type === 'savings')?.id ??
+    snapshot.accounts.find((a) => !a.archived && a.countInBudget)?.id ??
+    snapshot.accounts.find((a) => !a.archived)?.id ??
+    '';
+  const [accountId, setAccountId] = useState(defaultAccountId);
   const [targetDate, setTargetDate] = useState(existing?.targetDate ?? '');
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? '');
   const [icon, setIcon] = useState(existing?.icon ?? 'target');
@@ -75,6 +82,7 @@ export function AddGoalSheet({
   const [alreadyText, setAlreadyText] = useState('');
   const [alreadyMinor, setAlreadyMinor] = useState<bigint | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [alreadyError, setAlreadyError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -82,6 +90,7 @@ export function AddGoalSheet({
   const accounts = snapshot.accounts.filter((a) => !a.archived).map((a) => ({ value: a.id, label: a.name }));
   const categories = snapshot.categories.filter((c) => c.kind === 'expense' && !c.deleted).map((c) => ({ value: c.id, label: c.name }));
   const categoryOptions = [{ value: '__none__' as const, label: t('goals.noCategory') }, ...categories];
+  const balanceOf = (id: string) => (id ? ledgerBalance(id, snapshot.events) : 0n);
 
   const monthly = useMemo(() => {
     if (amountMinor === null || amountMinor <= 0n || !targetDate) return null;
@@ -101,6 +110,10 @@ export function AddGoalSheet({
     }
     if (targetDate && targetDate <= today) {
       setDateError(t('goals.targetDateFuture'));
+      return;
+    }
+    if (!existing && alreadyMinor !== null && alreadyMinor > balanceOf(accountId)) {
+      setAlreadyError(t('goals.alreadySavedTooHigh'));
       return;
     }
     if (!valid || amountMinor === null) return;
@@ -198,15 +211,19 @@ export function AddGoalSheet({
           />
           {dateError ? <InlineError testID="goal-date-error" message={dateError} /> : null}
           {!existing ? (
-            <AmountInput
-              testID="goal-already-saved"
-              label={t('goals.alreadySaved')}
-              value={alreadyText}
-              onChange={(text, minor) => {
-                setAlreadyText(text);
-                setAlreadyMinor(minor);
-              }}
-            />
+            <>
+              <AmountInput
+                testID="goal-already-saved"
+                label={t('goals.alreadySaved')}
+                value={alreadyText}
+                onChange={(text, minor) => {
+                  setAlreadyText(text);
+                  setAlreadyMinor(minor);
+                  setAlreadyError(null);
+                }}
+              />
+              {alreadyError ? <InlineError testID="goal-already-error" message={alreadyError} /> : null}
+            </>
           ) : null}
           {monthly !== null ? (
             <Text testID="goal-monthly-needed" tone="textSecondary">
@@ -346,7 +363,13 @@ export function GoalScheduleSheet({
   const [amountText, setAmountText] = useState(goal.scheduleAmountMinor ? formatNaira(BigInt(goal.scheduleAmountMinor)) : '');
   const [amountMinor, setAmountMinor] = useState<bigint | null>(goal.scheduleAmountMinor ? BigInt(goal.scheduleAmountMinor) : null);
   const [every, setEvery] = useState<'week' | 'month'>(goal.scheduleEvery ?? 'month');
-  const [day, setDay] = useState(goal.scheduleDayOfMonth ? String(goal.scheduleDayOfMonth) : String(new Date().getUTCDate()));
+  const [day, setDay] = useState(
+    goal.scheduleDayOfMonth
+      ? String(goal.scheduleDayOfMonth)
+      : every === 'week'
+        ? String(new Date().getUTCDay())
+        : String(new Date().getUTCDate()),
+  );
   const [starts, setStarts] = useState(goal.scheduleStarts ?? today);
   const [autoAllocate, setAutoAllocate] = useState(goal.scheduleAutoAllocate ?? false);
   const [busy, setBusy] = useState(false);
@@ -354,6 +377,20 @@ export function GoalScheduleSheet({
   const saved = goalSaved(goal.id, snapshot);
   const target = BigInt(goal.targetMinor);
   const reaches = amountMinor && amountMinor > 0n ? reachesByDate(saved, target, amountMinor, every, starts) : null;
+  const weekdayOptions = [
+    { value: '0', label: t('plan.weekday.sun') },
+    { value: '1', label: t('plan.weekday.mon') },
+    { value: '2', label: t('plan.weekday.tue') },
+    { value: '3', label: t('plan.weekday.wed') },
+    { value: '4', label: t('plan.weekday.thu') },
+    { value: '5', label: t('plan.weekday.fri') },
+    { value: '6', label: t('plan.weekday.sat') },
+  ];
+  const monthDayOptions = Array.from({ length: 31 }, (_, i) => {
+    const n = i + 1;
+    return { value: String(n), label: n === 31 ? t('plan.lastDayOfMonth') : String(n) };
+  });
+  const onOptions = every === 'week' ? weekdayOptions : monthDayOptions;
 
   return (
     <Sheet
@@ -370,12 +407,15 @@ export function GoalScheduleSheet({
             disabled={amountMinor === null || amountMinor <= 0n || !day.trim() || busy}
             onPress={() => {
               if (amountMinor === null) return;
+              const on = Number(day);
+              const scheduleDayOfMonth =
+                every === 'week' ? Math.min(6, Math.max(0, Number.isFinite(on) ? on : 1)) : Math.min(31, Math.max(1, Number.isFinite(on) ? on : 1));
               setBusy(true);
               void repo
-                .updateGoal({
+                .setGoalSchedule({
                   ...goal,
                   scheduleAmountMinor: amountMinor.toString(),
-                  scheduleDayOfMonth: Math.min(31, Math.max(1, Number(day) || 1)),
+                  scheduleDayOfMonth,
                   scheduleEvery: every,
                   scheduleStarts: starts,
                   scheduleAutoAllocate: autoAllocate,
@@ -403,13 +443,22 @@ export function GoalScheduleSheet({
         testID="goal-schedule-every"
         label={t('goals.scheduleEvery')}
         value={every}
-        onChange={setEvery}
+        onChange={(v) => {
+          setEvery(v);
+          setDay(v === 'week' ? String(new Date().getUTCDay()) : String(new Date().getUTCDate()));
+        }}
         options={[
           { value: 'week', label: t('goals.scheduleWeekly') },
           { value: 'month', label: t('goals.scheduleMonthly') },
         ]}
       />
-      <TextInput testID="goal-schedule-day" label={t('goals.scheduleDay')} value={day} onChangeText={setDay} keyboardType="number-pad" />
+      <Select
+        testID="goal-schedule-day"
+        label={every === 'week' ? t('plan.dayOfWeek') : t('plan.dayOfMonth')}
+        options={onOptions}
+        value={day}
+        onChange={setDay}
+      />
       <DatePicker testID="goal-schedule-starts" label={t('goals.scheduleStarts')} value={starts} onChange={setStarts} />
       <Switch testID="goal-schedule-auto" label={t('goals.scheduleAuto')} value={autoAllocate} onChange={setAutoAllocate} />
       {reaches ? (

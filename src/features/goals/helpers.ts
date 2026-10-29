@@ -132,8 +132,34 @@ export function goalProgressPoints(goalId: string, snapshot: Snapshot, today: st
   return points;
 }
 
-export function gridColumns(size: 'phone' | 'tablet' | 'desktop' | 'wide'): number {
+/** DESIGN D10: tablet portrait 2 / landscape 3; desktop+ always 3; phone 1. */
+export function gridColumns(
+  size: 'phone' | 'tablet' | 'desktop' | 'wide',
+  opts?: { width?: number; height?: number },
+): number {
   if (size === 'wide' || size === 'desktop') return 3;
-  if (size === 'tablet') return 2;
+  if (size === 'tablet') {
+    const w = opts?.width;
+    const h = opts?.height;
+    if (w !== undefined && h !== undefined && w > h) return 3;
+    return 2;
+  }
   return 1;
+}
+
+/** True when a goal's PU-33 schedule should fire on `today` (YYYY-MM-DD). */
+export function goalScheduleDue(
+  goal: { scheduleEvery?: 'week' | 'month'; scheduleDayOfMonth?: number; scheduleStarts?: string; scheduleAmountMinor?: string; scheduleAutoAllocate?: boolean },
+  today: string,
+): boolean {
+  if (!goal.scheduleAutoAllocate || !goal.scheduleAmountMinor || !goal.scheduleDayOfMonth) return false;
+  if (goal.scheduleStarts && goal.scheduleStarts > today) return false;
+  const [y, m, d] = today.split('-').map(Number);
+  const date = new Date(Date.UTC(y!, m! - 1, d!));
+  if (goal.scheduleEvery === 'week') {
+    return date.getUTCDay() === Math.min(6, Math.max(0, goal.scheduleDayOfMonth));
+  }
+  const last = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+  const on = goal.scheduleDayOfMonth === 31 ? last : Math.min(goal.scheduleDayOfMonth, last);
+  return d === on;
 }

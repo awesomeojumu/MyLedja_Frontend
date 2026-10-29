@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, TextInput as RNTextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, TextInput as RNTextInput, useWindowDimensions, View } from 'react-native';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { t, type TextKey } from '@/i18n';
 import tokens from '../tokens.json';
@@ -15,7 +15,7 @@ const sp = tokens.spacing;
 const r = tokens.radius;
 const backdrop = `${tokens.color['brand-dark-900']}73`;
 
-/** Quick detail of one item: a full-screen sheet on phones and tablets, a right-side panel from 1024 (DESIGN.md 4). */
+/** Quick detail of one item: sheet on phone / tablet portrait; right-side panel on tablet landscape + desktop (DESIGN.md 4 / D10). */
 export function Panel({
   visible,
   title,
@@ -34,7 +34,9 @@ export function Panel({
 }) {
   const theme = useTheme();
   const size = useSizeClass();
-  const side = size === 'desktop' || size === 'wide';
+  const { width: winW, height: winH } = useWindowDimensions();
+  const tabletLandscape = size === 'tablet' && winW > winH;
+  const side = size === 'desktop' || size === 'wide' || tabletLandscape;
   return (
     <Modal visible={visible} transparent={side} animationType="slide" onRequestClose={onClose} aria-label={title}>
       <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }}>

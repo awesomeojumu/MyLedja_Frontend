@@ -276,15 +276,22 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
     }
     case 'goals': {
       const schedule = d.schedule as Doc | null | undefined;
+      const recurrence = schedule?.recurrence as Doc | undefined;
+      const unit = str(recurrence?.unit);
       const data: Omit<Goal, 'id'> = {
         name: String(d.name),
+        icon: str(d.icon),
+        notes: str(d.notes),
         targetMinor: String(d.targetAmount),
         targetDate: str(d.targetDate),
         accountId: String(d.accountId),
         categoryId: str(d.categoryId),
         status: d.status === 'in_progress' ? 'active' : (d.status as Goal['status']),
+        completedAt: str(d.completedAt) ?? undefined,
         scheduleAmountMinor: minorOrUndefined(schedule?.amount),
-        scheduleDayOfMonth: num((schedule?.recurrence as Doc | undefined)?.dayOfMonth),
+        scheduleDayOfMonth: num(recurrence?.dayOfMonth) ?? (unit === 'week' ? num(recurrence?.weekday) : undefined),
+        scheduleEvery: unit === 'week' || unit === 'month' ? unit : undefined,
+        scheduleStarts: str(schedule?.startDate),
       };
       return rec('goals', id, data);
     }
@@ -297,6 +304,7 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         date: d.date,
         fromAccountId: str(d.fromAccountId) ?? '',
         kind: spend ? 'spend' : 'allocate',
+        transactionId: str(d.transactionId),
       });
     }
     case 'reconciliations': {
@@ -433,6 +441,8 @@ export function goalBody(id: string, g: Omit<Goal, 'id'>) {
   return {
     id,
     name: g.name,
+    icon: g.icon ?? null,
+    notes: g.notes ?? null,
     targetAmount: g.targetMinor,
     targetDate: g.targetDate ?? null,
     accountId: g.accountId,
@@ -443,4 +453,20 @@ export function goalBody(id: string, g: Omit<Goal, 'id'>) {
 export function goalUpdateBody(g: Omit<Goal, 'id'>, baseVersion: number) {
   const { id: _id, ...rest } = goalBody('', g);
   return { ...rest, baseVersion, status: g.status === 'active' ? 'in_progress' : g.status };
+}
+
+/** PUT /goals/:id/schedule body (PU-33 / sync `goal.schedule`). */
+export function goalScheduleBody(g: Omit<Goal, 'id'>, baseVersion: number) {
+  const every = g.scheduleEvery ?? 'month';
+  const on = g.scheduleDayOfMonth ?? 1;
+  const rule: RecurrenceRule =
+    every === 'week'
+      ? { every: 'week', on: Math.min(6, Math.max(0, on)), interval: 1 }
+      : { every: 'month', on: Math.min(31, Math.max(1, on)), interval: 1 };
+  return {
+    baseVersion,
+    amount: g.scheduleAmountMinor ?? '0',
+    recurrence: recurrenceToServer(rule),
+    startDate: g.scheduleStarts ?? new Date().toISOString().slice(0, 10),
+  };
 }

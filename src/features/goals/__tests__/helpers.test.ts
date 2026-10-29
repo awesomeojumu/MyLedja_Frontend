@@ -1,4 +1,4 @@
-import { monthlyNeeded, goalProgress, goalStatusKind } from '../helpers';
+import { monthlyNeeded, goalProgress, goalScheduleDue, goalStatusKind, gridColumns } from '../helpers';
 
 describe('goal helpers', () => {
   it('P14-01: monthly needed from target and saved', () => {
@@ -18,5 +18,26 @@ describe('goal helpers', () => {
       accountName: 'Savings',
     };
     expect(goalStatusKind(card, '2026-10-28')).toBe('behind');
+  });
+
+  it('D10: tablet landscape uses 3 columns', () => {
+    expect(gridColumns('tablet', { width: 1100, height: 800 })).toBe(3);
+    expect(gridColumns('tablet', { width: 800, height: 1100 })).toBe(2);
+    expect(gridColumns('phone')).toBe(1);
+  });
+
+  it('PU-33: schedule due on matching day when auto on', () => {
+    expect(
+      goalScheduleDue(
+        { scheduleAutoAllocate: true, scheduleAmountMinor: '1000', scheduleEvery: 'month', scheduleDayOfMonth: 28, scheduleStarts: '2026-10-01' },
+        '2026-10-28',
+      ),
+    ).toBe(true);
+    expect(
+      goalScheduleDue(
+        { scheduleAutoAllocate: true, scheduleAmountMinor: '1000', scheduleEvery: 'month', scheduleDayOfMonth: 28, scheduleStarts: '2026-10-01' },
+        '2026-10-27',
+      ),
+    ).toBe(false);
   });
 });
