@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, Confirm, InlineError, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
+import { Button, Confirm, DatePicker, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { Category, ExchangeRateEntry } from '@/data/workspace/model';
 import { t, type TextKey } from '@/i18n';
-import { isRate } from '@/ledger/rates';
 
 const sp = tokens.spacing;
 
@@ -103,48 +102,36 @@ export function ChangeRoleSheet({
   );
 }
 
-/** #56 Exchange rate: how much one unit of a currency is worth in the budget currency, on a date (P26-14). */
+/** #56 Exchange rate (PU-56) */
 export function ExchangeRateSheet({
   visible,
-  home,
   onClose,
   onSave,
+  initialCurrency,
+  initialDate,
 }: {
   visible: boolean;
-  home: string;
   onClose: () => void;
   onSave: (entry: Omit<ExchangeRateEntry, 'id'>) => void | Promise<void>;
+  initialCurrency?: string;
+  initialDate?: string;
 }) {
   const toast = useToast();
-  const [currency, setCurrency] = useState('USD');
-  const [date, setDate] = useState('');
+  const today = new Intl.DateTimeFormat('en-CA').format(new Date());
+  const [currency, setCurrency] = useState(initialCurrency ?? 'USD');
+  const [date, setDate] = useState(initialDate ?? today);
   const [rate, setRate] = useState('');
-  const [error, setError] = useState<string | null>(null);
 
   // Start empty each time the sheet opens.
   const [wasVisible, setWasVisible] = useState(visible);
   if (visible !== wasVisible) {
     setWasVisible(visible);
     if (visible) {
-      setCurrency('USD');
-      setDate('');
+      setCurrency(initialCurrency ?? 'USD');
+      setDate(initialDate ?? today);
       setRate('');
-      setError(null);
     }
   }
-
-  const save = () => {
-    const code = currency.trim().toUpperCase();
-    const day = date.trim() || new Intl.DateTimeFormat('en-CA').format(new Date());
-    const value = rate.trim().replace(/,/g, '');
-    if (!/^[A-Z]{3}$/.test(code) || code === home) return setError(t('settings.currencies.errorCurrency'));
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return setError(t('settings.currencies.errorDate'));
-    if (!isRate(value)) return setError(t('settings.currencies.errorRate'));
-    void Promise.resolve(onSave({ currency: code, date: day, rate: value, source: 'manual' })).then(() => {
-      toast.show(t('common.saved'));
-      onClose();
-    });
-  };
 
   return (
     <Sheet
@@ -152,18 +139,43 @@ export function ExchangeRateSheet({
       title={t('settings.popup.exchangeTitle')}
       onClose={onClose}
       testID="settings-exchange-sheet"
-      footer={<Button testID="settings-exchange-save" label={t('panel.save')} disabled={!rate.trim()} onPress={save} />}
+      footer={
+        <Button
+          testID="settings-exchange-save"
+          label={t('settings.popup.exchangeSave')}
+          disabled={!rate.trim() || !currency.trim()}
+          onPress={() => {
+            void Promise.resolve(
+              onSave({
+                currency: currency.trim().toUpperCase(),
+                date: date.trim() || today,
+                rate: rate.trim(),
+                source: 'manual',
+              }),
+            ).then(() => {
+              toast.show(t('settings.popup.exchangeSaved'));
+              onClose();
+            });
+          }}
+        />
+      }
     >
-      <TextInput testID="settings-exchange-currency" label={t('settings.popup.exchangeCurrency')} value={currency} onChangeText={setCurrency} autoCapitalize="characters" maxLength={3} />
-      <TextInput testID="settings-exchange-date" label={t('settings.popup.exchangeDate')} value={date} onChangeText={setDate} placeholder="2026-10-28" />
+      <Select
+        testID="settings-exchange-currency"
+        label={t('settings.popup.exchangeCurrency')}
+        value={currency}
+        onChange={setCurrency}
+        options={['USD', 'GBP', 'EUR', 'CAD', 'GHS'].map((c) => ({ value: c, label: c }))}
+      />
+      <DatePicker testID="settings-exchange-date" label={t('settings.popup.exchangeDate')} value={date} onChange={setDate} />
       <TextInput
         testID="settings-exchange-rate"
-        label={t('settings.currencies.rateLabel', { currency: currency.trim().toUpperCase() || 'USD', home })}
+        label={t('settings.popup.exchangeRatePer', { currency })}
         value={rate}
         onChangeText={setRate}
         keyboardType="decimal-pad"
+        placeholder="1550.00"
       />
-      {error ? <InlineError testID="settings-exchange-error" message={error} /> : null}
     </Sheet>
   );
 }

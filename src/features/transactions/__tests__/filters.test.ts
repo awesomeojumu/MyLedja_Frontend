@@ -1,4 +1,4 @@
-import { applyFilters, emptyFilters, filtersFromParams } from '../filters';
+import { applyFilters, emptyFilters } from '../filters';
 import { rowsFor } from '../helpers';
 import type { Snapshot } from '@/data/workspace/repository';
 
@@ -48,10 +48,8 @@ function snapshotStub(): Snapshot {
     budgetTemplates: [],
     rules: [],
     holdings: [],
+    lots: [],
     prices: [],
-    rates: [],
-    reportDashboards: [],
-    savedReports: [],
     waiting: new Set(),
     chart: {} as Snapshot['chart'],
   };
@@ -64,18 +62,5 @@ describe('transaction filters', () => {
     const expenseOnly = rows.filter((r) => applyFilters(r, { ...emptyFilters(), type: 'expense' }, snapshot));
     expect(expenseOnly).toHaveLength(1);
     expect(expenseOnly[0]!.event.id).toBe('e1');
-  });
-});
-
-describe('filters from the URL (P20-03)', () => {
-  it('reads a month, a range and ids, and leaves out what it cannot read', () => {
-    expect(filtersFromParams({ month: '2026-02', category: 'c1' })).toEqual({ dateFrom: '2026-02-01', dateTo: '2026-02-28', categoryId: 'c1' });
-    expect(filtersFromParams({ from: '2026-10-01', to: '2026-10-31', account: 'a1', payee: 'p1' })).toEqual({
-      dateFrom: '2026-10-01',
-      dateTo: '2026-10-31',
-      accountId: 'a1',
-      payeeId: 'p1',
-    });
-    expect(filtersFromParams({ month: '2026-13', from: '1 Oct' })).toEqual({});
   });
 });

@@ -1,5 +1,3 @@
-import type { InvestmentMeta } from './investments';
-
 /** TECH-SPEC 6.1: the six kinds of ledger account. */
 export type LedgerKind = 'asset' | 'liability' | 'income' | 'expense' | 'equity' | 'loss';
 
@@ -28,8 +26,6 @@ export type LedgerAccount = {
   categoryId?: string;
   /** Income that counts toward the budget (TECH-SPEC 6.6). Defaults to true. */
   countInBudget?: boolean;
-  /** A holding: an asset at cost (TECH-SPEC 6.1). Never a cash account. */
-  holding?: boolean;
 };
 
 /** Positive is a debit, negative a credit (TECH-SPEC 6.1). */
@@ -69,9 +65,6 @@ export type MoneyEvent = {
   splitTotal?: bigint;
   payeeName?: string;
   notes?: string;
-  /** E20 to E22: the holding, and the units, prices and lots it recorded (TECH-SPEC 6.8). */
-  holdingId?: string;
-  investment?: InvestmentMeta;
 };
 
 export type LedgerErrorCode =
@@ -85,11 +78,7 @@ export type LedgerErrorCode =
   | 'already_reversed'
   | 'reconciled'
   | 'not_positive'
-  | 'wrong_account_kind'
-  | 'not_enough_units'
-  | 'lots_mismatch'
-  | 'fees_too_big'
-  | 'lot_sold';
+  | 'wrong_account_kind';
 
 export type LedgerResult<T> = { ok: true; value: T } | { ok: false; error: LedgerErrorCode };
 

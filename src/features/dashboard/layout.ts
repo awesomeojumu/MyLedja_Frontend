@@ -2,7 +2,7 @@ import type { DashboardLayout as StoredDashboardLayout, WorkspaceSettings } from
 import type { SizeClass } from '@/design/size';
 import type { TextKey } from '@/i18n';
 
-/** DESIGN.md page 5 cards; Health and Investments came in Phase 5. */
+/** DESIGN.md page 5 cards (Phase 1–2; Health and Investments are Phase 5). */
 export const DASHBOARD_CARD_IDS = [
   'checklist',
   'netWorth',
@@ -16,8 +16,6 @@ export const DASHBOARD_CARD_IDS = [
   'recent',
   'goals',
   'debts',
-  'health',
-  'investments',
 ] as const;
 
 export type DashboardCardId = (typeof DASHBOARD_CARD_IDS)[number];
@@ -45,8 +43,6 @@ const CARD_LABELS: Record<DashboardCardId, TextKey> = {
   recent: 'dashboard.card.recent',
   goals: 'dashboard.card.goals',
   debts: 'dashboard.card.debts',
-  health: 'dashboard.card.health',
-  investments: 'dashboard.card.investments',
 };
 
 export function dashboardCardLabel(id: DashboardCardId): TextKey {

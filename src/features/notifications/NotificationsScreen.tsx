@@ -212,9 +212,8 @@ export function NotificationsScreen() {
             const r = await repo.recordDebtPayment(debtPayTarget.debtId, {
               accountId: input.accountId,
               amount: input.principal,
-              date: 'date' in input && typeof input.date === 'string' ? input.date : day,
+              date: day,
               interest: input.interest,
-              overpayment: 'overpayment' in input ? input.overpayment : undefined,
             });
             if (!r.ok) setError(ledgerMessage(r.error));
             else {

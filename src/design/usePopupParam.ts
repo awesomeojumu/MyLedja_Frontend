@@ -35,15 +35,32 @@ export function usePopupParam<TDraft>({
   const [draft, setDraftState] = useState<TDraft>(emptyDraft);
   const [hydrated, setHydrated] = useState(false);
 
+  if (!shouldOpen && hydrated) {
+    setDraftState(emptyDraft);
+    setHydrated(false);
+  }
+
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  if (shouldOpen && loadedKey !== draftKey && hydrated) {
+    setHydrated(false);
+  }
+
   useEffect(() => {
-    if (!shouldOpen) {
-      setDraftState(emptyDraft);
-      setHydrated(false);
+    if (!shouldOpen) return;
+    let cancelled = false;
+    let kv;
+    try {
+      kv = openKeyValue();
+    } catch {
+      // No device store (Jest native SQLite). Hydrate empty on next tick.
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setLoadedKey(draftKey);
+        setHydrated(true);
+      });
       return;
     }
-    let cancelled = false;
-    setHydrated(false);
-    void openKeyValue()
+    void kv
       .get(draftKey)
       .then((rawDraft) => {
         if (cancelled) return;
@@ -56,6 +73,7 @@ export function usePopupParam<TDraft>({
         } else {
           setDraftState(emptyDraft);
         }
+        setLoadedKey(draftKey);
         setHydrated(true);
       });
     return () => {
@@ -69,7 +87,13 @@ export function usePopupParam<TDraft>({
     (next: TDraft | ((prev: TDraft) => TDraft)) => {
       setDraftState((prev) => {
         const value = typeof next === 'function' ? (next as (p: TDraft) => TDraft)(prev) : next;
-        if (shouldOpen) void openKeyValue().set([[draftKey, JSON.stringify(value)]]);
+        if (shouldOpen) {
+          try {
+            void openKeyValue().set([[draftKey, JSON.stringify(value)]]);
+          } catch {
+            /* ignore missing native store in tests */
+          }
+        }
         return value;
       });
     },
@@ -77,7 +101,11 @@ export function usePopupParam<TDraft>({
   );
 
   const close = useCallback(() => {
-    void openKeyValue().remove([draftKey]);
+    try {
+      void openKeyValue().remove([draftKey]);
+    } catch {
+      /* ignore */
+    }
     router.setParams({ [param]: undefined });
   }, [draftKey, param, router]);
 

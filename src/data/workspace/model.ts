@@ -1,5 +1,5 @@
 import type { TextKey } from '@/i18n';
-import type { EventType, InvestmentMeta, LedgerKind, Line, MoneyEvent } from '@/ledger';
+import type { EventType, LedgerKind, Line, MoneyEvent } from '@/ledger';
 
 /** DESIGN.md page 8 groups, in order. */
 export const ACCOUNT_GROUPS = ['cashBank', 'cards', 'investments', 'property', 'loans', 'other'] as const;
@@ -30,9 +30,11 @@ export type Account = {
   last4?: string;
   countInBudget: boolean;
   archived: boolean;
-  order: number;
-  /** Archived while money stayed in the account (PU-15). Restoring clears this. */
+  /** Archived while still holding a balance; still counts in net worth (PU-15). */
   closedWithBalance?: boolean;
+  /** ISO date the account was opened / created (TB-03 Details). */
+  openedAt?: string;
+  order: number;
   /** The last CSV column mapping used for this account (P09-05). */
   importMapping?: ImportMapping;
 };
@@ -63,6 +65,8 @@ export type Category = {
   group: string;
   /** For starter categories, the catalogue key; the name follows the person's edits. */
   key?: TextKey;
+  /** Lucide icon name (PU-11). */
+  icon?: string | null;
   /** Hide from the Budget page (P07-05). */
   hidden: boolean;
   countInBudget: boolean;
@@ -70,12 +74,10 @@ export type Category = {
   budgetType: BudgetType;
   /** Tracking style: leftover carries when on (TECH-SPEC 6.6). */
   carryOver: boolean;
-  /** Lucide icon name chosen on the category (PU category edit). */
-  icon?: string;
+  /** Counts towards runway in Health (PU-11 / TECH-SPEC 6.10). */
+  essential?: boolean;
   /** Soft-deleted after reassignment (Q-18); filtered out of the snapshot. */
   deleted?: boolean;
-  /** Counts in Health's runway (TECH-SPEC 6.10). Fixed categories and the Home, Food, Getting around, Health and Education groups count by default. */
-  essential?: boolean;
 };
 
 export type Payee = {
@@ -92,7 +94,15 @@ export type Payee = {
 /** Transaction sorting rules (DESIGN page 25, TECH-SPEC rules collection). */
 export type RuleStage = 'first' | 'normal' | 'last';
 
-export type RuleConditionField = 'payee' | 'description' | 'amount' | 'account' | 'category' | 'notes' | 'date' | 'money';
+export type RuleConditionField =
+  | 'payee'
+  | 'description'
+  | 'amount'
+  | 'account'
+  | 'category'
+  | 'notes'
+  | 'date'
+  | 'money';
 
 export type RuleConditionOp =
   | 'contains'
@@ -156,20 +166,80 @@ export type ExchangeRateEntry = {
   source: 'manual' | 'download';
 };
 
-/** Health settings (DESIGN.md page 23). */
-export type HealthSettings = {
-  /** Accounts that count as cash; undefined means bank, cash, wallet and savings. */
-  cashAccountIds?: string[];
-  targetMonths: 3 | 6 | 12;
-  /** Same choice as targetMonths, named by the Health settings sheet. */
-  emergencyMonths?: 3 | 6 | 12;
-  countInvestments: boolean;
-  /** Same choice as countInvestments, named by the Health settings sheet. */
-  countInvestmentsInRunway?: boolean;
-  essentialCategoryIds?: string[];
+/** Phase 5 investments (TECH-SPEC 6.8 / PU-37…40). */
+export const HOLDING_TYPES = ['stock', 'fund', 'pension', 'crypto', 'fixedDeposit', 'other'] as const;
+export type HoldingType = (typeof HOLDING_TYPES)[number];
+
+export type Holding = {
+  id: string;
+  name: string;
+  symbol?: string;
+  type: HoldingType;
+  /** Parent investment account (Held in). */
+  accountId: string;
+  currency: string;
+  /** Ledger asset for this holding's cost basis. */
+  ledgerAccountId: string;
 };
 
-export const DEFAULT_HEALTH_SETTINGS: HealthSettings = { targetMonths: 6, countInvestments: false };
+export type HoldingLot = {
+  id: string;
+  holdingId: string;
+  date: string;
+  units: string;
+  /** Units already sold from this lot. */
+  soldUnits: string;
+  /** Total cost of the original lot in minor units. */
+  costMinor: string;
+  pricePerUnitMinor: string;
+  feesMinor: string;
+  buyEventId?: string;
+};
+
+export type HoldingPrice = {
+  id: string;
+  holdingId: string;
+  date: string;
+  priceMinor: string;
+};
+
+/** Reports dashboards (PU-41…43 / TB-10). */
+export type ReportCardKind =
+  | 'spendingByCategory'
+  | 'incomeVsSpending'
+  | 'netWorth'
+  | 'cashFlow'
+  | 'budgetProgress'
+  | 'custom';
+
+export type ReportCard = {
+  id: string;
+  kind: ReportCardKind;
+  title: string;
+  hidden?: boolean;
+};
+
+export type ReportDashboard = {
+  id: string;
+  name: string;
+  cards: ReportCard[];
+  order: number;
+};
+
+export type SavedReport = {
+  id: string;
+  name: string;
+  kind: ReportCardKind;
+  dashboardId?: string;
+};
+
+/** Health settings (PU-44 / TECH-SPEC 6.10). */
+export type HealthSettings = {
+  cashAccountIds: string[];
+  emergencyMonths: 3 | 6 | 12;
+  countInvestmentsInRunway: boolean;
+  essentialCategoryIds: string[];
+};
 
 /** Which budget category types appear in the budget UI (Settings › Budget). */
 export type BudgetTypesShown = {
@@ -197,17 +267,22 @@ export const DEFAULT_DEVICE_SYNC: DeviceSyncPrefs = {
   lastSyncedLabel: undefined,
 };
 
+/** Settings › Categories and tags — tag list (DESIGN page 26). */
+export type WorkspaceTag = { id: string; name: string };
+
 /** Workspace preferences chosen in Welcome and Settings (Phase 1 subset). */
 export type WorkspaceSettings = {
   budgetStyle: BudgetStyle;
   currency: string;
   weekStart: 'monday' | 'sunday' | 'saturday';
+  /** Workspace display name (TB-11 Workspace). */
+  workspaceName?: string;
+  /** Default Africa/Lagos (TB-11 Workspace). */
+  timeZone?: string;
   checklistHidden?: boolean;
+  /** Larger screens (tablet+); phone layout is `dashboardLayoutPhone` (PU-06). */
   dashboardLayout?: DashboardLayout;
-  /** Phone card order, stored apart from the larger layout (PU-06). */
   dashboardLayoutPhone?: DashboardLayout;
-  /** Days ahead a bill counts as due soon on Plan. */
-  dueSoonDays?: number;
   notificationPrefs?: NotificationPrefs;
   aiPrefs?: AiFeaturePrefs;
   carryOverDefault?: boolean;
@@ -215,7 +290,17 @@ export type WorkspaceSettings = {
   exchangeRates?: ExchangeRateEntry[];
   downloadDailyRates?: boolean;
   deviceSync?: DeviceSyncPrefs;
-  healthSettings?: HealthSettings;
+  /** Profile photo (local URI); shows in sidebar/drawer (PU-63). */
+  profilePhotoUri?: string | null;
+  /** Phone haptics (Settings › General). */
+  hapticsEnabled?: boolean;
+  /** Tags managed under Categories and tags. */
+  tags?: WorkspaceTag[];
+  /** PU-28 — Due soon window in days (3 · 7 · 14 · 30). */
+  dueSoonDays?: 3 | 7 | 14 | 30;
+  health?: HealthSettings;
+  reportDashboards?: ReportDashboard[];
+  savedReports?: SavedReport[];
 };
 
 /** Settings › Notifications (P26-05). */
@@ -276,21 +361,21 @@ export const budgetAssignId = (categoryId: string, month: string) => `${category
 export type Goal = {
   id: string;
   name: string;
+  icon?: string;
+  notes?: string;
   targetMinor: string;
   targetDate?: string;
   accountId: string;
   categoryId?: string;
   status: 'active' | 'paused' | 'completed';
   completedAt?: string;
-  notes?: string;
-  icon?: string;
-  /** Optional monthly schedule (P14-04). */
+  /** Optional monthly schedule (P14-04 / PU-33). */
   scheduleAmountMinor?: string;
   scheduleDayOfMonth?: number;
-  scheduleEvery?: 'day' | 'week' | 'month' | 'year';
+  scheduleEvery?: 'week' | 'month';
   scheduleStarts?: string;
+  /** When true, allocate on the day without asking (PU-33). */
   scheduleAutoAllocate?: boolean;
-  deleted?: boolean;
 };
 
 /** Earmark into a goal (TECH-SPEC E18); amounts are kobo strings. */
@@ -326,6 +411,8 @@ export type Recurring = {
   amountMinor: string;
   approximate?: boolean;
   accountId: string;
+  /** Transfer destination (PU-25). */
+  toAccountId?: string;
   categoryId?: string;
   payeeId?: string;
   rule: RecurrenceRule;
@@ -334,15 +421,17 @@ export type Recurring = {
   autoCreate?: boolean;
   /** DESIGN #25 — stop after this many occurrences (optional; endDate also ends the series). */
   endAfterCount?: number;
-  /** Days before due: 0 = on the day, 1, 3, or 7. */
+  /**
+   * Days before due: 0 = on the day, 1, 3, or 7.
+   * Omit / undefined = Off (PU-25 Remind me).
+   */
   reminderDays?: number;
   /** DESIGN #25 — hide amount on lock screen (default on). */
   hideAmountOnLock?: boolean;
+  /** Soft-deleted / cancelled schedule. */
   cancelled?: boolean;
-  /** Paused bills stay on the plan but do not come due. */
+  /** TB-04 / PU-25 — paused: shown as Paused, creates no reminders. */
   paused?: boolean;
-  /** Destination account when kind is transfer. */
-  toAccountId?: string;
 };
 
 export type RecurringOccurrence = {
@@ -391,6 +480,8 @@ export type IncomeStream = {
   categoryId: string;
   rule: RecurrenceRule;
   countInBudget: boolean;
+  /** Source or employer (PU-29). */
+  source?: string;
   /** For tax-class report (P13-08). */
   taxClass?: string;
   amountKind?: IncomeAmountKind;
@@ -401,15 +492,16 @@ export type IncomeStream = {
   deductions?: IncomeDeduction[];
   routing?: IncomeRouting[];
   reminder?: IncomeReminder;
-  /** Where the money comes from (salary, business, gift). */
-  source?: string;
 };
 
 export type DebtDirection = 'owedToMe' | 'iOwe';
 
-export type DebtInterest = { kind: 'none' } | { kind: 'fixed'; amountMinor: string } | { kind: 'percent_month'; percent: number };
-
 /** Person debt (DESIGN.md page 15); bank loans use account type loan instead. */
+export type DebtInterest =
+  | { kind: 'none' }
+  | { kind: 'fixed'; amountMinor: string }
+  | { kind: 'percent_month'; percent: number };
+
 export type PersonDebt = {
   id: string;
   name: string;
@@ -418,9 +510,11 @@ export type PersonDebt = {
   ledgerAccountId: string;
   payeeId?: string;
   status: 'open' | 'settled' | 'written_off';
-  interest?: DebtInterest;
   nextDueDate?: string;
   notes?: string;
+  interest?: DebtInterest;
+  /** Credit kept after an overpayment (TECH-SPEC 6.9). */
+  creditMinor?: string;
   /** Instalment plan (DESIGN popup #36). */
   scheduleInstallmentCount?: number;
   scheduleAmountMinor?: string;
@@ -469,90 +563,6 @@ export type AppNotification = {
   snoozedUntil?: string;
 };
 
-/** DESIGN.md page 17, Add / edit holding. */
-export const HOLDING_TYPES = ['stock', 'fund', 'pension', 'crypto', 'fixed_deposit', 'other'] as const;
-export type HoldingType = (typeof HOLDING_TYPES)[number];
-
-/** An investment (TECH-SPEC 6.8). Its id is also its ledger account's id; it uses its account's currency. */
-export type Holding = {
-  id: string;
-  name: string;
-  symbol?: string;
-  type: HoldingType;
-  accountId: string;
-  currency: string;
-  archived: boolean;
-};
-
-/** A price typed in for one holding on one day. Not a money event (M17). */
-export type HoldingPrice = { id: string; holdingId: string; date: string; priceMinor: string };
-
-/** An exchange rate typed in by hand: home currency per one unit of `currency` (TECH-SPEC 6.5). */
-export type ExchangeRate = { id: string; currency: string; date: string; rate: string };
-
-export const REPORT_KINDS = [
-  'net_worth',
-  'income_vs_expenses',
-  'spending_by_category',
-  'spending_trends',
-  'cash_flow',
-  'transaction_calendar',
-  'summary_number',
-  'budget_analysis',
-  'age_of_money',
-  'balance_forecast',
-  'crossover',
-  'investment_performance',
-  'debt_payoff',
-  'income_steadiness',
-  'formula',
-  'note',
-  'custom',
-] as const;
-export type ReportKind = (typeof REPORT_KINDS)[number];
-
-export type ReportChart = 'bar' | 'line' | 'area' | 'donut' | 'table' | 'number' | 'sankey' | 'calendar' | 'note';
-export type RangePreset = 'this_month' | 'last_month' | 'last_3_months' | 'this_year' | 'last_12_months' | 'all';
-export type ReportInterval = 'day' | 'week' | 'month' | 'year';
-
-export type ReportFiltersModel = {
-  accountIds?: string[];
-  categoryIds?: string[];
-  payeeIds?: string[];
-  tagIds?: string[];
-  types?: string[];
-};
-
-/** Report builder choices (DESIGN.md page 21). */
-export type BuilderSpecModel = {
-  show: 'spending' | 'income' | 'net' | 'balance' | 'count';
-  groupBy: 'category' | 'group' | 'payee' | 'account' | 'tag' | 'month';
-  splitBy: 'category' | 'group' | 'payee' | 'account' | 'tag' | 'month' | null;
-  chart: ReportChart;
-  filters: ReportFiltersModel;
-};
-
-export type ReportCardModel = {
-  id: string;
-  kind: ReportKind;
-  title: string | null;
-  savedReportId: string | null;
-  range: RangePreset;
-  interval: ReportInterval;
-  chart: ReportChart | null;
-  spec: BuilderSpecModel | null;
-  formula: string | null;
-  text: string | null;
-  layout: { x: number; y: number; w: number; h: number };
-  hidden: boolean;
-  /** The dashboard's one gold highlight (P19-05). */
-  highlight?: boolean;
-};
-
-export type ReportDashboardModel = { id: string; name: string; sortOrder: number; cards: ReportCardModel[] };
-
-export type SavedReportModel = { id: string; name: string; spec: BuilderSpecModel };
-
 export type StoredLine = { a: string; m: string; c: string };
 
 /** A money event as stored and synced: amounts are strings of kobo. */
@@ -576,8 +586,6 @@ export type StoredEvent = {
   recurringId?: string;
   incomeStreamId?: string;
   oneOff?: boolean;
-  holdingId?: string;
-  investment?: InvestmentMeta;
 };
 
 export type EventMeta = {
@@ -612,8 +620,6 @@ export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & 
     recurringId: e.recurringId,
     incomeStreamId: e.incomeStreamId,
     oneOff: e.oneOff,
-    holdingId: e.holdingId,
-    investment: e.investment,
   };
 }
 
@@ -640,8 +646,6 @@ export function fromStored(id: string, operationId: string, s: StoredEvent, reve
     recurringId: s.recurringId,
     incomeStreamId: s.incomeStreamId,
     oneOff: s.oneOff,
-    holdingId: s.holdingId,
-    investment: s.investment,
   };
 }
 

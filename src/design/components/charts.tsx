@@ -83,8 +83,8 @@ function scale(values: bigint[]): (v: bigint) => number {
   return (v) => Number((v > 0n ? v : 0n) * 10_000n / max) / 10_000;
 }
 
-/** Up to 12 bars; over-plan bars are ruby; at most one gold bar, and only if the view has no other gold mark. A pressed bar can open its transactions. */
-export function BarChart({ highlight, onBarPress, ...props }: Omit<Frame, 'children'> & { highlight?: number; onBarPress?: (row: Point) => void }) {
+/** Up to 12 bars; over-plan bars are ruby; at most one gold bar, and only if the view has no other gold mark. */
+export function BarChart({ highlight, ...props }: Omit<Frame, 'children'> & { highlight?: number }) {
   const theme = useTheme();
   const bars = props.rows.slice(-12);
   const y = scale(bars.map((b) => b.value));
@@ -100,17 +100,7 @@ export function BarChart({ highlight, onBarPress, ...props }: Omit<Frame, 'child
               {bars.map((b, i) => {
                 const h = Math.max(b.value > 0n ? 2 : 0, y(b.value) * (HEIGHT - 4));
                 const fill = b.over ? c.ruby : i === highlight ? c.gold : c['primary-soft'];
-                return (
-                  <BarShape
-                    key={b.label}
-                    testID={`chart-bar-${i}`}
-                    x={i * (barW + gap)}
-                    width={barW}
-                    height={h}
-                    fill={fill}
-                    onPress={onBarPress && (() => onBarPress(b))}
-                  />
-                );
+                return <BarShape key={b.label} testID={`chart-bar-${i}`} x={i * (barW + gap)} width={barW} height={h} fill={fill} />;
               })}
             </Svg>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -127,37 +117,31 @@ export function BarChart({ highlight, onBarPress, ...props }: Omit<Frame, 'child
   );
 }
 
-function BarShape({ x, width, height, fill, testID, onPress }: { x: number; width: number; height: number; fill: string; testID: string; onPress?: () => void }) {
+function BarShape({ x, width, height, fill, testID }: { x: number; width: number; height: number; fill: string; testID: string }) {
   const radius = Math.min(r['rounded-xs'], height / 2, width / 2);
   const top = HEIGHT - height;
   if (height === 0) return null;
   const d = `M${x},${HEIGHT} V${top + radius} Q${x},${top} ${x + radius},${top} H${x + width - radius} Q${x + width},${top} ${x + width},${top + radius} V${HEIGHT} Z`;
-  return <Path testID={testID} d={d} fill={fill} onPress={onPress} />;
+  return <Path testID={testID} d={d} fill={fill} />;
 }
 
-/**
- * A 2.2px primary line; the latest point is gold, which is that view's gold mark. `compare` draws a second
- * series as a dashed primary-soft line on the same scale (a holding's cost under its value).
- */
-export function LineChart({ goldLatest = true, compare, ...props }: Omit<Frame, 'children'> & { goldLatest?: boolean; compare?: bigint[] }) {
+/** A 2.2px primary line; the latest point is gold, which is that view's gold mark. */
+export function LineChart({ goldLatest = true, ...props }: Omit<Frame, 'children'> & { goldLatest?: boolean }) {
   const theme = useTheme();
-  const values = [...props.rows.map((p) => p.value), ...(compare ?? [])];
+  const values = props.rows.map((p) => p.value);
   const min = values.reduce((m, v) => (v < m ? v : m), values[0] ?? 0n);
   const y = scale(values.map((v) => v - min));
   return (
     <ChartFrame {...props}>
       {(width) => {
         const step = props.rows.length > 1 ? (width - 8) / (props.rows.length - 1) : 0;
-        const at = (v: bigint, i: number) => ({ x: 4 + i * step, y: 4 + (1 - y(v - min)) * (HEIGHT - 8) });
-        const pts = props.rows.map((p, i) => at(p.value, i));
-        const path = (ps: { x: number; y: number }[]) => ps.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-        const cmp = compare?.slice(0, props.rows.length).map(at) ?? [];
+        const pts = props.rows.map((p, i) => ({ x: 4 + i * step, y: 4 + (1 - y(p.value - min)) * (HEIGHT - 8) }));
+        const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
         const last = pts.at(-1);
         return (
           <Svg width={width} height={HEIGHT}>
             <SvgLine x1={0} x2={width} y1={HEIGHT - 0.5} y2={HEIGHT - 0.5} stroke={theme.border} strokeWidth={1} />
-            {cmp.length > 1 ? <Path testID="chart-compare" d={path(cmp)} stroke={c['primary-soft']} strokeWidth={1.5} strokeDasharray="4 4" fill="none" /> : null}
-            {pts.length > 1 ? <Path d={path(pts)} stroke={theme.primaryFill} strokeWidth={2.2} fill="none" /> : null}
+            {pts.length > 1 ? <Path d={d} stroke={theme.primaryFill} strokeWidth={2.2} fill="none" /> : null}
             {last ? <Circle testID="chart-latest" cx={last.x} cy={last.y} r={4} fill={goldLatest ? c.gold : theme.primaryFill} /> : null}
           </Svg>
         );

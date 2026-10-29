@@ -3,7 +3,6 @@ import type { Snapshot } from '@/data/workspace/repository';
 import { budgetForMonth, budgetCategories, barFor, rowFor, assignedOf } from '@/features/budget/helpers';
 import { activeGoals, goalCards, type GoalCard } from '@/features/goals/helpers';
 import { debtRows, debtTotals } from '@/features/debts/helpers';
-import { wealthAt } from '@/features/investments/helpers';
 import { dueDateInMonth } from '@/features/plan/recurrence';
 import { addDays, rowsFor, today as todayInWorkspace } from '@/features/transactions/helpers';
 import { leftToSpend } from '@/ledger/budget';
@@ -14,6 +13,7 @@ import {
   monthOf,
   monthSpent,
   monthsEndingAt,
+  netWorth,
   nextMonth,
   periodTotals,
   prevMonth,
@@ -158,12 +158,12 @@ export function dashboardModel(snapshot: Snapshot, month: string) {
   const netCash = income - spent;
   const budget = budgetForMonth(snapshot, month);
   const budgetLeft = snapshot.settings.budgetStyle === 'envelope' ? budget.leftToPlan : leftToSpend(budget);
-  const worthNow = wealthAt(snapshot, endOfMonth(month)).total;
-  const worthPrev = wealthAt(snapshot, endOfMonth(prev)).total;
+  const worthNow = netWorth(snapshot.chart, snapshot.events, endOfMonth(month)).total;
+  const worthPrev = netWorth(snapshot.chart, snapshot.events, endOfMonth(prev)).total;
   const months12 = monthsEndingAt(month, 12);
   const netWorthLine = months12.map((m) => ({
     label: shortMonthLabel(m),
-    value: wealthAt(snapshot, endOfMonth(m)).total,
+    value: netWorth(snapshot.chart, snapshot.events, endOfMonth(m)).total,
   }));
   const months6 = monthsEndingAt(month, 6);
   const incomeVsSpent = months6.flatMap((m) => [

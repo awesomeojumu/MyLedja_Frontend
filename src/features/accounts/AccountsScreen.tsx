@@ -16,7 +16,6 @@ import {
   Popover,
   StatusPill,
   Text,
-  useToast,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
@@ -25,9 +24,7 @@ import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { t } from '@/i18n';
-import { holdingsValueByAccount, wealthAt } from '@/features/investments/helpers';
-import { today } from '@/features/transactions/helpers';
-import { ledgerBalance } from '@/ledger';
+import { ledgerBalance, netWorth } from '@/ledger';
 
 import {
   AccountAvatar,
@@ -43,14 +40,10 @@ const sp = tokens.spacing;
 
 export type AccountRow = { account: Account; balance: bigint; waiting: boolean };
 
-/**
- * Balances as signed contributions to net worth: what you owe is negative (P08-02). An investment account
- * also holds its holdings at market value (TECH-SPEC 6.8).
- */
+/** Balances as signed contributions to net worth: what you owe is negative (P08-02). */
 export function accountRows(snapshot: Snapshot): AccountRow[] {
-  const held = holdingsValueByAccount(snapshot, today());
   return snapshot.accounts.map((account) => {
-    const balance = ledgerBalance(account.id, snapshot.events) + (held.get(account.id) ?? 0n);
+    const balance = ledgerBalance(account.id, snapshot.events);
     const waiting = snapshot.events.some((e) => snapshot.waiting.has(e.id) && e.lines.some((l) => l.ledgerAccountId === account.id));
     return { account, balance, waiting };
   });
@@ -66,17 +59,20 @@ const SORT_OPTIONS: { value: AccountSort; label: string }[] = [
 export function AccountsScreen() {
   const { snapshot } = useWorkspace();
   const theme = useTheme();
-  const toast = useToast();
   const router = useRouter();
-  const params = useGlobalSearchParams<{ connect?: string }>();
-  const [adding, setAdding] = useState(false);
+  const params = useGlobalSearchParams<{ account?: string; value?: string; connect?: string }>();
   const [connectOpen, setConnectOpen] = useState(params.connect === '1');
   const [showArchived, setShowArchived] = useState(false);
   const [reordering, setReordering] = useState(false);
   const [sort, setSort] = useState<AccountSort>('custom');
   const [sortOpen, setSortOpen] = useState(false);
-  const [rowSheet, setRowSheet] = useState<{ id: string; kind: 'edit' | 'value' | 'archive' } | null>(null);
+  const [archiveId, setArchiveId] = useState<string | null>(null);
   const { repo } = useWorkspace();
+  const adding = params.account === 'new';
+  const editId = params.account && params.account !== 'new' ? params.account : null;
+  const valueId = params.value ?? null;
+  const closeAccountParam = () => router.setParams({ account: undefined });
+  const closeValueParam = () => router.setParams({ value: undefined });
   const move = (id: string, by: -1 | 1) => {
     if (!snapshot) return;
     const ids = snapshot.accounts.filter((a) => !a.archived).map((a) => a.id);
@@ -100,11 +96,12 @@ export function AccountsScreen() {
       );
       return { group, rows: members, total: members.reduce((s, r) => s + r.balance, 0n) };
     }).filter((g) => g.rows.length > 0);
-    return { assets, debts, groups, archived: rows.filter((r) => r.account.archived), worth: wealthAt(snapshot, today()).total };
+    return { assets, debts, groups, archived: rows.filter((r) => r.account.archived), worth: netWorth(snapshot.chart, snapshot.events, '9999-12-31').total };
   }, [snapshot, sort]);
 
-  const rowAccount = rowSheet && snapshot ? snapshot.accounts.find((a) => a.id === rowSheet.id) : undefined;
-  const rowBalance = rowAccount && snapshot ? ledgerBalance(rowAccount.id, snapshot.events) : 0n;
+  const editAccount = editId && snapshot ? snapshot.accounts.find((a) => a.id === editId) : undefined;
+  const archiveAccount = archiveId && snapshot ? snapshot.accounts.find((a) => a.id === archiveId) : undefined;
+  const archiveBalance = archiveAccount && snapshot ? ledgerBalance(archiveAccount.id, snapshot.events) : 0n;
 
   return (
     <AppFrame title={t('accounts.title')}>
@@ -132,14 +129,19 @@ export function AccountsScreen() {
               label={reordering ? t('accounts.reorderDone') : t('accounts.reorder')}
               onPress={() => setReordering(!reordering)}
             />
-            <Button testID="accounts-add" label={t('accounts.add')} onPress={() => setAdding(true)} />
+            <Button testID="accounts-add" label={t('accounts.add')} onPress={() => router.setParams({ account: 'new' })} />
           </View>
         </View>
 
         {!summary ? (
           <Placeholder height={120} />
         ) : summary.groups.length === 0 ? (
-          <EmptyState title={t('accounts.emptyTitle')} body={t('accounts.emptyBody')} actionLabel={t('accounts.add')} onAction={() => setAdding(true)} />
+          <EmptyState
+            title={t('accounts.emptyTitle')}
+            body={t('accounts.emptyBody')}
+            actionLabel={t('accounts.add')}
+            onAction={() => router.setParams({ account: 'new' })}
+          />
         ) : (
           <>
             <AssetsDebtsBar assets={summary.assets} debts={summary.debts} />
@@ -168,7 +170,11 @@ export function AccountsScreen() {
                     row={r}
                     borderColor={theme.border}
                     onMove={reordering ? (by) => move(r.account.id, by) : undefined}
-                    onMenu={(kind) => setRowSheet({ id: r.account.id, kind })}
+                    onMenu={(kind) => {
+                      if (kind === 'edit') router.setParams({ account: r.account.id });
+                      else if (kind === 'value') router.setParams({ value: r.account.id });
+                      else setArchiveId(r.account.id);
+                    }}
                   />
                 ))}
               </Card>
@@ -183,18 +189,29 @@ export function AccountsScreen() {
                 >
                   <Text>{t('accounts.archived', { count: summary.archived.length })}</Text>
                 </Pressable>
-                {showArchived ? summary.archived.map((r) => <AccountLine key={r.account.id} row={r} borderColor={theme.border} />) : null}
+                {showArchived
+                  ? summary.archived.map((r) => (
+                      <View key={r.account.id} style={{ gap: sp['spacing-xxs'] }}>
+                        <AccountLine row={r} borderColor={theme.border} />
+                        {r.account.closedWithBalance ? (
+                          <Text variant="caption" tone="textSecondary" style={{ paddingHorizontal: sp['spacing-md'], paddingBottom: sp['spacing-sm'] }}>
+                            {t('account.closedWithBalance')}
+                          </Text>
+                        ) : null}
+                      </View>
+                    ))
+                  : null}
               </Card>
             ) : null}
           </>
         )}
       </ScrollView>
-      {adding ? <AddAccountSheet onClose={() => setAdding(false)} /> : null}
+      {adding ? <AddAccountSheet onClose={closeAccountParam} /> : null}
       {connectOpen ? <ConnectBankSheet onClose={() => setConnectOpen(false)} /> : null}
-      {rowSheet?.kind === 'edit' && rowAccount ? <EditAccountSheet account={rowAccount} onClose={() => setRowSheet(null)} /> : null}
-      {rowSheet?.kind === 'value' && rowSheet.id ? <UpdateValueSheetForAccount accountId={rowSheet.id} onClose={() => setRowSheet(null)} /> : null}
-      {rowSheet?.kind === 'archive' && rowAccount && snapshot ? (
-        <ArchiveSheet account={rowAccount} balance={rowBalance} snapshot={snapshot} onClose={() => setRowSheet(null)} />
+      {editAccount ? <EditAccountSheet account={editAccount} onClose={closeAccountParam} /> : null}
+      {valueId ? <UpdateValueSheetForAccount accountId={valueId} onClose={closeValueParam} /> : null}
+      {archiveAccount && snapshot ? (
+        <ArchiveSheet account={archiveAccount} balance={archiveBalance} snapshot={snapshot} onClose={() => setArchiveId(null)} />
       ) : null}
       <Popover visible={sortOpen} onClose={() => setSortOpen(false)} testID="accounts-sort-menu">
         <View style={{ gap: sp['spacing-xs'], minWidth: 200 }}>

@@ -1,19 +1,16 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 
-import { Amount, BarChart, Button, Card, DonutChart, LineChart, Placeholder, ProgressRing, StatusPill, Text, formatDay } from '@/design/components';
+import { Amount, BarChart, Button, Card, DonutChart, LineChart, Placeholder, StatusPill, Text, formatDay, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
+import { useSizeClass } from '@/design/size';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { monthLabel, nextMonth, prevMonth } from '@/features/budget/helpers';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { adviceText, reasonText } from '@/features/health/HealthScreen';
-import { healthPage } from '@/features/health/helpers';
-import { percentText } from '@/features/investments/InvestmentsScreen';
-import { gainBasisPoints, portfolio } from '@/features/investments/helpers';
 import { today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
@@ -21,7 +18,7 @@ import { monthOf } from '@/ledger';
 
 import { CustomizeDashboardSheet } from './CustomizeDashboardSheet';
 import { checklist, dashboardModel, type ComingUpRow } from './helpers';
-import { resolveDashboardLayout, toStoredLayout, visibleDashboardCards, type DashboardLayout, type DashboardCardId } from './layout';
+import { resolveLayoutForDevice, visibleDashboardCards, withStoredLayoutForDevice, type DashboardLayout, type DashboardCardId } from './layout';
 
 const sp = tokens.spacing;
 
@@ -35,15 +32,18 @@ export function DashboardScreen() {
   const { snapshot, repo } = useWorkspace();
   const { user } = useAuth();
   const theme = useTheme();
+  const toast = useToast();
   const router = useRouter();
+  const size = useSizeClass();
+  const params = useGlobalSearchParams<{ customize?: string }>();
+  const customizeOpen = params.customize === '1';
   const [month, setMonth] = useState(() => monthOf(today()));
   const [checklistHidden, setChecklistHidden] = useState(false);
-  const [customizeOpen, setCustomizeOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const model = useMemo(() => (snapshot ? dashboardModel(snapshot, month) : null), [snapshot, month]);
   const items = useMemo(() => (snapshot ? checklist(snapshot, checklistHidden || !!snapshot.settings.checklistHidden) : []), [snapshot, checklistHidden]);
-  const layout = useMemo(() => resolveDashboardLayout(snapshot?.settings.dashboardLayout), [snapshot?.settings.dashboardLayout]);
+  const layout = useMemo(() => resolveLayoutForDevice(snapshot?.settings, size), [snapshot?.settings, size]);
   const cards = useMemo(() => visibleDashboardCards(layout), [layout]);
 
   const hideChecklist = () => {
@@ -51,9 +51,13 @@ export function DashboardScreen() {
     if (snapshot) void repo.updateSettings({ ...snapshot.settings, checklistHidden: true });
   };
 
-  const saveLayout = (next: DashboardLayout) => {
+  const openCustomize = () => router.setParams({ customize: '1' });
+  const closeCustomize = () => router.setParams({ customize: undefined });
+
+  const saveLayout = async (next: DashboardLayout) => {
     if (!snapshot) return;
-    void repo.updateSettings({ ...snapshot.settings, dashboardLayout: toStoredLayout(next) });
+    await repo.updateSettings(withStoredLayoutForDevice(snapshot.settings, size, next));
+    toast.show(t('dashboard.layoutSaved'));
   };
 
   const onRefresh = useCallback(async () => {
@@ -232,10 +236,6 @@ export function DashboardScreen() {
             </Card>
           </Pressable>
         );
-      case 'health':
-        return <HealthCard key={id} month={month} onOpen={() => router.push('/health')} />;
-      case 'investments':
-        return <InvestmentsCard key={id} onOpen={() => router.push('/investments')} />;
       case 'incomeVsSpending':
         return (
           <BarChart
@@ -322,17 +322,29 @@ export function DashboardScreen() {
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'center' }}>
-            <Pressable testID="dashboard-prev-month" accessibilityLabel={t('date.previousMonth')} onPress={() => setMonth(prevMonth(month))} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable
+              testID="dashboard-prev-month"
+              accessibilityRole="button"
+              accessibilityLabel={t('date.previousMonth')}
+              onPress={() => setMonth(prevMonth(month))}
+              style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
               <ChevronLeft size={20} color={theme.textSecondary} />
             </Pressable>
             <Text testID="dashboard-month" variant="heading-sm">
               {monthLabel(month)}
             </Text>
-            <Pressable testID="dashboard-next-month" accessibilityLabel={t('date.nextMonth')} onPress={() => setMonth(nextMonth(month))} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable
+              testID="dashboard-next-month"
+              accessibilityRole="button"
+              accessibilityLabel={t('date.nextMonth')}
+              onPress={() => setMonth(nextMonth(month))}
+              style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
               <ChevronRight size={20} color={theme.textSecondary} />
             </Pressable>
           </View>
-          <Button testID="dashboard-customize" kind="link" label={t('dashboard.customize')} onPress={() => setCustomizeOpen(true)} />
+          <Button testID="dashboard-customize" kind="link" label={t('dashboard.customize')} onPress={openCustomize} />
         </View>
 
         {!model ? (
@@ -341,7 +353,7 @@ export function DashboardScreen() {
           cards.map((id) => renderCard(id))
         )}
       </ScrollView>
-      <CustomizeDashboardSheet visible={customizeOpen} layout={layout} onClose={() => setCustomizeOpen(false)} onSave={saveLayout} />
+      <CustomizeDashboardSheet visible={customizeOpen} layout={layout} onClose={closeCustomize} onSave={saveLayout} />
     </AppFrame>
   );
 }
@@ -405,58 +417,6 @@ function StatTile({
             {footnote}
           </Text>
         ) : null}
-      </Card>
-    </Pressable>
-  );
-}
-
-/** Score ring and one sentence of advice (DESIGN.md page 5). */
-function HealthCard({ month, onOpen }: { month: string; onOpen: () => void }) {
-  const { snapshot } = useWorkspace();
-  const onDate = today();
-  const page = useMemo(() => (snapshot ? healthPage(snapshot, month < onDate.slice(0, 7) ? month : onDate.slice(0, 7), onDate, { history: false }) : null), [snapshot, month, onDate]);
-  if (!page) return null;
-  const advice = page.advice[0];
-  return (
-    <Pressable testID="dashboard-health" accessibilityRole="link" onPress={onOpen}>
-      <Card style={{ gap: sp['spacing-sm'] }}>
-        <Text variant="heading-sm">{t('dashboard.healthCard')}</Text>
-        {page.ready && page.score !== null ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'] }}>
-            <ProgressRing value={page.score / 100} label={t('health.scoreLabel', { score: String(page.score) })} />
-            <View style={{ flex: 1 }}>
-              <Text variant="heading-md" testID="dashboard-health-score">
-                {String(page.score)}
-              </Text>
-              <Text variant="caption" tone="textSecondary">
-                {advice ? adviceText(advice, formatNaira) : reasonText(page)}
-              </Text>
-            </View>
-          </View>
-        ) : (
-          <Text tone="textSecondary" testID="dashboard-health-not-ready">
-            {t('health.notReadyTitle')}
-          </Text>
-        )}
-      </Card>
-    </Pressable>
-  );
-}
-
-/** Portfolio value and gain; shown once there's a holding (DESIGN.md page 5). */
-function InvestmentsCard({ onOpen }: { onOpen: () => void }) {
-  const { snapshot } = useWorkspace();
-  const onDate = today();
-  const data = useMemo(() => (snapshot?.holdings.length ? portfolio(snapshot, '1M', onDate) : null), [snapshot, onDate]);
-  if (!data || data.rows.length === 0) return null;
-  return (
-    <Pressable testID="dashboard-investments" accessibilityRole="link" onPress={onOpen}>
-      <Card style={{ gap: sp['spacing-xs'] }}>
-        <Text variant="heading-sm">{t('dashboard.investmentsCard')}</Text>
-        <Amount testID="dashboard-investments-value" minor={data.value} variant="heading-md" />
-        <Text variant="caption" tone="textSecondary" testID="dashboard-investments-gain">
-          {t('dashboard.investmentsGain', { amount: formatNaira(data.unrealised, { signed: true }), pct: percentText(gainBasisPoints(data.unrealised, data.cost)) })}
-        </Text>
       </Card>
     </Pressable>
   );

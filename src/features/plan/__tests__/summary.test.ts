@@ -34,10 +34,8 @@ function stubSnapshot(): Snapshot {
     budgetTemplates: [],
     rules: [],
     holdings: [],
+    lots: [],
     prices: [],
-    rates: [],
-    reportDashboards: [],
-    savedReports: [],
     waiting: new Set(),
     chart: {} as unknown as Snapshot['chart'],
   };

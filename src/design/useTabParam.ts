@@ -33,15 +33,19 @@ export function useTabParam<T extends string>({
 
   useEffect(() => {
     let cancelled = false;
-    void openKeyValue()
-      .get(storageKey)
-      .then((v) => {
-        if (cancelled) return;
-        if (v && allowed.has(v as T)) setRemembered(v as T);
-      })
-      .catch(() => {
-        /* memory-only when the device store isn't available (tests / blocked storage) */
-      });
+    try {
+      void openKeyValue()
+        .get(storageKey)
+        .then((v) => {
+          if (cancelled) return;
+          if (v && allowed.has(v as T)) setRemembered(v as T);
+        })
+        .catch(() => {
+          /* memory-only when the device store isn't available (tests / blocked storage) */
+        });
+    } catch {
+      /* Jest iOS resolves kv.native; SQLite isn't available in unit tests. */
+    }
     return () => {
       cancelled = true;
     };
@@ -53,9 +57,13 @@ export function useTabParam<T extends string>({
     (next: T) => {
       if (!allowed.has(next)) return;
       setRemembered(next);
-      void openKeyValue()
-        .set([[storageKey, next]])
-        .catch(() => {});
+      try {
+        void openKeyValue()
+          .set([[storageKey, next]])
+          .catch(() => {});
+      } catch {
+        /* ignore missing native store */
+      }
       router.setParams({ [param]: next });
     },
     [allowed, param, router, storageKey],

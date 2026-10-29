@@ -28,27 +28,6 @@ export function emptyFilters(): TxFilters {
   return {};
 }
 
-/** URL params for the Transactions page's filters, so other pages can open "the transactions behind" a figure. */
-export type FilterParams = { from?: string; to?: string; month?: string; account?: string; category?: string; payee?: string };
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Filters from the page's URL (P20-03, P06-09). Anything unreadable is left out. */
-export function filtersFromParams(p: FilterParams): TxFilters {
-  const out: TxFilters = {};
-  if (p.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(p.month)) {
-    const [y, m] = p.month.split('-').map(Number) as [number, number];
-    out.dateFrom = `${p.month}-01`;
-    out.dateTo = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
-  }
-  if (p.from && DAY.test(p.from)) out.dateFrom = p.from;
-  if (p.to && DAY.test(p.to)) out.dateTo = p.to;
-  if (p.account) out.accountId = p.account;
-  if (p.category) out.categoryId = p.category;
-  if (p.payee) out.payeeId = p.payee;
-  return out;
-}
-
 export function applyFilters(row: Row, filters: TxFilters, snapshot: Snapshot): boolean {
   const { event } = row;
   if (filters.dateFrom && event.date < filters.dateFrom) return false;

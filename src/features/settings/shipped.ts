@@ -1,8 +1,8 @@
 /**
  * Settings tabs by phase (addendum TB-11).
- * HANDOFF: Phase 1–4 shipped; Phase 5 (Currencies) and Advanced (after Release 3) stay hidden.
+ * HANDOFF: Phase 1–5 shipped; Advanced (after Release 3) stays hidden.
  */
-export const SHIPPED_PHASE = 4;
+export const SHIPPED_PHASE = 5;
 
 export type SettingsTabId =
   | 'general'

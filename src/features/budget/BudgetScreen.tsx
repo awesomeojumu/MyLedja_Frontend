@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, CircleDot, RotateCcw } from 'lucide-react-native';
 
 import {
   Amount,
-  AmountInput,
   Banner,
   Button,
   Card,
@@ -16,12 +15,12 @@ import {
   Popover,
   Select,
   SegmentedControl,
-  Sheet,
   Text,
   useToast,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
+import { useSizeClass } from '@/design/size';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
@@ -41,11 +40,12 @@ import {
   prevMonth,
   resolveTemplateLineAmount,
   rowFor,
-  assignedOf,
   shortMonth,
   type BudgetGroupBy,
 } from './helpers';
+import { CoverSheet } from './CoverSheet';
 import { EditAmountSheet } from './EditAmountSheet';
+import { MoveMoneySheet } from './MoveMoneySheet';
 import { TemplatesSheet } from './TemplatesSheet';
 
 function groupLabel(group: string): string {
@@ -70,11 +70,18 @@ export function BudgetScreen() {
   const theme = useTheme();
   const toast = useToast();
   const router = useRouter();
+  const size = useSizeClass();
+  const wideEnough = size === 'desktop' || size === 'wide';
+  const params = useGlobalSearchParams<{
+    plan?: string;
+    move?: string;
+    cover?: string;
+    months?: string;
+    group?: string;
+    templates?: string;
+  }>();
+
   const [month, setMonth] = useState(() => monthOf(today()));
-  const [editId, setEditId] = useState<string | null>(null);
-  const [moveOpen, setMoveOpen] = useState(false);
-  const [coverOpen, setCoverOpen] = useState(false);
-  const params = useLocalSearchParams<{ templates?: string }>();
   const templatesOpen = params.templates === '1';
   const setTemplatesOpen = (open: boolean) => {
     if (open) router.setParams({ templates: '1' });
@@ -82,9 +89,26 @@ export function BudgetScreen() {
   };
   const [menuOpen, setMenuOpen] = useState(false);
   const [rowMenuId, setRowMenuId] = useState<string | null>(null);
-  const [monthSpan, setMonthSpan] = useState<'1' | '3'>('1');
-  const [groupBy, setGroupBy] = useState<BudgetGroupBy>('groups');
   const [error, setError] = useState<string | null>(null);
+
+  const monthSpan: '1' | '3' = params.months === '3' && wideEnough ? '3' : '1';
+  const groupBy: BudgetGroupBy = params.group === 'type' ? 'type' : 'groups';
+  const editId = params.plan ?? null;
+  const moveOpen = params.move !== undefined;
+  const moveFrom = params.move && params.move !== '1' ? params.move : null;
+  const coverOpen = params.cover === '1';
+
+  const setMonthSpan = (v: '1' | '3') => router.setParams({ months: v === '1' ? undefined : v });
+  const setGroupBy = (v: BudgetGroupBy) => router.setParams({ group: v === 'groups' ? undefined : v });
+  const openEdit = (catId: string) => {
+    setRowMenuId(null);
+    router.setParams({ plan: catId });
+  };
+  const closeEdit = () => router.setParams({ plan: undefined });
+  const openMove = (fromId?: string) => router.setParams({ move: fromId ?? '1' });
+  const closeMove = () => router.setParams({ move: undefined });
+  const openCover = () => router.setParams({ cover: '1' });
+  const closeCover = () => router.setParams({ cover: undefined });
 
   const displayMonths = useMemo(() => {
     if (monthSpan === '1') return [month];
@@ -108,24 +132,29 @@ export function BudgetScreen() {
 
   const categoryOrder = useMemo(() => {
     if (!model) return [];
-    return model.groups.flatMap(([, cats]) => cats.map((c) => c.id));
+    return model.groups.flatMap(([, cats]) => cats.map((cat) => cat.id));
   }, [model]);
-
-  const openEdit = (catId: string) => {
-    setRowMenuId(null);
-    setEditId(catId);
-  };
 
   const savePlanned = async (amount: bigint, opts: { carryOver: boolean; note: string }) => {
     if (!editId || !snapshot) return;
     setError(null);
     const cat = snapshot.categories.find((c) => c.id === editId);
+    const prevAmount = repo.assigned(editId, month, snapshot);
+    const prevCarry = cat?.carryOver ?? false;
+    const prevNote = snapshot.assignNotes.get(`${editId}:${month}`) ?? '';
     if (cat && cat.carryOver !== opts.carryOver) {
       await repo.updateCategory({ ...cat, carryOver: opts.carryOver });
     }
     await repo.setAssigned(editId, month, amount, { note: opts.note });
-    toast.show(t('common.saved'));
-    setEditId(null);
+    toast.show(t('budget.planSaved'), () => {
+      void (async () => {
+        const current = await repo.load();
+        const c2 = current.categories.find((x) => x.id === editId);
+        if (c2 && c2.carryOver !== prevCarry) await repo.updateCategory({ ...c2, carryOver: prevCarry });
+        await repo.setAssigned(editId, month, prevAmount, { note: prevNote });
+      })();
+    });
+    closeEdit();
   };
 
   return (
@@ -156,16 +185,18 @@ export function BudgetScreen() {
         </View>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], alignItems: 'center' }}>
-          <SegmentedControl
-            testID="budget-month-span"
-            label={t('budget.monthSpan')}
-            value={monthSpan}
-            onChange={setMonthSpan}
-            options={[
-              { value: '1', label: t('budget.oneMonth') },
-              { value: '3', label: t('budget.threeMonths') },
-            ]}
-          />
+          {wideEnough ? (
+            <SegmentedControl
+              testID="budget-month-span"
+              label={t('budget.monthSpan')}
+              value={monthSpan}
+              onChange={setMonthSpan}
+              options={[
+                { value: '1', label: t('budget.oneMonth') },
+                { value: '3', label: t('budget.threeMonths') },
+              ]}
+            />
+          ) : null}
           <Select
             testID="budget-group-by"
             label={t('budget.groupBy')}
@@ -189,11 +220,11 @@ export function BudgetScreen() {
               style={model.style}
               leftToPlan={model.budget.leftToPlan}
               overspentCount={model.overspent.length}
-              onCover={() => setCoverOpen(true)}
+              onCover={openCover}
             />
             <BudgetSummaryStrip snapshot={snapshot!} budget={model.budget} />
             <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
-              <Button testID="budget-move" kind="secondary" label={t('budget.moveMoney')} onPress={() => setMoveOpen(true)} />
+              <Button testID="budget-move" kind="secondary" label={t('budget.moveMoney')} onPress={() => openMove()} />
               {snapshot && snapshot.assigns.size > 0 ? (
                 <Button testID="budget-templates" kind="secondary" label={t('budget.templates')} onPress={() => setTemplatesOpen(true)} />
               ) : null}
@@ -202,34 +233,55 @@ export function BudgetScreen() {
                   testID="budget-cover"
                   kind="secondary"
                   label={t('budget.coverOverspending', { count: model.overspent.length })}
-                  onPress={() => setCoverOpen(true)}
+                  onPress={openCover}
                 />
               ) : null}
             </View>
             {error ? <InlineError message={error} /> : null}
             {monthSpan === '3' ? (
-              <View testID="budget-three-months" style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
-                {displayMonths.map((m) => (
-                  <Text key={m} variant="caption" tone={m === month ? undefined : 'textSecondary'}>
-                    {shortMonth(m)}
+              <View testID="budget-three-months" style={{ gap: sp['spacing-sm'] }}>
+                <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
+                  {displayMonths.map((m) => (
+                    <Text key={m} variant="caption" tone={m === month ? undefined : 'textSecondary'}>
+                      {shortMonth(m)}
+                    </Text>
+                  ))}
+                </View>
+                <View testID="budget-columns-3" style={{ flexDirection: 'row', gap: sp['spacing-sm'], paddingHorizontal: sp['spacing-md'] }}>
+                  <Text variant="caption" tone="textSecondary" style={{ flex: 1 }}>
+                    {t('budget.col.category')}
                   </Text>
-                ))}
+                  {displayMonths.map((m) => (
+                    <View key={m} style={{ width: 168, flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text variant="micro" tone={m === month ? undefined : 'textSecondary'}>
+                        {t('budget.col.planned')}
+                      </Text>
+                      <Text variant="micro" tone={m === month ? undefined : 'textSecondary'}>
+                        {t('budget.col.spent')}
+                      </Text>
+                      <Text variant="micro" tone={m === month ? undefined : 'textSecondary'}>
+                        {t('budget.col.remaining')}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               </View>
-            ) : null}
-            <View testID="budget-columns" style={{ flexDirection: 'row', gap: sp['spacing-md'], paddingHorizontal: sp['spacing-md'] }}>
-              <Text variant="caption" tone="textSecondary" style={{ flex: 1 }}>
-                {t('budget.col.category')}
-              </Text>
-              <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
-                {t('budget.col.planned')}
-              </Text>
-              <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
-                {t('budget.col.spent')}
-              </Text>
-              <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
-                {t('budget.col.remaining')}
-              </Text>
-            </View>
+            ) : (
+              <View testID="budget-columns" style={{ flexDirection: 'row', gap: sp['spacing-md'], paddingHorizontal: sp['spacing-md'] }}>
+                <Text variant="caption" tone="textSecondary" style={{ flex: 1 }}>
+                  {t('budget.col.category')}
+                </Text>
+                <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
+                  {t('budget.col.planned')}
+                </Text>
+                <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
+                  {t('budget.col.spent')}
+                </Text>
+                <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
+                  {t('budget.col.remaining')}
+                </Text>
+              </View>
+            )}
             {model.groups.map(([group, cats]) => (
               <Card key={group} testID={`budget-group-${group}`} style={{ padding: 0, gap: 0 }}>
                 <View style={{ padding: sp['spacing-md'] }}>
@@ -254,11 +306,6 @@ export function BudgetScreen() {
                         borderTopWidth: 1,
                         borderTopColor: theme.border,
                         gap: sp['spacing-xs'],
-                        ...(monthSpan === '3' && displayMonths[displayMonths.length - 1] === month
-                          ? {}
-                          : monthSpan === '3'
-                            ? { opacity: 0.92 }
-                            : {}),
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'] }}>
@@ -285,47 +332,63 @@ export function BudgetScreen() {
                             </View>
                           ) : null}
                         </Pressable>
-                        <Pressable
-                          testID={`budget-planned-${cat.id}`}
-                          accessibilityRole="button"
-                          accessibilityLabel={t('budget.editPlanned', { name: cat.name })}
-                          onPress={() => openEdit(cat.id)}
-                          onLongPress={() => setRowMenuId(cat.id)}
-                          style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
-                        >
-                          <Amount minor={row.assigned} />
-                        </Pressable>
                         {monthSpan === '3'
-                          ? displayMonths
-                              .filter((m) => m !== month)
-                              .map((m) => (
-                                <View key={m} style={{ width: 72, alignItems: 'flex-end' }}>
-                                  <Amount minor={assignedOf(snapshot!, cat.id, m)} variant="caption" />
+                          ? displayMonths.map((m) => {
+                              const r = rowFor(snapshot!, m, cat.id);
+                              return (
+                                <View key={m} testID={`budget-month-cols-${cat.id}-${m}`} style={{ width: 168, flexDirection: 'row', justifyContent: 'space-between' }}>
+                                  <Pressable
+                                    testID={m === month ? `budget-planned-${cat.id}` : undefined}
+                                    accessibilityRole="button"
+                                    onPress={() => {
+                                      setMonth(m);
+                                      openEdit(cat.id);
+                                    }}
+                                    style={{ minWidth: 48, alignItems: 'flex-end' }}
+                                  >
+                                    <Amount minor={r.assigned} variant="caption" />
+                                  </Pressable>
+                                  <Amount minor={r.activity} variant="caption" />
+                                  <Amount minor={r.available} variant="caption" />
                                 </View>
-                              ))
-                          : null}
-                        <Pressable
-                          testID={`budget-spent-${cat.id}`}
-                          accessibilityRole="link"
-                          accessibilityLabel={t('budget.spentLink', { name: cat.name })}
-                          onPress={() => router.push({ pathname: '/transactions', params: { category: cat.id, month } })}
-                          style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
-                        >
-                          <Amount minor={row.activity} />
-                        </Pressable>
-                        <View style={{ width: 88, alignItems: 'flex-end' }} testID={`budget-remaining-${cat.id}`}>
-                          <Amount minor={row.available} />
-                          {state === 'near' ? (
-                            <Text variant="micro" tone="textSecondary">
-                              {t('budget.nearLimit')}
-                            </Text>
-                          ) : null}
-                          {state === 'over' ? (
-                            <Text variant="micro" style={{ color: theme.error }}>
-                              {t('budget.overBy', { amount: formatNaira(-row.available) })}
-                            </Text>
-                          ) : null}
-                        </View>
+                              );
+                            })
+                          : (
+                            <>
+                              <Pressable
+                                testID={`budget-planned-${cat.id}`}
+                                accessibilityRole="button"
+                                accessibilityLabel={t('budget.editPlanned', { name: cat.name })}
+                                onPress={() => openEdit(cat.id)}
+                                onLongPress={() => setRowMenuId(cat.id)}
+                                style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+                              >
+                                <Amount minor={row.assigned} />
+                              </Pressable>
+                              <Pressable
+                                testID={`budget-spent-${cat.id}`}
+                                accessibilityRole="link"
+                                accessibilityLabel={t('budget.spentLink', { name: cat.name })}
+                                onPress={() => router.push({ pathname: '/transactions', params: { category: cat.id, month } })}
+                                style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+                              >
+                                <Amount minor={row.activity} />
+                              </Pressable>
+                              <View style={{ width: 88, alignItems: 'flex-end' }} testID={`budget-remaining-${cat.id}`}>
+                                <Amount minor={row.available} />
+                                {state === 'near' ? (
+                                  <Text variant="micro" tone="textSecondary">
+                                    {t('budget.nearLimit')}
+                                  </Text>
+                                ) : null}
+                                {state === 'over' ? (
+                                  <Text variant="micro" style={{ color: theme.error }}>
+                                    {t('budget.overBy', { amount: formatNaira(-row.available) })}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </>
+                          )}
                       </View>
                       <View
                         testID={`budget-bar-${cat.id}`}
@@ -352,9 +415,9 @@ export function BudgetScreen() {
           month={month}
           snapshot={snapshot}
           categoryOrder={categoryOrder}
-          onClose={() => setEditId(null)}
+          onClose={closeEdit}
           onSave={savePlanned}
-          onNext={(nextId) => setEditId(nextId)}
+          onNext={(nextId) => router.setParams({ plan: nextId })}
         />
       ) : null}
 
@@ -365,8 +428,9 @@ export function BudgetScreen() {
           kind="secondary"
           label={t('budget.moveMoney')}
           onPress={() => {
+            const id = rowMenuId;
             setRowMenuId(null);
-            setMoveOpen(true);
+            if (id) openMove(id);
           }}
         />
         <Button
@@ -422,34 +486,61 @@ export function BudgetScreen() {
 
       {snapshot && moveOpen ? (
         <MoveMoneySheet
+          visible
           month={month}
           snapshot={snapshot}
-          onClose={() => setMoveOpen(false)}
+          fromCategoryId={moveFrom}
+          onClose={closeMove}
           onSave={async (fromId, toId, amount) => {
+            const before = await repo.load();
+            const fromPrev = repo.assigned(fromId, month, before);
+            const toPrev = repo.assigned(toId, month, before);
             const r = await repo.moveAssigned(fromId, toId, month, amount);
             if (!r.ok) {
               setError(ledgerMessage(r.error));
               return;
             }
-            toast.show(t('budget.moved'));
-            setMoveOpen(false);
+            toast.show(t('budget.moved'), () => {
+              void (async () => {
+                await repo.setAssigned(fromId, month, fromPrev);
+                await repo.setAssigned(toId, month, toPrev);
+              })();
+            });
+            closeMove();
           }}
         />
       ) : null}
 
       {snapshot && coverOpen ? (
         <CoverSheet
+          visible
           month={month}
           snapshot={snapshot}
-          onClose={() => setCoverOpen(false)}
+          onClose={closeCover}
           onSave={async (covers) => {
+            const before = await repo.load();
+            const prev = covers.map((cvr) => ({
+              id: cvr.overspentId,
+              amount: repo.assigned(cvr.overspentId, month, before),
+            }));
+            const fromPrev = covers.map((cvr) => ({
+              id: cvr.fromId,
+              amount: cvr.fromId === '__left_to_plan__' ? 0n : repo.assigned(cvr.fromId, month, before),
+            }));
             const r = await repo.coverOverspending(month, covers);
             if (!r.ok) {
               setError(ledgerMessage(r.error));
               return;
             }
-            toast.show(t('budget.covered'));
-            setCoverOpen(false);
+            toast.show(t('budget.covered'), () => {
+              void (async () => {
+                for (const p of prev) await repo.setAssigned(p.id, month, p.amount);
+                for (const p of fromPrev) {
+                  if (p.id !== '__left_to_plan__') await repo.setAssigned(p.id, month, p.amount);
+                }
+              })();
+            });
+            closeCover();
           }}
         />
       ) : null}
@@ -530,122 +621,5 @@ function BudgetBanner({
         <Button testID="budget-banner-cover" kind="secondary" label={t('budget.coverOverspending', { count: overspentCount })} onPress={onCover} />
       ) : null}
     </View>
-  );
-}
-
-function MoveMoneySheet({
-  month,
-  snapshot,
-  onClose,
-  onSave,
-}: {
-  month: string;
-  snapshot: NonNullable<ReturnType<typeof useWorkspace>['snapshot']>;
-  onClose: () => void;
-  onSave: (fromId: string, toId: string, amount: bigint) => Promise<void>;
-}) {
-  const cats = budgetCategories(snapshot);
-  const [fromId, setFromId] = useState(cats[0]?.id ?? '');
-  const [toId, setToId] = useState(cats[1]?.id ?? cats[0]?.id ?? '');
-  const [text, setText] = useState('');
-  const [minor, setMinor] = useState<bigint | null>(null);
-  const fromRow = fromId ? rowFor(snapshot, month, fromId) : null;
-  const toRow = toId ? rowFor(snapshot, month, toId) : null;
-  const options = cats.map((c) => ({ value: c.id, label: c.name }));
-  const previewFrom = fromRow && minor !== null ? fromRow.assigned - minor : null;
-  const previewTo = toRow && minor !== null ? toRow.assigned + minor : null;
-
-  return (
-    <Sheet
-      visible
-      title={t('budget.moveMoney')}
-      onClose={onClose}
-      testID="budget-move-sheet"
-      footer={
-        <Button
-          testID="budget-move-save"
-          label={t('budget.moveSave')}
-          disabled={!fromId || !toId || fromId === toId || minor === null || minor <= 0n}
-          onPress={() => void onSave(fromId, toId, minor!)}
-        />
-      }
-    >
-      <Select testID="budget-move-from" label={t('budget.moveFrom')} options={options} value={fromId} onChange={setFromId} />
-      {fromRow ? (
-        <Text variant="caption" tone="textSecondary">
-          {t('budget.moveRemaining', { amount: formatNaira(fromRow.available) })}
-        </Text>
-      ) : null}
-      <Select testID="budget-move-to" label={t('budget.moveTo')} options={options.filter((o) => o.value !== fromId)} value={toId} onChange={setToId} />
-      <AmountInput label={t('budget.moveAmount')} value={text} onChange={(v, m) => { setText(v); setMinor(m); }} testID="budget-move-amount" />
-      {previewFrom !== null && previewTo !== null ? (
-        <View testID="budget-move-preview" style={{ gap: sp['spacing-xs'] }}>
-          <Text variant="caption">{t('budget.movePreviewFrom', { amount: formatNaira(previewFrom) })}</Text>
-          <Text variant="caption">{t('budget.movePreviewTo', { amount: formatNaira(previewTo) })}</Text>
-        </View>
-      ) : null}
-    </Sheet>
-  );
-}
-
-function CoverSheet({
-  month,
-  snapshot,
-  onClose,
-  onSave,
-}: {
-  month: string;
-  snapshot: NonNullable<ReturnType<typeof useWorkspace>['snapshot']>;
-  onClose: () => void;
-  onSave: (covers: { overspentId: string; fromId: string; amount: bigint }[]) => Promise<void>;
-}) {
-  const overspent = overspentCategories(snapshot, month);
-  const sources = budgetCategories(snapshot).filter((c) => !overspent.some((o) => o.category.id === c.id));
-  const [fromBy, setFromBy] = useState<Record<string, string>>(() =>
-    Object.fromEntries(overspent.map((o) => [o.category.id, sources[0]?.id ?? ''])),
-  );
-
-  return (
-    <Sheet
-      visible
-      title={t('budget.coverTitle')}
-      onClose={onClose}
-      testID="budget-cover-sheet"
-      footer={
-        <Button
-          testID="budget-cover-save"
-          label={t('budget.coverAll')}
-          disabled={overspent.length === 0 || overspent.some((o) => !fromBy[o.category.id])}
-          onPress={() =>
-            void onSave(
-              overspent.map((o) => ({
-                overspentId: o.category.id,
-                fromId: fromBy[o.category.id]!,
-                amount: o.over,
-              })),
-            )
-          }
-        />
-      }
-    >
-      {overspent.length === 0 ? (
-        <Text tone="textSecondary">{t('budget.coverNone')}</Text>
-      ) : (
-        overspent.map((o) => (
-          <View key={o.category.id} testID={`cover-row-${o.category.id}`} style={{ gap: sp['spacing-sm'], marginBottom: sp['spacing-md'] }}>
-            <Text>
-              {t('budget.coverRow', { name: o.category.name, amount: formatNaira(o.over) })}
-            </Text>
-            <Select
-              testID={`cover-from-${o.category.id}`}
-              label={t('budget.coverFrom')}
-              options={sources.map((s) => ({ value: s.id, label: s.name }))}
-              value={fromBy[o.category.id] ?? ''}
-              onChange={(v) => setFromBy((prev) => ({ ...prev, [o.category.id]: v }))}
-            />
-          </View>
-        ))
-      )}
-    </Sheet>
   );
 }

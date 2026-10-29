@@ -57,15 +57,6 @@ export function formatNaira(minor: bigint, options: FormatOptions = {}): string 
   return `${sign}₦${body}`;
 }
 
-const SYMBOLS: Record<string, string> = { NGN: '₦', USD: '$', GBP: '£', EUR: '€' };
-
-/** An amount in its own currency: its symbol (or code) before the figure (DESIGN.md 2.6). Two decimals. */
-export function formatMoney(minor: bigint, currency = 'NGN', options: FormatOptions = {}): string {
-  if (currency === 'NGN') return formatNaira(minor, options);
-  const symbol = SYMBOLS[currency] ?? `${currency} `;
-  return formatNaira(minor, options).replace('₦', symbol);
-}
-
 /** Exported statements use brackets for negatives. */
 export function formatNairaStatement(minor: bigint): string {
   return minor < 0n ? `(${formatNaira(-minor)})` : formatNaira(minor);

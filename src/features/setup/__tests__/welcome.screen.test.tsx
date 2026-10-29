@@ -117,7 +117,9 @@ describe('P04 Welcome', () => {
     await renderWelcome();
     await fireEvent.press(screen.getByTestId('continue'));
     await fireEvent.press(screen.getByTestId('continue'));
-    await fireEvent.changeText(screen.getByTestId('account-opening-0'), '1,2,3');
+    const opening = screen.getByTestId('account-opening-0');
+    await fireEvent.changeText(opening, '1,2,3');
+    await fireEvent(opening, 'blur');
     expect(screen.getByTestId('continue')).toBeDisabled();
     expect(screen.getByText(t('money.unreadable'))).toBeTruthy();
   });

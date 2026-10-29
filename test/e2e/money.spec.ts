@@ -10,6 +10,8 @@ async function addAccount(page: Page, name: string, opening: string, isMobile: b
   } else await page.getByRole('link', { name: en['nav.accounts'], exact: true }).locator('visible=true').first().click();
   await expect(page).toHaveURL(/\/accounts$/);
   await page.getByTestId('accounts-add').click();
+  // PU-13 is two steps: pick kind, then name/opening (type grid covers Continue otherwise).
+  await page.getByTestId('type-bank').click();
   await page.getByTestId('account-name').fill(name);
   await page.getByTestId('account-opening').fill(opening);
   await page.getByTestId('save-account').click();
@@ -41,6 +43,7 @@ test('P09-01, P09-02, P09-04: an account page, a CSV import and its Undo', async
   await page.getByTestId('import-next').click();
   await page.getByTestId('import-post').click();
   await expect(page.getByTestId('account-balance')).toHaveText('₦1,455.50');
-  await page.getByRole('button', { name: en['common.undo'] }).click();
+  // Toast Undo — prefer over any leftover import-sheet undo control.
+  await page.getByRole('button', { name: en['common.undo'] }).first().click();
   await expect(page.getByTestId('account-balance')).toHaveText('₦1,000.00');
 });
