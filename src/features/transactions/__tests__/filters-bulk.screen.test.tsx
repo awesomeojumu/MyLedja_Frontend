@@ -5,10 +5,15 @@ import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
+import { resetParams } from '../../../../test/helpers/router';
 import { AddTransactionProvider } from '../AddTransaction';
 import { TransactionsScreen } from '../TransactionsScreen';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
+
+beforeEach(() => {
+  resetParams();
+});
 
 async function seeded() {
   const sync = memorySync();
@@ -81,6 +86,6 @@ describe('Transactions filters and bulk', () => {
       expect(expenses.every((e) => e.lines.some((l) => l.ledgerAccountId === rentId))).toBe(true);
     });
     void marketId;
-    expect(await screen.findByText(t('tx.bulk.done'))).toBeTruthy();
+    expect(await screen.findByText(t('tx.bulk.changed', { count: 2 }))).toBeTruthy();
   });
 });

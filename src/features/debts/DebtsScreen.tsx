@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
   Amount,
@@ -10,12 +10,10 @@ import {
   EmptyState,
   InlineError,
   Placeholder,
-  Select,
-  Sheet,
+  StatusPill,
   Text,
-  TextInput,
-  AmountInput,
   formatDay,
+  useToast,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
@@ -26,9 +24,12 @@ import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
 import { DebtsPaymentSheet } from './DebtsPaymentSheet';
+import { DebtScheduleSheet } from './DebtScheduleSheet';
 import { MoneyBackReviewSheet } from './MoneyBackReviewSheet';
+import { OpenDebtSheet } from './OpenDebtSheet';
 import { listMoneyBackReview } from './moneyBack';
-import { debtOriginalAmount, debtProgress, nextInstallment } from './schedule';
+import { DEBT_URL, debtsListTabToFilter, filterToDebtsListTab, parseDebtsListTab } from './popupUrl';
+import { debtIsOverdue, debtOriginalAmount, debtProgress, nextInstallment } from './schedule';
 import { debtRows, debtTotals, findRecentPayment, type DebtFilter } from './helpers';
 
 const sp = tokens.spacing;
@@ -38,13 +39,17 @@ export function DebtsScreen() {
   const { snapshot, repo } = useWorkspace();
   const router = useRouter();
   const theme = useTheme();
+  const toast = useToast();
+  const params = useLocalSearchParams<{ tab?: string; debt?: string; payment?: string; debtSchedule?: string }>();
   const onDate = today();
-  const [filter, setFilter] = useState<DebtFilter>('all');
-  const [lendOpen, setLendOpen] = useState(false);
-  const [borrowOpen, setBorrowOpen] = useState(false);
-  const [payDebt, setPayDebt] = useState<PersonDebt | null>(null);
-  const [payBalance, setPayBalance] = useState<bigint>(0n);
-  const [duplicateConfirm, setDuplicateConfirm] = useState<{ accountId: string; principal: bigint; interest: bigint } | null>(null);
+  const filter = debtsListTabToFilter(parseDebtsListTab(typeof params.tab === 'string' ? params.tab : undefined));
+  const debtParam = typeof params.debt === 'string' ? params.debt : undefined;
+  const paymentParam = typeof params.payment === 'string' ? params.payment : undefined;
+  const scheduleParam = typeof params.debtSchedule === 'string' ? params.debtSchedule : undefined;
+  const lendOpen = debtParam === 'new';
+  const openDirection: PersonDebt['direction'] = parseDebtsListTab(typeof params.tab === 'string' ? params.tab : undefined) === 'owe' ? 'iOwe' : 'owedToMe';
+  const [pendingScheduleId, setPendingScheduleId] = useState<string | null>(null);
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{ accountId: string; principal: bigint; interest: bigint; date: string; overpayment?: 'gift' | 'credit' } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [moneyBackReview, setMoneyBackReview] = useState(false);
 
@@ -53,17 +58,43 @@ export function DebtsScreen() {
   const bankLoans = useMemo(() => snapshot?.accounts.filter((a) => a.type === 'loan' && !a.archived) ?? [], [snapshot]);
   const moneyBackCount = useMemo(() => (snapshot ? listMoneyBackReview(snapshot, onDate).length : 0), [snapshot, onDate]);
 
-  async function saveListPayment(debt: PersonDebt, balance: bigint, input: { accountId: string; principal: bigint; interest: bigint; force?: boolean }) {
+  const payRow =
+    paymentParam && snapshot ? debtRows(snapshot, 'all', onDate).find((r) => r.debt.id === paymentParam) ?? null : null;
+  const scheduleDebt =
+    snapshot && (scheduleParam || pendingScheduleId)
+      ? snapshot.debts.find((d) => d.id === (scheduleParam ?? pendingScheduleId)) ?? null
+      : null;
+
+  const setListTab = (f: DebtFilter) => {
+    router.setParams({ [DEBT_URL.tab]: filterToDebtsListTab(f) });
+  };
+
+  async function saveListPayment(
+    debt: PersonDebt,
+    input: { accountId: string; principal: bigint; interest: bigint; date: string; force?: boolean; overpayment?: 'gift' | 'credit' },
+  ) {
     setError(null);
-    const dup = snapshot ? findRecentPayment(debt.id, snapshot, input.principal, onDate) : null;
+    const dup = snapshot ? findRecentPayment(debt.id, snapshot, input.principal, input.date) : null;
     if (dup && !input.force) {
-      setDuplicateConfirm({ ...input });
+      setDuplicateConfirm(input);
       return;
     }
-    const r = await repo.recordDebtPayment(debt.id, { accountId: input.accountId, amount: input.principal, date: onDate, interest: input.interest });
+    const r = await repo.recordDebtPayment(debt.id, {
+      accountId: input.accountId,
+      amount: input.principal,
+      date: input.date,
+      interest: input.interest,
+      overpayment: input.overpayment,
+    });
     if (!r.ok) setError(ledgerMessage(r.error));
-    else setPayDebt(null);
+    else {
+      toast.show(t('debts.paymentRecorded'));
+      router.setParams({ [DEBT_URL.payment]: undefined });
+    }
   }
+
+  const emptyCopy =
+    filter === 'owedToMe' ? t('debts.emptyOwed') : filter === 'iOwe' ? t('debts.emptyOwe') : filter === 'settled' ? t('debts.emptySettled') : t('debts.emptyBody');
 
   return (
     <AppFrame title={t('debts.title')}>
@@ -81,40 +112,49 @@ export function DebtsScreen() {
             testID={`debts-filter-${f}`}
             kind={filter === f ? 'primary-pill' : 'secondary'}
             label={t(`debts.filter.${f}`)}
-            onPress={() => setFilter(f)}
+            onPress={() => setListTab(f)}
           />
         ))}
       </View>
       <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'] }}>
-        <Button testID="debts-lent" label={t('debts.iLent')} onPress={() => setLendOpen(true)} />
-        <Button testID="debts-borrowed" kind="secondary" label={t('debts.iBorrowed')} onPress={() => setBorrowOpen(true)} />
+        <Button
+          testID="debts-lent"
+          label={t('debts.iLent')}
+          onPress={() => router.setParams({ [DEBT_URL.debt]: 'new', [DEBT_URL.tab]: 'owed' })}
+        />
+        <Button
+          testID="debts-borrowed"
+          kind="secondary"
+          label={t('debts.iBorrowed')}
+          onPress={() => router.setParams({ [DEBT_URL.debt]: 'new', [DEBT_URL.tab]: 'owe' })}
+        />
       </View>
       {moneyBackCount > 0 ? (
         <Card testID="debts-money-back-banner" style={{ marginBottom: sp['spacing-md'], gap: sp['spacing-sm'] }}>
           <Text>{t('debts.moneyBack.banner', { count: String(moneyBackCount) })}</Text>
-          <Button
-            testID="debts-money-back-review"
-            kind="secondary"
-            label={t('debts.moneyBack.review')}
-            onPress={() => setMoneyBackReview(true)}
-          />
+          <Button testID="debts-money-back-review" kind="secondary" label={t('debts.moneyBack.review')} onPress={() => setMoneyBackReview(true)} />
         </Card>
       ) : null}
       {error ? <InlineError message={error} /> : null}
       {!rows ? (
         <Placeholder height={120} />
       ) : rows.length === 0 ? (
-        <EmptyState title={t('debts.emptyTitle')} body={t('debts.emptyBody')} actionLabel={t('debts.iLent')} onAction={() => setLendOpen(true)} />
+        <EmptyState title={t('debts.emptyTitle')} body={emptyCopy} actionLabel={t('debts.iLent')} onAction={() => router.setParams({ [DEBT_URL.debt]: 'new', [DEBT_URL.tab]: 'owed' })} />
       ) : (
         <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }}>
           {rows.map(({ debt, balance }) => {
             const original = snapshot ? debtOriginalAmount(debt.id, snapshot) : 0n;
             const progress = snapshot ? debtProgress(debt.id, snapshot, balance) : 0;
             const next = snapshot ? nextInstallment(debt, snapshot, onDate) : null;
+            const overdue = snapshot ? debtIsOverdue(debt, snapshot, onDate) : false;
             return (
-              <Card key={debt.id} testID={`debt-row-${debt.id}`} style={{ gap: sp['spacing-sm'] }}>
+              <Card key={debt.id} testID={`debt-row-${debt.id}`} style={{ gap: sp['spacing-sm'], opacity: debt.status !== 'open' ? 0.72 : 1 }}>
                 <Pressable accessibilityRole="button" onPress={() => router.push(`/debts/${debt.id}`)}>
-                  <Text variant="heading-sm">{debt.name}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text variant="heading-sm">{debt.name}</Text>
+                    {overdue ? <StatusPill kind="problem" label={t('debts.overdue')} /> : null}
+                    {debt.status === 'written_off' ? <StatusPill kind="problem" label={t('debts.writtenOff')} /> : null}
+                  </View>
                   <Text tone="textSecondary">{debt.direction === 'owedToMe' ? t('debts.theyOweLabel') : t('debts.iOweLabel')}</Text>
                   {original > 0n ? (
                     <Text tone="textSecondary">
@@ -139,14 +179,11 @@ export function DebtsScreen() {
                     testID={`debt-pay-${debt.id}`}
                     kind="secondary"
                     label={t('debts.recordPayment')}
-                    onPress={() => {
-                      setPayBalance(balance);
-                      setPayDebt(debt);
-                    }}
+                    onPress={() => router.setParams({ [DEBT_URL.payment]: debt.id })}
                   />
                 ) : (
                   <Text variant="caption" tone="textSecondary">
-                    {t('debts.settled')}
+                    {debt.status === 'written_off' ? t('debts.writtenOff') : t('debts.settled')}
                   </Text>
                 )}
               </Card>
@@ -167,46 +204,65 @@ export function DebtsScreen() {
       )}
       {lendOpen && snapshot ? (
         <OpenDebtSheet
-          direction="owedToMe"
+          direction={openDirection}
           snapshot={snapshot}
-          onClose={() => setLendOpen(false)}
+          onClose={() => router.setParams({ [DEBT_URL.debt]: undefined })}
           onSave={async (input) => {
             setError(null);
-            const r = await repo.openPersonDebt({ ...input, direction: 'owedToMe' });
-            if (!r.ok) setError(ledgerMessage(r.error));
-            else setLendOpen(false);
+            const r = await repo.openPersonDebt(input);
+            if (!r.ok) {
+              setError(ledgerMessage(r.error));
+              return;
+            }
+            toast.show(t('debts.loanRecorded'));
+            router.setParams({ [DEBT_URL.debt]: undefined });
+            if (input.payBack === 'instalments' && r.ok) {
+              setPendingScheduleId(r.value.id);
+              router.setParams({ [DEBT_URL.debtSchedule]: r.value.id });
+            }
           }}
         />
       ) : null}
-      {borrowOpen && snapshot ? (
-        <OpenDebtSheet
-          direction="iOwe"
-          snapshot={snapshot}
-          onClose={() => setBorrowOpen(false)}
-          onSave={async (input) => {
-            setError(null);
-            const r = await repo.openPersonDebt({ ...input, direction: 'iOwe' });
-            if (!r.ok) setError(ledgerMessage(r.error));
-            else setBorrowOpen(false);
-          }}
-        />
-      ) : null}
-      {payDebt && snapshot ? (
+      {payRow && snapshot ? (
         <DebtsPaymentSheet
-          max={payBalance}
+          debt={payRow.debt}
+          max={payRow.balance}
           snapshot={snapshot}
-          onClose={() => setPayDebt(null)}
-          onSave={(input) => saveListPayment(payDebt, payBalance, input)}
+          onClose={() => router.setParams({ [DEBT_URL.payment]: undefined })}
+          onSave={(input) => saveListPayment(payRow.debt, input)}
+        />
+      ) : null}
+      {scheduleDebt && snapshot ? (
+        <DebtScheduleSheet
+          debt={scheduleDebt}
+          totalMinor={debtOriginalAmount(scheduleDebt.id, snapshot)}
+          onClose={() => {
+            setPendingScheduleId(null);
+            router.setParams({ [DEBT_URL.debtSchedule]: undefined });
+          }}
+          onSave={async (input) => {
+            await repo.updatePersonDebt({
+              ...scheduleDebt,
+              scheduleInstallmentCount: input.count,
+              scheduleAmountMinor: input.amountMinor.toString(),
+              scheduleEvery: input.every,
+              scheduleFirstDue: input.firstDue,
+              nextDueDate: input.firstDue,
+            });
+            toast.show(t('debts.scheduleSaved'));
+            setPendingScheduleId(null);
+            router.setParams({ [DEBT_URL.debtSchedule]: undefined });
+          }}
         />
       ) : null}
       <Confirm
-        visible={duplicateConfirm !== null && payDebt !== null}
+        visible={duplicateConfirm !== null && payRow !== null}
         title={t('debts.duplicateTitle')}
-        body={t('debts.duplicateBody', { date: onDate })}
+        body={t('debts.duplicateBody', { date: duplicateConfirm?.date ?? onDate })}
         confirmLabel={t('debts.duplicateConfirm')}
         onConfirm={() => {
-          if (!duplicateConfirm || !payDebt) return;
-          void saveListPayment(payDebt, payBalance, { ...duplicateConfirm, force: true });
+          if (!duplicateConfirm || !payRow) return;
+          void saveListPayment(payRow.debt, { ...duplicateConfirm, force: true });
           setDuplicateConfirm(null);
         }}
         onCancel={() => setDuplicateConfirm(null)}
@@ -224,47 +280,5 @@ function SummaryTile({ label, amount, emphasize }: { label: string; amount: bigi
       </Text>
       <Amount minor={amount} variant={emphasize ? 'heading-sm' : 'body-tabular'} />
     </Card>
-  );
-}
-
-function OpenDebtSheet({
-  direction,
-  snapshot,
-  onClose,
-  onSave,
-}: {
-  direction: 'owedToMe' | 'iOwe';
-  snapshot: NonNullable<ReturnType<typeof useWorkspace>['snapshot']>;
-  onClose: () => void;
-  onSave: (input: { name: string; accountId: string; amount: bigint; date: string; payeeName?: string }) => Promise<void>;
-}) {
-  const [name, setName] = useState('');
-  const [amountText, setAmountText] = useState('');
-  const [amountMinor, setAmountMinor] = useState<bigint | null>(null);
-  const [accountId, setAccountId] = useState(snapshot.accounts[0]?.id ?? '');
-  const accounts = snapshot.accounts.filter((a) => !a.archived).map((a) => ({ value: a.id, label: a.name }));
-  const title = direction === 'owedToMe' ? t('debts.lendTitle') : t('debts.borrowTitle');
-  const caption = direction === 'owedToMe' ? t('debts.lendCaption') : t('debts.borrowCaption');
-
-  return (
-    <Sheet
-      visible
-      title={title}
-      onClose={onClose}
-      testID="debt-open-sheet"
-      footer={
-        <Button
-          testID="debt-open-save"
-          label={t('panel.save')}
-          disabled={!name.trim() || amountMinor === null || amountMinor <= 0n || !accountId}
-          onPress={() => void onSave({ name, accountId, amount: amountMinor!, date: today(), payeeName: name })}
-        />
-      }
-    >
-      <Text tone="textSecondary">{caption}</Text>
-      <TextInput testID="debt-name" label={t('debts.personName')} value={name} onChangeText={setName} />
-      <AmountInput testID="debt-amount" label={t('add.amount')} value={amountText} onChange={(text, minor) => { setAmountText(text); setAmountMinor(minor); }} />
-      <Select testID="debt-account" label={t('add.account')} options={accounts} value={accountId} onChange={setAccountId} />
-    </Sheet>
   );
 }

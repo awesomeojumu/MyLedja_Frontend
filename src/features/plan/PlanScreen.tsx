@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react-native';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -9,6 +9,7 @@ import {
   Card,
   Checkbox,
   EmptyState,
+  Footer,
   Icon,
   InlineError,
   Placeholder,
@@ -39,6 +40,7 @@ import { billMatchCandidates, billMatchReviewCount } from './match';
 import { RecurringFormSheet } from './RecurringFormSheet';
 import {
   calendarDays,
+  dayListTitle,
   findRecurringSuggestions,
   planSummaryStrip,
   planRowsForMonth,
@@ -55,10 +57,19 @@ const GROUP_ORDER: BillRow['group'][] = ['overdue', 'dueSoon', 'later', 'paid'];
 const UPCOMING_OPTIONS = [3, 7, 14, 30] as const;
 
 type ViewMode = 'list' | 'calendar';
-type PlanTab = 'thisMonth' | 'allSchedules';
+type PlanTab = 'month' | 'all';
 
 export function PlanScreen() {
   const router = useRouter();
+  const params = useGlobalSearchParams<{
+    tab?: string;
+    view?: string;
+    schedule?: string;
+    kind?: string;
+    occurrence?: string;
+    find?: string;
+    day?: string;
+  }>();
   const toast = useToast();
   const theme = useTheme();
   const sizeClass = useSizeClass();
@@ -66,22 +77,34 @@ export function PlanScreen() {
   const { snapshot, repo } = useWorkspace();
   const [viewMonth, setViewMonth] = useState(() => monthOf(today()));
   const month = viewMonth;
-  const [view, setView] = useState<ViewMode>('list');
-  const [planTab, setPlanTab] = useState<PlanTab>('thisMonth');
+  const planTab: PlanTab = params.tab === 'all' ? 'all' : 'month';
+  const view: ViewMode = params.view === 'calendar' ? 'calendar' : 'list';
+  const setPlanTab = (tab: PlanTab) => router.setParams({ tab });
+  const setView = (v: ViewMode) => router.setParams({ view: v });
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [showCancelled, setShowCancelled] = useState(false);
   const [paidExpanded, setPaidExpanded] = useState(false);
-  const [dueSoonDays, setDueSoonDays] = useState<number>(7);
+  const dueSoonDays = (snapshot?.settings.dueSoonDays ?? 7) as (typeof UPCOMING_OPTIONS)[number];
   const [upcomingOpen, setUpcomingOpen] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
-  const [formKind, setFormKind] = useState<Recurring['kind']>('bill');
-  const [editRecurring, setEditRecurring] = useState<Recurring | null>(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const [matchRow, setMatchRow] = useState<BillRow | null>(null);
-  const [findOpen, setFindOpen] = useState(false);
-  const [daySheet, setDaySheet] = useState<string | null>(null);
   const [scheduleAction, setScheduleAction] = useState<Recurring | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const formOpen = !!params.schedule;
+  const findOpen = params.find === '1';
+  const daySheet = typeof params.day === 'string' ? params.day : null;
+  const editRecurring = useMemo(() => {
+    if (!snapshot || !params.schedule || params.schedule === 'new') return null;
+    return snapshot.recurring.find((r) => r.id === params.schedule) ?? null;
+  }, [snapshot, params.schedule]);
+  const formKind = (params.kind as Recurring['kind'] | undefined) ?? 'bill';
+  const matchRow = useMemo(() => {
+    if (!snapshot || !params.occurrence) return null;
+    const [recurringId, dueDate] = String(params.occurrence).split(':');
+    if (!recurringId || !dueDate) return null;
+    const rows = planRowsForMonth(snapshot, monthOf(dueDate), today(), dueSoonDays);
+    return rows.find((r) => r.recurring.id === recurringId && r.dueDate === dueDate) ?? null;
+  }, [snapshot, params.occurrence, dueSoonDays]);
 
   const rows = useMemo(
     () => (snapshot ? planRowsForMonth(snapshot, month, today(), dueSoonDays) : null),
@@ -97,51 +120,51 @@ export function PlanScreen() {
   );
 
   const openMatch = (row: BillRow) => {
-    if (row.occurrence?.status === 'paid') {
-      let paidOn = row.dueDate;
-      if (row.occurrence.eventId && snapshot) {
-        const ev = snapshot.events.find((e) => e.id === row.occurrence!.eventId);
-        if (ev) paidOn = ev.date;
-      }
-      toast.show(t('plan.alreadyPaid', { date: formatDay(paidOn) }));
-      return;
-    }
-    setMatchRow(row);
+    router.setParams({ occurrence: `${row.recurring.id}:${row.dueDate}` });
   };
 
   const openAdd = (kind: Recurring['kind']) => {
-    setEditRecurring(null);
-    setFormKind(kind);
-    setFormOpen(true);
     setAddMenuOpen(false);
+    if (kind === 'income') {
+      router.push('/income?stream=new');
+      return;
+    }
+    router.setParams({ schedule: 'new', kind });
+  };
+
+  const setDueSoonDays = (days: (typeof UPCOMING_OPTIONS)[number]) => {
+    if (!snapshot) return;
+    void repo.updateSettings({ ...snapshot.settings, dueSoonDays: days });
   };
 
   return (
     <AppFrame title={t('plan.title')}>
-      <View
-        testID="plan-month-nav"
-        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'] }}
-      >
-        <Pressable
-          testID="plan-prev-month"
-          accessibilityLabel={t('date.previousMonth')}
-          onPress={() => setViewMonth(prevMonth(viewMonth))}
-          style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+      {planTab === 'month' ? (
+        <View
+          testID="plan-month-nav"
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'] }}
         >
-          <ChevronLeft size={20} color={theme.textSecondary} />
-        </Pressable>
-        <Text variant="heading-sm" style={{ minWidth: 160, textAlign: 'center' }}>
-          {monthLabel(viewMonth)}
-        </Text>
-        <Pressable
-          testID="plan-next-month"
-          accessibilityLabel={t('date.nextMonth')}
-          onPress={() => setViewMonth(nextMonth(viewMonth))}
-          style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ChevronRight size={20} color={theme.textSecondary} />
-        </Pressable>
-      </View>
+          <Pressable
+            testID="plan-prev-month"
+            accessibilityLabel={t('date.previousMonth')}
+            onPress={() => setViewMonth(prevMonth(viewMonth))}
+            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <ChevronLeft size={20} color={theme.textSecondary} />
+          </Pressable>
+          <Text variant="heading-sm" style={{ minWidth: 160, textAlign: 'center' }}>
+            {monthLabel(viewMonth)}
+          </Text>
+          <Pressable
+            testID="plan-next-month"
+            accessibilityLabel={t('date.nextMonth')}
+            onPress={() => setViewMonth(nextMonth(viewMonth))}
+            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <ChevronRight size={20} color={theme.textSecondary} />
+          </Pressable>
+        </View>
+      ) : null}
       {strip ? (
         <View testID="plan-summary-strip" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'] }}>
           <SummaryCell label={t('plan.comingIn')} testID="plan-coming-in">
@@ -177,7 +200,7 @@ export function PlanScreen() {
             label={t('plan.matchReview')}
             onPress={() => {
               const first = rows?.find((r) => r.group !== 'paid' && r.recurring.kind !== 'income');
-              if (first) setMatchRow(first);
+              if (first) openMatch(first);
             }}
           />
         </Card>
@@ -189,12 +212,12 @@ export function PlanScreen() {
         value={planTab}
         onChange={setPlanTab}
         options={[
-          { value: 'thisMonth', label: t('plan.tabThisMonth') },
-          { value: 'allSchedules', label: t('plan.tabAllSchedules') },
+          { value: 'month', label: t('plan.tabThisMonth') },
+          { value: 'all', label: t('plan.tabAllSchedules') },
         ]}
       />
 
-      {planTab === 'allSchedules' ? (
+      {planTab === 'all' ? (
         <AllSchedulesTable
           rows={schedules}
           snapshot={snapshot}
@@ -203,6 +226,7 @@ export function PlanScreen() {
           showCancelled={showCancelled}
           onToggleCancelled={() => setShowCancelled((v) => !v)}
           onOpenMenu={setScheduleAction}
+          onAddBill={() => openAdd('bill')}
         />
       ) : (
         <>
@@ -217,7 +241,7 @@ export function PlanScreen() {
           value={view}
           onChange={setView}
         />
-        <Button testID="plan-find" kind="secondary" label={t('plan.findRecurring')} onPress={() => setFindOpen(true)} />
+        <Button testID="plan-find" kind="secondary" label={t('plan.findRecurring')} onPress={() => router.setParams({ find: '1' })} />
         <Button testID="plan-upcoming" kind="link" label={t('plan.upcomingLength', { days: dueSoonDays })} onPress={() => setUpcomingOpen(true)} />
         <Button testID="plan-add-menu" label={t('plan.addMenu')} onPress={() => setAddMenuOpen(true)} />
       </View>
@@ -227,7 +251,12 @@ export function PlanScreen() {
       {!rows ? (
         <Placeholder height={120} />
       ) : rows.length === 0 ? (
-        <EmptyState title={t('plan.emptyTitle')} body={t('plan.emptyBody')} actionLabel={t('plan.addMenu')} onAction={() => setAddMenuOpen(true)} />
+        <EmptyState
+          title={t('plan.emptyMonthTitle')}
+          body={t('plan.emptyMonthBody')}
+          actionLabel={t('plan.addBill')}
+          onAction={() => openAdd('bill')}
+        />
       ) : view === 'list' ? (
         <ScrollView contentContainerStyle={{ gap: sp['spacing-lg'] }}>
           {GROUP_ORDER.map((group) => {
@@ -255,14 +284,8 @@ export function PlanScreen() {
                     onMark={() => openMatch(row)}
                     onEdit={
                       row.recurring.id.startsWith('stream:')
-                        ? () => router.push('/income')
-                        : () => {
-                            const rec = snapshot!.recurring.find((r) => r.id === row.recurring.id);
-                            if (rec) {
-                              setEditRecurring(rec);
-                              setFormOpen(true);
-                            }
-                          }
+                        ? () => router.push(`/income?stream=${row.recurring.id.replace(/^stream:/, '')}`)
+                        : () => router.setParams({ schedule: row.recurring.id })
                     }
                   />
                 ))}
@@ -271,7 +294,7 @@ export function PlanScreen() {
           })}
         </ScrollView>
       ) : (
-        <CalendarGrid month={month} today={today()} byDate={byDate} onDay={(d) => setDaySheet(d)} theme={theme} compact={calendarCompact} />
+        <CalendarGrid month={month} today={today()} byDate={byDate} onDay={(d) => router.setParams({ day: d })} theme={theme} compact={calendarCompact} />
       )}
 
         </>
@@ -283,15 +306,25 @@ export function PlanScreen() {
           existing={editRecurring}
           initialKind={formKind}
           visible
-          onClose={() => {
-            setFormOpen(false);
-            setEditRecurring(null);
+          onClose={() => router.setParams({ schedule: undefined, kind: undefined })}
+          onChooseIncome={() => {
+            router.setParams({ schedule: undefined, kind: undefined });
+            router.push('/income?stream=new');
           }}
           onSave={async (data) => {
             setError(null);
             if (editRecurring) await repo.updateRecurring({ ...data, id: editRecurring.id });
             else await repo.addRecurring(data);
+            toast.show(editRecurring ? t('plan.billSaved') : t('plan.billAdded'));
           }}
+          onDelete={
+            editRecurring
+              ? async () => {
+                  await repo.updateRecurring({ ...editRecurring, cancelled: true });
+                  toast.show(t('plan.billDeleted'));
+                }
+              : undefined
+          }
           onCancelSchedule={
             editRecurring
               ? async () => {
@@ -311,13 +344,13 @@ export function PlanScreen() {
         />
       ) : null}
 
-      {snapshot && matchRow ? (
+      {snapshot && params.occurrence ? (
         <MarkPaidMatchSheet
           row={matchRow}
           snapshot={snapshot}
           visible
-          onClose={() => setMatchRow(null)}
-          onDone={() => toast.show(t('common.saved'))}
+          onClose={() => router.setParams({ occurrence: undefined })}
+          onDone={(msg) => toast.show(msg ?? t('common.saved'))}
         />
       ) : null}
 
@@ -326,7 +359,7 @@ export function PlanScreen() {
         <Button testID="plan-add-bill" kind="secondary" label={t('plan.kind.bill')} onPress={() => openAdd('bill')} />
         <Button testID="plan-add-subscription" kind="secondary" label={t('plan.kind.subscription')} onPress={() => openAdd('subscription')} />
         <Button testID="plan-add-transfer" kind="secondary" label={t('plan.kind.transfer')} onPress={() => openAdd('transfer')} />
-        <Button testID="plan-add-income" kind="secondary" label={t('plan.kind.income')} onPress={() => { setAddMenuOpen(false); router.push('/income'); }} />
+        <Button testID="plan-add-income" kind="secondary" label={t('plan.kind.income')} onPress={() => openAdd('income')} />
       </Popover>
 
       <Popover visible={!!scheduleAction} onClose={() => setScheduleAction(null)} testID="plan-schedule-menu">
@@ -337,11 +370,35 @@ export function PlanScreen() {
               kind="secondary"
               label={t('plan.editRecurring')}
               onPress={() => {
-                setEditRecurring(scheduleAction);
-                setFormOpen(true);
+                router.setParams({ schedule: scheduleAction.id });
                 setScheduleAction(null);
               }}
             />
+            {scheduleAction.paused ? (
+              <Button
+                testID="plan-schedule-resume"
+                kind="secondary"
+                label={t('plan.resumeSchedule')}
+                onPress={() =>
+                  void repo.updateRecurring({ ...scheduleAction, paused: false }).then(() => {
+                    toast.show(t('plan.scheduleResumed'));
+                    setScheduleAction(null);
+                  })
+                }
+              />
+            ) : (
+              <Button
+                testID="plan-schedule-pause"
+                kind="secondary"
+                label={t('plan.pauseSchedule')}
+                onPress={() =>
+                  void repo.updateRecurring({ ...scheduleAction, paused: true }).then(() => {
+                    toast.show(t('plan.schedulePaused'));
+                    setScheduleAction(null);
+                  })
+                }
+              />
+            )}
             {scheduleAction.cancelled ? (
               <Button
                 testID="plan-schedule-restore"
@@ -374,7 +431,7 @@ export function PlanScreen() {
       {findOpen && snapshot ? (
         <FindRecurringSheet
           suggestions={suggestions}
-          onClose={() => setFindOpen(false)}
+          onClose={() => router.setParams({ find: undefined })}
           onAddMany={async (picked) => {
             for (const s of picked) {
               await repo.addRecurring({
@@ -383,33 +440,40 @@ export function PlanScreen() {
                 amountMinor: s.averageMinor.toString(),
                 accountId: snapshot.accounts[0]!.id,
                 categoryId: snapshot.categories.find((c) => c.kind === 'expense')!.id,
-                rule: { every: 'month', on: 1 },
+                payeeId: s.payeeId,
+                rule: { every: 'month', on: s.dayOfMonth },
                 startDate: today(),
+                reminderDays: 1,
+                hideAmountOnLock: true,
               });
             }
-            setFindOpen(false);
+            toast.show(t('plan.findAdded', { count: String(picked.length) }));
+            router.setParams({ find: undefined });
           }}
         />
       ) : null}
 
       <Popover visible={upcomingOpen} onClose={() => setUpcomingOpen(false)} testID="plan-upcoming-popover">
         <Text variant="heading-sm">{t('plan.upcomingTitle')}</Text>
-        {UPCOMING_OPTIONS.map((d) => (
-          <Button
-            key={d}
-            testID={`plan-upcoming-${d}`}
-            kind={dueSoonDays === d ? 'primary-pill' : 'secondary'}
-            label={t('plan.upcomingDays', { days: d })}
-            onPress={() => {
-              setDueSoonDays(d);
-              setUpcomingOpen(false);
-            }}
-          />
-        ))}
+        <SegmentedControl
+          testID="plan-upcoming-seg"
+          label={t('plan.upcomingTitle')}
+          value={String(dueSoonDays)}
+          onChange={(v) => {
+            setDueSoonDays(Number(v) as (typeof UPCOMING_OPTIONS)[number]);
+            setUpcomingOpen(false);
+          }}
+          options={UPCOMING_OPTIONS.map((d) => ({ value: String(d), label: t('plan.upcomingDays', { days: d }) }))}
+        />
       </Popover>
 
       {daySheet && rows ? (
-        <Sheet visible title={formatDay(daySheet)} onClose={() => setDaySheet(null)} testID="plan-day-sheet">
+        <Sheet
+          visible
+          title={dayListTitle(daySheet)}
+          onClose={() => router.setParams({ day: undefined })}
+          testID="plan-day-sheet"
+        >
           {(byDate.get(daySheet) ?? []).map((row: BillRow) => (
             <BillRowView
               key={`${row.recurring.id}-${row.dueDate}`}
@@ -417,18 +481,14 @@ export function PlanScreen() {
               snapshot={snapshot!}
               onMark={() => openMatch(row)}
               onEdit={() => {
-                if (row.recurring.id.startsWith('stream:')) router.push('/income');
-                else {
-                  const rec = snapshot!.recurring.find((r) => r.id === row.recurring.id);
-                  if (rec) {
-                    setEditRecurring(rec);
-                    setFormOpen(true);
-                  }
-                }
+                if (row.recurring.id.startsWith('stream:')) router.push(`/income?stream=${row.recurring.id.replace(/^stream:/, '')}`);
+                else router.setParams({ schedule: row.recurring.id, day: undefined });
               }}
             />
           ))}
-          {(byDate.get(daySheet) ?? []).length === 0 ? <Text tone="textSecondary">{t('plan.dayEmpty')}</Text> : null}
+          {(byDate.get(daySheet) ?? []).length === 0 ? (
+            <EmptyState title={t('plan.dayEmpty')} body="" actionLabel={t('plan.addBill')} onAction={() => openAdd('bill')} />
+          ) : null}
         </Sheet>
       ) : null}
     </AppFrame>
@@ -443,6 +503,7 @@ function AllSchedulesTable({
   showCancelled,
   onToggleCancelled,
   onOpenMenu,
+  onAddBill,
 }: {
   rows: ScheduleRow[];
   snapshot: Snapshot | null;
@@ -451,6 +512,7 @@ function AllSchedulesTable({
   showCancelled: boolean;
   onToggleCancelled: () => void;
   onOpenMenu: (rec: Recurring) => void;
+  onAddBill: () => void;
 }) {
   return (
     <View testID="plan-all-schedules" style={{ gap: sp['spacing-md'] }}>
@@ -465,7 +527,9 @@ function AllSchedulesTable({
         <Icon icon={showCancelled ? ChevronDown : ChevronRight} size="row" />
         <Text tone="link">{t('plan.showCancelled')}</Text>
       </Pressable>
-      {rows.length === 0 ? (
+      {rows.length === 0 && !search.trim() ? (
+        <EmptyState title={t('plan.schedulesEmptyTitle')} body={t('plan.schedulesEmptyBody')} actionLabel={t('plan.addBill')} onAction={onAddBill} />
+      ) : rows.length === 0 ? (
         <Text tone="textSecondary">{t('plan.schedulesEmpty')}</Text>
       ) : (
         <ScrollView horizontal>
@@ -674,17 +738,23 @@ function BillRowView({
         {formatDay(row.dueDate)} · <Amount minor={BigInt(row.recurring.amountMinor)} signed={income} variant="caption" />
         {row.recurring.approximate ? ` ${t('plan.approximate')}` : ''}
       </Text>
-      {paid ? null : (
-        <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
-          <Button
-            testID={`bill-mark-${row.recurring.id}`}
-            kind="secondary"
-            label={income ? t('plan.markReceived') : hasMatch ? t('plan.match') : t('plan.markPaid')}
-            onPress={onMark}
-          />
-          <Button testID={`bill-edit-${row.recurring.id}`} kind="link" label={t('plan.editRecurring')} onPress={onEdit} />
-        </View>
-      )}
+      <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
+        <Button
+          testID={`bill-mark-${row.recurring.id}`}
+          kind="secondary"
+          label={
+            paid
+              ? t('plan.alreadyPaidShort')
+              : income
+                ? t('plan.markReceived')
+                : hasMatch
+                  ? t('plan.match')
+                  : t('plan.markPaid')
+          }
+          onPress={onMark}
+        />
+        <Button testID={`bill-edit-${row.recurring.id}`} kind="link" label={t('plan.editRecurring')} onPress={onEdit} />
+      </View>
     </Card>
   );
 }
@@ -698,7 +768,13 @@ function FindRecurringSheet({
   onClose: () => void;
   onAddMany: (selected: FindRecurringSuggestion[]) => Promise<void>;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const strongKey = suggestions.map((s) => s.id).join('|');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(suggestions.filter((s) => s.confidence === 'strong').map((s) => s.id)));
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  if (seededFor !== strongKey) {
+    setSeededFor(strongKey);
+    setSelected(new Set(suggestions.filter((s) => s.confidence === 'strong').map((s) => s.id)));
+  }
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -712,7 +788,7 @@ function FindRecurringSheet({
   const addSelected = () => {
     const picks = suggestions.filter((s) => selected.has(s.id));
     if (picks.length === 0) return;
-    void onAddMany(picks).then(onClose);
+    void onAddMany(picks);
   };
 
   return (
@@ -720,14 +796,18 @@ function FindRecurringSheet({
       visible
       title={t('plan.findTitle')}
       onClose={onClose}
+      width={640}
       testID="plan-find-sheet"
       footer={
-        <Button
-          testID="plan-find-add-selected"
-          label={t('plan.findAddSelected')}
-          onPress={() => void addSelected()}
-          disabled={selected.size === 0}
-        />
+        <Footer>
+          <Button testID="plan-find-cancel" kind="secondary" label={t('common.cancel')} onPress={onClose} />
+          <Button
+            testID="plan-find-add-selected"
+            label={t('plan.findAddCount', { count: String(selected.size) })}
+            onPress={() => void addSelected()}
+            disabled={selected.size === 0}
+          />
+        </Footer>
       }
     >
       {suggestions.length === 0 ? (
@@ -742,9 +822,8 @@ function FindRecurringSheet({
               onChange={() => toggle(s.id)}
             />
             <Text tone="textSecondary">
-              {t(`plan.confidence.${s.confidence}`)} · <Amount minor={s.averageMinor} variant="caption" />
+              {s.howOften} · {t(`plan.confidence.${s.confidence}`)} · <Amount minor={s.averageMinor} variant="caption" /> · {formatDay(s.lastDate)}
             </Text>
-            <Button testID={`plan-find-add-${s.id}`} kind="secondary" label={t('plan.findAdd')} onPress={() => void onAddMany([s]).then(onClose)} />
           </Card>
         ))
       )}

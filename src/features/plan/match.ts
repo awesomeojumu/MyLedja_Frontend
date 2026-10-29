@@ -35,6 +35,7 @@ export function billMatchCandidates(snapshot: Snapshot, row: BillRow, windowDays
   const out: BillMatchCandidate[] = [];
 
   for (const r of rowsFor(snapshot)) {
+    // PU26-1: a transaction already linked to any occurrence can't pay another.
     if (r.event.type !== 'expense' || linked.has(r.event.id) || r.event.recurringId) continue;
     if (r.event.date < from || r.event.date > to) continue;
     const amount = expenseTotal(r.event, snapshot);

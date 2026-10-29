@@ -1,24 +1,29 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { Button, Card, InlineError, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
+import { Button, Card, Checkbox, Footer, InlineError, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { BudgetTemplateLine, BudgetTemplateRuleKind } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import {
+  assignedOf,
   budgetCategories,
+  budgetForMonth,
+  groupedBudgetCategories,
   monthLabel,
   resolveTemplateLineAmount,
   templateLineLabel,
 } from '@/features/budget/helpers';
-import { t } from '@/i18n';
+import { catalogue, t, type TextKey } from '@/i18n';
 import { formatNaira } from '@/money';
 
 const sp = tokens.spacing;
 
-type LineDraft = {
+type Kind = BudgetTemplateRuleKind | 'none';
+
+type RowDraft = {
   categoryId: string;
-  ruleKind: BudgetTemplateRuleKind;
+  kind: Kind;
   amountText: string;
   targetMonth: string;
   billId: string;
@@ -26,26 +31,40 @@ type LineDraft = {
   capText: string;
 };
 
-const RULE_OPTIONS: { value: BudgetTemplateRuleKind; labelKey: 'budget.templatesKindMonthly' | 'budget.templatesKindSaveBy' | 'budget.templatesKindCoverBill' | 'budget.templatesKindAverage' | 'budget.templatesKindCap' }[] = [
+const KIND_OPTIONS: { value: Kind; labelKey: 'budget.templatesKindMonthly' | 'budget.templatesKindSaveBy' | 'budget.templatesKindCoverBill' | 'budget.templatesKindAverage' | 'budget.templatesKindCap' | 'budget.templatesKindNone' }[] = [
   { value: 'monthly', labelKey: 'budget.templatesKindMonthly' },
   { value: 'saveBy', labelKey: 'budget.templatesKindSaveBy' },
   { value: 'coverBill', labelKey: 'budget.templatesKindCoverBill' },
   { value: 'average', labelKey: 'budget.templatesKindAverage' },
   { value: 'cap', labelKey: 'budget.templatesKindCap' },
+  { value: 'none', labelKey: 'budget.templatesKindNone' },
 ];
 
-function emptyLine(): LineDraft {
-  return { categoryId: '', ruleKind: 'monthly', amountText: '', targetMonth: '', billId: '', avgMonths: '3', capText: '' };
+const WORKSPACE_TEMPLATE_NAME = 'Monthly plan';
+
+function draftFromLine(categoryId: string, line: BudgetTemplateLine | undefined): RowDraft {
+  if (!line) return { categoryId, kind: 'none', amountText: '', targetMonth: '', billId: '', avgMonths: '3', capText: '' };
+  const kind = (line.ruleKind ?? 'monthly') as BudgetTemplateRuleKind;
+  const meta = line.ruleMeta ?? {};
+  return {
+    categoryId,
+    kind,
+    amountText: line.amountMinor ? String(BigInt(line.amountMinor) / 100n) : meta.targetMinor ? String(BigInt(meta.targetMinor) / 100n) : '',
+    targetMonth: meta.targetMonth ?? '',
+    billId: meta.recurringId ?? '',
+    avgMonths: meta.months ?? '3',
+    capText: meta.maxMinor ? String(BigInt(meta.maxMinor) / 100n) : '',
+  };
 }
 
-function buildLine(draft: LineDraft): BudgetTemplateLine | null {
-  if (!draft.categoryId) return null;
-  if (draft.ruleKind === 'monthly') {
+function buildLine(draft: RowDraft): BudgetTemplateLine | null {
+  if (draft.kind === 'none') return null;
+  if (draft.kind === 'monthly') {
     const parsed = draft.amountText.replace(/,/g, '').trim();
     if (!/^\d+$/.test(parsed)) return null;
     return { categoryId: draft.categoryId, ruleKind: 'monthly', amountMinor: (BigInt(parsed) * 100n).toString() };
   }
-  if (draft.ruleKind === 'saveBy') {
+  if (draft.kind === 'saveBy') {
     const parsed = draft.amountText.replace(/,/g, '').trim();
     if (!/^\d+$/.test(parsed) || !/^\d{4}-\d{2}$/.test(draft.targetMonth)) return null;
     return {
@@ -54,16 +73,16 @@ function buildLine(draft: LineDraft): BudgetTemplateLine | null {
       ruleMeta: { targetMinor: (BigInt(parsed) * 100n).toString(), targetMonth: draft.targetMonth },
     };
   }
-  if (draft.ruleKind === 'coverBill') {
+  if (draft.kind === 'coverBill') {
     if (!draft.billId) return null;
     return { categoryId: draft.categoryId, ruleKind: 'coverBill', ruleMeta: { recurringId: draft.billId } };
   }
-  if (draft.ruleKind === 'average') {
+  if (draft.kind === 'average') {
     const n = draft.avgMonths.trim() || '3';
     if (!/^\d+$/.test(n)) return null;
     return { categoryId: draft.categoryId, ruleKind: 'average', ruleMeta: { months: n } };
   }
-  if (draft.ruleKind === 'cap') {
+  if (draft.kind === 'cap') {
     const parsed = draft.capText.replace(/,/g, '').trim();
     if (!/^\d+$/.test(parsed)) return null;
     return { categoryId: draft.categoryId, ruleKind: 'cap', ruleMeta: { maxMinor: (BigInt(parsed) * 100n).toString() } };
@@ -71,6 +90,14 @@ function buildLine(draft: LineDraft): BudgetTemplateLine | null {
   return null;
 }
 
+function sentenceFor(snapshot: NonNullable<ReturnType<typeof useWorkspace>['snapshot']>, draft: RowDraft): string {
+  if (draft.kind === 'none') return t('budget.templatesKindNone');
+  const line = buildLine(draft);
+  if (!line) return t('budget.templatesIncomplete');
+  return templateLineLabel(snapshot, line);
+}
+
+/** PU-09: one row per budget category with sentence templates, preview fills, total, replace tick. */
 export function TemplatesSheet({
   visible,
   month,
@@ -82,43 +109,108 @@ export function TemplatesSheet({
 }) {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
-  const [name, setName] = useState('');
-  const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [rows, setRows] = useState<RowDraft[]>([]);
+  const [replace, setReplace] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const cats = useMemo(() => (snapshot ? budgetCategories(snapshot) : []), [snapshot]);
+  const groups = useMemo(() => (snapshot ? groupedBudgetCategories(snapshot, 'groups') : []), [snapshot]);
   const bills = useMemo(() => snapshot?.recurring.filter((r) => r.kind === 'bill' || r.kind === 'subscription') ?? [], [snapshot]);
 
-  const selectedRows = useMemo(() => {
-    if (!snapshot || !selectedId) return [];
-    const template = snapshot.budgetTemplates.find((t) => t.id === selectedId);
-    if (!template) return [];
-    return template.lines.map((line) => {
-      const catName = snapshot.categories.find((c) => c.id === line.categoryId)?.name ?? '';
-      const fill = resolveTemplateLineAmount(snapshot, month, line);
-      return { id: line.categoryId + catName, catName, rule: templateLineLabel(snapshot, line), fill };
-    });
-  }, [snapshot, selectedId, month]);
-
-  const saveTemplate = async () => {
-    if (!snapshot) return;
-    const built = lines.map(buildLine).filter((x): x is BudgetTemplateLine => x !== null);
-    if (!name.trim() || built.length === 0) {
-      setError(t('budget.templatesMissing'));
-      return;
+  useEffect(() => {
+    if (!visible || !snapshot || loaded) return;
+    const byCat = new Map<string, BudgetTemplateLine>();
+    const preferred = snapshot.budgetTemplates.find((t) => t.name === WORKSPACE_TEMPLATE_NAME);
+    for (const tpl of preferred ? [preferred] : snapshot.budgetTemplates) {
+      for (const line of tpl.lines) byCat.set(line.categoryId, line);
     }
-    const saved = await repo.saveBudgetTemplate(name.trim(), built);
-    setSelectedId(saved.id);
+    setRows(cats.map((c) => draftFromLine(c.id, byCat.get(c.id))));
+    setReplace(false);
     setError(null);
-    toast.show(t('common.saved'));
+    setLoaded(true);
+  }, [visible, snapshot, cats, loaded]);
+
+  useEffect(() => {
+    if (!visible) setLoaded(false);
+  }, [visible]);
+
+  const previews = useMemo(() => {
+    if (!snapshot) return [] as { categoryId: string; fill: bigint; keep: boolean }[];
+    return rows.map((row) => {
+      const line = buildLine(row);
+      const fill = line ? resolveTemplateLineAmount(snapshot, month, line) : 0n;
+      const existing = assignedOf(snapshot, row.categoryId, month);
+      const keep = !replace && existing > 0n;
+      return { categoryId: row.categoryId, fill: keep ? existing : fill, keep };
+    });
+  }, [snapshot, rows, month, replace]);
+
+  const plannedTotal = previews.reduce((s, p) => s + p.fill, 0n);
+  const available = useMemo(() => {
+    if (!snapshot) return 0n;
+    return budgetForMonth(snapshot, month).leftToPlan + plannedTotal;
+  }, [snapshot, month, plannedTotal]);
+
+  const groupLabel = (group: string): string => {
+    if (group in catalogue) return t(group as TextKey);
+    return group;
+  };
+
+  const updateRow = (categoryId: string, patch: Partial<RowDraft>) => {
+    setRows((all) => all.map((r) => (r.categoryId === categoryId ? { ...r, ...patch } : r)));
+  };
+
+  const collectLines = (): BudgetTemplateLine[] => {
+    const out: BudgetTemplateLine[] = [];
+    for (const row of rows) {
+      const line = buildLine(row);
+      if (line) out.push(line);
+    }
+    return out;
+  };
+
+  const saveTemplates = async () => {
+    if (!snapshot) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const lines = collectLines();
+      const existing = snapshot.budgetTemplates.find((t) => t.name === WORKSPACE_TEMPLATE_NAME);
+      if (existing) {
+        await repo.saveBudgetTemplate(WORKSPACE_TEMPLATE_NAME, lines);
+      } else {
+        await repo.saveBudgetTemplate(WORKSPACE_TEMPLATE_NAME, lines);
+      }
+      toast.show(t('budget.templatesSaved'));
+    } catch {
+      setError(t('errors.network'));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const apply = async () => {
-    if (!selectedId) return;
-    await repo.applyBudgetTemplate(selectedId, month);
-    toast.show(t('common.saved'));
-    onClose();
+    if (!snapshot) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const lines = collectLines();
+      const saved = await repo.saveBudgetTemplate(WORKSPACE_TEMPLATE_NAME, lines);
+      const before = new Map(cats.map((c) => [c.id, assignedOf(snapshot, c.id, month)]));
+      await repo.applyBudgetTemplate(saved.id, month, { replace });
+      toast.show(t('budget.templatesApplied'), async () => {
+        for (const [categoryId, amount] of before) {
+          await repo.setAssigned(categoryId, month, amount);
+        }
+      });
+      onClose();
+    } catch {
+      setError(t('errors.network'));
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (!snapshot) return null;
@@ -131,103 +223,93 @@ export function TemplatesSheet({
       testID="budget-templates-sheet"
       width={720}
       footer={
-        <Button
-          testID="budget-templates-apply"
-          label={t('budget.templatesApplyMonth', { month: monthLabel(month) })}
-          onPress={apply}
-          disabled={!selectedId}
-        />
+        <Footer>
+          <Button kind="secondary" label={t('common.cancel')} onPress={onClose} />
+          <Button testID="budget-templates-apply" label={t('budget.templatesApplyMonth', { month: monthLabel(month) })} disabled={busy} onPress={() => void apply()} />
+        </Footer>
       }
     >
       <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }}>
         {error ? <InlineError message={error} /> : null}
-        {snapshot.budgetTemplates.length > 0 ? (
-          <Select
-            testID="budget-templates-pick"
-            label={t('budget.templatesPick')}
-            value={selectedId ?? ''}
-            onChange={(id) => setSelectedId(id || null)}
-            options={snapshot.budgetTemplates.map((tpl) => ({ value: tpl.id, label: tpl.name }))}
-          />
-        ) : (
-          <Text tone="textSecondary">{t('budget.templatesEmpty')}</Text>
-        )}
-        {selectedRows.length > 0 ? (
-          <Card testID="budget-templates-preview" style={{ gap: sp['spacing-sm'] }}>
-            <Text variant="heading-sm">{t('budget.templatesPreview')}</Text>
-            {selectedRows.map((row) => (
-              <View key={row.id} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-sm'], alignItems: 'flex-start' }}>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text variant="caption" tone="textSecondary">
-                    {row.catName}
-                  </Text>
-                  <Text>{row.rule}</Text>
-                </View>
-                <Text testID={`budget-templates-fill-${row.id}`}>{formatNaira(row.fill)}</Text>
-              </View>
-            ))}
-          </Card>
-        ) : null}
-        <Text variant="heading-sm">{t('budget.templatesNew')}</Text>
-        <TextInput testID="budget-templates-name" label={t('budget.templatesName')} value={name} onChangeText={setName} />
-        {lines.map((line, i) => (
-          <Card key={i} style={{ gap: sp['spacing-xs'] }}>
-            <Select
-              label={t('budget.templatesCategory')}
-              value={line.categoryId}
-              onChange={(id) => setLines((all) => all.map((row, j) => (j === i ? { ...row, categoryId: id } : row)))}
-              options={cats.map((c) => ({ value: c.id, label: c.name }))}
-            />
-            <Select
-              label={t('budget.templatesRuleKind')}
-              value={line.ruleKind}
-              onChange={(v) => setLines((all) => all.map((row, j) => (j === i ? { ...row, ruleKind: v as BudgetTemplateRuleKind } : row)))}
-              options={RULE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
-            />
-            {line.ruleKind === 'monthly' || line.ruleKind === 'saveBy' ? (
-              <TextInput
-                label={line.ruleKind === 'saveBy' ? t('budget.templatesTargetAmount') : t('budget.templatesAmount')}
-                value={line.amountText}
-                onChangeText={(text) => setLines((all) => all.map((row, j) => (j === i ? { ...row, amountText: text } : row)))}
-                keyboardType="number-pad"
-              />
-            ) : null}
-            {line.ruleKind === 'saveBy' ? (
-              <TextInput
-                label={t('budget.templatesTargetMonth')}
-                value={line.targetMonth}
-                onChangeText={(text) => setLines((all) => all.map((row, j) => (j === i ? { ...row, targetMonth: text } : row)))}
-                placeholder="2027-12"
-              />
-            ) : null}
-            {line.ruleKind === 'coverBill' ? (
-              <Select
-                label={t('budget.templatesBill')}
-                value={line.billId}
-                onChange={(id) => setLines((all) => all.map((row, j) => (j === i ? { ...row, billId: id } : row)))}
-                options={bills.map((b) => ({ value: b.id, label: b.name }))}
-              />
-            ) : null}
-            {line.ruleKind === 'average' ? (
-              <TextInput
-                label={t('budget.templatesAvgMonths')}
-                value={line.avgMonths}
-                onChangeText={(text) => setLines((all) => all.map((row, j) => (j === i ? { ...row, avgMonths: text } : row)))}
-                keyboardType="number-pad"
-              />
-            ) : null}
-            {line.ruleKind === 'cap' ? (
-              <TextInput
-                label={t('budget.templatesCap')}
-                value={line.capText}
-                onChangeText={(text) => setLines((all) => all.map((row, j) => (j === i ? { ...row, capText: text } : row)))}
-                keyboardType="number-pad"
-              />
-            ) : null}
-          </Card>
+        {groups.map(([groupKey, groupCats]) => (
+          <View key={groupKey} style={{ gap: sp['spacing-sm'] }} testID={`budget-templates-group-${groupKey}`}>
+            <Text variant="heading-sm">{groupLabel(groupKey)}</Text>
+            {groupCats.map((cat) => {
+              const row = rows.find((r) => r.categoryId === cat.id) ?? draftFromLine(cat.id, undefined);
+              const preview = previews.find((p) => p.categoryId === cat.id);
+              return (
+                <Card key={cat.id} style={{ gap: sp['spacing-xs'] }} testID={`budget-templates-row-${cat.id}`}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-sm'], alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text variant="heading-sm">{cat.name}</Text>
+                      <Text tone="textSecondary" testID={`budget-templates-sentence-${cat.id}`}>
+                        {sentenceFor(snapshot, row)}
+                      </Text>
+                    </View>
+                    <Text testID={`budget-templates-fill-${cat.id}`}>{formatNaira(preview?.fill ?? 0n)}</Text>
+                  </View>
+                  <Select
+                    testID={`budget-templates-kind-${cat.id}`}
+                    label={t('budget.templatesRuleKind')}
+                    value={row.kind}
+                    onChange={(v) => updateRow(cat.id, { kind: v as Kind })}
+                    options={KIND_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
+                  />
+                  {row.kind === 'monthly' || row.kind === 'saveBy' ? (
+                    <TextInput
+                      label={row.kind === 'saveBy' ? t('budget.templatesTargetAmount') : t('budget.templatesAmount')}
+                      value={row.amountText}
+                      onChangeText={(text) => updateRow(cat.id, { amountText: text })}
+                      keyboardType="number-pad"
+                    />
+                  ) : null}
+                  {row.kind === 'saveBy' ? (
+                    <TextInput
+                      label={t('budget.templatesTargetMonth')}
+                      value={row.targetMonth}
+                      onChangeText={(text) => updateRow(cat.id, { targetMonth: text })}
+                      placeholder="2027-12"
+                    />
+                  ) : null}
+                  {row.kind === 'coverBill' ? (
+                    <Select
+                      label={t('budget.templatesBill')}
+                      value={row.billId}
+                      onChange={(id) => updateRow(cat.id, { billId: id })}
+                      options={bills.map((b) => ({ value: b.id, label: b.name }))}
+                    />
+                  ) : null}
+                  {row.kind === 'average' ? (
+                    <TextInput
+                      label={t('budget.templatesAvgMonths')}
+                      value={row.avgMonths}
+                      onChangeText={(text) => updateRow(cat.id, { avgMonths: text })}
+                      keyboardType="number-pad"
+                    />
+                  ) : null}
+                  {row.kind === 'cap' ? (
+                    <TextInput
+                      label={t('budget.templatesCap')}
+                      value={row.capText}
+                      onChangeText={(text) => updateRow(cat.id, { capText: text })}
+                      keyboardType="number-pad"
+                    />
+                  ) : null}
+                </Card>
+              );
+            })}
+          </View>
         ))}
-        <Button kind="secondary" label={t('budget.templatesAddLine')} onPress={() => setLines((all) => [...all, emptyLine()])} />
-        <Button testID="budget-templates-save" kind="secondary" label={t('budget.templatesSave')} onPress={saveTemplate} />
+        <Text testID="budget-templates-total" tone="textSecondary">
+          {t('budget.templatesTotal', { planned: formatNaira(plannedTotal), available: formatNaira(available) })}
+        </Text>
+        <Checkbox
+          testID="budget-templates-replace"
+          label={t('budget.templatesReplace')}
+          checked={replace}
+          onChange={setReplace}
+        />
+        <Button testID="budget-templates-save" kind="link" label={t('budget.templatesSave')} disabled={busy} onPress={() => void saveTemplates()} />
       </ScrollView>
     </Sheet>
   );

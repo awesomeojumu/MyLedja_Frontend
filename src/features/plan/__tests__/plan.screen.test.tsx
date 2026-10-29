@@ -5,10 +5,15 @@ import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
+import { resetParams } from '../../../../test/helpers/router';
 import { PlanScreen } from '../PlanScreen';
 import { planSummaryStrip, billsForMonth } from '../recurrence';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
+
+beforeEach(() => {
+  resetParams();
+});
 
 async function seeded() {
   const sync = memorySync();
@@ -99,6 +104,8 @@ describe('Plan page (DESIGN.md page 12)', () => {
       { sync },
     );
     await fireEvent.press(screen.getByTestId(`bill-mark-${bill.id}`));
+    const { setParams } = require('../../../../test/helpers/router');
+    await setParams({ occurrence: `${bill.id}:2026-10-01` });
     expect(screen.getByTestId('plan-match-sheet')).toBeTruthy();
   });
 
@@ -124,6 +131,9 @@ describe('Plan page (DESIGN.md page 12)', () => {
     );
     await fireEvent.press(screen.getByTestId('plan-add-menu'));
     await fireEvent.press(screen.getByTestId('plan-add-bill'));
+    // Opens via ?schedule=new (PU00-5).
+    const { setParams } = require('../../../../test/helpers/router');
+    await setParams({ schedule: 'new', kind: 'bill' });
     expect(screen.getByTestId('plan-recurring-sheet')).toBeTruthy();
   });
 });

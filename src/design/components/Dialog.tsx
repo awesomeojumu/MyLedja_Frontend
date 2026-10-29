@@ -67,7 +67,7 @@ export function Sheet({
   );
 }
 
-/** Only for actions that move money, send something or can't be undone. */
+/** Only for actions that move money, send something or can't be undone. Destructive uses an outline pill with a ruby dot (PU-02). */
 export function Confirm({
   visible,
   title,
@@ -75,6 +75,8 @@ export function Confirm({
   confirmLabel,
   onConfirm,
   onCancel,
+  destructive = false,
+  testID,
 }: {
   visible: boolean;
   title: string;
@@ -82,12 +84,16 @@ export function Confirm({
   confirmLabel: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Outline pill + ruby dot; focus starts on Cancel (PU-02). */
+  destructive?: boolean;
+  testID?: string;
 }) {
   const theme = useTheme();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} aria-label={title}>
       <View style={{ flex: 1, backgroundColor: backdrop, justifyContent: 'center', alignItems: 'center', padding: tokens.spacing['spacing-lg'] }}>
         <View
+          testID={testID}
           accessibilityViewIsModal
           accessibilityRole="alert"
           style={{
@@ -105,8 +111,35 @@ export function Confirm({
           </Text>
           <Text tone="textSecondary">{body}</Text>
           <Footer>
-            <Button kind="secondary" label={t('common.cancel')} onPress={onCancel} />
-            <Button label={confirmLabel} onPress={onConfirm} />
+            <Button kind="secondary" label={t('common.cancel')} onPress={onCancel} {...(destructive ? { autoFocus: true } as object : null)} />
+            {destructive ? (
+              <Pressable
+                testID={testID ? `${testID}-confirm` : undefined}
+                accessibilityRole="button"
+                accessibilityLabel={confirmLabel}
+                onPress={onConfirm}
+                style={({ pressed }) => ({
+                  minHeight: 44,
+                  paddingVertical: tokens.spacing['spacing-sm'],
+                  paddingHorizontal: tokens.spacing['spacing-lg'],
+                  borderRadius: tokens.radius['rounded-pill'],
+                  borderWidth: 1,
+                  borderColor: theme.inputBorder,
+                  backgroundColor: theme.card,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: tokens.spacing['spacing-sm'],
+                  opacity: pressed ? 0.9 : 1,
+                  transform: pressed ? [{ scale: 0.98 }] : undefined,
+                })}
+              >
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.error }} />
+                <Text variant="button-md">{confirmLabel}</Text>
+              </Pressable>
+            ) : (
+              <Button label={confirmLabel} onPress={onConfirm} />
+            )}
           </Footer>
         </View>
       </View>

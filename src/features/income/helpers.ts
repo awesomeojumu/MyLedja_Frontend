@@ -104,6 +104,49 @@ export function takeHomeMinor(stream: IncomeStream): bigint {
   return gross > 0n ? gross : 0n;
 }
 
+/** PU29-1 — deductions must leave take-home above ₦0. */
+export function deductionsExceedGross(stream: Pick<IncomeStream, 'recordMode' | 'grossMinor' | 'deductions' | 'expectedMinor'>): boolean {
+  if (stream.recordMode !== 'gross' || !stream.grossMinor) return false;
+  const draft = {
+    id: 'x',
+    name: '',
+    kind: 'regular' as const,
+    expectedMinor: stream.expectedMinor,
+    accountId: '',
+    categoryId: '',
+    rule: { every: 'month' as const, on: 1 },
+    countInBudget: true,
+    recordMode: stream.recordMode,
+    grossMinor: stream.grossMinor,
+    deductions: stream.deductions,
+  };
+  return takeHomeMinor(draft) <= 0n && BigInt(stream.grossMinor) > 0n;
+}
+
+/** PU29-3 — routing can't exceed income (amount or 100%). */
+export function routingExceedsIncome(stream: Pick<IncomeStream, 'expectedMinor' | 'routing'>): boolean {
+  let fixed = 0n;
+  let percent = 0;
+  for (const r of stream.routing ?? []) {
+    if (r.restToBudget) continue;
+    if (r.amountMinor) fixed += BigInt(r.amountMinor);
+    if (r.percent) percent += r.percent;
+  }
+  const expected = BigInt(stream.expectedMinor);
+  if (percent > 100) return true;
+  if (fixed > expected) return true;
+  if (percent > 0 && fixed > 0n) {
+    const fromPct = (expected * BigInt(Math.round(percent * 100))) / 10_000n;
+    return fixed + fromPct > expected;
+  }
+  return false;
+}
+
+/** PU29-2 — Passive streams start with Count in budget off. */
+export function defaultCountInBudget(kind: IncomeStreamKind): boolean {
+  return kind !== 'passive';
+}
+
 export function routingSummary(stream: IncomeStream, snapshot: Snapshot): string | null {
   const parts: string[] = [];
   for (const row of stream.routing ?? []) {

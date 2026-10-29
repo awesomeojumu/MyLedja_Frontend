@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Image, Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Activity, ArrowLeftRight, Bell, CalendarClock, CircleDollarSign, Eye, EyeOff, HandCoins, HeartPulse, LayoutDashboard, LineChart, Menu, PieChart, Plus, Settings, Target, TrendingUp, Users, Wallet, Zap } from 'lucide-react-native';
@@ -12,6 +12,7 @@ import { useOnline } from '@/lib/useOnline';
 import { useSyncStatus } from '@/data/sync/SyncProvider';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { CommandBar, CommandSearchButton } from '@/features/command/CommandBar';
 import { NotificationsBell } from '@/features/notifications/NotificationsBell';
 import { SyncIssuesBanner } from '@/features/sync/SyncIssues';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
@@ -80,6 +81,8 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
+  const { snapshot } = useWorkspace();
+  const photoUri = snapshot?.settings.profilePhotoUri;
   const add = useOptionalAddTransaction();
   return (
     <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
@@ -115,6 +118,34 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
           <Text variant="heading-sm" style={{ color: c['on-primary'], fontFamily: 'Inter_400Regular' }}>
             {t('app.name')}
           </Text>
+          <View
+            testID="sidebar-profile"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'] }}
+          >
+            <View
+              testID="sidebar-profile-photo"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: c['primary-deep'],
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+              }}
+            >
+              {photoUri ? (
+                <Image source={{ uri: photoUri }} style={{ width: 36, height: 36 }} accessibilityIgnoresInvertColors />
+              ) : (
+                <Text variant="caption" style={{ color: c['on-primary'] }}>
+                  {(user?.name ?? '?').slice(0, 1).toUpperCase()}
+                </Text>
+              )}
+            </View>
+            <Text variant="caption" style={{ color: c['on-primary'], flexShrink: 1 }}>
+              {user?.name ?? ''}
+            </Text>
+          </View>
           <View
             testID="workspace-switcher"
             accessibilityLabel={t('nav.workspace', {
@@ -407,6 +438,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
           </SafeAreaView>
         </View>
         {content}
+        <CommandBar />
       </View>
     );
   }
@@ -440,6 +472,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
         <Text variant="heading-lg" accessibilityRole="header" style={{ flex: 1, textAlign: 'center' }}>
           {title}
         </Text>
+        <CommandSearchButton />
         <NotificationsBell items={snapshot?.notifications ?? []} />
         <PrivacyToggle color={theme.textSecondary} />
       </View>
@@ -476,6 +509,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
           />
         </View>
       </Modal>
+      <CommandBar />
     </SafeAreaView>
   );
 }

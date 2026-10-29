@@ -3,11 +3,13 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Bell } from 'lucide-react-native';
 
-import { Amount, Button, Popover, Text } from '@/design/components';
+import { Amount, Button, Popover, Text, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
 import type { AppNotification } from '@/data/workspace/model';
+import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
 import { formatNotificationWhen, unreadCount } from './helpers';
@@ -15,19 +17,108 @@ import { formatNotificationWhen, unreadCount } from './helpers';
 const sp = tokens.spacing;
 const c = tokens.color;
 
-/** DESIGN.md page 27 + popup #5: web preview; phone opens inbox. */
+/** DESIGN.md page 27 + PU-05: web preview (360 wide); phone opens inbox. */
 export function NotificationsBell({ items }: { items: AppNotification[] }) {
   const theme = useTheme();
   const router = useRouter();
+  const toast = useToast();
+  const { snapshot, repo } = useWorkspace();
   const phone = useSizeClass() === 'phone';
   const [open, setOpen] = useState(false);
   const unread = unreadCount(items);
   const latest = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
-  const today = new Date().toISOString().slice(0, 10);
+  const day = today();
 
   const onPress = () => {
     if (phone) router.push('/notifications');
     else setOpen((v) => !v);
+  };
+
+  const markPaid = async (n: AppNotification) => {
+    if (!n.recurringId || !n.dueDate || !snapshot) return;
+    const bill = snapshot.recurring.find((r) => r.id === n.recurringId);
+    if (!bill) return;
+    const categoryId = bill.categoryId ?? snapshot.categories.find((c) => c.kind === 'expense')!.id;
+    const r = await repo.markBillPaid(n.recurringId, n.dueDate, {
+      accountId: bill.accountId,
+      categoryId,
+      amount: BigInt(bill.amountMinor),
+      date: day,
+    });
+    if (!r.ok) toast.show(ledgerMessage(r.error));
+    else {
+      await repo.markNotificationRead(n.id);
+      toast.show(t('notifications.markedPaid'));
+    }
+  };
+
+  const primaryAction = (n: AppNotification) => {
+    if (n.action === 'mark_paid') {
+      return (
+        <Button
+          testID={`preview-action-${n.id}`}
+          kind="secondary"
+          size="sm"
+          label={t('plan.markPaid')}
+          onPress={() => void markPaid(n)}
+        />
+      );
+    }
+    if (n.action === 'see_budget') {
+      return (
+        <Button
+          testID={`preview-action-${n.id}`}
+          kind="secondary"
+          size="sm"
+          label={t('notifications.seeBudget')}
+          onPress={() => {
+            void repo.markNotificationRead(n.id);
+            setOpen(false);
+            router.push('/budget');
+          }}
+        />
+      );
+    }
+    if (n.action === 'match') {
+      return (
+        <Button
+          testID={`preview-action-${n.id}`}
+          kind="secondary"
+          size="sm"
+          label={t('notifications.match')}
+          onPress={() => {
+            setOpen(false);
+            router.push('/notifications');
+          }}
+        />
+      );
+    }
+    if (n.action === 'record_payment') {
+      return (
+        <Button
+          testID={`preview-action-${n.id}`}
+          kind="secondary"
+          size="sm"
+          label={t('debts.recordPayment')}
+          onPress={() => {
+            setOpen(false);
+            router.push(n.debtId ? `/debts/${n.debtId}` : '/debts');
+          }}
+        />
+      );
+    }
+    if (n.category === 'security') {
+      return (
+        <Button
+          testID={`preview-action-${n.id}`}
+          kind="secondary"
+          size="sm"
+          label={t('notifications.securityYes')}
+          onPress={() => void repo.markNotificationRead(n.id)}
+        />
+      );
+    }
+    return null;
   };
 
   return (
@@ -56,36 +147,50 @@ export function NotificationsBell({ items }: { items: AppNotification[] }) {
       </Pressable>
       {!phone ? (
         <Popover visible={open} onClose={() => setOpen(false)} testID="notifications-preview">
-          <View style={{ gap: sp['spacing-sm'], maxWidth: 320 }}>
+          <View style={{ gap: sp['spacing-sm'], width: 360, maxWidth: 360 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text variant="heading-sm">{t('nav.notifications')}</Text>
+              {latest.length > 0 ? (
+                <Button
+                  testID="notifications-preview-mark-all"
+                  kind="link"
+                  size="sm"
+                  label={t('notifications.markAllRead')}
+                  onPress={() => void repo.markAllNotificationsRead()}
+                />
+              ) : null}
+            </View>
             {latest.length === 0 ? (
               <Text tone="textSecondary">{t('notifications.emptyPreview')}</Text>
             ) : (
               latest.map((n) => (
                 <View
                   key={n.id}
+                  testID={`notifications-preview-row-${n.id}`}
                   style={{
-                    flexDirection: 'row',
-                    gap: sp['spacing-sm'],
-                    alignItems: 'flex-start',
+                    gap: sp['spacing-xs'],
                     backgroundColor: n.read ? undefined : c['primary-bg-subdued-hover'],
                     borderRadius: tokens.radius['rounded-xs'],
                     padding: sp['spacing-xs'],
                   }}
                 >
-                  {!n.read ? (
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.primaryFill, marginTop: 6 }} />
-                  ) : (
-                    <View style={{ width: 6, marginTop: 6 }} />
-                  )}
-                  <View style={{ flex: 1, gap: sp['spacing-xxs'] }}>
-                    <Text variant="caption" tone={n.read ? 'textSecondary' : 'text'}>
-                      {n.title}
+                  <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], alignItems: 'flex-start' }}>
+                    {!n.read ? (
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.primaryFill, marginTop: 6 }} />
+                    ) : (
+                      <View style={{ width: 6, marginTop: 6 }} />
+                    )}
+                    <View style={{ flex: 1, gap: sp['spacing-xxs'] }}>
+                      <Text variant="caption" tone={n.read ? 'textSecondary' : 'text'}>
+                        {n.title}
+                      </Text>
+                      {n.amountMinor ? <Amount minor={BigInt(n.amountMinor)} variant="caption" /> : null}
+                    </View>
+                    <Text variant="caption" tone="textSecondary">
+                      {formatNotificationWhen(n.createdAt, day)}
                     </Text>
-                    {n.amountMinor ? <Amount minor={BigInt(n.amountMinor)} variant="caption" /> : null}
                   </View>
-                  <Text variant="caption" tone="textSecondary">
-                    {formatNotificationWhen(n.createdAt, today)}
-                  </Text>
+                  {primaryAction(n)}
                 </View>
               ))
             )}

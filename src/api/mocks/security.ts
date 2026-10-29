@@ -4,6 +4,7 @@ import type { TransportRequest, TransportResponse } from '../client';
 export function createSecurityMock() {
   let twoFactorOn = false;
   let rechecked = false;
+  let pendingEmail: string | null = null;
   const passkeys: { id: string; name: string; createdAt: string; lastUsedAt: string | null }[] = [];
   const ok = (body: unknown = null, status = 200): TransportResponse => ({ status, body });
   const codes = () => Array.from({ length: 10 }, (_, i) => `ab${i}d-ef${i}h`);
@@ -16,6 +17,7 @@ export function createSecurityMock() {
       case 'GET /v1/me/security':
         return ok(status());
       case 'POST /v1/auth/recheck':
+      case 'POST /v1/auth/recheck/google':
         rechecked = true;
         return ok(status());
       case 'POST /v1/me/two-factor/setup':
@@ -33,10 +35,30 @@ export function createSecurityMock() {
         return ok({ sessions: [{ id: '00000000-0000-7000-8000-000000000001', deviceName: 'This device', staysSignedIn: false, createdAt: new Date().toISOString(), lastUsedAt: new Date().toISOString(), current: true }] });
       case 'POST /v1/me/password':
         return ok(null, 204);
+      case 'POST /v1/me/email/request': {
+        const blocked = needsRecheck();
+        if (blocked) return blocked;
+        const email = String((req.body as { email?: string } | null)?.email ?? '').toLowerCase();
+        if (email === 'taken@example.test') return { status: 409, body: { code: 'email_in_use', message: "That email can't be used" } };
+        pendingEmail = email;
+        return ok(null, 204);
+      }
+      case 'POST /v1/me/email/confirm': {
+        const body = req.body as { email?: string; code?: string } | null;
+        if (!pendingEmail || body?.email?.toLowerCase() !== pendingEmail) return { status: 400, body: { code: 'email_code_wrong', message: "That code doesn't match" } };
+        if (body?.code !== '123456') return { status: 400, body: { code: 'email_code_wrong', message: "That code doesn't match" } };
+        const email = pendingEmail;
+        pendingEmail = null;
+        return ok({ email });
+      }
       case 'POST /v1/me/restore/preview':
         return ok({ workspaceName: 'Personal', createdAt: new Date().toISOString(), accounts: 3, transactions: 42, firstDate: '2026-10-01', lastDate: '2026-10-28', categories: 12, goals: 1, debts: 1, bills: 2 });
-      case 'POST /v1/me/restore':
-        return needsRecheck() ?? ok({ workspaceId: 'ws-restored', workspaceName: 'Personal (restored)' }, 201);
+      case 'POST /v1/me/restore': {
+        const blocked = needsRecheck();
+        if (blocked) return blocked;
+        const name = String((req.body as { workspaceName?: string } | null)?.workspaceName ?? 'Personal (restored)');
+        return ok({ workspaceId: 'ws-restored', workspaceName: name }, 201);
+      }
       case 'POST /v1/me/delete':
         return needsRecheck() ?? ok({ deletingWorkspaces: 1 }, 202);
       default:

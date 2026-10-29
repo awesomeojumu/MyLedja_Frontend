@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, CircleDot, RotateCcw } from 'lucide-react-native';
 
 import {
@@ -74,7 +74,12 @@ export function BudgetScreen() {
   const [editId, setEditId] = useState<string | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
-  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const params = useLocalSearchParams<{ templates?: string }>();
+  const templatesOpen = params.templates === '1';
+  const setTemplatesOpen = (open: boolean) => {
+    if (open) router.setParams({ templates: '1' });
+    else router.setParams({ templates: undefined });
+  };
   const [menuOpen, setMenuOpen] = useState(false);
   const [rowMenuId, setRowMenuId] = useState<string | null>(null);
   const [monthSpan, setMonthSpan] = useState<'1' | '3'>('1');
