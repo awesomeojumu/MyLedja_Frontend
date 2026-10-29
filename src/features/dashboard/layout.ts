@@ -1,4 +1,5 @@
-import type { DashboardLayout as StoredDashboardLayout } from '@/data/workspace/model';
+import type { DashboardLayout as StoredDashboardLayout, WorkspaceSettings } from '@/data/workspace/model';
+import type { SizeClass } from '@/design/size';
 import type { TextKey } from '@/i18n';
 
 /** DESIGN.md page 5 cards (Phase 1–2; Health and Investments are Phase 5). */
@@ -93,4 +94,37 @@ export function toggleCardHidden(hidden: DashboardCardId[], id: DashboardCardId,
   if (on) set.delete(id);
   else set.add(id);
   return DASHBOARD_CARD_IDS.filter((card) => set.has(card));
+}
+
+/** Phone vs larger layouts are stored separately and sync (PU-06). */
+export function layoutDeviceKind(size: SizeClass): 'phone' | 'larger' {
+  return size === 'phone' ? 'phone' : 'larger';
+}
+
+export function resolveLayoutForDevice(settings: WorkspaceSettings | undefined, size: SizeClass): DashboardLayout {
+  const kind = layoutDeviceKind(size);
+  const raw = kind === 'phone' ? settings?.dashboardLayoutPhone ?? settings?.dashboardLayout : settings?.dashboardLayout;
+  return resolveDashboardLayout(raw);
+}
+
+export function withStoredLayoutForDevice(
+  settings: WorkspaceSettings,
+  size: SizeClass,
+  layout: DashboardLayout,
+): WorkspaceSettings {
+  const stored = toStoredLayout(layout);
+  if (layoutDeviceKind(size) === 'phone') return { ...settings, dashboardLayoutPhone: stored };
+  return { ...settings, dashboardLayout: stored };
+}
+
+/** Reorder by dropping `fromId` onto `toId` (web drag). */
+export function reorderCard(order: DashboardCardId[], fromId: DashboardCardId, toId: DashboardCardId): DashboardCardId[] {
+  if (fromId === toId) return order;
+  const from = order.indexOf(fromId);
+  const to = order.indexOf(toId);
+  if (from < 0 || to < 0) return order;
+  const copy = [...order];
+  const [item] = copy.splice(from, 1);
+  copy.splice(to, 0, item!);
+  return copy;
 }

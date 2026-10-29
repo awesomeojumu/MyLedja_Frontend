@@ -59,7 +59,8 @@ export function sortPayeeRows(rows: PayeeRow[], sort: PayeeSort): PayeeRow[] {
   return copy;
 }
 
-export function payeeTransactions(snapshot: Snapshot, payeeId: string, limit = 12) {
+/** Latest transactions for the payee panel (PU-46: latest 10). */
+export function payeeTransactions(snapshot: Snapshot, payeeId: string, limit = 10) {
   const accountIds = new Set(snapshot.accounts.map((a) => a.id));
   return snapshot.events
     .filter((e) => e.status === 'posted' && e.payeeId === payeeId && e.type !== 'transfer')
@@ -67,9 +68,7 @@ export function payeeTransactions(snapshot: Snapshot, payeeId: string, limit = 1
     .map((e) => {
       const categoryLine = e.lines.find((l) => !accountIds.has(l.ledgerAccountId));
       const category = snapshot.categories.find((c) => c.id === categoryLine?.ledgerAccountId)?.name ?? '';
-      const amount = e.lines
-        .filter((l) => accountIds.has(l.ledgerAccountId))
-        .reduce((s, l) => s + l.amountMinor, 0n);
+      const amount = e.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + l.amountMinor, 0n);
       return { id: e.id, date: e.date, category, amount };
     });
 }
@@ -80,6 +79,31 @@ export function mergeTransactionCount(snapshot: Snapshot, mergeIds: string[]): n
 
 export function yearOf(iso: string): number {
   return Number(iso.slice(0, 4));
+}
+
+/** Who already owns this bank name (PU46-2). */
+export function aliasOwner(snapshot: Snapshot, alias: string, exceptPayeeId?: string): Payee | undefined {
+  const key = alias.trim().toLowerCase();
+  if (!key) return undefined;
+  return snapshot.payees.find((p) => {
+    if (exceptPayeeId && p.id === exceptPayeeId) return false;
+    if (p.name.toLowerCase() === key) return true;
+    return (p.aliases ?? []).some((a) => a.toLowerCase() === key);
+  });
+}
+
+/** Find a payee by display name or bank alias. */
+export function findPayeeByName(snapshot: Snapshot, name: string): Payee | undefined {
+  const key = name.trim().toLowerCase();
+  if (!key) return undefined;
+  return (
+    snapshot.payees.find((p) => p.name.toLowerCase() === key) ??
+    snapshot.payees.find((p) => (p.aliases ?? []).some((a) => a.toLowerCase() === key))
+  );
+}
+
+export function debtForPayee(snapshot: Snapshot, payeeId: string) {
+  return snapshot.debts.find((d) => d.payeeId === payeeId);
 }
 
 export { monthOf };

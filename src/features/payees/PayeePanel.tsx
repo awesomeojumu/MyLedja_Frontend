@@ -1,16 +1,20 @@
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import {
   Amount,
   Button,
   Card,
+  Confirm,
+  InlineError,
+  Menu,
+  Panel,
+  PillTag,
   Select,
   Text,
   TextInput,
   formatDay,
-  Panel,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
@@ -20,7 +24,8 @@ import { rulesForPayee } from '@/features/rules/ruleEngine';
 import { ruleSentence, payeeMonogram } from '@/features/rules/helpers';
 import { t } from '@/i18n';
 
-import { payeeTransactions } from './helpers';
+import { aliasOwner, debtForPayee, payeeTransactions } from './helpers';
+import { pickImageUri } from './pickMedia';
 
 const sp = tokens.spacing;
 
@@ -31,56 +36,198 @@ export function PayeePanel({
   onClose,
   onSave,
   onCreateRule,
+  onMergeWith,
+  onDelete,
 }: {
   payee: Payee;
   snapshot: Snapshot;
   side: boolean;
   onClose: () => void;
-  onSave: (p: Payee) => Promise<void>;
+  onSave: (p: Payee) => Promise<{ ok: boolean; aliasConflict?: string }>;
   onCreateRule: () => void;
+  onMergeWith: () => void;
+  onDelete: () => Promise<boolean>;
 }) {
   const theme = useTheme();
   const router = useRouter();
+  // Remount via key={payee.id} from the parent when switching payees.
   const [name, setName] = useState(payee.name);
   const [categoryId, setCategoryId] = useState(payee.defaultCategoryId ?? '');
-  const [aliasText, setAliasText] = useState((payee.aliases ?? []).join(', '));
+  const [aliases, setAliases] = useState<string[]>(payee.aliases ?? []);
   const [logoUri, setLogoUri] = useState(payee.logoUri ?? '');
+  const [newAlias, setNewAlias] = useState('');
+  const [aliasError, setAliasError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const categories = snapshot.categories.filter((c) => c.kind === 'expense' && !c.hidden);
-  const options = [{ value: '', label: t('payees.noDefaultCategory') }, ...categories.map((c) => ({ value: c.id, label: c.name }))];
-  const txns = useMemo(() => payeeTransactions(snapshot, payee.id), [snapshot, payee.id]);
+  const options = [{ value: '', label: t('payees.noUsualCategory') }, ...categories.map((c) => ({ value: c.id, label: c.name }))];
+  const txns = useMemo(() => payeeTransactions(snapshot, payee.id, 10), [snapshot, payee.id]);
+  const txCount = useMemo(
+    () => snapshot.events.filter((e) => e.status === 'posted' && e.payeeId === payee.id).length,
+    [snapshot, payee.id],
+  );
   const linkedRules = useMemo(() => rulesForPayee(snapshot.rules, payee), [snapshot, payee]);
+  const linkedDebt = useMemo(() => debtForPayee(snapshot, payee.id), [snapshot, payee.id]);
+
+  const persist = async (next: Partial<Payee>) => {
+    const body: Payee = {
+      ...payee,
+      name: (next.name ?? name).trim() || payee.name,
+      defaultCategoryId: (next.defaultCategoryId !== undefined ? next.defaultCategoryId : categoryId) || undefined,
+      aliases: next.aliases ?? aliases,
+      logoUri: next.logoUri !== undefined ? next.logoUri || undefined : logoUri || undefined,
+    };
+    const r = await onSave(body);
+    if (!r.ok && r.aliasConflict) {
+      setAliasError(t('payees.aliasTaken', { name: r.aliasConflict }));
+      return false;
+    }
+    setAliasError(null);
+    return true;
+  };
+
+  const addAlias = async () => {
+    const value = newAlias.trim();
+    if (!value) return;
+    const owner = aliasOwner(snapshot, value, payee.id);
+    if (owner) {
+      setAliasError(t('payees.aliasTaken', { name: owner.name }));
+      return;
+    }
+    if (aliases.some((a) => a.toLowerCase() === value.toLowerCase())) {
+      setNewAlias('');
+      return;
+    }
+    const next = [...aliases, value];
+    setAliases(next);
+    setNewAlias('');
+    await persist({ aliases: next });
+  };
+
+  const removeAlias = async (value: string) => {
+    const next = aliases.filter((a) => a !== value);
+    setAliases(next);
+    await persist({ aliases: next });
+  };
+
+  const changeLogo = async () => {
+    const uri = await pickImageUri();
+    if (!uri) return;
+    setLogoUri(uri);
+    await persist({ logoUri: uri });
+  };
+
+  const removeLogo = async () => {
+    setLogoUri('');
+    await persist({ logoUri: '' });
+  };
 
   const body = (
     <>
-      <Pressable
-        testID="payee-logo"
-        accessibilityRole="button"
-        accessibilityLabel={t('payees.changeLogo')}
-        onPress={() => setLogoUri(logoUri ? '' : `mono://${payeeMonogram(name)}`)}
-        style={{
-          width: 64,
-          height: 64,
-          borderRadius: tokens.radius['rounded-lg'],
-          backgroundColor: theme.tagFill,
-          alignItems: 'center',
-          justifyContent: 'center',
-          alignSelf: 'flex-start',
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'] }}>
+        <Pressable
+          testID="payee-logo"
+          accessibilityRole="button"
+          accessibilityLabel={t('payees.changeLogo')}
+          onPress={() => void changeLogo()}
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: tokens.radius['rounded-lg'],
+            backgroundColor: theme.tagFill,
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          }}
+        >
+          {logoUri && !logoUri.startsWith('mono://') ? (
+            <Image source={{ uri: logoUri }} style={{ width: 64, height: 64 }} accessibilityIgnoresInvertColors />
+          ) : (
+            <Text variant="heading-md" style={{ color: theme.tagText }}>
+              {payeeMonogram(name)}
+            </Text>
+          )}
+        </Pressable>
+        <View style={{ gap: sp['spacing-xs'] }}>
+          <Button testID="payee-logo-pick" kind="link" label={t('payees.changeLogo')} onPress={() => void changeLogo()} />
+          {logoUri ? <Button testID="payee-logo-remove" kind="link" label={t('payees.removeLogo')} onPress={() => void removeLogo()} /> : null}
+        </View>
+        <View style={{ flex: 1 }} />
+        <Menu
+          testID="payee-menu"
+          trigger={(open) => <Button testID="payee-menu-open" kind="secondary" label="⋯" onPress={open} />}
+          items={[
+            { key: 'merge', label: t('payees.mergeWith'), onPress: onMergeWith },
+            {
+              key: 'delete',
+              label: t('payees.deletePayee'),
+              onPress: () => {
+                if (txCount > 0) onMergeWith();
+                else setConfirmDelete(true);
+              },
+            },
+          ]}
+        />
+      </View>
+
+      <TextInput
+        testID="payee-name"
+        label={t('payees.name')}
+        value={name}
+        onChangeText={setName}
+        onBlur={() => void persist({ name })}
+      />
+
+      <Select
+        testID="payee-category"
+        label={t('payees.usualCategory')}
+        options={options}
+        value={categoryId}
+        onChange={(v) => {
+          setCategoryId(v);
+          void persist({ defaultCategoryId: v });
         }}
-      >
-        <Text variant="heading-md" style={{ color: theme.tagText }}>
-          {payeeMonogram(name)}
-        </Text>
-      </Pressable>
-      <TextInput testID="payee-name" label={t('payees.name')} value={name} onChangeText={setName} />
-      <Select testID="payee-category" label={t('payees.defaultCategoryLabel')} options={options} value={categoryId} onChange={setCategoryId} />
+      />
       <Text variant="caption" tone="textSecondary">
-        {t('payees.aliases')}
+        {t('payees.usualCategoryHint')}
       </Text>
-      <TextInput testID="payee-aliases" label={t('payees.aliases')} value={aliasText} onChangeText={setAliasText} />
-      <Text variant="caption" tone="textSecondary">
-        {t('payees.aliasesHint')}
-      </Text>
+
+      <Text variant="heading-sm">{t('payees.aliases')}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'] }}>
+        {aliases.map((a) => (
+          <PillTag key={a} testID={`payee-alias-${a}`} label={`${a} ×`} onPress={() => void removeAlias(a)} />
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], alignItems: 'flex-end' }}>
+        <View style={{ flex: 1 }}>
+          <TextInput
+            testID="payee-alias-input"
+            label={t('payees.addAlias')}
+            value={newAlias}
+            onChangeText={(v) => {
+              setNewAlias(v);
+              setAliasError(null);
+            }}
+            onBlur={() => void addAlias()}
+          />
+        </View>
+        <Button testID="payee-alias-add" kind="secondary" label={t('payees.addAliasButton')} onPress={() => void addAlias()} />
+      </View>
+      {aliasError ? <InlineError testID="payee-alias-error" message={aliasError} /> : null}
+
+      {linkedDebt ? (
+        <Pressable
+          testID="payee-linked-debt"
+          accessibilityRole="button"
+          onPress={() => router.push(`/debts/${linkedDebt.id}`)}
+        >
+          <Card>
+            <Text variant="heading-sm">{t('payees.linkedPerson')}</Text>
+            <Text tone="textSecondary">{linkedDebt.name}</Text>
+          </Card>
+        </Pressable>
+      ) : null}
+
       {txns.length ? (
         <View style={{ gap: sp['spacing-xs'] }}>
           <Text variant="heading-sm">{t('payees.recentTx')}</Text>
@@ -91,14 +238,21 @@ export function PayeePanel({
                   <Text variant="caption" tone="textSecondary">
                     {formatDay(row.date)}
                   </Text>
-                  <Text>{row.category || t('payees.noDefaultCategory')}</Text>
+                  <Text>{row.category || t('payees.noUsualCategory')}</Text>
                 </View>
                 <Amount minor={row.amount < 0n ? -row.amount : row.amount} />
               </Card>
             </Pressable>
           ))}
+          <Button
+            testID="payee-see-all"
+            kind="link"
+            label={t('payees.seeAll')}
+            onPress={() => router.push(`/transactions?payee=${payee.id}`)}
+          />
         </View>
       ) : null}
+
       {linkedRules.length ? (
         <View style={{ gap: sp['spacing-xs'] }}>
           <Text variant="heading-sm">{t('payees.rulesUsing')}</Text>
@@ -116,27 +270,41 @@ export function PayeePanel({
         </View>
       ) : null}
       <Button testID="payee-create-rule" kind="secondary" label={t('payees.createRule')} onPress={onCreateRule} />
-      <Button
-        testID="payee-save"
-        label={t('common.save')}
-        onPress={() =>
-          void onSave({
-            ...payee,
-            name: name.trim() || payee.name,
-            defaultCategoryId: categoryId || undefined,
-            aliases: aliasText.split(',').map((s) => s.trim()).filter(Boolean),
-            logoUri: logoUri || undefined,
-          })
-        }
+
+      <Confirm
+        visible={confirmDelete}
+        title={t('payees.deleteTitle', { name: payee.name })}
+        body={t('payees.deleteBody')}
+        confirmLabel={t('payees.deletePayee')}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void onDelete().then((ok) => {
+            if (ok) onClose();
+          });
+        }}
       />
     </>
   );
 
   if (side) {
     return (
-      <View testID="payee-panel" style={{ flex: 1, maxWidth: 420, borderLeftWidth: 1, borderColor: theme.border, padding: sp['spacing-lg'], gap: sp['spacing-md'] }}>
+      <View
+        testID="payee-panel"
+        style={{
+          flex: 1,
+          maxWidth: 440,
+          width: 440,
+          borderLeftWidth: 1,
+          borderColor: theme.border,
+          padding: sp['spacing-lg'],
+          gap: sp['spacing-md'],
+        }}
+      >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text variant="heading-md">{payee.name}</Text>
+          <Text variant="heading-md" accessibilityRole="header">
+            {payee.name}
+          </Text>
           <Button kind="link" label={t('common.close')} onPress={onClose} />
         </View>
         {body}
