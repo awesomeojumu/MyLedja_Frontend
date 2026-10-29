@@ -30,6 +30,10 @@ export type Account = {
   last4?: string;
   countInBudget: boolean;
   archived: boolean;
+  /** Archived while still holding a balance; still counts in net worth (PU-15). */
+  closedWithBalance?: boolean;
+  /** ISO date the account was opened / created (TB-03 Details). */
+  openedAt?: string;
   order: number;
   /** The last CSV column mapping used for this account (P09-05). */
   importMapping?: ImportMapping;
@@ -61,6 +65,8 @@ export type Category = {
   group: string;
   /** For starter categories, the catalogue key; the name follows the person's edits. */
   key?: TextKey;
+  /** Lucide icon name (PU-11). */
+  icon?: string | null;
   /** Hide from the Budget page (P07-05). */
   hidden: boolean;
   countInBudget: boolean;
@@ -68,6 +74,8 @@ export type Category = {
   budgetType: BudgetType;
   /** Tracking style: leftover carries when on (TECH-SPEC 6.6). */
   carryOver: boolean;
+  /** Counts towards runway in Health (PU-11 / TECH-SPEC 6.10). */
+  essential?: boolean;
   /** Soft-deleted after reassignment (Q-18); filtered out of the snapshot. */
   deleted?: boolean;
 };
@@ -171,7 +179,9 @@ export type WorkspaceSettings = {
   currency: string;
   weekStart: 'monday' | 'sunday' | 'saturday';
   checklistHidden?: boolean;
+  /** Larger screens (tablet+); phone layout is `dashboardLayoutPhone` (PU-06). */
   dashboardLayout?: DashboardLayout;
+  dashboardLayoutPhone?: DashboardLayout;
   notificationPrefs?: NotificationPrefs;
   aiPrefs?: AiFeaturePrefs;
   carryOverDefault?: boolean;

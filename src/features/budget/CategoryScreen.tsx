@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGlobalSearchParams, useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
   Amount,
@@ -11,16 +11,12 @@ import {
   formatDay,
   InlineError,
   Placeholder,
-  Select,
-  Sheet,
-  Switch,
   Text,
-  TextInput,
   useToast,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
-import { BUDGET_TYPES, budgetAssignId, type BudgetType, type Category } from '@/data/workspace/model';
+import { budgetAssignId, type Category } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { ledgerMessage, rowsFor, today } from '@/features/transactions/helpers';
@@ -39,6 +35,7 @@ import {
   sixMonthAverage,
   templateLineLabel,
 } from './helpers';
+import { DeleteCategorySheet, EditCategorySheet, type CategoryDraft } from './CategorySheets';
 
 const sp = tokens.spacing;
 
@@ -53,17 +50,20 @@ const GROUP_OPTIONS: { value: string; labelKey: TextKey }[] = [
 
 export function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useGlobalSearchParams<{ category?: string }>();
   const { snapshot, repo } = useWorkspace();
   const theme = useTheme();
   const toast = useToast();
   const router = useRouter();
   const month = monthOf(today());
-  const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [moveTo, setMoveTo] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const category = snapshot?.categories.find((c) => c.id === id);
+  const editOpen = params.category === id || params.category === 'edit';
+
+  const openEdit = () => router.setParams({ category: id });
+  const closeEdit = () => router.setParams({ category: undefined });
 
   const model = useMemo(() => {
     if (!snapshot || !category) return null;
@@ -115,6 +115,22 @@ export function CategoryScreen() {
     return known ? t(known.labelKey) : group;
   };
 
+  const saveCategory = async (draft: CategoryDraft) => {
+    const next: Category = {
+      ...category,
+      name: draft.name,
+      group: draft.group,
+      kind: draft.kind,
+      budgetType: draft.budgetType,
+      icon: draft.icon,
+      essential: draft.essential,
+      hidden: draft.hidden,
+    };
+    await repo.updateCategory(next);
+    toast.show(t('category.saved'));
+    closeEdit();
+  };
+
   return (
     <AppFrame title={category.name}>
       <ScrollView contentContainerStyle={{ gap: sp['spacing-lg'] }}>
@@ -128,7 +144,7 @@ export function CategoryScreen() {
             </Text>
           </View>
           <View style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
-            <Button testID="category-edit" kind="secondary" label={t('category.edit')} onPress={() => setEditOpen(true)} />
+            <Button testID="category-edit" kind="secondary" label={t('category.edit')} onPress={openEdit} />
             <Button testID="category-back" kind="secondary" label={t('common.back')} onPress={() => router.push('/budget')} />
           </View>
         </View>
@@ -238,58 +254,37 @@ export function CategoryScreen() {
         )}
       </ScrollView>
 
-      {editOpen ? (
-        <EditCategorySheet
-          category={category}
-          onClose={() => setEditOpen(false)}
-          onSave={async (next) => {
-            await repo.updateCategory(next);
-            toast.show(t('common.saved'));
-            setEditOpen(false);
-          }}
-          onDelete={() => {
-            setEditOpen(false);
-            setMoveTo(snapshot.categories.find((c) => c.id !== category.id && c.kind === category.kind)?.id ?? '');
-            setDeleteOpen(true);
-          }}
-        />
-      ) : null}
+      <EditCategorySheet
+        visible={editOpen}
+        category={category}
+        snapshot={snapshot}
+        onClose={closeEdit}
+        onSave={saveCategory}
+        onDelete={() => {
+          closeEdit();
+          setDeleteOpen(true);
+        }}
+      />
 
       {deleteOpen ? (
-        <Sheet
+        <DeleteCategorySheet
           visible
-          title={t('category.deleteTitle')}
+          category={category}
+          snapshot={snapshot}
+          month={month}
           onClose={() => setDeleteOpen(false)}
-          testID="category-delete-sheet"
-          footer={
-            <Button
-              testID="category-delete-confirm"
-              label={t('category.deleteConfirm')}
-              disabled={!moveTo}
-              onPress={async () => {
-                setError(null);
-                const r = await repo.deleteCategory(category.id, moveTo, today());
-                if (!r.ok) {
-                  setError(ledgerMessage(r.error));
-                  return;
-                }
-                toast.show(t('category.deleted'));
-                router.replace('/budget');
-              }}
-            />
-          }
-        >
-          <Text>{t('category.deleteBody')}</Text>
-          <Select
-            testID="category-delete-move"
-            label={t('category.deleteMove')}
-            options={snapshot.categories
-              .filter((c) => c.id !== category.id && c.kind === category.kind)
-              .map((c) => ({ value: c.id, label: c.name }))}
-            value={moveTo}
-            onChange={setMoveTo}
-          />
-        </Sheet>
+          onConfirm={async (moveTo) => {
+            setError(null);
+            const r = await repo.deleteCategory(category.id, moveTo, today());
+            if (!r.ok) {
+              setError(ledgerMessage(r.error));
+              return;
+            }
+            const undoId = r.value?.undoId;
+            toast.show(t('category.deleted'), undoId ? () => void repo.undoDeleteCategory(undoId, today()) : undefined);
+            router.replace('/budget');
+          }}
+        />
       ) : null}
     </AppFrame>
   );
@@ -303,57 +298,5 @@ function Stat({ label, minor, testID }: { label: string; minor: bigint; testID: 
       </Text>
       <Amount minor={minor} variant="heading-sm" />
     </View>
-  );
-}
-
-function EditCategorySheet({
-  category,
-  onClose,
-  onSave,
-  onDelete,
-}: {
-  category: Category;
-  onClose: () => void;
-  onSave: (c: Category) => Promise<void>;
-  onDelete: () => void;
-}) {
-  const [name, setName] = useState(category.name);
-  const [group, setGroup] = useState(category.group);
-  const [budgetType, setBudgetType] = useState<BudgetType>(category.budgetType);
-  const [hidden, setHidden] = useState(category.hidden);
-  const groupOptions = GROUP_OPTIONS.map((g) => ({ value: g.value, label: t(g.labelKey) }));
-  if (!groupOptions.some((g) => g.value === group)) {
-    groupOptions.push({ value: group, label: group });
-  }
-
-  return (
-    <Sheet
-      visible
-      title={t('category.edit')}
-      onClose={onClose}
-      testID="category-edit-sheet"
-      footer={
-        <View style={{ gap: sp['spacing-sm'] }}>
-          <Button
-            testID="category-edit-save"
-            label={t('budget.save')}
-            disabled={!name.trim()}
-            onPress={() => void onSave({ ...category, name: name.trim(), group, budgetType, hidden })}
-          />
-          <Button testID="category-edit-delete" kind="secondary" label={t('category.delete')} onPress={onDelete} />
-        </View>
-      }
-    >
-      <TextInput testID="category-edit-name" label={t('category.name')} value={name} onChangeText={setName} />
-      <Select testID="category-edit-group" label={t('category.group')} options={groupOptions} value={group} onChange={setGroup} />
-      <Select
-        testID="category-edit-type"
-        label={t('category.type')}
-        options={BUDGET_TYPES.map((v) => ({ value: v, label: t(`category.budgetType.${v}`) }))}
-        value={budgetType}
-        onChange={(v) => setBudgetType(v as BudgetType)}
-      />
-      <Switch testID="category-edit-hide" label={t('category.hideFromBudget')} value={hidden} onChange={setHidden} />
-    </Sheet>
   );
 }

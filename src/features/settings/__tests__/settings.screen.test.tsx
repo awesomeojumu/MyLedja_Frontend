@@ -124,8 +124,8 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
     );
     await fireEvent.press(screen.getByTestId('settings-tab-categories'));
     await fireEvent.press(screen.getByTestId(`settings-cat-edit-${market.id}`));
-    await fireEvent.changeText(screen.getByTestId('settings-edit-cat-name'), 'Groceries');
-    await fireEvent.press(screen.getByText(t('panel.save')));
+    await fireEvent.changeText(screen.getByTestId('category-edit-name'), 'Groceries');
+    await fireEvent.press(screen.getByTestId('category-edit-save'));
     await waitFor(async () => {
       expect((await repo.load()).categories.find((c) => c.id === market.id)?.name).toBe('Groceries');
     });
