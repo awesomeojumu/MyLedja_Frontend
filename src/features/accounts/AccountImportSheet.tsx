@@ -12,7 +12,6 @@ import tokens from '@/design/tokens.json';
 import type { Account, DateFormat, ImportMapping } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { guessMapping, isDuplicate, parseCsv, readRows } from '@/features/import/csv';
-import { ledgerMessage } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
 import { suggestMoneyBack } from '@/features/debts/moneyBack';
@@ -24,14 +23,18 @@ const sp = tokens.spacing;
 const NONE = 'none';
 const FORMATS: DateFormat[] = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
 
-type Step = 'upload' | 'map' | 'review';
+type Step = 'upload' | 'map' | 'review' | 'done';
 
 type Picked = { kind: 'csv'; text: string } | { kind: 'statement'; fileName: string; base64: string };
 
 const STATEMENT_TYPES = ['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+const ALLOWED_EXT = /\.(csv|txt|pdf|xlsx)$/i;
+const MAX_BYTES = 10 * 1024 * 1024;
+
+type PickError = 'type' | 'size';
 
 /** A CSV is read on the device; a PDF or Excel statement is read by the API (F4.1). */
-async function pickFile(): Promise<Picked | null> {
+async function pickFile(): Promise<{ ok: true; value: Picked } | { ok: false; error: PickError } | null> {
   const result = await DocumentPicker.getDocumentAsync({
     type: ['text/csv', 'text/comma-separated-values', 'text/plain', ...STATEMENT_TYPES],
     copyToCacheDirectory: true,
@@ -39,10 +42,18 @@ async function pickFile(): Promise<Picked | null> {
   if (result.canceled) return null;
   const asset = result.assets[0];
   if (!asset) return null;
+  if (asset.name && !ALLOWED_EXT.test(asset.name) && asset.mimeType && !['text/csv', 'text/comma-separated-values', 'text/plain', ...STATEMENT_TYPES].includes(asset.mimeType)) {
+    return { ok: false, error: 'type' };
+  }
+  if (typeof asset.size === 'number' && asset.size > MAX_BYTES) return { ok: false, error: 'size' };
   const isStatement = /\.(pdf|xlsx)$/i.test(asset.name) || STATEMENT_TYPES.includes(asset.mimeType ?? '');
-  if (!isStatement) return { kind: 'csv', text: asset.file ? await asset.file.text() : await (await fetch(asset.uri)).text() };
+  if (!isStatement) {
+    const text = asset.file ? await asset.file.text() : await (await fetch(asset.uri)).text();
+    return { ok: true, value: { kind: 'csv', text } };
+  }
   const buffer = asset.file ? await asset.file.arrayBuffer() : await (await fetch(asset.uri)).arrayBuffer();
-  return { kind: 'statement', fileName: asset.name, base64: toBase64(new Uint8Array(buffer)) };
+  if (buffer.byteLength > MAX_BYTES) return { ok: false, error: 'size' };
+  return { ok: true, value: { kind: 'statement', fileName: asset.name, base64: toBase64(new Uint8Array(buffer)) } };
 }
 
 /** Statement rows from the API as CSV text, so they go through the same mapping and review as a CSV. */
@@ -83,6 +94,7 @@ export function AccountImportSheet({
   const [moneyBackChoice, setMoneyBackChoice] = useState<Map<number, 'money_back' | 'income'>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<{ importId: string; count: number } | null>(null);
 
   const load = (text: string) => {
     const parsed = parseCsv(text);
@@ -213,7 +225,7 @@ export function AccountImportSheet({
       );
       if (!r.ok) {
         setBusy(false);
-        return setError(ledgerMessage(r.error));
+        return setError(t('import.failedPartial'));
       }
       importId = r.value.importId;
       count = r.value.count;
@@ -232,16 +244,25 @@ export function AccountImportSheet({
       );
       if (!confirmed.ok) {
         setBusy(false);
-        return setError(ledgerMessage(confirmed.error));
+        return setError(t('import.failedPartial'));
       }
       count += 1;
     }
     setBusy(false);
-    onImported(importId || 'money-back', count);
-    onClose();
+    const result = { importId: importId || 'money-back', count };
+    setDone(result);
+    setStep('done');
+    onImported(result.importId, result.count);
   };
 
-  const stepLabel = step === 'upload' ? t('import.step.upload') : step === 'map' ? t('import.step.map') : t('import.step.review');
+  const stepLabel =
+    step === 'upload'
+      ? t('import.step.upload')
+      : step === 'map'
+        ? t('import.step.map')
+        : step === 'review'
+          ? t('import.step.review')
+          : t('import.step.done');
 
   const footer =
     step === 'upload' ? (
@@ -253,15 +274,28 @@ export function AccountImportSheet({
         <Button kind="secondary" label={t('common.back')} onPress={() => setStep('upload')} />
         <Button testID="import-next" label={t('import.toReview')} disabled={!read || read.rows.length === 0} onPress={() => setStep('review')} />
       </Footer>
-    ) : (
+    ) : step === 'review' ? (
       <Footer>
         <Button kind="secondary" label={t('common.back')} onPress={() => setStep('map')} />
         <Button testID="import-post" label={t('import.post', { count: chosen.length })} disabled={chosen.length === 0 || busy} onPress={() => void post()} />
       </Footer>
+    ) : (
+      <Footer>
+        <Button
+          testID="import-undo"
+          kind="secondary"
+          label={t('import.undo')}
+          onPress={() => {
+            if (done) void repo.undoImport(done.importId, new Date().toISOString().slice(0, 10));
+            onClose();
+          }}
+        />
+        <Button testID="import-done-close" label={t('import.seeTransactions')} onPress={onClose} />
+      </Footer>
     );
 
   return (
-    <Sheet visible testID="import-sheet" title={t('import.title', { account: account.name })} onClose={onClose} footer={footer}>
+    <Sheet visible testID="import-sheet" title={t('import.title', { account: account.name })} onClose={onClose} footer={footer} width={720}>
       <View style={{ gap: sp['spacing-lg'] }}>
         <Text variant="caption" tone="textSecondary">
           {stepLabel}
@@ -275,11 +309,23 @@ export function AccountImportSheet({
               void pickFile()
                 .then((picked) => {
                   if (!picked) return;
-                  if (picked.kind === 'csv') load(picked.text);
-                  else void readStatement({ fileName: picked.fileName, base64: picked.base64 }, false);
+                  if (!picked.ok) {
+                    setError(picked.error === 'size' ? t('import.tooBig') : t('import.wrongType'));
+                    return;
+                  }
+                  if (picked.value.kind === 'csv') load(picked.value.text);
+                  else void readStatement({ fileName: picked.value.fileName, base64: picked.value.base64 }, false);
                 })
                 .catch(() => setError(t('import.unreadable')))
             }
+          />
+        ) : null}
+        {step === 'done' && done ? (
+          <EmptyState
+            title={t('import.doneTitle', { count: done.count })}
+            body={t('import.doneBody')}
+            actionLabel={t('import.seeTransactions')}
+            onAction={onClose}
           />
         ) : null}
         {reading ? <Text tone="textSecondary">{t('import.reading')}</Text> : null}
@@ -353,7 +399,12 @@ export function AccountImportSheet({
         {step === 'review' ? (
           <>
             <Text testID="import-counts">
-              {t('import.countsFull', { fresh: counts.fresh, duplicates: counts.duplicates, rules: counts.rules })}
+              {t('import.countsPhrase', {
+                fresh: counts.fresh,
+                duplicates: counts.duplicates,
+                rules: counts.rules,
+                broken: counts.broken,
+              })}
             </Text>
             {counts.broken > 0 ? <InlineError message={t('import.broken', { lines: read?.broken.map((b) => b.line).join(', ') ?? '' })} /> : null}
             {review.map(({ row, duplicate, suggested, moneyBack }) => {
