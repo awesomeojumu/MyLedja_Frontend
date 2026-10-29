@@ -2,7 +2,7 @@ import { v7 as uuidv7 } from 'uuid';
 
 import type { SetupBody } from '@/api/auth';
 import { formatDay } from '@/design/components/overlays';
-import { budgetForMonth, resolveTemplateLineAmount, rowFor } from '@/features/budget/helpers';
+import { resolveTemplateLineAmount } from '@/features/budget/helpers';
 import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import type { RemoteOperation } from '../sync/mapOperation';
 import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
@@ -46,7 +46,6 @@ import {
   type AccountKind,
   type BudgetTemplate,
   type BudgetAssign,
-  type BudgetType,
   DEFAULT_NOTIFICATION_PREFS,
   type Category,
   type EventMeta,
@@ -124,7 +123,7 @@ function stageOrder(stage: RuleStage): number {
 export type TransactionInput =
   | { kind: 'expense'; accountId: string; parts: ExpensePart[]; date: string; payeeName?: string; notes?: string }
   | { kind: 'income'; accountId: string; categoryId: string; amount: bigint; date: string; payeeName?: string; notes?: string }
-  | { kind: 'transfer'; fromId: string; toId: string; amount: bigint; date: string; notes?: string; toAmount?: bigint };
+  | { kind: 'transfer'; fromId: string; toId: string; amount: bigint; date: string; notes?: string };
 
 /**
  * Writes the server derives from another operation, or keeps per device for now: they're saved locally and never
@@ -136,6 +135,7 @@ const LOCAL_ONLY = new Set([
   'debt.update',
   'occurrence.paid',
   'occurrence.matched',
+  'occurrence.unpaid',
   'reconcile.finish',
   'transfer.dismiss',
   'settings.update',
@@ -155,27 +155,14 @@ const record = (collection: string, id: string, data: object, version = 0): Loca
   data: data as Record<string, unknown>,
 });
 
-type CategoryDeleteUndo = {
-  categoryId: string;
-  moveToId: string;
-  category: Category;
-  replacementEventIds: string[];
-  planMoves: { month: string; amount: bigint; note: string }[];
-};
-
 /** Reads and writes the workspace through the local store; every write is queued for sync. */
 export class WorkspaceRepository {
-  private readonly categoryDeleteUndos = new Map<string, CategoryDeleteUndo>();
-
   constructor(
     private readonly store: LocalStore,
     private readonly engine: SyncEngine,
     readonly workspaceId: string,
     private readonly newId: () => string = uuidv7,
   ) {}
-
-  /** Sentinel for envelope "Left to plan" when covering overspending (PU-10). */
-  static readonly LEFT_TO_PLAN = '__left_to_plan__';
 
   async load(): Promise<Snapshot> {
     const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows, ruleRows] =
@@ -242,9 +229,7 @@ export class WorkspaceRepository {
       exchangeRates: raw?.exchangeRates,
       downloadDailyRates: raw?.downloadDailyRates,
       deviceSync: raw?.deviceSync,
-      profilePhotoUri: raw?.profilePhotoUri,
-      hapticsEnabled: raw?.hapticsEnabled,
-      tags: raw?.tags,
+      dueSoonDays: raw?.dueSoonDays === 3 || raw?.dueSoonDays === 7 || raw?.dueSoonDays === 14 || raw?.dueSoonDays === 30 ? raw.dueSoonDays : undefined,
     };
     const assigns = new Map<string, bigint>();
     const assignNotes = new Map<string, string>();
@@ -386,7 +371,6 @@ export class WorkspaceRepository {
     type: AccountKind;
     institution?: string;
     last4?: string;
-    currency?: string;
     countInBudget?: boolean;
     openingBalance: bigint;
     openingDate: string;
@@ -396,12 +380,11 @@ export class WorkspaceRepository {
       id: this.newId(),
       name: input.name,
       type: input.type,
-      currency: input.currency ?? 'NGN',
+      currency: 'NGN',
       institution: input.institution,
       last4: input.last4?.slice(-4),
       countInBudget: input.countInBudget ?? ACCOUNT_KIND_INFO[input.type].countInBudget,
       archived: false,
-      openedAt: input.openingDate,
       order: snapshot.accounts.length,
     };
     const { id, ...data } = account;
@@ -592,8 +575,8 @@ export class WorkspaceRepository {
     await this.engine.save({ ...rec, data }, 'event.notes', { collection: 'events', id, data }, rec.version);
   }
 
-  /** E10: a new value for property or an untracked investment; the change goes to Revaluation, never income (P08-05 / PU-14). */
-  async updateValue(accountId: string, value: bigint, date: string, notes?: string): Promise<Result<TxEvent | null>> {
+  /** E10: a new value for property or an untracked investment; the change goes to Revaluation, never income (P08-05). */
+  async updateValue(accountId: string, value: bigint, date: string): Promise<Result<TxEvent | null>> {
     const snapshot = await this.load();
     const account = snapshot.chart.get(accountId);
     if (!account) return { ok: false, error: 'missing_lines' };
@@ -602,64 +585,28 @@ export class WorkspaceRepository {
     if (target === current) return { ok: true, value: null };
     const lines = buildAdjustment(snapshot.chart, { accountId, delta: target - current, against: 'revaluation' });
     if (!lines.ok) return lines;
-    return this.postEvent(snapshot.chart, snapshot.events, {
-      type: 'balance_adjustment',
-      date,
-      lines: lines.value,
-      notes: notes?.trim() || undefined,
-    });
+    return this.postEvent(snapshot.chart, snapshot.events, { type: 'balance_adjustment', date, lines: lines.value });
   }
 
-  /**
-   * PU-15 / P08-06: archive an account.
-   * - Zero balance: archive.
-   * - `moveToId` set: transfer the balance first, then archive.
-   * - `moveToId === null`: archive with its balance (still counts in net worth).
-   * - Balance and `moveToId` omitted: refused — the person must choose.
-   */
-  async archiveAccount(accountId: string, date: string, moveToId?: string | null): Promise<Result> {
+  /** P08-06: a balance moves to another account first, then the account is archived. */
+  async archiveAccount(accountId: string, date: string, moveToId?: string): Promise<Result> {
     const snapshot = await this.load();
     const account = snapshot.accounts.find((a) => a.id === accountId);
     if (!account) return { ok: false, error: 'missing_lines' };
     const balance = ledgerBalance(accountId, snapshot.events);
     if (balance !== 0n) {
-      if (moveToId === undefined) return { ok: false, error: 'missing_lines' };
-      if (moveToId !== null) {
-        const amount = balance > 0n ? balance : -balance;
-        const lines =
-          balance > 0n
-            ? buildTransfer(snapshot.chart, { fromId: accountId, toId: moveToId, amount })
-            : buildTransfer(snapshot.chart, { fromId: moveToId, toId: accountId, amount });
-        if (!lines.ok) return lines;
-        const posted = await this.postEvent(snapshot.chart, snapshot.events, { type: 'transfer', date, lines: lines.value });
-        if (!posted.ok) return posted;
-        await this.updateAccount({ ...account, archived: true, closedWithBalance: false });
-        return { ok: true, value: undefined };
-      }
-      await this.updateAccount({ ...account, archived: true, closedWithBalance: true });
-      return { ok: true, value: undefined };
+      if (!moveToId) return { ok: false, error: 'missing_lines' };
+      const amount = balance > 0n ? balance : -balance;
+      const lines =
+        balance > 0n
+          ? buildTransfer(snapshot.chart, { fromId: accountId, toId: moveToId, amount })
+          : buildTransfer(snapshot.chart, { fromId: moveToId, toId: accountId, amount });
+      if (!lines.ok) return lines;
+      const posted = await this.postEvent(snapshot.chart, snapshot.events, { type: 'transfer', date, lines: lines.value });
+      if (!posted.ok) return posted;
     }
-    await this.updateAccount({ ...account, archived: true, closedWithBalance: false });
+    await this.updateAccount({ ...account, archived: true });
     return { ok: true, value: undefined };
-  }
-
-  /** Undo of archive (PU-15 toast Undo). */
-  async restoreAccount(accountId: string): Promise<Result> {
-    const snapshot = await this.load();
-    const account = snapshot.accounts.find((a) => a.id === accountId);
-    if (!account) return { ok: false, error: 'missing_lines' };
-    await this.updateAccount({ ...account, archived: false, closedWithBalance: false });
-    return { ok: true, value: undefined };
-  }
-
-  /** Details tab: forget the remembered CSV column mapping (TB-03). */
-  async clearImportMapping(accountId: string): Promise<void> {
-    const snapshot = await this.load();
-    const account = snapshot.accounts.find((a) => a.id === accountId);
-    if (!account?.importMapping) return;
-    const next: Account = { ...account };
-    delete next.importMapping;
-    await this.updateAccount(next);
   }
 
   async reorderAccounts(ids: string[]): Promise<void> {
@@ -829,28 +776,21 @@ export class WorkspaceRepository {
     });
   }
 
-  /** P06-06 / PU-08: move available money between categories in the same month. */
+  /** P06-06: move planned money between categories in the same month. */
   async moveAssigned(fromId: string, toId: string, month: string, amount: bigint): Promise<Result> {
     if (amount <= 0n || fromId === toId) return { ok: false, error: 'not_positive' };
     const snapshot = await this.load();
-    const available = rowFor(snapshot, month, fromId).available;
-    if (available < amount) return { ok: false, error: 'not_positive' };
     const from = this.assigned(fromId, month, snapshot);
+    if (from < amount) return { ok: false, error: 'not_positive' };
     await this.setAssigned(fromId, month, from - amount);
     await this.setAssigned(toId, month, this.assigned(toId, month, snapshot) + amount);
     return { ok: true, value: undefined };
   }
 
-  /** P06-07 / PU-10: raise each overspent category's plan by taking from another category (or left to plan). */
+  /** P06-07: raise each overspent category's plan by taking from another category. */
   async coverOverspending(month: string, covers: { overspentId: string; fromId: string; amount: bigint }[]): Promise<Result> {
     for (const cover of covers) {
       if (cover.amount <= 0n) continue;
-      if (cover.fromId === WorkspaceRepository.LEFT_TO_PLAN) {
-        const snapshot = await this.load();
-        if (budgetForMonth(snapshot, month).leftToPlan < cover.amount) return { ok: false, error: 'not_positive' };
-        await this.setAssigned(cover.overspentId, month, this.assigned(cover.overspentId, month, snapshot) + cover.amount);
-        continue;
-      }
       const moved = await this.moveAssigned(cover.fromId, cover.overspentId, month, cover.amount);
       if (!moved.ok) return moved;
     }
@@ -913,29 +853,18 @@ export class WorkspaceRepository {
     }
   }
 
-  async addCategory(input: {
-    name: string;
-    kind: 'income' | 'expense';
-    group: string;
-    icon?: string | null;
-    budgetType?: BudgetType;
-    essential?: boolean;
-    hidden?: boolean;
-    carryOver?: boolean;
-  }): Promise<Category> {
+  async addCategory(input: { name: string; kind: 'income' | 'expense'; group: string }): Promise<Category> {
     const snapshot = await this.load();
     const category: Category = {
       id: this.newId(),
       name: input.name.trim(),
       kind: input.kind,
       group: input.group,
-      icon: input.icon ?? null,
-      hidden: input.hidden ?? false,
+      hidden: false,
       countInBudget: input.kind === 'expense',
       order: snapshot.categories.length,
-      budgetType: input.budgetType ?? 'flexible',
-      carryOver: input.carryOver ?? snapshot.settings.carryOverDefault ?? false,
-      essential: input.essential ?? false,
+      budgetType: 'flexible',
+      carryOver: false,
     };
     const { id, ...data } = category;
     await this.put('categories', id, data, 'category.create');
@@ -955,142 +884,40 @@ export class WorkspaceRepository {
     await this.updateCategory({ ...b, order: a.order ?? index });
   }
 
-  async updatePayee(payee: Payee): Promise<Result> {
-    const snapshot = await this.load();
-    const aliases = payee.aliases ?? [];
-    for (const alias of aliases) {
-      const key = alias.trim().toLowerCase();
-      if (!key) continue;
-      const owner = snapshot.payees.find((p) => {
-        if (p.id === payee.id) return false;
-        if (p.name.toLowerCase() === key) return true;
-        return (p.aliases ?? []).some((a) => a.toLowerCase() === key);
-      });
-      if (owner) return { ok: false, error: 'missing_lines' };
-    }
+  async updatePayee(payee: Payee): Promise<void> {
     const { id, ...data } = payee;
     await this.put('payees', id, data, 'payee.update');
-    return { ok: true, value: undefined };
   }
 
-  /** Soft-delete only when the payee has no transactions (PU-46). */
-  async deletePayee(payeeId: string): Promise<Result> {
-    const snapshot = await this.load();
-    const payee = snapshot.payees.find((p) => p.id === payeeId);
-    if (!payee) return { ok: false, error: 'missing_lines' };
-    if (snapshot.events.some((e) => e.payeeId === payeeId && e.status === 'posted')) {
-      return { ok: false, error: 'missing_lines' };
-    }
-    await this.put('payees', payeeId, { ...payee, deleted: true }, 'payee.delete');
-    return { ok: true, value: undefined };
-  }
-
-  /**
-   * P24-04 / PU-47: move every transaction and bank name to the kept payee.
-   * Returns mergeId so Undo can restore (TECH-SPEC merge undo).
-   */
-  async mergePayees(
-    keepId: string,
-    mergeIds: string[],
-    choices?: { nameId?: string; logoId?: string; categoryId?: string },
-  ): Promise<Result<{ mergeId: string; moved: number }>> {
+  /** P24-04: move every transaction to the kept payee and remove the others. */
+  async mergePayees(keepId: string, mergeIds: string[]): Promise<Result> {
     const ids = mergeIds.filter((id) => id !== keepId);
     if (ids.length === 0) return { ok: false, error: 'not_positive' };
     const snapshot = await this.load();
-    const all = snapshot.payees;
-    const byId = (id: string) => all.find((p) => p.id === id);
-    const keepPayee = byId(keepId);
-    if (!keepPayee) return { ok: false, error: 'missing_lines' };
-    const merged = ids.map((id) => byId(id)).filter(Boolean) as Payee[];
+    const keep = snapshot.payees.find((p) => p.id === keepId);
+    if (!keep) return { ok: false, error: 'missing_lines' };
+    const merged = ids.map((id) => snapshot.payees.find((p) => p.id === id)).filter(Boolean) as Payee[];
     if (merged.length !== ids.length) return { ok: false, error: 'missing_lines' };
 
-    const moved: { eventId: string; fromPayeeId: string }[] = [];
     for (const event of snapshot.events) {
       if (!event.payeeId || !ids.includes(event.payeeId)) continue;
       const rec = await this.store.read('events', event.id);
       if (!rec) continue;
-      moved.push({ eventId: event.id, fromPayeeId: event.payeeId });
       const data = { ...(rec.data as StoredEvent), payeeId: keepId };
       await this.engine.save({ ...rec, data }, 'event.payee', { collection: 'events', id: event.id, data }, rec.version);
     }
 
-    const nameSrc = byId(choices?.nameId ?? keepId) ?? keepPayee;
-    const logoSrc = byId(choices?.logoId ?? keepId) ?? keepPayee;
-    const catSrc = byId(choices?.categoryId ?? keepId) ?? keepPayee;
-    const next: Payee = {
-      ...keepPayee,
-      // Name stays on keepId (radio chooses which payee id is kept); logo/category may come from a sibling.
-      name: keepPayee.name,
-      logoUri: logoSrc.logoUri,
-      defaultCategoryId: catSrc.defaultCategoryId,
-    };
-    // If the user chose another payee's name, rename the kept record to that name.
-    if (choices?.nameId && choices.nameId !== keepId && nameSrc) {
-      next.name = nameSrc.name;
-    }
-    const aliases = new Set(next.aliases ?? []);
+    const aliases = new Set(keep.aliases ?? []);
     for (const p of merged) {
       aliases.add(p.name);
       for (const a of p.aliases ?? []) aliases.add(a);
     }
-    // Drop the kept display name from aliases if it was a sibling's name we promoted.
-    aliases.delete(next.name);
-    next.aliases = [...aliases];
-    const { id: _keepId, ...keepBody } = next;
-    await this.put('payees', next.id, keepBody, 'payee.update');
+    await this.updatePayee({ ...keep, aliases: [...aliases] });
 
     for (const id of ids) {
       const p = merged.find((m) => m.id === id)!;
       await this.put('payees', id, { ...p, deleted: true }, 'payee.delete');
     }
-
-    const mergeId = this.newId();
-    await this.put(
-      'payee_merges',
-      mergeId,
-      {
-        keepId,
-        previousKeep: keepPayee,
-        removed: merged,
-        moved,
-      },
-      'payee.merge',
-      undefined,
-      null,
-    );
-    return { ok: true, value: { mergeId, moved: moved.length } };
-  }
-
-  /** PU47-2: restore payees and transaction links exactly as before the merge. */
-  async undoMergePayees(mergeId: string): Promise<Result> {
-    const rec = await this.store.read('payee_merges', mergeId);
-    if (!rec) return { ok: false, error: 'missing_lines' };
-    const data = rec.data as {
-      keepId: string;
-      previousKeep: Payee;
-      removed: Payee[];
-      moved: { eventId: string; fromPayeeId: string }[];
-    };
-
-    for (const row of data.moved) {
-      const eventRec = await this.store.read('events', row.eventId);
-      if (!eventRec) continue;
-      const eventData = { ...(eventRec.data as StoredEvent), payeeId: row.fromPayeeId };
-      await this.engine.save(
-        { ...eventRec, data: eventData },
-        'event.payee',
-        { collection: 'events', id: row.eventId, data: eventData },
-        eventRec.version,
-      );
-    }
-
-    const { id: keepId, ...keepBody } = data.previousKeep;
-    await this.put('payees', keepId, keepBody, 'payee.update');
-    for (const p of data.removed) {
-      const { id, deleted: _d, ...body } = p as Payee & { deleted?: boolean };
-      await this.put('payees', id, body, 'payee.update');
-    }
-    await this.put('payee_merges', mergeId, { ...data, undone: true }, 'payee.merge.undo', undefined, null);
     return { ok: true, value: undefined };
   }
 
@@ -1186,21 +1013,16 @@ export class WorkspaceRepository {
   }
 
   /**
-   * P07-06 / PU-12: move this category's transactions and plans to another, then soft-delete it.
-   * Each move is a correction (TECH-SPEC 6.3). Returns undoId for toast Undo.
+   * P07-06: move this category's transactions to another, then soft-delete it.
+   * Each move is a correction (TECH-SPEC 6.3).
    */
-  async deleteCategory(
-    categoryId: string,
-    moveToId: string,
-    _date: string,
-  ): Promise<Result<{ undoId: string }>> {
+  async deleteCategory(categoryId: string, moveToId: string, _date: string): Promise<Result> {
     if (categoryId === moveToId) return { ok: false, error: 'not_positive' };
     const snapshot = await this.load();
     const category = snapshot.categories.find((c) => c.id === categoryId);
     const target = snapshot.categories.find((c) => c.id === moveToId);
     if (!category || !target || category.kind !== target.kind) return { ok: false, error: 'missing_lines' };
 
-    const replacementEventIds: string[] = [];
     const accountIds = new Set(snapshot.accounts.map((a) => a.id));
     // Reload after each correction so we never correct an already-reversed event.
     for (;;) {
@@ -1241,75 +1063,9 @@ export class WorkspaceRepository {
             };
       const corrected = await this.correctTransaction(event.id, input);
       if (!corrected.ok) return corrected;
-      replacementEventIds.push(corrected.value.id);
     }
 
-    const planMoves: { month: string; amount: bigint; note: string }[] = [];
-    for (const [key, amount] of snapshot.assigns) {
-      if (!key.startsWith(`${categoryId}:`) || amount <= 0n) continue;
-      const month = key.slice(categoryId.length + 1);
-      const note = snapshot.assignNotes.get(key) ?? '';
-      planMoves.push({ month, amount, note });
-    }
-    for (const plan of planMoves) {
-      const snap = await this.load();
-      await this.setAssigned(moveToId, plan.month, this.assigned(moveToId, plan.month, snap) + plan.amount, { note: plan.note });
-      await this.setAssigned(categoryId, plan.month, 0n);
-    }
-
-    const undoId = this.newId();
-    this.categoryDeleteUndos.set(undoId, { categoryId, moveToId, category, replacementEventIds, planMoves });
     await this.updateCategory({ ...category, deleted: true, hidden: true });
-    return { ok: true, value: { undoId } };
-  }
-
-  /** PU12-3: restore a soft-deleted category and move transactions/plans back. */
-  async undoDeleteCategory(undoId: string, _date: string): Promise<Result> {
-    const data = this.categoryDeleteUndos.get(undoId);
-    if (!data) return { ok: false, error: 'missing_lines' };
-    await this.updateCategory({ ...data.category, deleted: false, hidden: data.category.hidden });
-    for (const plan of data.planMoves) {
-      const snap = await this.load();
-      const targetAmt = this.assigned(data.moveToId, plan.month, snap);
-      await this.setAssigned(data.moveToId, plan.month, targetAmt > plan.amount ? targetAmt - plan.amount : 0n);
-      await this.setAssigned(data.categoryId, plan.month, plan.amount, { note: plan.note });
-    }
-    for (const eventId of [...data.replacementEventIds].reverse()) {
-      const snap = await this.load();
-      const event = snap.events.find((e) => e.id === eventId);
-      if (!event || event.status !== 'posted') continue;
-      const accountIds = new Set(snap.accounts.map((a) => a.id));
-      const money = event.lines.find((l) => accountIds.has(l.ledgerAccountId));
-      if (!money) continue;
-      if (data.category.kind === 'expense') {
-        const parts = event.lines
-          .filter((l) => !accountIds.has(l.ledgerAccountId))
-          .map((l) => ({
-            categoryId: l.ledgerAccountId === data.moveToId ? data.categoryId : l.ledgerAccountId,
-            amount: l.amountMinor < 0n ? -l.amountMinor : l.amountMinor,
-          }));
-        await this.correctTransaction(eventId, {
-          kind: 'expense',
-          accountId: money.ledgerAccountId,
-          parts,
-          date: event.date,
-          notes: event.notes,
-        });
-      } else {
-        const amount = event.lines
-          .filter((l) => !accountIds.has(l.ledgerAccountId))
-          .reduce((s, l) => s + (l.amountMinor < 0n ? -l.amountMinor : l.amountMinor), 0n);
-        await this.correctTransaction(eventId, {
-          kind: 'income',
-          accountId: money.ledgerAccountId,
-          categoryId: data.categoryId,
-          amount,
-          date: event.date,
-          notes: event.notes,
-        });
-      }
-    }
-    this.categoryDeleteUndos.delete(undoId);
     return { ok: true, value: undefined };
   }
 
@@ -1327,16 +1083,12 @@ export class WorkspaceRepository {
   }
 
   /** Bulk categorize uses corrections (TECH-SPEC 8). */
-  async bulkSetCategory(eventIds: string[], categoryId: string): Promise<Result<{ skippedReconciled: number }>> {
-    let skippedReconciled = 0;
+  async bulkSetCategory(eventIds: string[], categoryId: string): Promise<Result> {
     for (const id of eventIds) {
       const snapshot = await this.load();
       const event = snapshot.events.find((e) => e.id === id);
       if (!event || event.status !== 'posted' || (event.type !== 'expense' && event.type !== 'income')) continue;
-      if (event.reconciledBy) {
-        skippedReconciled += 1;
-        continue;
-      }
+      if (event.reconciledBy) return { ok: false, error: 'reconciled' };
       const accountIds = new Set(snapshot.accounts.map((a) => a.id));
       const money = event.lines.find((l) => accountIds.has(l.ledgerAccountId));
       if (!money) continue;
@@ -1363,7 +1115,7 @@ export class WorkspaceRepository {
       const corrected = await this.correctTransaction(id, input);
       if (!corrected.ok) return corrected;
     }
-    return { ok: true, value: { skippedReconciled } };
+    return { ok: true, value: undefined };
   }
 
   async bulkDelete(eventIds: string[], date: string): Promise<Result> {
@@ -1374,20 +1126,12 @@ export class WorkspaceRepository {
     return { ok: true, value: undefined };
   }
 
-  async bulkSetPayee(eventIds: string[], payeeId: string): Promise<Result<{ skippedReconciled: number }>> {
-    let skippedReconciled = 0;
+  async bulkSetPayee(eventIds: string[], payeeId: string): Promise<Result> {
     for (const id of eventIds) {
-      const snapshot = await this.load();
-      const event = snapshot.events.find((e) => e.id === id);
-      if (!event || event.status !== 'posted') continue;
-      if (event.reconciledBy) {
-        skippedReconciled += 1;
-        continue;
-      }
       const moved = await this.setEventPayee(id, payeeId);
       if (!moved.ok) return moved;
     }
-    return { ok: true, value: { skippedReconciled } };
+    return { ok: true, value: undefined };
   }
 
   savedForGoal(goalId: string, snapshot: Snapshot): bigint {
@@ -1538,6 +1282,8 @@ export class WorkspaceRepository {
     if (!event || event.type !== 'expense') return { ok: false, error: 'missing_lines' };
     const occId = `${recurringId}:${dueDate}`;
     if (snapshot.occurrences.some((o) => o.id === occId && o.status === 'paid')) return { ok: false, error: 'already_reversed' };
+    // PU26-1: one transaction can't pay two occurrences.
+    if (snapshot.occurrences.some((o) => o.eventId === eventId && o.status === 'paid')) return { ok: false, error: 'already_reversed' };
     const accountIds = new Set(snapshot.accounts.map((a) => a.id));
     // An expense credits the account it was paid from, so the money that left is minus the account lines.
     const amountMinor = -event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + l.amountMinor, 0n);
@@ -1557,6 +1303,21 @@ export class WorkspaceRepository {
       await this.put('notifications', billNotificationId, { ...(note.data as object), read: true }, 'notification.read', note.version);
     }
     return { ok: true, value: occurrence };
+  }
+
+  /** PU-26 — Undo mark paid (unlink occurrence; keeps the transaction). */
+  async unmarkBillPaid(recurringId: string, dueDate: string): Promise<Result<void>> {
+    const snapshot = await this.load();
+    const occId = `${recurringId}:${dueDate}`;
+    const existing = snapshot.occurrences.find((o) => o.id === occId);
+    if (!existing || existing.status !== 'paid') return { ok: false, error: 'missing_lines' };
+    await this.put(
+      'occurrences',
+      occId,
+      { recurringId, dueDate, amountMinor: existing.amountMinor, status: 'upcoming', eventId: undefined },
+      'occurrence.unpaid',
+    );
+    return { ok: true, value: undefined };
   }
 
   async addIncomeStream(input: Omit<IncomeStream, 'id'>): Promise<IncomeStream> {
@@ -1905,12 +1666,7 @@ export class WorkspaceRepository {
     const r =
       input.kind === 'income'
         ? buildIncome(chart, { accountId: input.accountId, categoryId: input.categoryId, amount: input.amount })
-        : buildTransfer(chart, {
-            fromId: input.fromId,
-            toId: input.toId,
-            amount: input.amount,
-            toAmount: input.toAmount,
-          });
+        : buildTransfer(chart, { fromId: input.fromId, toId: input.toId, amount: input.amount });
     return r.ok ? { ok: true, value: { lines: r.value } } : r;
   }
 
