@@ -26,7 +26,8 @@ import {
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useOnline } from '@/lib/useOnline';
-import { useAppLockSetting } from '@/features/lock/AppLock';
+import { useSync } from '@/data/sync/SyncProvider';
+import { LOCK_AFTER_OPTIONS, type LockAfterMs, useAppLockSetting } from '@/features/lock/AppLock';
 import { t, type TextKey } from '@/i18n';
 import Constants from 'expo-constants';
 
@@ -83,6 +84,17 @@ export function AiTab() {
     { key: 'statements', label: 'settings.ai.readStatements', detail: 'settings.ai.readStatementsDetail' },
     // Health advice joins when Health ships (Phase 5, DESIGN principle 12).
   ];
+  const statusLabel = (key: keyof AiConsent) => {
+    if (!settings) return t('settings.ai.neverAsked');
+    const consent = settings.consent;
+    if (consent[key]) {
+      const since = consent.updatedAt ? formatDay(consent.updatedAt.slice(0, 10)) : null;
+      return since ? t('settings.ai.onSince', { date: since }) : t('settings.ai.on');
+    }
+    // Never asked: both still off and updatedAt absent / epoch-like; otherwise Off.
+    if (!consent.updatedAt) return t('settings.ai.neverAsked');
+    return t('settings.ai.off');
+  };
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-ai">
       <Text tone="textSecondary">{t('settings.ai.body')}</Text>
@@ -91,6 +103,9 @@ export function AiTab() {
         ? rows.map((r) => (
             <Card key={r.key} style={{ gap: sp['spacing-sm'] }}>
               <Switch testID={`settings-ai-${r.key}`} label={t(r.label)} value={settings.consent[r.key]} onChange={(v) => void save(r.key, v)} />
+              <Text variant="caption" tone="textSecondary" testID={`settings-ai-status-${r.key}`}>
+                {statusLabel(r.key)}
+              </Text>
               <Text variant="caption" tone="textSecondary">
                 {t(r.detail)}
               </Text>
@@ -370,6 +385,8 @@ export function WorkspaceTabDeep() {
   const { snapshot, repo } = useWorkspace();
   const { user } = useAuth();
   const toast = useToast();
+  // PU-50 / PU-51 members + invites when shared workspaces ship (TB-11 Workspace).
+  const sharedWorkspacesShipped = false;
   const [inviteOpen, setInviteOpen] = useState(false);
   const [roleMember, setRoleMember] = useState<MemberRow | null>(null);
   const [name, setName] = useState(snapshot?.settings.workspaceName ?? user?.workspaceName ?? 'Personal');
@@ -425,26 +442,34 @@ export function WorkspaceTabDeep() {
         onChange={() => {}}
         options={[{ value: 'personal', label: t('settings.workspace.typePersonal') }]}
       />
-      <Text variant="heading-sm">{t('settings.workspace.members')}</Text>
-      {members.map((m) => (
-        <Card key={m.id} style={{ gap: sp['spacing-xs'] }}>
-          <Text variant="heading-sm">{m.name}</Text>
-          <Text tone="textSecondary">{m.email}</Text>
-          <Text variant="caption" tone="textSecondary">
-            {t(`settings.workspace.role.${m.role}` as TextKey)} · {m.lastActive}
-          </Text>
-          {m.role !== 'owner' ? (
-            <Button testID={`settings-member-role-${m.id}`} kind="secondary" label={t('settings.workspace.changeRole')} onPress={() => setRoleMember(m)} />
-          ) : null}
-        </Card>
-      ))}
-      <Button testID="settings-invite" label={t('settings.workspace.invite')} onPress={() => setInviteOpen(true)} />
-      <Text variant="heading-sm">{t('settings.workspace.rolesTitle')}</Text>
-      <Text tone="textSecondary">{t('settings.workspace.rolesBody')}</Text>
+      {sharedWorkspacesShipped ? (
+        <>
+          <Text variant="heading-sm">{t('settings.workspace.members')}</Text>
+          {members.map((m) => (
+            <Card key={m.id} style={{ gap: sp['spacing-xs'] }}>
+              <Text variant="heading-sm">{m.name}</Text>
+              <Text tone="textSecondary">{m.email}</Text>
+              <Text variant="caption" tone="textSecondary">
+                {t(`settings.workspace.role.${m.role}` as TextKey)} · {m.lastActive}
+              </Text>
+              {m.role !== 'owner' ? (
+                <Button testID={`settings-member-role-${m.id}`} kind="secondary" label={t('settings.workspace.changeRole')} onPress={() => setRoleMember(m)} />
+              ) : null}
+            </Card>
+          ))}
+          <Button testID="settings-invite" label={t('settings.workspace.invite')} onPress={() => setInviteOpen(true)} />
+          <Text variant="heading-sm">{t('settings.workspace.rolesTitle')}</Text>
+          <Text tone="textSecondary">{t('settings.workspace.rolesBody')}</Text>
+          <InviteMemberSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} />
+          <ChangeRoleSheet member={roleMember} visible={roleMember !== null} onClose={() => setRoleMember(null)} />
+        </>
+      ) : (
+        <Text tone="textSecondary" testID="settings-workspace-members-later">
+          {t('settings.workspace.membersLater')}
+        </Text>
+      )}
       <Text variant="heading-sm">{t('settings.workspace.activity')}</Text>
       <ActivityLog />
-      <InviteMemberSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} />
-      <ChangeRoleSheet member={roleMember} visible={roleMember !== null} onClose={() => setRoleMember(null)} />
     </ScrollView>
   );
 }
@@ -538,7 +563,24 @@ export function SecurityTabDeep() {
 
       {!web && phone ? (
         <>
-          <Switch testID="settings-app-lock" label={t('settings.security.appLock')} value={lock.enabled} onChange={(v) => void lock.setEnabled(v)} />
+          <Switch testID="settings-app-lock" label={lock.lockLabel} value={lock.enabled} onChange={(v) => void lock.setEnabled(v)} />
+          {lock.enabled ? (
+            <SegmentedControl
+              testID="settings-app-lock-timing"
+              label={t('settings.security.appLockTiming')}
+              value={String(lock.afterMs)}
+              onChange={(v) => void lock.setAfterMs(Number(v) as LockAfterMs)}
+              options={LOCK_AFTER_OPTIONS.map((ms) => ({
+                value: String(ms),
+                label:
+                  ms === 0
+                    ? t('settings.security.appLockImmediate')
+                    : ms === 60_000
+                      ? t('settings.security.appLockAfter1m')
+                      : t('settings.security.appLockAfter5m'),
+              }))}
+            />
+          ) : null}
           <Switch testID="settings-privacy-mode" label={t('settings.security.privacyMode')} value={lock.privacyDefault} onChange={(v) => void lock.setPrivacyDefault(v)} />
         </>
       ) : null}
@@ -731,8 +773,10 @@ function activityLabel(action: string): string {
 
 export function DevicesTab() {
   const { snapshot, repo } = useWorkspace();
+  const { engine } = useSync();
   const toast = useToast();
   const online = useOnline();
+  const [syncing, setSyncing] = useState(false);
   const prefs = { ...DEFAULT_DEVICE_SYNC, ...snapshot?.settings.deviceSync };
   const waitingIds = snapshot ? [...snapshot.waiting] : [];
   const waiting = waitingIds.length;
@@ -741,6 +785,26 @@ export function DevicesTab() {
     if (!snapshot) return;
     await repo.updateSettings({ ...snapshot.settings, deviceSync });
     toast.show(t('common.saved'));
+  };
+
+  const syncNow = async () => {
+    setSyncing(true);
+    toast.show(t('settings.devices.syncStarted'));
+    try {
+      await engine.sync({ force: true });
+      const when = t('settings.devices.justNow');
+      if (snapshot) {
+        await repo.updateSettings({
+          ...snapshot.settings,
+          deviceSync: { ...prefs, lastSyncedLabel: when },
+        });
+      }
+      toast.show(t('common.saved'));
+    } catch {
+      toast.show(t('errors.network'));
+    } finally {
+      setSyncing(false);
+    }
   };
 
   return (
@@ -764,14 +828,7 @@ export function DevicesTab() {
             ))}
           </View>
         ) : null}
-        <Button
-          testID="settings-sync-now"
-          label={t('settings.devices.syncNow')}
-          onPress={() => {
-            toast.show(t('settings.devices.syncStarted'));
-            void repo.refreshBillNotifications();
-          }}
-        />
+        <Button testID="settings-sync-now" label={t('settings.devices.syncNow')} disabled={syncing} onPress={() => void syncNow()} />
       </Card>
       <Text variant="heading-sm">{t('settings.devices.offlineCopy')}</Text>
       <Text tone="textSecondary">{t('settings.devices.offlineSize')}</Text>
@@ -883,16 +940,34 @@ export function ImportExportTabDeep() {
 
 export function HelpTab() {
   const web = Platform.OS === 'web';
+  const toast = useToast();
   const version = Constants.expoConfig?.version ?? '0.1.0';
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+
+  const installPwa = async () => {
+    if (typeof window === 'undefined') return;
+    const w = window as Window & { deferredPwaPrompt?: { prompt: () => Promise<void> } };
+    if (w.deferredPwaPrompt) {
+      try {
+        await w.deferredPwaPrompt.prompt();
+        toast.show(t('settings.help.installStarted'));
+        return;
+      } catch {
+        /* fall through */
+      }
+    }
+    toast.show(t('settings.help.installHint'));
+  };
 
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-help">
       <Text tone="textSecondary">{t('settings.help.body')}</Text>
       <Button testID="settings-help-guide" kind="secondary" label={t('settings.help.guide')} onPress={() => Linking.openURL('https://myledja.com/guide')} />
       {web ? (
-        <Button testID="settings-help-shortcuts" kind="secondary" label={t('settings.help.shortcuts')} onPress={() => {}} />
+        <Button testID="settings-help-shortcuts" kind="secondary" label={t('settings.help.shortcuts')} onPress={() => setShortcutsOpen(true)} />
       ) : null}
-      <Button testID="settings-help-whats-new" kind="secondary" label={t('settings.help.whatsNew')} onPress={() => {}} />
+      <Button testID="settings-help-whats-new" kind="secondary" label={t('settings.help.whatsNew')} onPress={() => setWhatsNewOpen(true)} />
       <Button testID="settings-help-support" kind="secondary" label={t('settings.help.support')} onPress={() => Linking.openURL('mailto:support@myledja.com')} />
       <Pressable testID="settings-help-terms" accessibilityRole="link" onPress={() => Linking.openURL('https://myledja.com/terms')}>
         <Text tone="textSecondary">{t('settings.help.terms')}</Text>
@@ -901,7 +976,7 @@ export function HelpTab() {
         <Text tone="textSecondary">{t('settings.help.privacy')}</Text>
       </Pressable>
       {web ? (
-        <Button testID="settings-install-pwa" kind="secondary" label={t('settings.help.install')} onPress={() => {}} />
+        <Button testID="settings-install-pwa" kind="secondary" label={t('settings.help.install')} onPress={() => void installPwa()} />
       ) : null}
       <Text variant="caption" tone="textSecondary">
         {t('settings.help.version', { version })}
@@ -909,6 +984,22 @@ export function HelpTab() {
       <Text variant="caption" tone="textSecondary">
         {t('settings.help.byPlanexi')}
       </Text>
+      <Confirm
+        visible={shortcutsOpen}
+        title={t('settings.help.shortcuts')}
+        body={t('settings.help.shortcutsBody')}
+        confirmLabel={t('common.close')}
+        onConfirm={() => setShortcutsOpen(false)}
+        onCancel={() => setShortcutsOpen(false)}
+      />
+      <Confirm
+        visible={whatsNewOpen}
+        title={t('settings.help.whatsNew')}
+        body={t('settings.help.whatsNewBody', { version })}
+        confirmLabel={t('common.close')}
+        onConfirm={() => setWhatsNewOpen(false)}
+        onCancel={() => setWhatsNewOpen(false)}
+      />
     </ScrollView>
   );
 }

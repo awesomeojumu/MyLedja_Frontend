@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Image, Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, GripVertical } from 'lucide-react-native';
 import { v7 as uuidv7 } from 'uuid';
 
 import {
@@ -26,6 +26,7 @@ import { AppFrame } from '@/features/frame/AppFrame';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { AccountImportSheet } from '@/features/accounts/AccountImportSheet';
 import { pickImageUri } from '@/features/payees/pickMedia';
+import { parseTags } from '@/features/transactions/tags';
 import { t, type TextKey } from '@/i18n';
 
 import {
@@ -111,21 +112,45 @@ export function SettingsScreen() {
   };
 
   if (phone && !paramTab) {
+    // iOS-style inset grouped list (DESIGN Page 26); Android uses the same grouped chrome.
+    const inset = Platform.OS === 'ios';
     return (
       <AppFrame title={t('settings.title')}>
-        <ScrollView contentContainerStyle={{ gap: sp['spacing-sm'] }}>
-          {visibleTabs.map((tab) => (
-            <Pressable
-              key={tab.id}
-              testID={`settings-link-${tab.id}`}
-              accessibilityRole="button"
-              onPress={() => router.push(`/settings/${tab.id === 'importExport' ? 'data' : tab.id === 'devices' ? 'sync' : tab.id}`)}
-            >
-              <Card>
-                <Text>{t(tab.label)}</Text>
-              </Card>
-            </Pressable>
-          ))}
+        <ScrollView contentContainerStyle={{ gap: inset ? 0 : sp['spacing-sm'], paddingHorizontal: inset ? sp['spacing-md'] : 0 }}>
+          <View
+            style={
+              inset
+                ? {
+                    borderRadius: tokens.radius['rounded-md'],
+                    overflow: 'hidden',
+                    backgroundColor: theme.card,
+                  }
+                : { gap: sp['spacing-sm'] }
+            }
+          >
+            {visibleTabs.map((tab, index) => (
+              <Pressable
+                key={tab.id}
+                testID={`settings-link-${tab.id}`}
+                accessibilityRole="button"
+                onPress={() => router.push(`/settings/${tab.id === 'importExport' ? 'data' : tab.id === 'devices' ? 'sync' : tab.id}`)}
+                style={
+                  inset
+                    ? {
+                        paddingVertical: sp['spacing-md'],
+                        paddingHorizontal: sp['spacing-md'],
+                        borderBottomWidth: index < visibleTabs.length - 1 ? 1 : 0,
+                        borderBottomColor: theme.border,
+                        minHeight: 44,
+                        justifyContent: 'center',
+                      }
+                    : undefined
+                }
+              >
+                {inset ? <Text>{t(tab.label)}</Text> : <Card><Text>{t(tab.label)}</Text></Card>}
+              </Pressable>
+            ))}
+          </View>
         </ScrollView>
       </AppFrame>
     );
@@ -297,13 +322,27 @@ function GeneralTab() {
 
       {/* Language picker hidden while English is the only option (PU-63). */}
 
-      <Select
-        testID="settings-currency"
-        label={t('settings.general.currency')}
-        value={snapshot?.settings.currency ?? 'NGN'}
-        onChange={(currency) => void saveSettings({ currency })}
-        options={[{ value: 'NGN', label: 'NGN' }]}
-      />
+      {(() => {
+        const budgetCurrency = snapshot?.settings.currency ?? 'NGN';
+        const accountCurrencies = new Set((snapshot?.accounts ?? []).map((a) => a.currency ?? budgetCurrency));
+        const currencyLocked = accountCurrencies.size > 1 || [...accountCurrencies].some((c) => c !== budgetCurrency);
+        return currencyLocked ? (
+          <View style={{ gap: sp['spacing-xs'] }} testID="settings-currency-locked">
+            <TextInput testID="settings-currency" label={t('settings.general.currency')} value={budgetCurrency} editable={false} />
+            <Text variant="caption" tone="textSecondary">
+              {t('settings.general.currencyLocked')}
+            </Text>
+          </View>
+        ) : (
+          <Select
+            testID="settings-currency"
+            label={t('settings.general.currency')}
+            value={budgetCurrency}
+            onChange={(currency) => void saveSettings({ currency })}
+            options={[{ value: 'NGN', label: 'NGN' }]}
+          />
+        );
+      })()}
 
       <SegmentedControl
         testID="settings-weekStart"
@@ -359,11 +398,21 @@ function GeneralTab() {
 function CategoriesTab() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
+  const phone = useSizeClass() === 'phone';
+  const web = Platform.OS === 'web';
   const [newName, setNewName] = useState('');
+  const [newGroup, setNewGroup] = useState('');
+  const [groupDraft, setGroupDraft] = useState('');
+  const [reorderMode, setReorderMode] = useState(!phone);
   const [editCat, setEditCat] = useState<Category | null>(null);
   const [deleteCat, setDeleteCat] = useState<Category | null>(null);
   const expense = useMemo(() => snapshot?.categories.filter((c) => c.kind === 'expense') ?? [], [snapshot]);
   const month = monthOf(today());
+  const groups = useMemo(() => {
+    const fromCats = expense.map((c) => c.group);
+    const extra = snapshot?.settings.extraCategoryGroups ?? [];
+    return [...new Set([...fromCats, ...extra])];
+  }, [expense, snapshot?.settings.extraCategoryGroups]);
 
   const saveCategory = async (category: Category) => {
     await repo.updateCategory(category);
@@ -385,36 +434,85 @@ function CategoriesTab() {
     setEditCat(null);
   };
 
+  const addGroup = async () => {
+    const name = groupDraft.trim();
+    if (!name || !snapshot) return;
+    const key = name.toLowerCase().startsWith('group.') ? name : `group.${name.toLowerCase().replace(/\s+/g, '')}`;
+    const extra = [...new Set([...(snapshot.settings.extraCategoryGroups ?? []), key])];
+    await repo.updateSettings({ ...snapshot.settings, extraCategoryGroups: extra });
+    setGroupDraft('');
+    toast.show(t('common.saved'));
+  };
+
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-categories">
-      {expense.map((c) => (
-        <Card key={c.id} style={{ gap: sp['spacing-sm'] }} testID={`settings-cat-${c.id}`}>
-          <Text variant="heading-sm">{c.name}</Text>
-          <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
-            <Button testID={`settings-cat-edit-${c.id}`} kind="secondary" label={t('settings.categories.edit')} onPress={() => setEditCat(c)} />
-            <Button testID={`settings-cat-delete-${c.id}`} kind="secondary" label={t('settings.categories.delete')} onPress={() => setDeleteCat(c)} />
-            <Button testID={`settings-cat-up-${c.id}`} kind="secondary" label={t('settings.categories.moveUp')} onPress={() => void repo.reorderCategory(c.id, 'up')} />
-            <Button testID={`settings-cat-down-${c.id}`} kind="secondary" label={t('settings.categories.moveDown')} onPress={() => void repo.reorderCategory(c.id, 'down')} />
-          </View>
-          <Switch
-            testID={`settings-cat-hidden-${c.id}`}
-            label={t('settings.categories.hidden')}
-            value={c.hidden}
-            onChange={(hidden) => void saveCategory({ ...c, hidden })}
-          />
-        </Card>
+      {phone ? (
+        <Button
+          testID="settings-categories-reorder"
+          kind="secondary"
+          label={reorderMode ? t('settings.categories.doneReorder') : t('settings.categories.reorder')}
+          onPress={() => setReorderMode((v) => !v)}
+        />
+      ) : null}
+      {groups.map((group) => (
+        <View key={group} style={{ gap: sp['spacing-sm'] }} testID={`settings-cat-group-${group}`}>
+          <Text variant="heading-sm">{group.replace(/^group\./, '')}</Text>
+          {expense
+            .filter((c) => c.group === group)
+            .map((c) => (
+              <Card key={c.id} style={{ gap: sp['spacing-sm'] }} testID={`settings-cat-${c.id}`}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'] }}>
+                  {web || reorderMode ? (
+                    <View accessibilityLabel={t('settings.categories.dragHandle')} testID={`settings-cat-handle-${c.id}`}>
+                      <GripVertical size={18} color={tokens.color['ink-mute']} />
+                    </View>
+                  ) : null}
+                  <Text variant="heading-sm" style={{ flex: 1 }}>
+                    {c.name}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
+                  <Button testID={`settings-cat-edit-${c.id}`} kind="secondary" label={t('settings.categories.edit')} onPress={() => setEditCat(c)} />
+                  <Button testID={`settings-cat-delete-${c.id}`} kind="secondary" label={t('settings.categories.delete')} onPress={() => setDeleteCat(c)} />
+                  {web || reorderMode ? (
+                    <>
+                      <Button testID={`settings-cat-up-${c.id}`} kind="secondary" label={t('settings.categories.moveUp')} onPress={() => void repo.reorderCategory(c.id, 'up')} />
+                      <Button testID={`settings-cat-down-${c.id}`} kind="secondary" label={t('settings.categories.moveDown')} onPress={() => void repo.reorderCategory(c.id, 'down')} />
+                    </>
+                  ) : null}
+                </View>
+                <Switch
+                  testID={`settings-cat-hidden-${c.id}`}
+                  label={t('settings.categories.hidden')}
+                  value={c.hidden}
+                  onChange={(hidden) => void saveCategory({ ...c, hidden })}
+                />
+              </Card>
+            ))}
+        </View>
       ))}
       <TextInput testID="settings-new-category" label={t('settings.categories.add')} value={newName} onChangeText={setNewName} />
+      {groups.length > 1 ? (
+        <Select
+          testID="settings-new-category-group"
+          label={t('settings.categories.group')}
+          value={newGroup || groups[0]!}
+          onChange={setNewGroup}
+          options={groups.map((g) => ({ value: g, label: g.replace(/^group\./, '') }))}
+        />
+      ) : null}
       <Button
         testID="settings-add-category"
         label={t('settings.categories.addButton')}
         disabled={!newName.trim()}
         onPress={async () => {
-          await repo.addCategory({ name: newName.trim(), kind: 'expense', group: 'group.home' });
+          await repo.addCategory({ name: newName.trim(), kind: 'expense', group: newGroup || groups[0] || 'group.home' });
           setNewName('');
           toast.show(t('category.saved'));
         }}
       />
+      <TextInput testID="settings-new-group" label={t('settings.categories.addGroup')} value={groupDraft} onChangeText={setGroupDraft} />
+      <Button testID="settings-add-group" kind="secondary" label={t('settings.categories.addGroup')} disabled={!groupDraft.trim()} onPress={() => void addGroup()} />
       <TagsSection />
       {snapshot && editCat ? (
         <EditCategorySheet
@@ -457,6 +555,17 @@ function TagsSection() {
   const [renameText, setRenameText] = useState('');
   const [remove, setRemove] = useState<WorkspaceTag | null>(null);
   const tags = snapshot?.settings.tags ?? [];
+  const tagUsage = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const ev of snapshot?.events ?? []) {
+      for (const tag of parseTags(ev.notes)) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [snapshot?.events]);
+
+  const countFor = (tag: WorkspaceTag) => tagUsage.get(tag.name) ?? tagUsage.get(tag.id) ?? 0;
 
   const saveTags = async (next: WorkspaceTag[]) => {
     if (!snapshot) return;
@@ -470,7 +579,7 @@ function TagsSection() {
       {tags.map((tag) => (
         <Card key={tag.id} style={{ gap: sp['spacing-sm'] }} testID={`settings-tag-${tag.id}`}>
           <Text>
-            {tag.name} · {t('settings.categories.tagCount', { count: '0' })}
+            {tag.name} · {t('settings.categories.tagCount', { count: String(countFor(tag)) })}
           </Text>
           <View style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
             <Button
@@ -513,7 +622,7 @@ function TagsSection() {
       <Confirm
         visible={remove !== null}
         title={t('settings.categories.tagDeleteTitle', { name: remove?.name ?? '' })}
-        body={t('settings.categories.tagDeleteBody', { count: '0' })}
+        body={t('settings.categories.tagDeleteBody', { count: String(remove ? countFor(remove) : 0) })}
         confirmLabel={t('settings.categories.tagsDelete')}
         onCancel={() => setRemove(null)}
         onConfirm={() => {
@@ -564,7 +673,8 @@ function today(): string {
 function NotificationsTab() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
-  const prefs = snapshot?.settings.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS;
+  const prefs = { ...DEFAULT_NOTIFICATION_PREFS, ...snapshot?.settings.notificationPrefs };
+  const nativePhone = Platform.OS === 'ios' || Platform.OS === 'android';
 
   const save = async (next: typeof prefs) => {
     if (!snapshot) return;
@@ -582,9 +692,19 @@ function NotificationsTab() {
   const reminderLabel = (days: number) =>
     days === 1 ? t('settings.notifications.remindDaysBefore', { days: String(days) }) : t('settings.notifications.remindDaysBeforePlural', { days: String(days) });
 
+  const openOsSettings = () => {
+    if (Platform.OS === 'ios' || Platform.OS === 'android') Linking.openSettings();
+  };
+
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-notifications">
       <Text tone="textSecondary">{t('settings.notifications.intro')}</Text>
+      {nativePhone ? (
+        <Card style={{ gap: sp['spacing-sm'] }} testID="settings-notify-os-blocked">
+          <Text>{t('settings.notifications.osBlocked')}</Text>
+          <Button testID="settings-notify-open-os" kind="secondary" label={t('settings.notifications.turnOnInSettings')} onPress={openOsSettings} />
+        </Card>
+      ) : null}
       <Switch testID="settings-notify-bills" label={t('settings.notifications.bills')} value={prefs.bills} onChange={(bills) => void save({ ...prefs, bills })} />
       {prefs.bills ? (
         <View style={{ gap: sp['spacing-sm'], paddingLeft: sp['spacing-sm'] }}>
@@ -598,14 +718,20 @@ function NotificationsTab() {
               onChange={(checked) => toggleReminderDay(day, checked)}
             />
           ))}
+          {Platform.OS === 'android' ? (
+            <Button testID="settings-notify-channel-bills" kind="link" label={t('settings.notifications.manageChannel')} onPress={openOsSettings} />
+          ) : null}
         </View>
       ) : null}
       <Switch testID="settings-notify-budget" label={t('settings.notifications.budget')} value={prefs.budget} onChange={(budget) => void save({ ...prefs, budget })} />
+      {Platform.OS === 'android' ? (
+        <Button testID="settings-notify-channel-budget" kind="link" label={t('settings.notifications.manageChannel')} onPress={openOsSettings} />
+      ) : null}
       <Switch
         testID="settings-notify-budget-over"
         label={t('settings.notifications.budgetOver')}
-        value={prefs.budget}
-        onChange={(budget) => void save({ ...prefs, budget })}
+        value={prefs.budgetOver}
+        onChange={(budgetOver) => void save({ ...prefs, budgetOver })}
       />
       <Switch testID="settings-notify-goals" label={t('settings.notifications.goals')} value={prefs.goals} onChange={(goals) => void save({ ...prefs, goals })} />
       <Switch testID="settings-notify-debts" label={t('settings.notifications.debts')} value={prefs.debts} onChange={(debts) => void save({ ...prefs, debts })} />

@@ -713,11 +713,13 @@ export function DeleteAccountSheet({
   onDeleted: () => Promise<void>;
 }) {
   const api = useSecurityApi();
+  const { user } = useAuth();
   const toast = useToast();
   const [typed, setTyped] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [opened, setOpened] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   if (visible !== opened) {
     setOpened(visible);
@@ -725,8 +727,28 @@ export function DeleteAccountSheet({
       setTyped('');
       setError(null);
       setConfirmOpen(false);
+      setDownloading(false);
     }
   }
+
+  const downloadDataFirst = () =>
+    void guard(async () => {
+      const workspaceId = user?.workspaceId;
+      if (!workspaceId) return;
+      setDownloading(true);
+      try {
+        const backup = await api.backup(workspaceId);
+        await saveText(backup.filename, backup.content, backup.mimeType);
+        const csv = await api.exportCsv(workspaceId);
+        await saveText(csv.filename, csv.content, csv.mimeType);
+        toast.show(t('settings.popup.deleteAccountDownloadDone'));
+      } finally {
+        setDownloading(false);
+      }
+    }, t('security.action.export')).catch((e: unknown) => {
+      setDownloading(false);
+      setError(messageOf(e));
+    });
 
   return (
     <>
@@ -750,9 +772,11 @@ export function DeleteAccountSheet({
       >
         <Text tone="textSecondary">{t('settings.popup.deleteAccountBody')}</Text>
         <Button
+          testID="delete-account-download"
           kind="link"
           label={t('settings.popup.deleteAccountDownload')}
-          onPress={() => toast.show(t('settings.popup.deleteAccountDownloadHint'))}
+          disabled={downloading}
+          onPress={downloadDataFirst}
         />
         <TextInput
           testID="delete-account-type"

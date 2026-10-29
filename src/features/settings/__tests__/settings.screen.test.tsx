@@ -185,7 +185,7 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
     expect(screen.getByTestId('settings-help')).toBeTruthy();
   });
 
-  it('P26-06: workspace invite sheet still opens when Phase 3 tab is shipped', async () => {
+  it('P26-06 / TB-11: workspace members and invites stay gated until shared workspaces ship', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -194,8 +194,58 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
       { sync },
     );
     await fireEvent.press(screen.getByTestId('settings-tab-workspace'));
-    await fireEvent.press(screen.getByTestId('settings-invite'));
-    expect(screen.getByTestId('settings-invite-sheet')).toBeTruthy();
+    expect(screen.getByTestId('settings-workspace-members-later')).toBeTruthy();
+    expect(screen.queryByTestId('settings-invite')).toBeNull();
+  });
+
+  it('P26-05: budget near-limit and over-plan are separate prefs', async () => {
+    const { sync, repo } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-notifications'));
+    await fireEvent(screen.getByTestId('settings-notify-budget-over'), 'onChange', false);
+    await waitFor(async () => {
+      const prefs = (await repo.load()).settings.notificationPrefs;
+      expect(prefs?.budget).toBe(true);
+      expect(prefs?.budgetOver).toBe(false);
+    });
+  });
+
+  it('P26-11: Sync now runs the sync engine', async () => {
+    const { sync } = await seeded();
+    const spy = jest.spyOn(sync.engine, 'sync').mockResolvedValue(undefined as never);
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-devices'));
+    await fireEvent.press(screen.getByTestId('settings-sync-now'));
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledWith({ force: true });
+    });
+    spy.mockRestore();
+  });
+
+  it('P26-03: categories support add group', async () => {
+    const { sync, repo } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-categories'));
+    await fireEvent.changeText(screen.getByTestId('settings-new-group'), 'Travel');
+    await fireEvent.press(screen.getByTestId('settings-add-group'));
+    await waitFor(async () => {
+      expect((await repo.load()).settings.extraCategoryGroups).toContain('group.travel');
+    });
   });
 
   it('P26-05: notifications toggles persist', async () => {

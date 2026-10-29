@@ -296,6 +296,8 @@ export type WorkspaceSettings = {
   hapticsEnabled?: boolean;
   /** Tags managed under Categories and tags. */
   tags?: WorkspaceTag[];
+  /** Extra category group keys from Settings › Categories “+ Add group” (TB-11). */
+  extraCategoryGroups?: string[];
   /** PU-28 — Due soon window in days (3 · 7 · 14 · 30). */
   dueSoonDays?: 3 | 7 | 14 | 30;
   health?: HealthSettings;
@@ -306,7 +308,10 @@ export type WorkspaceSettings = {
 /** Settings › Notifications (P26-05). */
 export type NotificationPrefs = {
   bills: boolean;
+  /** Budget near limit (~80%). */
   budget: boolean;
+  /** Over plan (separate from near-limit; TB-11 Notifications). */
+  budgetOver: boolean;
   goals: boolean;
   debts: boolean;
   income: boolean;
@@ -323,6 +328,7 @@ export type NotificationPrefs = {
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   bills: true,
   budget: true,
+  budgetOver: true,
   goals: true,
   debts: true,
   income: true,
