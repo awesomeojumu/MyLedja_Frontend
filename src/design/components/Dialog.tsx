@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { t } from '@/i18n';
 import tokens from '../tokens.json';
@@ -111,5 +111,30 @@ export function Confirm({
         </View>
       </View>
     </Modal>
+  );
+}
+
+/**
+ * A Sheet that asks "Discard your changes?" when it's closed after typing (DESIGN.md 4 rule 5, G-08).
+ * Untouched, it just closes.
+ */
+export function GuardedSheet({ dirty, onClose, ...props }: Parameters<typeof Sheet>[0] & { dirty: boolean }) {
+  const [asking, setAsking] = useState(false);
+  const close = () => (dirty ? setAsking(true) : onClose());
+  return (
+    <>
+      <Sheet {...props} onClose={close} />
+      <Confirm
+        visible={asking}
+        title={t('common.discardTitle')}
+        body={t('common.discardBody')}
+        confirmLabel={t('common.discardConfirm')}
+        onConfirm={() => {
+          setAsking(false);
+          onClose();
+        }}
+        onCancel={() => setAsking(false)}
+      />
+    </>
   );
 }

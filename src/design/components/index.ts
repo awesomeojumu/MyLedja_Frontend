@@ -4,7 +4,7 @@ export { AmountInput } from './AmountInput';
 export { Button } from './Button';
 export { TextInput } from './TextInput';
 export { CodeInput } from './CodeInput';
-export { Sheet, Confirm } from './Dialog';
+export { Sheet, Confirm, GuardedSheet } from './Dialog';
 export { ToastProvider, useToast } from './Toast';
 export { Icon, type IconSize } from './Icon';
 export {

@@ -125,23 +125,29 @@ function BarShape({ x, width, height, fill, testID }: { x: number; width: number
   return <Path testID={testID} d={d} fill={fill} />;
 }
 
-/** A 2.2px primary line; the latest point is gold, which is that view's gold mark. */
-export function LineChart({ goldLatest = true, ...props }: Omit<Frame, 'children'> & { goldLatest?: boolean }) {
+/**
+ * A 2.2px primary line; the latest point is gold, which is that view's gold mark. `compare` draws a second
+ * series as a dashed primary-soft line on the same scale (a holding's cost under its value).
+ */
+export function LineChart({ goldLatest = true, compare, ...props }: Omit<Frame, 'children'> & { goldLatest?: boolean; compare?: bigint[] }) {
   const theme = useTheme();
-  const values = props.rows.map((p) => p.value);
+  const values = [...props.rows.map((p) => p.value), ...(compare ?? [])];
   const min = values.reduce((m, v) => (v < m ? v : m), values[0] ?? 0n);
   const y = scale(values.map((v) => v - min));
   return (
     <ChartFrame {...props}>
       {(width) => {
         const step = props.rows.length > 1 ? (width - 8) / (props.rows.length - 1) : 0;
-        const pts = props.rows.map((p, i) => ({ x: 4 + i * step, y: 4 + (1 - y(p.value - min)) * (HEIGHT - 8) }));
-        const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+        const at = (v: bigint, i: number) => ({ x: 4 + i * step, y: 4 + (1 - y(v - min)) * (HEIGHT - 8) });
+        const pts = props.rows.map((p, i) => at(p.value, i));
+        const path = (ps: { x: number; y: number }[]) => ps.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+        const cmp = compare?.slice(0, props.rows.length).map(at) ?? [];
         const last = pts.at(-1);
         return (
           <Svg width={width} height={HEIGHT}>
             <SvgLine x1={0} x2={width} y1={HEIGHT - 0.5} y2={HEIGHT - 0.5} stroke={theme.border} strokeWidth={1} />
-            {pts.length > 1 ? <Path d={d} stroke={theme.primaryFill} strokeWidth={2.2} fill="none" /> : null}
+            {cmp.length > 1 ? <Path testID="chart-compare" d={path(cmp)} stroke={c['primary-soft']} strokeWidth={1.5} strokeDasharray="4 4" fill="none" /> : null}
+            {pts.length > 1 ? <Path d={path(pts)} stroke={theme.primaryFill} strokeWidth={2.2} fill="none" /> : null}
             {last ? <Circle testID="chart-latest" cx={last.x} cy={last.y} r={4} fill={goldLatest ? c.gold : theme.primaryFill} /> : null}
           </Svg>
         );

@@ -21,6 +21,7 @@ import { ACCOUNT_KIND_INFO, type Account } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
+import { HoldingsTab } from '@/features/investments/HoldingsTab';
 import { rowsFor, today, type Row } from '@/features/transactions/helpers';
 import { TransactionPanel } from '@/features/transactions/TransactionPanel';
 import { t } from '@/i18n';
@@ -37,7 +38,7 @@ import { groupRegisterByDay, hasValueTab } from './helpers';
 
 const sp = tokens.spacing;
 
-type Tab = 'transactions' | 'value' | 'details';
+type Tab = 'transactions' | 'holdings' | 'value' | 'details';
 export type RegisterRow = Row & { line: bigint; running: bigint };
 
 /** Rows that touch the account, newest first, with the balance after each (P09-01). */
@@ -138,6 +139,7 @@ export function AccountScreen() {
   const split = clearedSplit(rows);
   const tabs: { value: Tab; label: string }[] = [
     { value: 'transactions', label: t('account.tab.transactions') },
+    ...(account?.type === 'investment' ? [{ value: 'holdings' as const, label: t('account.tab.holdings') }] : []),
     ...(account && hasValueTab(account.type) ? [{ value: 'value' as const, label: t('account.tab.value') }] : []),
     { value: 'details', label: t('account.tab.details') },
   ];
@@ -242,6 +244,8 @@ export function AccountScreen() {
                   ))}
                 </View>
               )
+            ) : tab === 'holdings' ? (
+              <HoldingsTab snapshot={snapshot} account={account} />
             ) : tab === 'value' ? (
               <Card testID="value-list" style={{ gap: sp['spacing-sm'] }}>
                 {revalued(snapshot, account.id).length === 0 ? (

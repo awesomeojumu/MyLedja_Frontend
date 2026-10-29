@@ -2,12 +2,12 @@ import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeftRight, Bell, CalendarClock, CircleDollarSign, Eye, EyeOff, HandCoins, LayoutDashboard, Menu, PieChart, Plus, Settings, Target, Users, Wallet, Zap } from 'lucide-react-native';
+import { ArrowLeftRight, Bell, CalendarClock, ChartColumn, CircleDollarSign, Eye, EyeOff, HandCoins, HeartPulse, LayoutDashboard, Menu, PieChart, Plus, Settings, Target, TrendingUp, Users, Waves, Wallet, Zap } from 'lucide-react-native';
 import { Banner, Button, StatusPill, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useDesign, useTheme } from '@/design/ThemeProvider';
-import { t } from '@/i18n';
+import { t, type TextKey } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { useSyncStatus } from '@/data/sync/SyncProvider';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
@@ -15,7 +15,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { NotificationsBell } from '@/features/notifications/NotificationsBell';
 import { SyncIssuesBanner } from '@/features/sync/SyncIssues';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
-import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, PHONE_BOTTOM_PAGES, type NavItem } from './navigation';
+import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, PHONE_BOTTOM_PAGES, WEALTH_PAGES, type NavItem } from './navigation';
 
 const c = tokens.color;
 const sp = tokens.spacing;
@@ -32,6 +32,10 @@ const ICONS = {
   income: CircleDollarSign,
   debts: HandCoins,
   notifications: Bell,
+  investments: TrendingUp,
+  reports: ChartColumn,
+  cashFlow: Waves,
+  health: HeartPulse,
 };
 const onSidebarMuted = `${c['on-primary']}B3`;
 const onSidebarSection = `${c['on-primary']}99`;
@@ -77,6 +81,43 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
   const pathname = usePathname();
   const { user } = useAuth();
   const add = useOptionalAddTransaction();
+  const link = (item: NavItem) => {
+    const active = isActive(pathname, item);
+    const Icon = ICONS[item.icon];
+    return (
+      <Pressable
+        key={item.key}
+        testID={`nav-${item.key}`}
+        accessibilityRole="link"
+        accessibilityState={{ selected: active }}
+        accessibilityLabel={t(item.label)}
+        onPress={() => {
+          router.push(item.href);
+          onNavigate?.();
+        }}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: compact ? 'center' : 'flex-start',
+          gap: sp['spacing-md'],
+          minHeight: 44,
+          paddingHorizontal: sp['spacing-md'],
+          borderRadius: tokens.radius['rounded-pill'],
+          backgroundColor: active ? c['primary-deep'] : undefined,
+        }}
+      >
+        <Icon size={18} color={active ? c['on-primary'] : onSidebarMuted} />
+        {compact ? null : <Text style={{ color: active ? c['on-primary'] : onSidebarMuted }}>{t(item.label)}</Text>}
+      </Pressable>
+    );
+  };
+  const section = (label: TextKey) =>
+    compact ? null : (
+      <Text variant="micro" style={{ color: onSidebarSection, marginTop: sp['spacing-md'], textTransform: 'uppercase' }}>
+        {t(label)}
+      </Text>
+    );
+
   return (
     <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
       {add && !compact ? (
@@ -129,106 +170,13 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
           </View>
         </View>
       )}
-      {SHIPPED_PAGES.map((item) => {
-        const active = isActive(pathname, item);
-        const Icon = ICONS[item.icon];
-        return (
-          <Pressable
-            key={item.key}
-            testID={`nav-${item.key}`}
-            accessibilityRole="link"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={t(item.label)}
-            onPress={() => {
-              router.push(item.href);
-              onNavigate?.();
-            }}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: compact ? 'center' : 'flex-start',
-              gap: sp['spacing-md'],
-              minHeight: 44,
-              paddingHorizontal: sp['spacing-md'],
-              borderRadius: tokens.radius['rounded-pill'],
-              backgroundColor: active ? c['primary-deep'] : undefined,
-            }}
-          >
-            <Icon size={18} color={active ? c['on-primary'] : onSidebarMuted} />
-            {compact ? null : <Text style={{ color: active ? c['on-primary'] : onSidebarMuted }}>{t(item.label)}</Text>}
-          </Pressable>
-        );
-      })}
-      {compact ? null : (
-        <Text variant="micro" style={{ color: onSidebarSection, marginTop: sp['spacing-md'], textTransform: 'uppercase' }}>
-          {t('nav.manage')}
-        </Text>
-      )}
-      {MANAGE_PAGES.map((item) => {
-        const active = isActive(pathname, item);
-        const Icon = ICONS[item.icon];
-        return (
-          <Pressable
-            key={item.key}
-            testID={`nav-${item.key}`}
-            accessibilityRole="link"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={t(item.label)}
-            onPress={() => {
-              router.push(item.href);
-              onNavigate?.();
-            }}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: compact ? 'center' : 'flex-start',
-              gap: sp['spacing-md'],
-              minHeight: 44,
-              paddingHorizontal: sp['spacing-md'],
-              borderRadius: tokens.radius['rounded-pill'],
-              backgroundColor: active ? c['primary-deep'] : undefined,
-            }}
-          >
-            <Icon size={18} color={active ? c['on-primary'] : onSidebarMuted} />
-            {compact ? null : <Text style={{ color: active ? c['on-primary'] : onSidebarMuted }}>{t(item.label)}</Text>}
-          </Pressable>
-        );
-      })}
-      {compact ? null : (
-        <Text variant="micro" style={{ color: onSidebarSection, marginTop: sp['spacing-md'], textTransform: 'uppercase' }}>
-          {t('nav.plan')}
-        </Text>
-      )}
-      {PLAN_PAGES.map((item) => {
-        const active = isActive(pathname, item);
-        const Icon = ICONS[item.icon];
-        return (
-          <Pressable
-            key={item.key}
-            testID={`nav-${item.key}`}
-            accessibilityRole="link"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={t(item.label)}
-            onPress={() => {
-              router.push(item.href);
-              onNavigate?.();
-            }}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: compact ? 'center' : 'flex-start',
-              gap: sp['spacing-md'],
-              minHeight: 44,
-              paddingHorizontal: sp['spacing-md'],
-              borderRadius: tokens.radius['rounded-pill'],
-              backgroundColor: active ? c['primary-deep'] : undefined,
-            }}
-          >
-            <Icon size={18} color={active ? c['on-primary'] : onSidebarMuted} />
-            {compact ? null : <Text style={{ color: active ? c['on-primary'] : onSidebarMuted }}>{t(item.label)}</Text>}
-          </Pressable>
-        );
-      })}
+      {SHIPPED_PAGES.map(link)}
+      {section('nav.manage')}
+      {MANAGE_PAGES.map(link)}
+      {section('nav.plan')}
+      {PLAN_PAGES.map(link)}
+      {section('nav.wealth')}
+      {WEALTH_PAGES.map(link)}
       <View style={{ flex: 1 }} />
       <View
         style={{

@@ -38,7 +38,16 @@ import { transferMatchCandidates } from './transferMatch';
 import { rowIndicators } from './panelConnected';
 import { FiltersSheet } from './FiltersSheet';
 import { TransactionPanel } from './TransactionPanel';
-import { applyFilters, countActive, emptyFilters, filterChips, removeChip, type TxFilters } from './filters';
+import {
+  applyFilters,
+  countActive,
+  emptyFilters,
+  filterChips,
+  filtersFromParams,
+  removeChip,
+  type FilterParams,
+  type TxFilters,
+} from './filters';
 import { ledgerMessage, rowsFor, today, type Row } from './helpers';
 
 const sp = tokens.spacing;
@@ -67,7 +76,15 @@ export function TransactionsScreen() {
   const toast = useToast();
   const theme = useTheme();
   const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState<TxFilters>(emptyFilters());
+  const params = useGlobalSearchParams<{ tx?: string } & FilterParams>();
+  const [filters, setFilters] = useState<TxFilters>(() => ({ ...emptyFilters(), ...filtersFromParams(params) }));
+  // Another page may open this one with filters in the URL ("the transactions behind" a figure).
+  const linked = [params.from, params.to, params.month, params.account, params.category, params.payee].join('|');
+  const [appliedLink, setAppliedLink] = useState(linked);
+  if (linked !== appliedLink) {
+    setAppliedLink(linked);
+    setFilters({ ...emptyFilters(), ...filtersFromParams(params) });
+  }
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -77,7 +94,6 @@ export function TransactionsScreen() {
   const [selectMode, setSelectMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const params = useGlobalSearchParams<{ tx?: string }>();
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;

@@ -68,14 +68,16 @@ export function EmptyState({
   body,
   actionLabel,
   onAction,
+  testID,
 }: {
   title: string;
   body: string;
   actionLabel: string;
   onAction: () => void;
+  testID?: string;
 }) {
   return (
-    <View style={{ alignItems: 'center', gap: s['spacing-md'], padding: s['spacing-xl'] }}>
+    <View testID={testID} style={{ alignItems: 'center', gap: s['spacing-md'], padding: s['spacing-xl'] }}>
       <Text variant="heading-sm" accessibilityRole="header">
         {title}
       </Text>
