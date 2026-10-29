@@ -178,6 +178,7 @@ const BE_TYPES = new Set([
   'schedule.cancel',
   'occurrence.mark_paid',
   'occurrence.mark_received',
+  'occurrence.unmark',
   'goal.create',
   'goal.update',
   'goal.allocate',

@@ -1685,7 +1685,7 @@ export class WorkspaceRepository {
     return { ok: true, value: occurrence };
   }
 
-  /** PU-26 — Undo mark paid (unlink occurrence; keeps the transaction). */
+  /** PU-26 — Undo mark paid (unlink occurrence; keeps the transaction). Syncs via occurrence.unmark. */
   async unmarkBillPaid(recurringId: string, dueDate: string): Promise<Result<void>> {
     const snapshot = await this.load();
     const occId = `${recurringId}:${dueDate}`;
@@ -1697,7 +1697,11 @@ export class WorkspaceRepository {
       { recurringId, dueDate, amountMinor: existing.amountMinor, status: 'upcoming', eventId: undefined },
       'occurrence.unpaid',
       undefined,
-      null,
+      {
+        type: 'occurrence.unmark',
+        targetId: null,
+        payload: { scheduleId: recurringId, date: dueDate },
+      },
     );
     return { ok: true, value: undefined };
   }
