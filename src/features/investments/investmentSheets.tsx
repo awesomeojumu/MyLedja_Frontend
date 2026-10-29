@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import {
@@ -18,14 +18,90 @@ import {
 import tokens from '@/design/tokens.json';
 import type { Holding, HoldingType } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { AddAccountSheet } from '@/features/accounts/accountSheets';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 import { costOfPurchase } from '@/ledger';
 
-import { HOLDING_TYPES, fifoCost, holdingUnits, latestPrice } from './helpers';
+import { HOLDING_TYPES, defaultCashAccountId, fifoCost, holdingUnits, latestPrice } from './helpers';
 
 const sp = tokens.spacing;
+
+const CURRENCY_OPTIONS = [
+  { value: 'NGN', label: '₦ Naira (NGN)' },
+  { value: 'USD', label: '$ US dollar (USD)' },
+  { value: 'GBP', label: '£ Pound (GBP)' },
+  { value: 'EUR', label: '€ Euro (EUR)' },
+];
+
+export type HoldingDraft = {
+  name: string;
+  symbol: string;
+  type: HoldingType;
+  heldIn: string;
+  currency: string;
+  priceText: string;
+};
+
+export type TradeDraft = {
+  direction: 'buy' | 'sell';
+  holding: string;
+  units: string;
+  priceText: string;
+  feesText: string;
+  cashId: string;
+  date: string;
+};
+
+export type DividendDraft = {
+  holding: string;
+  amountText: string;
+  cashId: string;
+  date: string;
+  reinvested: boolean;
+  units: string;
+  priceText: string;
+};
+
+export type PricesDraft = {
+  date: string;
+  values: Record<string, string>;
+};
+
+export const emptyHoldingDraft = (): HoldingDraft => ({
+  name: '',
+  symbol: '',
+  type: 'stock',
+  heldIn: '',
+  currency: 'NGN',
+  priceText: '',
+});
+
+export const emptyTradeDraft = (direction: 'buy' | 'sell' = 'buy'): TradeDraft => ({
+  direction,
+  holding: '',
+  units: '',
+  priceText: '',
+  feesText: '',
+  cashId: '',
+  date: today(),
+});
+
+export const emptyDividendDraft = (): DividendDraft => ({
+  holding: '',
+  amountText: '',
+  cashId: '',
+  date: today(),
+  reinvested: false,
+  units: '',
+  priceText: '',
+});
+
+export const emptyPricesDraft = (): PricesDraft => ({
+  date: today(),
+  values: {},
+});
 
 /** PU-37 Add / edit holding */
 export function HoldingSheet({
@@ -33,24 +109,51 @@ export function HoldingSheet({
   accountId,
   onClose,
   onCreated,
+  draft,
+  setDraft,
 }: {
   holding?: Holding;
   accountId?: string;
   onClose: () => void;
   onCreated?: (h: Holding) => void;
+  draft?: HoldingDraft;
+  setDraft?: (next: HoldingDraft | ((prev: HoldingDraft) => HoldingDraft)) => void;
 }) {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const investments = (snapshot?.accounts ?? []).filter((a) => a.type === 'investment' && !a.archived);
-  const [name, setName] = useState(holding?.name ?? '');
-  const [symbol, setSymbol] = useState(holding?.symbol ?? '');
-  const [type, setType] = useState<HoldingType>(holding?.type ?? 'stock');
-  const [heldIn, setHeldIn] = useState(holding?.accountId ?? accountId ?? investments[0]?.id ?? '');
-  const [priceText, setPriceText] = useState('');
+  const defaultHeld = holding?.accountId ?? accountId ?? investments[0]?.id ?? '';
+  const defaultCurrency =
+    holding?.currency ??
+    investments.find((a) => a.id === defaultHeld)?.currency ??
+    snapshot?.accounts.find((a) => a.id === defaultHeld)?.currency ??
+    'NGN';
+
+  const [local, setLocal] = useState<HoldingDraft>(() => ({
+    name: holding?.name ?? '',
+    symbol: holding?.symbol ?? '',
+    type: holding?.type ?? 'stock',
+    heldIn: defaultHeld,
+    currency: defaultCurrency,
+    priceText: '',
+  }));
+  const state = draft ?? local;
+  const update = setDraft ?? setLocal;
+
+  const heldIn = state.heldIn || defaultHeld;
+  const currency = state.currency || defaultCurrency;
   const [priceMinor, setPriceMinor] = useState<bigint | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const valid = name.trim().length > 0 && !!heldIn;
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [knownInvestmentIds, setKnownInvestmentIds] = useState<string[]>([]);
+  const valid = state.name.trim().length > 0 && !!heldIn;
+
+  useEffect(() => {
+    if (holding || !defaultHeld) return;
+    if (!state.heldIn) update((s) => ({ ...s, heldIn: defaultHeld, currency: s.currency || defaultCurrency }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once when account list is ready
+  }, [defaultHeld, defaultCurrency, holding, state.heldIn]);
 
   const save = async () => {
     if (!valid || busy) return;
@@ -60,89 +163,126 @@ export function HoldingSheet({
       if (holding) {
         await repo.updateHolding({
           ...holding,
-          name: name.trim(),
-          symbol: symbol.trim().toUpperCase() || undefined,
-          type,
+          name: state.name.trim(),
+          symbol: state.symbol.trim().toUpperCase() || undefined,
+          type: state.type,
           accountId: heldIn,
+          currency,
         });
         toast.show(t('investments.holdingSaved'));
         onClose();
         return;
       }
       const r = await repo.createHolding({
-        name: name.trim(),
-        symbol: symbol.trim() || undefined,
-        type,
+        name: state.name.trim(),
+        symbol: state.symbol.trim() || undefined,
+        type: state.type,
         accountId: heldIn,
+        currency,
         currentPriceMinor: priceMinor ?? undefined,
       });
       if (!r.ok) return setError(ledgerMessage(r.error));
       toast.show(t('investments.holdingAdded'));
-      onCreated?.(r.value);
-      onClose();
+      // Keep sheet mounted until parent opens buy — do not call onClose (P1 #14).
+      if (onCreated) onCreated(r.value);
+      else onClose();
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Sheet
-      visible
-      testID="holding-sheet"
-      title={holding ? t('investments.editHolding') : t('investments.addHolding')}
-      onClose={onClose}
-      footer={
-        <Footer>
-          <Button kind="secondary" label={t('common.cancel')} onPress={onClose} />
-          <Button
-            testID="holding-save"
-            label={holding ? t('common.saveChanges') : t('investments.addHolding')}
-            disabled={!valid || busy}
-            onPress={() => void save()}
+    <>
+      <Sheet
+        visible
+        testID="holding-sheet"
+        title={holding ? t('investments.editHolding') : t('investments.addHolding')}
+        onClose={onClose}
+        footer={
+          <Footer>
+            <Button kind="secondary" label={t('common.cancel')} onPress={onClose} />
+            <Button
+              testID="holding-save"
+              label={holding ? t('common.saveChanges') : t('investments.addHolding')}
+              disabled={!valid || busy}
+              onPress={() => void save()}
+            />
+          </Footer>
+        }
+      >
+        <View style={{ gap: sp['spacing-md'] }}>
+          <TextInput
+            testID="holding-name"
+            label={t('investments.name')}
+            value={state.name}
+            onChangeText={(name) => update((s) => ({ ...s, name }))}
           />
-        </Footer>
-      }
-    >
-      <View style={{ gap: sp['spacing-md'] }}>
-        <TextInput testID="holding-name" label={t('investments.name')} value={name} onChangeText={setName} />
-        <TextInput
-          testID="holding-symbol"
-          label={`${t('investments.symbol')} ${t('common.optional')}`}
-          value={symbol}
-          onChangeText={(v) => setSymbol(v.toUpperCase())}
-          autoCapitalize="characters"
-        />
-        <Select
-          testID="holding-type"
-          label={t('investments.type')}
-          value={type}
-          onChange={(v) => setType(v as HoldingType)}
-          options={HOLDING_TYPES.map((x) => ({ value: x, label: t(`investments.type.${x}`) }))}
-        />
-        <Select
-          testID="holding-account"
-          label={t('investments.heldIn')}
-          value={heldIn}
-          onChange={setHeldIn}
-          options={investments.map((a) => ({ value: a.id, label: a.name }))}
-        />
-        {!holding ? (
-          <AmountInput
-            testID="holding-price"
-            label={`${t('investments.currentPrice')} ${t('common.optional')}`}
-            value={priceText}
-            onChange={(text, minor) => {
-              setPriceText(text);
-              setPriceMinor(minor);
+          <TextInput
+            testID="holding-symbol"
+            label={`${t('investments.symbol')} ${t('common.optional')}`}
+            value={state.symbol}
+            onChangeText={(v) => update((s) => ({ ...s, symbol: v.toUpperCase() }))}
+            autoCapitalize="characters"
+          />
+          <Select
+            testID="holding-type"
+            label={t('investments.type')}
+            value={state.type}
+            onChange={(v) => update((s) => ({ ...s, type: v as HoldingType }))}
+            options={HOLDING_TYPES.map((x) => ({ value: x, label: t(`investments.type.${x}`) }))}
+          />
+          <Select
+            testID="holding-account"
+            label={t('investments.heldIn')}
+            value={heldIn}
+            onChange={(next) => {
+              const nextCurrency = investments.find((a) => a.id === next)?.currency ?? currency;
+              update((s) => ({ ...s, heldIn: next, currency: nextCurrency }));
+            }}
+            options={investments.map((a) => ({ value: a.id, label: a.name }))}
+            addNewLabel={t('investments.addAccountOption')}
+            onAddNew={() => {
+              setKnownInvestmentIds(investments.map((a) => a.id));
+              setAddingAccount(true);
             }}
           />
-        ) : null}
-        <Text variant="caption" tone="textSecondary">
-          {t('investments.holdingCaption')}
-        </Text>
-        {error ? <InlineError message={error} /> : null}
-      </View>
-    </Sheet>
+          <Select
+            testID="holding-currency"
+            label={t('investments.currency')}
+            value={currency}
+            onChange={(next) => update((s) => ({ ...s, currency: next }))}
+            options={CURRENCY_OPTIONS}
+          />
+          {!holding ? (
+            <AmountInput
+              testID="holding-price"
+              label={`${t('investments.currentPrice')} ${t('common.optional')}`}
+              value={state.priceText}
+              onChange={(text, minor) => {
+                update((s) => ({ ...s, priceText: text }));
+                setPriceMinor(minor);
+              }}
+            />
+          ) : null}
+          <Text variant="caption" tone="textSecondary">
+            {t('investments.holdingCaption')}
+          </Text>
+          {error ? <InlineError message={error} /> : null}
+        </View>
+      </Sheet>
+      {addingAccount ? (
+        <AddAccountSheet
+          onClose={() => {
+            setAddingAccount(false);
+            void repo.load().then((s) => {
+              const known = new Set(knownInvestmentIds);
+              const created = s.accounts.find((a) => a.type === 'investment' && !a.archived && !known.has(a.id));
+              if (created) update((d) => ({ ...d, heldIn: created.id, currency: created.currency }));
+            });
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -151,27 +291,43 @@ export function TradeSheet({
   direction: initial,
   holdingId,
   onClose,
+  draft,
+  setDraft,
 }: {
   direction: 'buy' | 'sell';
   holdingId?: string;
   onClose: () => void;
+  draft?: TradeDraft;
+  setDraft?: (next: TradeDraft | ((prev: TradeDraft) => TradeDraft)) => void;
 }) {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const holdings = snapshot?.holdings ?? [];
   const cashAccounts = (snapshot?.accounts ?? []).filter((a) => !a.archived && ['bank', 'savings', 'cash', 'wallet'].includes(a.type));
-  const [direction, setDirection] = useState<'buy' | 'sell'>(initial);
-  const [holding, setHolding] = useState(holdingId ?? holdings[0]?.id ?? '');
-  const [units, setUnits] = useState('');
-  const defaultPrice = snapshot && (holdingId ?? holdings[0]?.id) ? latestPrice(snapshot, holdingId ?? holdings[0]!.id) : null;
-  const [priceText, setPriceText] = useState(defaultPrice ? formatNaira(BigInt(defaultPrice.priceMinor)) : '');
+  const defaultHolding = holdingId ?? holdings[0]?.id ?? '';
+  const defaultPrice = snapshot && defaultHolding ? latestPrice(snapshot, defaultHolding) : null;
+  const defaultCash = snapshot ? defaultCashAccountId(snapshot, defaultHolding || undefined) : cashAccounts[0]?.id ?? '';
+
+  const [local, setLocal] = useState<TradeDraft>(() => ({
+    direction: initial,
+    holding: defaultHolding,
+    units: '',
+    priceText: defaultPrice ? formatNaira(BigInt(defaultPrice.priceMinor)) : '',
+    feesText: '',
+    cashId: defaultCash,
+    date: today(),
+  }));
+  const state = draft ?? local;
+  const update = setDraft ?? setLocal;
   const [priceMinor, setPriceMinor] = useState<bigint | null>(defaultPrice ? BigInt(defaultPrice.priceMinor) : null);
-  const [feesText, setFeesText] = useState('');
   const [feesMinor, setFeesMinor] = useState<bigint | null>(0n);
-  const [cashId, setCashId] = useState(cashAccounts[0]?.id ?? '');
-  const [date, setDate] = useState(today());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const direction = state.direction;
+  const holding = state.holding || holdingId || defaultHolding;
+  const units = state.units;
+  const cashId = state.cashId || defaultCash;
 
   const held = useMemo(() => (snapshot && holding ? holdingUnits(snapshot, holding) : 0), [snapshot, holding]);
   const unitsNum = Number(units);
@@ -211,7 +367,7 @@ export function TradeSheet({
               pricePerUnit: priceMinor,
               fees,
               cashAccountId: cashId,
-              date,
+              date: state.date,
             })
           : await repo.sellHolding({
               holdingId: holding,
@@ -219,7 +375,7 @@ export function TradeSheet({
               pricePerUnit: priceMinor,
               fees,
               cashAccountId: cashId,
-              date,
+              date: state.date,
               costOfLots: sellCost?.cost,
             });
       if (!r.ok) return setError(ledgerMessage(r.error));
@@ -253,7 +409,7 @@ export function TradeSheet({
           testID="trade-direction"
           label={t('investments.direction')}
           value={direction}
-          onChange={setDirection}
+          onChange={(v) => update((s) => ({ ...s, direction: v }))}
           options={[
             { value: 'buy', label: t('investments.buy') },
             { value: 'sell', label: t('investments.sell') },
@@ -263,10 +419,25 @@ export function TradeSheet({
           testID="trade-holding"
           label={t('investments.holding')}
           value={holding}
-          onChange={setHolding}
+          onChange={(id) => {
+            const px = snapshot ? latestPrice(snapshot, id) : null;
+            update((s) => ({
+              ...s,
+              holding: id,
+              priceText: px ? formatNaira(BigInt(px.priceMinor)) : s.priceText,
+              cashId: snapshot ? defaultCashAccountId(snapshot, id) : s.cashId,
+            }));
+            setPriceMinor(px ? BigInt(px.priceMinor) : null);
+          }}
           options={holdings.map((h) => ({ value: h.id, label: h.symbol ? `${h.name} (${h.symbol})` : h.name }))}
         />
-        <TextInput testID="trade-units" label={t('investments.units')} value={units} onChangeText={setUnits} keyboardType="decimal-pad" />
+        <TextInput
+          testID="trade-units"
+          label={t('investments.units')}
+          value={units}
+          onChangeText={(v) => update((s) => ({ ...s, units: v }))}
+          keyboardType="decimal-pad"
+        />
         {direction === 'sell' ? (
           <Text variant="caption" tone="textSecondary">
             {t('investments.youHold', { units: String(held) })}
@@ -275,18 +446,18 @@ export function TradeSheet({
         <AmountInput
           testID="trade-price"
           label={t('investments.pricePerUnit')}
-          value={priceText}
+          value={state.priceText}
           onChange={(text, minor) => {
-            setPriceText(text);
+            update((s) => ({ ...s, priceText: text }));
             setPriceMinor(minor);
           }}
         />
         <AmountInput
           testID="trade-fees"
           label={`${t('investments.fees')} ${t('common.optional')}`}
-          value={feesText}
+          value={state.feesText}
           onChange={(text, minor) => {
-            setFeesText(text);
+            update((s) => ({ ...s, feesText: text }));
             setFeesMinor(minor ?? 0n);
           }}
         />
@@ -294,10 +465,10 @@ export function TradeSheet({
           testID="trade-cash"
           label={direction === 'buy' ? t('investments.moneyFrom') : t('investments.moneyTo')}
           value={cashId}
-          onChange={setCashId}
+          onChange={(id) => update((s) => ({ ...s, cashId: id }))}
           options={cashAccounts.map((a) => ({ value: a.id, label: a.name }))}
         />
-        <DatePicker testID="trade-date" label={t('common.date')} value={date} onChange={setDate} />
+        <DatePicker testID="trade-date" label={t('common.date')} value={state.date} onChange={(date) => update((s) => ({ ...s, date }))} />
         {direction === 'buy' && total !== null ? (
           <Text tone="textSecondary">{t('investments.buyTotal', { amount: formatNaira(total) })}</Text>
         ) : null}
@@ -320,29 +491,48 @@ export function TradeSheet({
 }
 
 /** PU-39 Dividend */
-export function DividendSheet({ holdingId, onClose }: { holdingId?: string; onClose: () => void }) {
+export function DividendSheet({
+  holdingId,
+  onClose,
+  draft,
+  setDraft,
+}: {
+  holdingId?: string;
+  onClose: () => void;
+  draft?: DividendDraft;
+  setDraft?: (next: DividendDraft | ((prev: DividendDraft) => DividendDraft)) => void;
+}) {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const holdings = snapshot?.holdings ?? [];
   const cashAccounts = (snapshot?.accounts ?? []).filter((a) => !a.archived && ['bank', 'savings', 'cash', 'wallet'].includes(a.type));
-  const [holding, setHolding] = useState(holdingId ?? holdings[0]?.id ?? '');
-  const [amountText, setAmountText] = useState('');
+  const defaultHolding = holdingId ?? holdings[0]?.id ?? '';
+  const defaultCash = snapshot ? defaultCashAccountId(snapshot, defaultHolding || undefined) : cashAccounts[0]?.id ?? '';
+
+  const [local, setLocal] = useState<DividendDraft>(() => ({
+    holding: defaultHolding,
+    amountText: '',
+    cashId: defaultCash,
+    date: today(),
+    reinvested: false,
+    units: '',
+    priceText: '',
+  }));
+  const state = draft ?? local;
+  const update = setDraft ?? setLocal;
+
   const [amountMinor, setAmountMinor] = useState<bigint | null>(null);
-  const [cashId, setCashId] = useState(cashAccounts[0]?.id ?? '');
-  const [date, setDate] = useState(today());
-  const [reinvested, setReinvested] = useState(false);
-  const [units, setUnits] = useState('');
-  const [priceText, setPriceText] = useState('');
   const [priceMinor, setPriceMinor] = useState<bigint | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const cashId = state.cashId || defaultCash;
   const valid =
-    !!holding &&
+    !!state.holding &&
     !!cashId &&
     amountMinor !== null &&
     amountMinor > 0n &&
-    (!reinvested || (!!units && Number(units) > 0 && priceMinor !== null && priceMinor > 0n));
+    (!state.reinvested || (!!state.units && Number(state.units) > 0 && priceMinor !== null && priceMinor > 0n));
 
   const save = async () => {
     if (!valid || busy || amountMinor === null) return;
@@ -350,13 +540,13 @@ export function DividendSheet({ holdingId, onClose }: { holdingId?: string; onCl
     setError(null);
     try {
       const r = await repo.recordDividend({
-        holdingId: holding,
+        holdingId: state.holding,
         amount: amountMinor,
-        date,
+        date: state.date,
         cashAccountId: cashId,
-        reinvested,
-        units: reinvested ? units : undefined,
-        pricePerUnit: reinvested ? priceMinor ?? undefined : undefined,
+        reinvested: state.reinvested,
+        units: state.reinvested ? state.units : undefined,
+        pricePerUnit: state.reinvested ? priceMinor ?? undefined : undefined,
       });
       if (!r.ok) return setError(ledgerMessage(r.error));
       toast.show(t('investments.dividendRecorded'));
@@ -383,37 +573,48 @@ export function DividendSheet({ holdingId, onClose }: { holdingId?: string; onCl
         <Select
           testID="dividend-holding"
           label={t('investments.holding')}
-          value={holding}
-          onChange={setHolding}
+          value={state.holding}
+          onChange={(holding) => update((s) => ({ ...s, holding, cashId: snapshot ? defaultCashAccountId(snapshot, holding) : s.cashId }))}
           options={holdings.map((h) => ({ value: h.id, label: h.name }))}
         />
         <AmountInput
           testID="dividend-amount"
           label={t('common.amount')}
-          value={amountText}
+          value={state.amountText}
           onChange={(text, minor) => {
-            setAmountText(text);
+            update((s) => ({ ...s, amountText: text }));
             setAmountMinor(minor);
           }}
         />
-        <DatePicker label={t('common.date')} value={date} onChange={setDate} />
+        <DatePicker label={t('common.date')} value={state.date} onChange={(date) => update((s) => ({ ...s, date }))} />
         <Select
           testID="dividend-cash"
           label={t('investments.paidInto')}
           value={cashId}
-          onChange={setCashId}
+          onChange={(id) => update((s) => ({ ...s, cashId: id }))}
           options={cashAccounts.map((a) => ({ value: a.id, label: a.name }))}
         />
-        <Switch testID="dividend-reinvest" label={t('investments.reinvested')} value={reinvested} onChange={setReinvested} />
-        {reinvested ? (
+        <Switch
+          testID="dividend-reinvest"
+          label={t('investments.reinvested')}
+          value={state.reinvested}
+          onChange={(reinvested) => update((s) => ({ ...s, reinvested }))}
+        />
+        {state.reinvested ? (
           <>
-            <TextInput testID="dividend-units" label={t('investments.unitsBought')} value={units} onChangeText={setUnits} keyboardType="decimal-pad" />
+            <TextInput
+              testID="dividend-units"
+              label={t('investments.unitsBought')}
+              value={state.units}
+              onChangeText={(units) => update((s) => ({ ...s, units }))}
+              keyboardType="decimal-pad"
+            />
             <AmountInput
               testID="dividend-price"
               label={t('investments.pricePerUnit')}
-              value={priceText}
+              value={state.priceText}
               onChange={(text, minor) => {
-                setPriceText(text);
+                update((s) => ({ ...s, priceText: text }));
                 setPriceMinor(minor);
               }}
             />
@@ -426,14 +627,26 @@ export function DividendSheet({ holdingId, onClose }: { holdingId?: string; onCl
 }
 
 /** PU-40 Update prices */
-export function UpdatePricesSheet({ holdingId, onClose }: { holdingId?: string; onClose: () => void }) {
+export function UpdatePricesSheet({
+  holdingId,
+  onClose,
+  draft,
+  setDraft,
+}: {
+  holdingId?: string;
+  onClose: () => void;
+  draft?: PricesDraft;
+  setDraft?: (next: PricesDraft | ((prev: PricesDraft) => PricesDraft)) => void;
+}) {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const rows = (snapshot?.holdings ?? []).filter((h) => !holdingId || h.id === holdingId);
-  const [values, setValues] = useState<Record<string, { text: string; minor: bigint | null }>>({});
-  const [date, setDate] = useState(today());
+  const [local, setLocal] = useState<PricesDraft>(() => ({ date: today(), values: {} }));
+  const state = draft ?? local;
+  const update = setDraft ?? setLocal;
+  const [minors, setMinors] = useState<Record<string, bigint | null>>({});
   const [busy, setBusy] = useState(false);
-  const filled = rows.filter((h) => (values[h.id]?.minor ?? null) !== null && (values[h.id]?.minor ?? 0n) > 0n);
+  const filled = rows.filter((h) => (minors[h.id] ?? null) !== null && (minors[h.id] ?? 0n) > 0n);
   const [focusIndex, setFocusIndex] = useState(0);
 
   const save = async () => {
@@ -441,8 +654,8 @@ export function UpdatePricesSheet({ holdingId, onClose }: { holdingId?: string; 
     setBusy(true);
     try {
       await repo.savePrices(
-        filled.map((h) => ({ holdingId: h.id, priceMinor: values[h.id]!.minor! })),
-        date,
+        filled.map((h) => ({ holdingId: h.id, priceMinor: minors[h.id]! })),
+        state.date,
       );
       toast.show(t('investments.pricesUpdated'));
       onClose();
@@ -470,7 +683,7 @@ export function UpdatePricesSheet({ holdingId, onClose }: { holdingId?: string; 
       }
     >
       <View style={{ gap: sp['spacing-md'] }}>
-        <DatePicker label={t('common.date')} value={date} onChange={setDate} />
+        <DatePicker label={t('common.date')} value={state.date} onChange={(date) => update((s) => ({ ...s, date }))} />
         {rows.map((h, i) => {
           const last = snapshot ? latestPrice(snapshot, h.id) : null;
           const label = last
@@ -482,8 +695,11 @@ export function UpdatePricesSheet({ holdingId, onClose }: { holdingId?: string; 
               key={`${h.id}-${focusIndex === i ? 'f' : 'b'}`}
               testID={`price-row-${h.id}`}
               label={label}
-              value={values[h.id]?.text ?? ''}
-              onChange={(text, minor) => setValues((v) => ({ ...v, [h.id]: { text, minor } }))}
+              value={state.values[h.id] ?? ''}
+              onChange={(text, minor) => {
+                update((s) => ({ ...s, values: { ...s.values, [h.id]: text } }));
+                setMinors((v) => ({ ...v, [h.id]: minor }));
+              }}
               returnKeyType={isLast ? 'done' : 'next'}
               blurOnSubmit={isLast}
               autoFocus={focusIndex === i && i > 0}

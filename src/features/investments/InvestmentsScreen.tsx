@@ -12,7 +12,9 @@ import {
   Placeholder,
   SegmentedControl,
   Text,
+  formatDay,
 } from '@/design/components';
+import { usePopupParam } from '@/design/usePopupParam';
 import { useSizeClass } from '@/design/size';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
@@ -21,7 +23,16 @@ import { AppFrame } from '@/features/frame/AppFrame';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
-import { DividendSheet, HoldingSheet, TradeSheet, UpdatePricesSheet } from './investmentSheets';
+import {
+  DividendSheet,
+  HoldingSheet,
+  TradeSheet,
+  UpdatePricesSheet,
+  emptyDividendDraft,
+  emptyHoldingDraft,
+  emptyPricesDraft,
+  emptyTradeDraft,
+} from './investmentSheets';
 import { formatGain, isDown, portfolioSummary, type HoldingFigures } from './helpers';
 
 const sp = tokens.spacing;
@@ -70,28 +81,36 @@ export function InvestmentsScreen() {
     dividend?: string;
     prices?: string;
   }>();
-  const [range, setRange] = useState<Range>((params.range as Range) || '1Y');
-  const [by, setBy] = useState<Breakdown>(params.by === 'account' ? 'account' : 'type');
+  const range = ((params.range as Range) || '1Y') as Range;
+  const by: Breakdown = params.by === 'account' ? 'account' : 'type';
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'value', dir: -1 });
-  const [sheet, setSheet] = useState<'add' | 'buy' | 'sell' | 'dividend' | 'prices' | null>(
-    params.holding === 'new'
-      ? 'add'
-      : params.trade === 'buy'
-        ? 'buy'
-        : params.trade === 'sell'
-          ? 'sell'
-          : params.dividend
-            ? 'dividend'
-            : params.prices
-              ? 'prices'
-              : null,
-  );
-  const [pendingTradeId, setPendingTradeId] = useState<string | null>(null);
+
+  const holdingPopup = usePopupParam({
+    param: 'holding',
+    openWhen: (v) => v === 'new',
+    emptyDraft: emptyHoldingDraft(),
+  });
+  const tradePopup = usePopupParam({
+    param: 'trade',
+    openWhen: (v) => v === 'buy' || v === 'sell',
+    emptyDraft: emptyTradeDraft((params.trade as 'buy' | 'sell') || 'buy'),
+  });
+  const dividendPopup = usePopupParam({
+    param: 'dividend',
+    openWhen: (v) => !!v,
+    emptyDraft: emptyDividendDraft(),
+  });
+  const pricesPopup = usePopupParam({
+    param: 'prices',
+    openWhen: (v) => !!v,
+    emptyDraft: emptyPricesDraft(),
+  });
 
   const paramHolding =
     typeof params.holding === 'string' && params.holding !== 'new' ? params.holding : undefined;
   const dividendHoldingId =
     typeof params.dividend === 'string' && params.dividend !== '1' ? params.dividend : paramHolding;
+  const tradeDirection = params.trade === 'sell' ? 'sell' : 'buy';
 
   const summary = useMemo(
     () => (snapshot ? portfolioSummary(snapshot, range, todayLagos()) : null),
@@ -139,9 +158,11 @@ export function InvestmentsScreen() {
     );
   };
 
-  const closeSheet = () => {
-    setSheet(null);
-    setPendingTradeId(null);
+  const closeAllSheets = () => {
+    holdingPopup.close();
+    tradePopup.close();
+    dividendPopup.close();
+    pricesPopup.close();
     router.setParams({ holding: undefined, trade: undefined, dividend: undefined, prices: undefined });
   };
 
@@ -153,10 +174,7 @@ export function InvestmentsScreen() {
             testID="investments-range"
             label={t('investments.range')}
             value={range}
-            onChange={(v) => {
-              setRange(v);
-              router.setParams({ range: v });
-            }}
+            onChange={(v) => router.setParams({ range: v })}
             options={[
               { value: '1M', label: '1M' },
               { value: '3M', label: '3M' },
@@ -168,10 +186,7 @@ export function InvestmentsScreen() {
             testID="investments-by"
             label={t('investments.breakdown')}
             value={by}
-            onChange={(v) => {
-              setBy(v);
-              router.setParams({ by: v });
-            }}
+            onChange={(v) => router.setParams({ by: v === 'type' ? undefined : v })}
             options={[
               { value: 'type', label: t('investments.byType') },
               { value: 'account', label: t('investments.byAccount') },
@@ -230,12 +245,12 @@ export function InvestmentsScreen() {
         )}
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
-          <Button testID="investments-add" label={t('investments.addHolding')} onPress={() => setSheet('add')} />
+          <Button testID="investments-add" label={t('investments.addHolding')} onPress={() => holdingPopup.openWith('new')} />
           <Button
             testID="investments-prices"
             kind="secondary"
             label={t('investments.updatePrices')}
-            onPress={() => setSheet('prices')}
+            onPress={() => pricesPopup.openWith('1')}
           />
         </View>
 
@@ -244,7 +259,7 @@ export function InvestmentsScreen() {
             title={t('investments.emptyTitle')}
             body={t('investments.emptyBody')}
             actionLabel={t('investments.addHolding')}
-            onAction={() => setSheet('add')}
+            onAction={() => holdingPopup.openWith('new')}
           />
         ) : showTable ? (
           <Card testID="investments-table" style={{ gap: sp['spacing-xs'] }}>
@@ -343,9 +358,9 @@ export function InvestmentsScreen() {
                   {f.units} · {t('investments.avgCost')}{' '}
                   {formatNaira(f.units > 0 ? f.cost / BigInt(Math.round(f.units)) : 0n)}
                 </Text>
-                {f.stalePrice ? (
+                {f.stalePrice && f.staleSince ? (
                   <Text testID={`stale-price-${f.holding.id}`} tone="textSecondary">
-                    {t('investments.priceNotUpdated')}
+                    {t('investments.priceNotUpdated', { date: formatDay(f.staleSince) })}
                   </Text>
                 ) : null}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -358,21 +373,41 @@ export function InvestmentsScreen() {
         )}
       </ScrollView>
 
-      {sheet === 'add' ? (
+      {holdingPopup.open ? (
         <HoldingSheet
-          onClose={closeSheet}
+          draft={holdingPopup.draft}
+          setDraft={holdingPopup.setDraft}
+          onClose={() => holdingPopup.close()}
           onCreated={(h) => {
-            setPendingTradeId(h.id);
-            setSheet('buy');
+            // Open buy with the new holding; clear holding=new without calling onClose first (P1 #14).
+            router.setParams({ holding: h.id, trade: 'buy' });
           }}
         />
       ) : null}
-      {sheet === 'buy' ? (
-        <TradeSheet direction="buy" holdingId={pendingTradeId ?? paramHolding} onClose={closeSheet} />
+      {tradePopup.open ? (
+        <TradeSheet
+          direction={tradeDirection}
+          holdingId={paramHolding}
+          draft={tradePopup.draft}
+          setDraft={tradePopup.setDraft}
+          onClose={closeAllSheets}
+        />
       ) : null}
-      {sheet === 'sell' ? <TradeSheet direction="sell" holdingId={paramHolding} onClose={closeSheet} /> : null}
-      {sheet === 'dividend' ? <DividendSheet holdingId={dividendHoldingId} onClose={closeSheet} /> : null}
-      {sheet === 'prices' ? <UpdatePricesSheet onClose={closeSheet} /> : null}
+      {dividendPopup.open ? (
+        <DividendSheet
+          holdingId={dividendHoldingId}
+          draft={dividendPopup.draft}
+          setDraft={dividendPopup.setDraft}
+          onClose={() => dividendPopup.close()}
+        />
+      ) : null}
+      {pricesPopup.open ? (
+        <UpdatePricesSheet
+          draft={pricesPopup.draft}
+          setDraft={pricesPopup.setDraft}
+          onClose={() => pricesPopup.close()}
+        />
+      ) : null}
     </AppFrame>
   );
 }

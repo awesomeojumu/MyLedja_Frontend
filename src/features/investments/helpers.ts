@@ -13,6 +13,8 @@ export type HoldingFigures = {
   priceDate: string | null;
   /** True when value fell back to cost because no price was entered (P17-06). */
   stalePrice: boolean;
+  /** ISO day for "Price not updated since …" (last lot / last price / today). */
+  staleSince: string | null;
   value: bigint;
   gain: bigint;
   gainPct: number | null;
@@ -80,16 +82,48 @@ export function fifoCost(snapshot: Snapshot, holdingId: string, units: number): 
   return { cost, ok: left <= 1e-9 };
 }
 
+function staleSinceDate(snapshot: Snapshot, holdingId: string, priceDate: string | null, onDate?: string): string {
+  if (priceDate) return priceDate;
+  const lots = lotsFor(snapshot, holdingId);
+  const lastLot = lots.length ? lots[lots.length - 1]!.date : null;
+  if (lastLot) return lastLot;
+  return onDate ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(new Date());
+}
+
+/** Cash account for buy/sell/dividend: last used on this holding's trades, else last used cash, else first. */
+export function defaultCashAccountId(snapshot: Snapshot, holdingId?: string): string {
+  const cashIds = new Set(
+    snapshot.accounts.filter((a) => !a.archived && ['bank', 'savings', 'cash', 'wallet'].includes(a.type)).map((a) => a.id),
+  );
+  if (holdingId) {
+    for (const e of snapshot.events) {
+      if (e.status !== 'posted') continue;
+      if (e.type !== 'investment_buy' && e.type !== 'investment_sell' && !(e.type === 'income' && e.holdingId === holdingId)) continue;
+      if (e.holdingId && e.holdingId !== holdingId) continue;
+      const cash = e.lines.find((l) => cashIds.has(l.ledgerAccountId));
+      if (cash) return cash.ledgerAccountId;
+    }
+  }
+  for (const e of snapshot.events) {
+    if (e.type === 'opening_balance' || e.type === 'reversal' || e.status !== 'posted') continue;
+    const cash = e.lines.find((l) => cashIds.has(l.ledgerAccountId));
+    if (cash) return cash.ledgerAccountId;
+  }
+  return [...cashIds][0] ?? '';
+}
+
 export function holdingFigures(snapshot: Snapshot, holding: Holding, onDate?: string): HoldingFigures {
   const units = holdingUnits(snapshot, holding.id);
   const cost = holdingCost(snapshot, holding);
   const px = latestPrice(snapshot, holding.id, onDate);
   const price = px ? BigInt(px.priceMinor) : null;
   const stalePrice = price === null;
+  const priceDate = px?.date ?? null;
+  const staleSince = stalePrice ? staleSinceDate(snapshot, holding.id, priceDate, onDate) : null;
   const value = price !== null ? costOfPurchase(String(units), price, 0n) : cost;
   const gain = value - cost;
   const gainPct = cost === 0n ? null : Number((gain * 10000n) / cost) / 100;
-  return { holding, units, cost, price, priceDate: px?.date ?? null, stalePrice, value, gain, gainPct };
+  return { holding, units, cost, price, priceDate, stalePrice, staleSince, value, gain, gainPct };
 }
 
 export function portfolioFigures(snapshot: Snapshot, accountId?: string): HoldingFigures[] {
