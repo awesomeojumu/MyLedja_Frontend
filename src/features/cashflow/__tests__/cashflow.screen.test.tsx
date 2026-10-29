@@ -101,6 +101,22 @@ describe('Cash flow (F5.3)', () => {
     expect(previousPeriod({ from: '2026-10-01', to: '2026-10-31' })).toEqual({ from: '2026-08-31', to: '2026-09-30' });
   });
 
+  it('D22-20: selecting a sink highlights the whole path source → middle → category', async () => {
+    mockWidth = 1024;
+    mockHeight = 768;
+    const { sync } = await seeded({ months: ['10'] });
+    await page(sync, <CashFlowScreen />);
+    const frame = await screen.findByTestId('cashflow-sankey-frame');
+    await fireEvent(frame, 'layout', { nativeEvent: { layout: { width: 800, height: 480 } } });
+    const sink = await screen.findByTestId('band-group:group.food');
+    await fireEvent.press(sink);
+    expect(screen.getByTestId('band-group:group.food').props.opacity).toBe(0.9);
+    expect(screen.getByTestId('bar-middle').props.opacity).toBe(0.9);
+    expect(screen.getByTestId('band-left_over').props.opacity).toBe(0.2);
+    const litRibbons = screen.getAllByTestId(/^band-/).filter((n) => n.props.opacity === 0.9);
+    expect(litRibbons.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('include transfers is off by default and toggling is in the address', async () => {
     const { sync } = await seeded({ months: ['10'] });
     await page(sync, <CashFlowScreen />);

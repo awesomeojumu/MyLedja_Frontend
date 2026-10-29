@@ -56,6 +56,17 @@ function place(nodes: SankeyNode[], total: bigint, length: number): Placed[] {
 }
 
 /**
+ * Keys on the highlighted path for D22-20: source → middle → category.
+ * All money shares one middle hub, so a source lights every sink (and a sink lights every source).
+ */
+export function pathHighlightKeys(active: string | null, sourceKeys: readonly string[], sinkKeys: readonly string[]): Set<string> | null {
+  if (!active) return null;
+  if (sourceKeys.includes(active)) return new Set([active, 'middle', ...sinkKeys]);
+  if (sinkKeys.includes(active)) return new Set([...sourceKeys, 'middle', active]);
+  return new Set([active, 'middle']);
+}
+
+/**
  * Where money came from and where it went (DESIGN.md page 22): sources, one middle bar, then groups. On a
  * phone it runs top to bottom with the names in a list underneath (P22-04).
  */
@@ -106,14 +117,12 @@ export function Sankey({
     if (!vertical) return `M${from},${s0} C${mid},${s0} ${mid},${s1} ${to},${s1} L${to},${s1 + w1} C${mid},${s1 + w1} ${mid},${s0 + w0} ${from},${s0 + w0} Z`;
     return `M${s0},${from} C${s0},${mid} ${s1},${mid} ${s1},${to} L${s1 + w1},${to} C${s1 + w1},${mid} ${s0 + w0},${mid} ${s0 + w0},${from} Z`;
   };
-  const bar = (n: Placed, at: number, key: string) =>
-    vertical ? (
-      <Rect key={key} x={n.start} y={at} width={n.size} height={NODE} fill={n.colour} onPress={() => pick(n.key)} />
-    ) : (
-      <Rect key={key} x={at} y={n.start} width={NODE} height={n.size} fill={n.colour} onPress={() => pick(n.key)} />
-    );
   const active = hovered ?? selected;
-  const dim = (key: string) => (active && active !== key ? 0.2 : active === key ? 0.9 : 0.55);
+  const sourceKeys = sources.map((n) => n.key);
+  const sinkKeys = sinks.map((n) => n.key);
+  const lit = pathHighlightKeys(active, sourceKeys, sinkKeys);
+  /** Whole path source→middle→category lit; others dimmed (D22-20). */
+  const dim = (key: string) => (lit ? (lit.has(key) ? 0.9 : 0.2) : 0.55);
   const hoverProps = (key: string) =>
     Platform.OS === 'web'
       ? {
@@ -121,14 +130,43 @@ export function Sankey({
           onMouseLeave: () => setHovered(null),
         }
       : {};
+  const bar = (n: Placed, at: number, key: string) =>
+    vertical ? (
+      <Rect
+        key={key}
+        testID={`bar-${n.key}`}
+        x={n.start}
+        y={at}
+        width={n.size}
+        height={NODE}
+        fill={n.colour}
+        opacity={dim(n.key)}
+        onPress={() => pick(n.key)}
+        {...hoverProps(n.key)}
+      />
+    ) : (
+      <Rect
+        key={key}
+        testID={`bar-${n.key}`}
+        x={at}
+        y={n.start}
+        width={NODE}
+        height={n.size}
+        fill={n.colour}
+        opacity={dim(n.key)}
+        onPress={() => pick(n.key)}
+        {...hoverProps(n.key)}
+      />
+    );
 
   const unit = middle.size / Math.max(1, Number(total));
   const offsets = (nodes: Placed[]) => nodes.map((_, i) => nodes.slice(0, i).reduce((s, n) => s + Number(n.amount) * unit, 0));
   const inAt = offsets(left);
   const outAt = offsets(right);
   return (
-    <View testID={testID} style={{ gap: sp['spacing-sm'] }}>
+    <View testID={testID} style={{ gap: sp['spacing-sm'] }} accessibilityState={active ? { selected: true } : undefined} nativeID={active ? `path-${active}` : undefined}>
       <View
+        testID={testID ? `${testID}-frame` : undefined}
         accessible
         accessibilityRole="image"
         accessibilityLabel={title}
@@ -144,6 +182,7 @@ export function Sankey({
                 <Path
                   key={`in-${n.key}`}
                   testID={`band-${n.key}`}
+                  accessibilityLabel={`path-opacity-${dim(n.key)}`}
                   d={d}
                   fill={n.colour}
                   opacity={dim(n.key)}
@@ -159,6 +198,7 @@ export function Sankey({
                 <Path
                   key={`out-${n.key}`}
                   testID={`band-${n.key}`}
+                  accessibilityLabel={`path-opacity-${dim(n.key)}`}
                   d={d}
                   fill={n.colour}
                   opacity={dim(n.key)}
@@ -174,12 +214,12 @@ export function Sankey({
               ? null
               : [
                   ...left.map((n) => (
-                    <SvgText key={`label-in-${n.key}`} x={a - 6} y={n.start + n.size / 2 + TICK / 3} fontSize={TICK} fill={theme.text} textAnchor="end">
+                    <SvgText key={`label-in-${n.key}`} x={a - 6} y={n.start + n.size / 2 + TICK / 3} fontSize={TICK} fill={theme.text} textAnchor="end" opacity={dim(n.key)}>
                       {`${n.label} ${show(n.amount)}`}
                     </SvgText>
                   )),
                   ...right.map((n) => (
-                    <SvgText key={`label-out-${n.key}`} x={b + NODE + 6} y={n.start + n.size / 2 + TICK / 3} fontSize={TICK} fill={theme.text}>
+                    <SvgText key={`label-out-${n.key}`} x={b + NODE + 6} y={n.start + n.size / 2 + TICK / 3} fontSize={TICK} fill={theme.text} opacity={dim(n.key)}>
                       {`${n.label} ${show(n.amount)}`}
                     </SvgText>
                   )),
