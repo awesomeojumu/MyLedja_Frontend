@@ -170,4 +170,42 @@ describe('P03 Recover account', () => {
     await fireEvent.press(screen.getByTestId('save-password'));
     expect(await screen.findByText(t('recover.doneTitle'))).toBeTruthy();
   });
+
+  it('web Enter submits the email step', async () => {
+    await renderWithProviders(<RecoverScreen />);
+    await fireEvent.changeText(screen.getByTestId('email'), DEMO.email);
+    await fireEvent(screen.getByTestId('email'), 'submitEditing');
+    expect(await screen.findByText(t('recover.sent'))).toBeTruthy();
+  });
+
+  it('web Enter on confirm submits the reset step', async () => {
+    await renderWithProviders(<RecoverScreen />);
+    await fireEvent.changeText(screen.getByTestId('email'), DEMO.email);
+    await fireEvent.press(screen.getByTestId('send-code'));
+    await screen.findByText(t('recover.sent'));
+    await fireEvent.changeText(screen.getByTestId('code-0'), DEMO.code);
+    await fireEvent.changeText(screen.getByTestId('new-password'), 'new-lagos-pass-1');
+    await fireEvent.changeText(screen.getByTestId('confirm-password'), 'new-lagos-pass-1');
+    await fireEvent(screen.getByTestId('confirm-password'), 'submitEditing');
+    expect(await screen.findByText(t('recover.doneTitle'))).toBeTruthy();
+  });
+
+  it('shows wait copy and countdown on recover 429', async () => {
+    let now = 1_000_000;
+    const transport = jest.fn(async () => ({
+      status: 429,
+      body: { code: 'too_many_attempts', message: t('signIn.wait'), retryAfterSeconds: 60 },
+    }));
+    await renderWithProviders(<RecoverScreen now={() => now} />, { transport });
+    await fireEvent.changeText(screen.getByTestId('email'), DEMO.email);
+    await fireEvent.press(screen.getByTestId('send-code'));
+    expect(await screen.findByText(t('signIn.wait'))).toBeTruthy();
+    expect(screen.getByText(t('signIn.waitCountdown', { seconds: 60 }))).toBeTruthy();
+    expect(screen.getByTestId('send-code')).toBeDisabled();
+    now += 61_000;
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 1100));
+    });
+    expect(screen.getByTestId('send-code')).not.toBeDisabled();
+  });
 });
