@@ -1,8 +1,11 @@
 import type {
   AccountKind,
+  AppNotification,
   Goal,
   IncomeStream,
   IncomeStreamKind,
+  NotificationAction,
+  NotificationCategory,
   PersonDebt,
   RecurrenceRule,
   Recurring,
@@ -57,7 +60,54 @@ const SERVER_ACCOUNT_TYPE: Record<string, AccountKind> = {
 const STREAM_KIND_FROM: Record<string, IncomeStreamKind> = { regular: 'regular', varies: 'variable', irregular: 'irregular', passive: 'passive' };
 const STREAM_KIND_TO: Record<IncomeStreamKind, string> = { regular: 'regular', variable: 'varies', irregular: 'irregular', passive: 'passive' };
 
+/** Server notification kinds → FE filter chips (DESIGN page 27 / TB-12). */
+const NOTIFICATION_CATEGORY_FROM: Record<string, NotificationCategory> = {
+  bill: 'bills',
+  budget: 'budget',
+  goal: 'goals',
+  debt: 'debts',
+  income: 'income',
+  security: 'security',
+  sync: 'security',
+  account: 'security',
+};
+
+const NOTIFICATION_ACTIONS = new Set<NotificationAction>([
+  'mark_paid',
+  'match',
+  'remind_tomorrow',
+  'record_payment',
+  'see_budget',
+  'open_plan',
+  'open_debt',
+  'security_review',
+]);
+
 const minorOrUndefined = (v: unknown) => (typeof v === 'string' ? v : undefined);
+
+function notificationFromServer(d: Doc): Omit<AppNotification, 'id'> {
+  const actions = Array.isArray(d.actions) ? (d.actions as Doc[]) : [];
+  const primary = actions[0];
+  const key = str(primary?.key);
+  const params = ((primary?.target as Doc | null | undefined)?.params as Doc | undefined) ?? {};
+  const action = key && NOTIFICATION_ACTIONS.has(key as NotificationAction) ? (key as NotificationAction) : undefined;
+  const amount = minorOrUndefined(d.amount) ?? minorOrUndefined(d.amountMinor);
+  return {
+    createdAt: str(d.createdAt) ?? new Date(0).toISOString(),
+    title: String(d.title ?? ''),
+    body: str(d.body),
+    category: NOTIFICATION_CATEGORY_FROM[String(d.kind)] ?? 'security',
+    read: d.readAt != null,
+    action,
+    recurringId: str(params.scheduleId) ?? str(params.recurringId),
+    debtId: str(params.debtId),
+    dueDate: str(params.date) ?? str(params.dueDate),
+    amountMinor: amount,
+    hideAmount: amount == null,
+    security: d.security === true,
+    dismissed: d.dismissedAt != null,
+  };
+}
 
 function eventFromServer(doc: Doc, workspaceId: string): StoredEvent & { operationId: string } {
   const lines = (doc.lines as Doc[] | undefined) ?? [];
@@ -251,6 +301,8 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         matchedCount: num(d.matchedCount) ?? 0,
         lastUsedAt: str(d.lastUsedAt),
       });
+    case 'notifications':
+      return rec('notifications', id, notificationFromServer(d));
     default:
       return null;
   }

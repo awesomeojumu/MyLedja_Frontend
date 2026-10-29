@@ -11,6 +11,7 @@ import type { AppNotification, NotificationCategory } from '@/data/workspace/mod
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { debtRows } from '@/features/debts/helpers';
 import { AppFrame } from '@/features/frame/AppFrame';
+import { ChangePasswordSheet, useSecurityApi } from '@/features/settings/SecuritySheets';
 import { addDays, ledgerMessage, today } from '@/features/transactions/helpers';
 import { t, type TextKey } from '@/i18n';
 
@@ -20,6 +21,7 @@ import {
   mergeDerivedNotifications,
   visibleNotifications,
 } from './helpers';
+import { syncLocalBillReminder } from './localPush';
 import { MatchBillSheet } from './MatchBillSheet';
 import { NotificationRow } from './NotificationRow';
 import { RecordDebtPaymentSheet } from './RecordDebtPaymentSheet';
@@ -43,12 +45,17 @@ export function NotificationsScreen() {
   const params = useLocalSearchParams<{ tab?: string }>();
   const toast = useToast();
   const theme = useTheme();
-  const phone = useSizeClass() === 'phone';
+  const security = useSecurityApi();
+  const size = useSizeClass();
+  const phone = size === 'phone';
+  const split = size === 'tablet' || size === 'desktop' || size === 'wide';
   const filter = filterFromParam(params.tab);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [matchTarget, setMatchTarget] = useState<AppNotification | null>(null);
   const [debtPayTarget, setDebtPayTarget] = useState<{ notificationId: string; debtId: string; max: bigint } | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const day = today();
 
   const setFilter = (next: NotificationCategory | 'all') => {
@@ -78,13 +85,101 @@ export function NotificationsScreen() {
     return filterNotifications(visibleNotifications(merged, day), filter);
   }, [snapshot, filter, day]);
 
+  useEffect(() => {
+    if (!items) return;
+    for (const n of items) void syncLocalBillReminder(n);
+  }, [items]);
+
   const groups = items ? groupNotifications(items, day) : null;
   const empty = emptyCopy(filter);
+  const selected = items?.find((n) => n.id === selectedId) ?? items?.[0] ?? null;
 
   const debtBalance = (debtId: string) => {
     if (!snapshot) return 0n;
     return debtRows(snapshot, 'all', day).find((r) => r.debt.id === debtId)?.balance ?? 0n;
   };
+
+  const onSecurityNo = async (n: AppNotification) => {
+    try {
+      await security.signOutOthers();
+      toast.show(t('notifications.securityRevoked'));
+      setPasswordOpen(true);
+    } catch {
+      toast.show(t('notifications.securityRevoked'));
+      setPasswordOpen(true);
+    }
+    await repo.markNotificationRead(n.id);
+  };
+
+  const renderRow = (n: AppNotification) => {
+    const row = (
+      <NotificationRow
+        notification={n}
+        today={day}
+        selected={split && selected?.id === n.id}
+        onSelect={split ? () => setSelectedId(n.id) : undefined}
+        onMarkPaid={async () => {
+          setError(null);
+          if (!n.recurringId || !n.dueDate || !snapshot) return;
+          const bill = snapshot.recurring.find((r) => r.id === n.recurringId);
+          if (!bill) return;
+          const categoryId = bill.categoryId ?? snapshot.categories.find((c) => c.kind === 'expense')!.id;
+          const r = await repo.markBillPaid(n.recurringId, n.dueDate, {
+            accountId: bill.accountId,
+            categoryId,
+            amount: BigInt(bill.amountMinor),
+            date: day,
+          });
+          if (!r.ok) setError(ledgerMessage(r.error));
+          else await repo.markNotificationRead(n.id);
+        }}
+        onMatch={() => setMatchTarget(n)}
+        onRemindTomorrow={() => void repo.snoozeNotification(n.id, addDays(day, 1))}
+        onSeeBudget={() => {
+          void repo.markNotificationRead(n.id);
+          router.push('/budget');
+        }}
+        onRecordPayment={() => {
+          if (!n.debtId) {
+            router.push('/debts');
+            return;
+          }
+          setDebtPayTarget({ notificationId: n.id, debtId: n.debtId, max: debtBalance(n.debtId) });
+        }}
+        onSecurityYes={() => void repo.markNotificationRead(n.id)}
+        onSecurityNo={() => void onSecurityNo(n)}
+        onDismiss={() => void repo.markNotificationRead(n.id)}
+      />
+    );
+    return <View key={n.id}>{row}</View>;
+  };
+
+  const list = !groups ? (
+    <Placeholder height={120} />
+  ) : items!.length === 0 ? (
+    <EmptyState
+      title={t(empty.title)}
+      body={t(empty.body)}
+      actionLabel={t('notifications.markAllRead')}
+      onAction={() => void repo.markAllNotificationsRead(filter)}
+    />
+  ) : (
+    <ScrollView
+      refreshControl={phone ? <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} /> : undefined}
+      contentContainerStyle={{ gap: sp['spacing-lg'] }}
+    >
+      {(['today', 'week', 'earlier'] as const).map((key) => {
+        const rows = groups[key];
+        if (rows.length === 0) return null;
+        return (
+          <View key={key} style={{ gap: sp['spacing-sm'] }}>
+            <Text variant="heading-sm">{t(`notifications.group.${key}`)}</Text>
+            {rows.map((n) => renderRow(n))}
+          </View>
+        );
+      })}
+    </ScrollView>
+  );
 
   return (
     <AppFrame title={t('notifications.title')}>
@@ -118,71 +213,24 @@ export function NotificationsScreen() {
         ))}
       </ScrollView>
       {error ? <InlineError message={error} /> : null}
-      {!groups ? (
-        <Placeholder height={120} />
-      ) : items!.length === 0 ? (
-        <EmptyState
-          title={t(empty.title)}
-          body={t(empty.body)}
-          actionLabel={t('notifications.markAllRead')}
-          onAction={() => void repo.markAllNotificationsRead(filter)}
-        />
+      {split && items && items.length > 0 ? (
+        <View testID="notifications-split" style={{ flex: 1, flexDirection: 'row', gap: sp['spacing-lg'] }}>
+          <View style={{ flex: 1, minWidth: 0 }}>{list}</View>
+          <View
+            testID="notifications-detail"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              borderLeftWidth: 1,
+              borderColor: theme.border,
+              paddingLeft: sp['spacing-lg'],
+            }}
+          >
+            {selected ? renderRow(selected) : null}
+          </View>
+        </View>
       ) : (
-        <ScrollView
-          refreshControl={phone ? <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} /> : undefined}
-          contentContainerStyle={{ gap: sp['spacing-lg'] }}
-        >
-          {(['today', 'week', 'earlier'] as const).map((key) => {
-            const rows = groups[key];
-            if (rows.length === 0) return null;
-            return (
-              <View key={key} style={{ gap: sp['spacing-sm'] }}>
-                <Text variant="heading-sm">{t(`notifications.group.${key}`)}</Text>
-                {rows.map((n) => (
-                  <NotificationRow
-                    key={n.id}
-                    notification={n}
-                    today={day}
-                    onMarkPaid={async () => {
-                      setError(null);
-                      if (!n.recurringId || !n.dueDate || !snapshot) return;
-                      const bill = snapshot.recurring.find((r) => r.id === n.recurringId);
-                      if (!bill) return;
-                      const categoryId = bill.categoryId ?? snapshot.categories.find((c) => c.kind === 'expense')!.id;
-                      const r = await repo.markBillPaid(n.recurringId, n.dueDate, {
-                        accountId: bill.accountId,
-                        categoryId,
-                        amount: BigInt(bill.amountMinor),
-                        date: day,
-                      });
-                      if (!r.ok) setError(ledgerMessage(r.error));
-                      else await repo.markNotificationRead(n.id);
-                    }}
-                    onMatch={() => setMatchTarget(n)}
-                    onRemindTomorrow={() => void repo.snoozeNotification(n.id, addDays(day, 1))}
-                    onSeeBudget={() => {
-                      void repo.markNotificationRead(n.id);
-                      router.push('/budget');
-                    }}
-                    onRecordPayment={() => {
-                      if (!n.debtId) {
-                        router.push('/debts');
-                        return;
-                      }
-                      setDebtPayTarget({ notificationId: n.id, debtId: n.debtId, max: debtBalance(n.debtId) });
-                    }}
-                    onSecurityYes={() => void repo.markNotificationRead(n.id)}
-                    onSecurityNo={() => {
-                      toast.show(t('notifications.securityAck'));
-                      void repo.markNotificationRead(n.id);
-                    }}
-                    onDismiss={() => void repo.markNotificationRead(n.id)}
-                  />
-                ))}
-              </View>
-            );
-          })}
-        </ScrollView>
+        list
       )}
       {matchTarget && snapshot ? (
         <MatchBillSheet
@@ -223,6 +271,13 @@ export function NotificationsScreen() {
           }}
         />
       ) : null}
+      <ChangePasswordSheet
+        visible={passwordOpen}
+        onClose={() => setPasswordOpen(false)}
+        guard={async (action) => {
+          await action();
+        }}
+      />
     </AppFrame>
   );
 }

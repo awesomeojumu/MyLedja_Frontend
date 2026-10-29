@@ -24,6 +24,8 @@ const ICONS = {
 export function NotificationRow({
   notification: n,
   today,
+  selected,
+  onSelect,
   onMarkPaid,
   onMatch,
   onRemindTomorrow,
@@ -35,6 +37,8 @@ export function NotificationRow({
 }: {
   notification: AppNotification;
   today: string;
+  selected?: boolean;
+  onSelect?: () => void;
   onMarkPaid: () => Promise<void>;
   onMatch: () => void;
   onRemindTomorrow: () => void;
@@ -50,15 +54,17 @@ export function NotificationRow({
   const when = formatNotificationWhen(n.createdAt, today);
   const unread = !n.read;
 
-  return (
+  const body = (
     <Card
       testID={`notification-${n.id}`}
       style={{
         gap: sp['spacing-sm'],
         flexDirection: 'row',
         alignItems: 'flex-start',
-        backgroundColor: unread ? c['primary-bg-subdued-hover'] : undefined,
-        opacity: n.read ? 0.92 : 1,
+        backgroundColor: unread || selected ? c['primary-bg-subdued-hover'] : undefined,
+        opacity: n.read && !selected ? 0.92 : 1,
+        borderWidth: selected ? 1 : undefined,
+        borderColor: selected ? theme.primaryFill : undefined,
       }}
     >
       <View style={{ paddingTop: 2, width: 20, alignItems: 'center' }}>
@@ -132,5 +138,11 @@ export function NotificationRow({
         </View>
       </View>
     </Card>
+  );
+  if (!onSelect) return body;
+  return (
+    <Pressable accessibilityRole="button" onPress={onSelect}>
+      {body}
+    </Pressable>
   );
 }

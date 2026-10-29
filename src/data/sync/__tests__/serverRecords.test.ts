@@ -40,6 +40,81 @@ describe('server records into local records (Phase 2 join)', () => {
     expect(localFromServer('goals', 'g1', { name: 'Car', targetAmount: '500', accountId: 'a', status: 'in_progress' }, 'ws')!.data).toMatchObject({ status: 'active' });
   });
 
+  it('maps server notifications into the inbox (kind, read, action, security)', () => {
+    const rec = localFromServer(
+      'notifications',
+      'n1',
+      {
+        id: 'n1',
+        kind: 'bill',
+        title: 'Rent due',
+        body: 'Tomorrow',
+        amount: '50000',
+        readAt: null,
+        dismissedAt: null,
+        security: false,
+        actions: [{ key: 'mark_paid', label: 'Mark paid', target: { path: '/plan', params: { scheduleId: 's1', date: '2026-10-05' } } }],
+        createdAt: '2026-10-28T11:00:00.000Z',
+        version: 1,
+      },
+      'ws',
+    );
+    expect(rec).toMatchObject({
+      collection: 'notifications',
+      id: 'n1',
+      version: 1,
+      data: {
+        title: 'Rent due',
+        category: 'bills',
+        read: false,
+        action: 'mark_paid',
+        recurringId: 's1',
+        dueDate: '2026-10-05',
+        amountMinor: '50000',
+        security: false,
+        dismissed: false,
+      },
+    });
+    const sec = localFromServer(
+      'notifications',
+      'n2',
+      {
+        id: 'n2',
+        kind: 'security',
+        title: 'New sign-in',
+        body: 'Was this you?',
+        amount: null,
+        readAt: '2026-10-28T12:00:00.000Z',
+        dismissedAt: null,
+        security: true,
+        actions: [{ key: 'security_review', label: 'Review', target: { path: '/settings/security' } }],
+        createdAt: '2026-10-28T11:00:00.000Z',
+        version: 2,
+      },
+      'ws',
+    );
+    expect(sec!.data).toMatchObject({ category: 'security', read: true, action: 'security_review', security: true, hideAmount: true });
+    const gone = localFromServer(
+      'notifications',
+      'n3',
+      {
+        id: 'n3',
+        kind: 'sync',
+        title: 'Sync issue',
+        body: '',
+        amount: null,
+        readAt: null,
+        dismissedAt: '2026-10-28T13:00:00.000Z',
+        security: false,
+        actions: [],
+        createdAt: '2026-10-28T11:00:00.000Z',
+        version: 1,
+      },
+      'ws',
+    );
+    expect(gone!.data).toMatchObject({ category: 'security', dismissed: true });
+  });
+
   it('round-trips recurrence rules', () => {
     for (const rule of [
       { every: 'month' as const, on: 31, interval: 1 },

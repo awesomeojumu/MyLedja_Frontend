@@ -310,6 +310,7 @@ export class WorkspaceRepository {
       debtEntries: debtEntryRows.map((r) => ({ ...(r.data as Omit<DebtEntry, 'id'>), id: r.id })),
       notifications: notificationRows
         .map((r) => ({ ...(r.data as Omit<AppNotification, 'id'>), id: r.id }))
+        .filter((n) => !n.dismissed)
         .filter((n) => !n.snoozedUntil || n.snoozedUntil <= workspaceToday()),
       budgetTemplates: templateRows.map((r) => ({ ...(r.data as Omit<BudgetTemplate, 'id'>), id: r.id })),
       rules: ruleRows
