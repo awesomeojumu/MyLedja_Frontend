@@ -140,7 +140,7 @@ function stageOrder(stage: RuleStage): number {
 export type TransactionInput =
   | { kind: 'expense'; accountId: string; parts: ExpensePart[]; date: string; payeeName?: string; notes?: string }
   | { kind: 'income'; accountId: string; categoryId: string; amount: bigint; date: string; payeeName?: string; notes?: string }
-  | { kind: 'transfer'; fromId: string; toId: string; amount: bigint; date: string; notes?: string };
+  | { kind: 'transfer'; fromId: string; toId: string; amount: bigint; date: string; notes?: string; toAmount?: bigint };
 
 /**
  * Writes the server derives from another operation, or keeps per device for now: they're saved locally and never
@@ -181,6 +181,9 @@ const record = (collection: string, id: string, data: object, version = 0): Loca
 
 /** Reads and writes the workspace through the local store; every write is queued for sync. */
 export class WorkspaceRepository {
+  /** Cover overspending from money left to plan (envelope budget). */
+  static readonly LEFT_TO_PLAN = 'left-to-plan';
+
   constructor(
     private readonly store: LocalStore,
     private readonly engine: SyncEngine,
@@ -249,6 +252,8 @@ export class WorkspaceRepository {
       weekStart: raw?.weekStart ?? 'monday',
       checklistHidden: raw?.checklistHidden,
       dashboardLayout: raw?.dashboardLayout,
+      dashboardLayoutPhone: raw?.dashboardLayoutPhone,
+      dueSoonDays: raw?.dueSoonDays,
       notificationPrefs: {
         ...DEFAULT_NOTIFICATION_PREFS,
         ...raw?.notificationPrefs,
@@ -301,7 +306,7 @@ export class WorkspaceRepository {
       reconciles: reconciles.map((r) => ({ ...(r.data as Omit<Reconcile, 'id'>), id: r.id })).sort((a, b) => b.statementDate.localeCompare(a.statementDate)),
       assigns,
       assignNotes,
-      goals: goalRows.map((r) => ({ ...(r.data as Omit<Goal, 'id'>), id: r.id })),
+      goals: goalRows.map((r) => ({ ...(r.data as Omit<Goal, 'id'>), id: r.id })).filter((g) => !g.deleted),
       allocations: allocationRows.map((r) => ({ ...(r.data as Omit<GoalAllocation, 'id'>), id: r.id })),
       recurring: recurringRows.map((r) => ({ ...(r.data as Omit<Recurring, 'id'>), id: r.id })),
       occurrences: occurrenceRows.map((r) => ({ ...(r.data as Omit<RecurringOccurrence, 'id'>), id: r.id })),
@@ -653,11 +658,15 @@ export class WorkspaceRepository {
   }
 
   /** P08-06: a balance moves to another account first, then the account is archived. */
-  async archiveAccount(accountId: string, date: string, moveToId?: string): Promise<Result> {
+  async archiveAccount(accountId: string, date: string, moveToId?: string | null): Promise<Result> {
     const snapshot = await this.load();
     const account = snapshot.accounts.find((a) => a.id === accountId);
     if (!account) return { ok: false, error: 'missing_lines' };
     const balance = ledgerBalance(accountId, snapshot.events);
+    if (balance !== 0n && moveToId === null) {
+      await this.updateAccount({ ...account, archived: true, closedWithBalance: true });
+      return { ok: true, value: undefined };
+    }
     if (balance !== 0n) {
       if (!moveToId) return { ok: false, error: 'missing_lines' };
       const amount = balance > 0n ? balance : -balance;
@@ -669,7 +678,16 @@ export class WorkspaceRepository {
       const posted = await this.postEvent(snapshot.chart, snapshot.events, { type: 'transfer', date, lines: lines.value });
       if (!posted.ok) return posted;
     }
-    await this.updateAccount({ ...account, archived: true });
+    await this.updateAccount({ ...account, archived: true, closedWithBalance: false });
+    return { ok: true, value: undefined };
+  }
+
+  /** PU-15: bring back an account that was archived with its money still in it. */
+  async restoreAccount(accountId: string): Promise<Result> {
+    const snapshot = await this.load();
+    const account = snapshot.accounts.find((a) => a.id === accountId);
+    if (!account) return { ok: false, error: 'missing_lines' };
+    await this.updateAccount({ ...account, archived: false, closedWithBalance: false });
     return { ok: true, value: undefined };
   }
 
@@ -878,11 +896,12 @@ export class WorkspaceRepository {
     return template;
   }
 
-  async applyBudgetTemplate(templateId: string, month: string): Promise<void> {
+  async applyBudgetTemplate(templateId: string, month: string, opts?: { replace?: boolean }): Promise<void> {
     const snapshot = await this.load();
     const template = snapshot.budgetTemplates.find((t) => t.id === templateId);
     if (!template) return;
     for (const line of template.lines) {
+      if (opts?.replace === false && this.assigned(line.categoryId, month, snapshot) > 0n) continue;
       const amount = resolveTemplateLineAmount(snapshot, month, line);
       if (amount > 0n) await this.setAssigned(line.categoryId, month, amount);
     }
@@ -948,13 +967,37 @@ export class WorkspaceRepository {
     await this.updateCategory({ ...b, order: a.order ?? index });
   }
 
-  async updatePayee(payee: Payee): Promise<void> {
+  async updatePayee(payee: Payee): Promise<Result> {
+    const snapshot = await this.load();
+    for (const alias of payee.aliases ?? []) {
+      const key = alias.trim().toLowerCase();
+      if (!key) continue;
+      const owner = snapshot.payees.find((p) => {
+        if (p.id === payee.id) return false;
+        if (p.name.toLowerCase() === key) return true;
+        return (p.aliases ?? []).some((a) => a.toLowerCase() === key);
+      });
+      if (owner) return { ok: false, error: 'not_positive' };
+    }
     const { id, ...data } = payee;
     await this.put('payees', id, data, 'payee.update');
+    return { ok: true, value: undefined };
+  }
+
+  async deletePayee(payeeId: string): Promise<Result> {
+    const snapshot = await this.load();
+    const payee = snapshot.payees.find((p) => p.id === payeeId);
+    if (!payee) return { ok: false, error: 'missing_lines' };
+    await this.put('payees', payeeId, { ...payee, deleted: true }, 'payee.delete');
+    return { ok: true, value: undefined };
   }
 
   /** P24-04: move every transaction to the kept payee and remove the others. */
-  async mergePayees(keepId: string, mergeIds: string[]): Promise<Result> {
+  async mergePayees(
+    keepId: string,
+    mergeIds: string[],
+    choices?: { nameId?: string; logoId?: string; categoryId?: string },
+  ): Promise<Result<{ mergeId: string }>> {
     const ids = mergeIds.filter((id) => id !== keepId);
     if (ids.length === 0) return { ok: false, error: 'not_positive' };
     const snapshot = await this.load();
@@ -976,12 +1019,32 @@ export class WorkspaceRepository {
       aliases.add(p.name);
       for (const a of p.aliases ?? []) aliases.add(a);
     }
-    await this.updatePayee({ ...keep, aliases: [...aliases] });
+    const nameFrom = snapshot.payees.find((p) => p.id === choices?.nameId) ?? keep;
+    const logoFrom = snapshot.payees.find((p) => p.id === choices?.logoId);
+    const categoryFrom = snapshot.payees.find((p) => p.id === choices?.categoryId);
+    const mergeId = this.newId();
+    await this.put('payee_merges', mergeId, { keepId, ids, keep, merged }, 'payee.merge', undefined, null);
+    await this.updatePayee({
+      ...keep,
+      name: nameFrom.name,
+      logoUri: logoFrom?.logoUri ?? keep.logoUri,
+      defaultCategoryId: categoryFrom?.defaultCategoryId ?? keep.defaultCategoryId,
+      aliases: [...aliases],
+    });
 
     for (const id of ids) {
       const p = merged.find((m) => m.id === id)!;
       await this.put('payees', id, { ...p, deleted: true }, 'payee.delete');
     }
+    return { ok: true, value: { mergeId } };
+  }
+
+  async undoMergePayees(mergeId: string): Promise<Result> {
+    const rec = await this.store.read('payee_merges', mergeId);
+    if (!rec) return { ok: false, error: 'missing_lines' };
+    const data = rec.data as { keep: Payee; merged: Payee[] };
+    await this.updatePayee(data.keep);
+    for (const payee of data.merged) await this.updatePayee({ ...payee, deleted: false });
     return { ok: true, value: undefined };
   }
 
@@ -1080,7 +1143,7 @@ export class WorkspaceRepository {
    * P07-06: move this category's transactions to another, then soft-delete it.
    * Each move is a correction (TECH-SPEC 6.3).
    */
-  async deleteCategory(categoryId: string, moveToId: string, _date: string): Promise<Result> {
+  async deleteCategory(categoryId: string, moveToId: string, _date: string): Promise<Result<{ undoId: string }>> {
     if (categoryId === moveToId) return { ok: false, error: 'not_positive' };
     const snapshot = await this.load();
     const category = snapshot.categories.find((c) => c.id === categoryId);
@@ -1130,6 +1193,14 @@ export class WorkspaceRepository {
     }
 
     await this.updateCategory({ ...category, deleted: true, hidden: true });
+    return { ok: true, value: { undoId: categoryId } };
+  }
+
+  async undoDeleteCategory(undoId: string, _date: string): Promise<Result> {
+    const rec = await this.store.read('categories', undoId);
+    if (!rec) return { ok: false, error: 'missing_lines' };
+    const data = rec.data as Omit<Category, 'id'>;
+    await this.updateCategory({ ...data, id: undoId, deleted: false, hidden: data.hidden === true ? false : data.hidden });
     return { ok: true, value: undefined };
   }
 
@@ -1226,6 +1297,15 @@ export class WorkspaceRepository {
     return { ok: true, value: goal };
   }
 
+  async deleteGoal(goalId: string): Promise<Result> {
+    const snapshot = await this.load();
+    const goal = snapshot.goals.find((g) => g.id === goalId);
+    if (!goal) return { ok: false, error: 'missing_lines' };
+    const { id, ...data } = goal;
+    await this.put('goals', id, { ...data, deleted: true }, 'goal.delete', undefined, { type: 'goal.delete', targetId: id, payload: {} });
+    return { ok: true, value: undefined };
+  }
+
   async updateGoal(goal: Goal): Promise<void> {
     const { id, ...data } = goal;
     const baseVersion = await this.versionOf('goals', id);
@@ -1302,6 +1382,22 @@ export class WorkspaceRepository {
       targetId: id,
       payload: scheduleUpdateBody(data, baseVersion),
     });
+  }
+
+  async unmarkBillPaid(recurringId: string, dueDate: string): Promise<Result> {
+    const snapshot = await this.load();
+    const occ = snapshot.occurrences.find((o) => o.recurringId === recurringId && o.dueDate === dueDate);
+    if (!occ || occ.status !== 'paid') return { ok: false, error: 'missing_lines' };
+    if (occ.eventId) {
+      const event = snapshot.events.find((e) => e.id === occ.eventId);
+      if (event && event.status === 'posted') {
+        const removed = await this.deleteTransaction(event.id, event.date);
+        if (!removed.ok) return removed;
+      }
+    }
+    const { id, ...data } = occ;
+    await this.put('occurrences', id, { ...data, status: 'upcoming', eventId: undefined }, 'occurrence.paid', undefined, null);
+    return { ok: true, value: undefined };
   }
 
   async markBillPaid(
@@ -1402,6 +1498,7 @@ export class WorkspaceRepository {
     amount: bigint;
     date: string;
     payeeName?: string;
+    bankNames?: string[];
   }): Promise<Result<PersonDebt>> {
     const snapshot = await this.load();
     const id = this.newId();
@@ -1499,7 +1596,7 @@ export class WorkspaceRepository {
 
   async recordDebtPayment(
     debtId: string,
-    input: { accountId: string; amount: bigint; date: string; interest?: bigint },
+    input: { accountId: string; amount: bigint; date: string; interest?: bigint; overpayment?: bigint },
   ): Promise<Result<TxEvent>> {
     const snapshot = await this.load();
     const debt = snapshot.debts.find((d) => d.id === debtId);
@@ -1627,10 +1724,12 @@ export class WorkspaceRepository {
     await this.put('notifications', id, { ...(rec.data as object), read: true }, 'notification.read', rec.version);
   }
 
-  async markAllNotificationsRead(): Promise<void> {
+  async markAllNotificationsRead(category?: string): Promise<void> {
     const rows = await this.store.list('notifications');
     for (const r of rows) {
-      if ((r.data as AppNotification).read) continue;
+      const data = r.data as AppNotification;
+      if (data.read) continue;
+      if (category && category !== 'all' && data.category !== category) continue;
       await this.put('notifications', r.id, { ...(r.data as object), read: true }, 'notification.read', r.version);
     }
   }
@@ -1809,9 +1908,23 @@ export class WorkspaceRepository {
   }
 
   /** E20: buying isn't spending (case 15). */
-  async buyHolding(input: { holdingId: string; accountId: string; units: string; price: bigint; fees: bigint; date: string; notes?: string }): Promise<Result<TxEvent>> {
+  async buyHolding(input: {
+    holdingId: string;
+    accountId?: string;
+    cashAccountId?: string;
+    units: string;
+    price?: bigint;
+    pricePerUnit?: bigint;
+    fees?: bigint;
+    date: string;
+    notes?: string;
+  }): Promise<Result<TxEvent>> {
+    const accountId = input.accountId ?? input.cashAccountId;
+    const price = input.price ?? input.pricePerUnit;
+    const fees = input.fees ?? 0n;
+    if (!accountId || price === undefined) return { ok: false, error: 'missing_lines' };
     const snapshot = await this.load();
-    const built = buildBuy(snapshot.chart, input);
+    const built = buildBuy(snapshot.chart, { holdingId: input.holdingId, accountId, units: input.units, price, fees });
     if (!built.ok) return built;
     return this.postEvent(
       snapshot.chart,
@@ -1822,10 +1935,10 @@ export class WorkspaceRepository {
         payload: {
           type: 'investment_buy',
           holdingId: input.holdingId,
-          accountId: input.accountId,
+          accountId,
           units: input.units,
-          price: input.price.toString(),
-          fees: input.fees.toString(),
+          price: price.toString(),
+          fees: fees.toString(),
           date: input.date,
           notes: input.notes ?? null,
         },
@@ -1837,16 +1950,30 @@ export class WorkspaceRepository {
   /** E21: oldest lots first unless chosen; only the gain counts as income (case 17). */
   async sellHolding(input: {
     holdingId: string;
-    accountId: string;
+    accountId?: string;
+    cashAccountId?: string;
     units: string;
-    price: bigint;
-    fees: bigint;
+    price?: bigint;
+    pricePerUnit?: bigint;
+    fees?: bigint;
     date: string;
     lots?: { lotId: string; units: string }[];
     notes?: string;
   }): Promise<Result<TxEvent>> {
+    const accountId = input.accountId ?? input.cashAccountId;
+    const price = input.price ?? input.pricePerUnit;
+    const fees = input.fees ?? 0n;
+    if (!accountId || price === undefined) return { ok: false, error: 'missing_lines' };
     const snapshot = await this.load();
-    const built = buildSell(snapshot.chart, { ...input, open: openLotsOf(snapshot.events, input.holdingId) });
+    const built = buildSell(snapshot.chart, {
+      holdingId: input.holdingId,
+      accountId,
+      units: input.units,
+      price,
+      fees,
+      lots: input.lots,
+      open: openLotsOf(snapshot.events, input.holdingId),
+    });
     if (!built.ok) return built;
     return this.postEvent(
       snapshot.chart,
@@ -1857,10 +1984,10 @@ export class WorkspaceRepository {
         payload: {
           type: 'investment_sell',
           holdingId: input.holdingId,
-          accountId: input.accountId,
+          accountId,
           units: input.units,
-          price: input.price.toString(),
-          fees: input.fees.toString(),
+          price: price.toString(),
+          fees: fees.toString(),
           ...(input.lots ? { lots: input.lots } : {}),
           date: input.date,
           notes: input.notes ?? null,

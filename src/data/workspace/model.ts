@@ -31,6 +31,8 @@ export type Account = {
   countInBudget: boolean;
   archived: boolean;
   order: number;
+  /** Archived while money stayed in the account (PU-15). Restoring clears this. */
+  closedWithBalance?: boolean;
   /** The last CSV column mapping used for this account (P09-05). */
   importMapping?: ImportMapping;
 };
@@ -68,6 +70,8 @@ export type Category = {
   budgetType: BudgetType;
   /** Tracking style: leftover carries when on (TECH-SPEC 6.6). */
   carryOver: boolean;
+  /** Lucide icon name chosen on the category (PU category edit). */
+  icon?: string;
   /** Soft-deleted after reassignment (Q-18); filtered out of the snapshot. */
   deleted?: boolean;
   /** Counts in Health's runway (TECH-SPEC 6.10). Fixed categories and the Home, Food, Getting around, Health and Education groups count by default. */
@@ -88,13 +92,27 @@ export type Payee = {
 /** Transaction sorting rules (DESIGN page 25, TECH-SPEC rules collection). */
 export type RuleStage = 'first' | 'normal' | 'last';
 
-export type RuleConditionField = 'payee' | 'description' | 'amount' | 'account' | 'category' | 'notes' | 'date';
+export type RuleConditionField = 'payee' | 'description' | 'amount' | 'account' | 'category' | 'notes' | 'date' | 'money';
 
-export type RuleConditionOp = 'contains' | 'equals' | 'lessThan' | 'greaterThan' | 'before' | 'after';
+export type RuleConditionOp =
+  | 'contains'
+  | 'equals'
+  | 'notEquals'
+  | 'startsWith'
+  | 'isOneOf'
+  | 'lessThan'
+  | 'greaterThan'
+  | 'between'
+  | 'before'
+  | 'after'
+  | 'dayOfMonth'
+  | 'isIn'
+  | 'isOut'
+  | 'isEmpty';
 
 export type RuleCondition = { field: RuleConditionField; op: RuleConditionOp; value: string };
 
-export type RuleActionKind = 'setCategory' | 'renamePayee' | 'addNote';
+export type RuleActionKind = 'setCategory' | 'renamePayee' | 'addNote' | 'addTag' | 'split' | 'linkSchedule' | 'moneyBack';
 
 export type RuleAction = { kind: RuleActionKind; value: string };
 
@@ -143,7 +161,12 @@ export type HealthSettings = {
   /** Accounts that count as cash; undefined means bank, cash, wallet and savings. */
   cashAccountIds?: string[];
   targetMonths: 3 | 6 | 12;
+  /** Same choice as targetMonths, named by the Health settings sheet. */
+  emergencyMonths?: 3 | 6 | 12;
   countInvestments: boolean;
+  /** Same choice as countInvestments, named by the Health settings sheet. */
+  countInvestmentsInRunway?: boolean;
+  essentialCategoryIds?: string[];
 };
 
 export const DEFAULT_HEALTH_SETTINGS: HealthSettings = { targetMonths: 6, countInvestments: false };
@@ -181,6 +204,10 @@ export type WorkspaceSettings = {
   weekStart: 'monday' | 'sunday' | 'saturday';
   checklistHidden?: boolean;
   dashboardLayout?: DashboardLayout;
+  /** Phone card order, stored apart from the larger layout (PU-06). */
+  dashboardLayoutPhone?: DashboardLayout;
+  /** Days ahead a bill counts as due soon on Plan. */
+  dueSoonDays?: number;
   notificationPrefs?: NotificationPrefs;
   aiPrefs?: AiFeaturePrefs;
   carryOverDefault?: boolean;
@@ -254,9 +281,16 @@ export type Goal = {
   accountId: string;
   categoryId?: string;
   status: 'active' | 'paused' | 'completed';
+  completedAt?: string;
+  notes?: string;
+  icon?: string;
   /** Optional monthly schedule (P14-04). */
   scheduleAmountMinor?: string;
   scheduleDayOfMonth?: number;
+  scheduleEvery?: 'day' | 'week' | 'month' | 'year';
+  scheduleStarts?: string;
+  scheduleAutoAllocate?: boolean;
+  deleted?: boolean;
 };
 
 /** Earmark into a goal (TECH-SPEC E18); amounts are kobo strings. */
@@ -305,6 +339,10 @@ export type Recurring = {
   /** DESIGN #25 — hide amount on lock screen (default on). */
   hideAmountOnLock?: boolean;
   cancelled?: boolean;
+  /** Paused bills stay on the plan but do not come due. */
+  paused?: boolean;
+  /** Destination account when kind is transfer. */
+  toAccountId?: string;
 };
 
 export type RecurringOccurrence = {
@@ -363,9 +401,13 @@ export type IncomeStream = {
   deductions?: IncomeDeduction[];
   routing?: IncomeRouting[];
   reminder?: IncomeReminder;
+  /** Where the money comes from (salary, business, gift). */
+  source?: string;
 };
 
 export type DebtDirection = 'owedToMe' | 'iOwe';
+
+export type DebtInterest = { kind: 'none' } | { kind: 'fixed'; amountMinor: string } | { kind: 'percent_month'; percent: number };
 
 /** Person debt (DESIGN.md page 15); bank loans use account type loan instead. */
 export type PersonDebt = {
@@ -375,7 +417,8 @@ export type PersonDebt = {
   /** Ledger account id for R (asset) or P (liability). */
   ledgerAccountId: string;
   payeeId?: string;
-  status: 'open' | 'settled';
+  status: 'open' | 'settled' | 'written_off';
+  interest?: DebtInterest;
   nextDueDate?: string;
   notes?: string;
   /** Instalment plan (DESIGN popup #36). */
