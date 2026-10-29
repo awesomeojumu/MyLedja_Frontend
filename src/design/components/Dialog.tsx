@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { t } from '@/i18n';
 import tokens from '../tokens.json';
@@ -11,7 +11,7 @@ import { Text } from './Text';
 // brand-dark-900 at 45% (DESIGN.md 4).
 const backdrop = `${tokens.color['brand-dark-900']}73`;
 
-/** A bottom sheet on phones and a centred dialog elsewhere (DESIGN.md 4). */
+/** A bottom sheet on phones and a centred dialog elsewhere (DESIGN.md 4). Supports dirty discard (PU00-6). */
 export function Sheet({
   visible,
   title,
@@ -20,6 +20,7 @@ export function Sheet({
   footer,
   width = 480,
   testID,
+  dirty = false,
 }: {
   visible: boolean;
   title: string;
@@ -28,6 +29,8 @@ export function Sheet({
   footer?: ReactNode;
   width?: number;
   testID?: string;
+  /** When true, closing asks Discard your changes? (PU00-6 / PU-02). */
+  dirty?: boolean;
 }) {
   const theme = useTheme();
   const phone = useSizeClass() === 'phone';
@@ -40,38 +43,51 @@ export function Sheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType={phone ? 'slide' : 'fade'} onRequestClose={onClose} aria-label={title}>
-      <View style={{ flex: 1, backgroundColor: backdrop, justifyContent: phone ? 'flex-end' : 'center', alignItems: 'center' }}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={onClose} style={{ position: 'absolute', inset: 0 }} />
-        <View
-          testID={testID}
-          accessibilityViewIsModal
-          style={{
-            backgroundColor: theme.card,
-            width: phone ? '100%' : width,
-            maxWidth: '100%',
-            maxHeight: phone ? '92%' : '90%',
-            borderRadius: tokens.radius['rounded-lg'],
-            borderBottomLeftRadius: phone ? 0 : tokens.radius['rounded-lg'],
-            borderBottomRightRadius: phone ? 0 : tokens.radius['rounded-lg'],
-            borderTopLeftRadius: phone ? tokens.radius['rounded-xl'] : tokens.radius['rounded-lg'],
-            borderTopRightRadius: phone ? tokens.radius['rounded-xl'] : tokens.radius['rounded-lg'],
-            padding: tokens.spacing['spacing-xl'],
-            gap: tokens.spacing['spacing-lg'],
-            boxShadow: tokens.elevation['elevation-2'],
-          }}
-        >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="heading-md" accessibilityRole="header">
-              {title}
-            </Text>
-            {phone ? null : <Button kind="link" label={t('common.close')} onPress={onClose} />}
+    <>
+      <Modal visible={visible} transparent animationType={phone ? 'slide' : 'fade'} onRequestClose={requestClose} aria-label={title}>
+        <View style={{ flex: 1, backgroundColor: backdrop, justifyContent: phone ? 'flex-end' : 'center', alignItems: 'center' }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={requestClose} style={{ position: 'absolute', inset: 0 }} />
+          <View
+            testID={testID}
+            accessibilityViewIsModal
+            style={{
+              backgroundColor: theme.card,
+              width: phone ? '100%' : width,
+              maxWidth: '100%',
+              maxHeight: phone ? '92%' : '90%',
+              borderRadius: tokens.radius['rounded-lg'],
+              borderBottomLeftRadius: phone ? 0 : tokens.radius['rounded-lg'],
+              borderBottomRightRadius: phone ? 0 : tokens.radius['rounded-lg'],
+              borderTopLeftRadius: phone ? tokens.radius['rounded-xl'] : tokens.radius['rounded-lg'],
+              borderTopRightRadius: phone ? tokens.radius['rounded-xl'] : tokens.radius['rounded-lg'],
+              padding: tokens.spacing['spacing-xl'],
+              gap: tokens.spacing['spacing-lg'],
+              boxShadow: tokens.elevation['elevation-2'],
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text variant="heading-md" accessibilityRole="header">
+                {title}
+              </Text>
+              {phone ? null : <Button kind="link" label={t('common.close')} onPress={requestClose} />}
+            </View>
+            <ScrollView>{children}</ScrollView>
+            {footer}
           </View>
-          <ScrollView>{children}</ScrollView>
-          {footer}
         </View>
-      </View>
-    </Modal>
+      </Modal>
+      <Confirm
+        visible={discard}
+        title={t('common.discardTitle')}
+        body={t('common.discardBody')}
+        confirmLabel={t('common.discardConfirm')}
+        onCancel={() => setDiscard(false)}
+        onConfirm={() => {
+          setDiscard(false);
+          onClose();
+        }}
+      />
+    </>
   );
 }
 
@@ -100,9 +116,26 @@ export function Confirm({
   testID?: string;
 }) {
   const theme = useTheme();
+  const cancelRef = useRef<ComponentRef<typeof Button>>(null);
+
+  useEffect(() => {
+    if (!visible || !destructive) return;
+    // Web: put keyboard focus on Cancel so Enter does nothing harmful (PU02-3).
+    const node = cancelRef.current as unknown as { focus?: () => void } | null;
+    const id = requestAnimationFrame(() => node?.focus?.());
+    return () => cancelAnimationFrame(id);
+  }, [visible, destructive]);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} aria-label={title}>
       <View style={{ flex: 1, backgroundColor: backdrop, justifyContent: 'center', alignItems: 'center', padding: tokens.spacing['spacing-lg'] }}>
+        <Pressable
+          testID={testID ? `${testID}-backdrop` : 'confirm-backdrop'}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.cancel')}
+          onPress={onCancel}
+          style={{ position: 'absolute', inset: 0 }}
+        />
         <View
           testID={testID ?? 'confirm'}
           accessibilityViewIsModal
