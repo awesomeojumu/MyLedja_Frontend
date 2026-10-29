@@ -661,4 +661,6 @@ export type Reconcile = {
   calculatedBalance: string;
   adjustment: string;
   finishedAt: string;
+  /** Person who finished (TB03-3 / DESIGN Account Details). */
+  finishedBy: string | null;
 };

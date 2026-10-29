@@ -21,6 +21,7 @@ import { useTheme } from '@/design/ThemeProvider';
 import { ACCOUNT_KIND_INFO } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { useAddTransaction } from '@/features/transactions/AddTransaction';
 import { today } from '@/features/transactions/helpers';
@@ -45,6 +46,7 @@ export function clearedShown(rows: RegisterRow[], eventIds: Set<string>, liabili
 
 export function ReconcileScreen() {
   const { snapshot, repo } = useWorkspace();
+  const { user } = useAuth();
   const params = useGlobalSearchParams<{ id?: string }>();
   const router = useRouter();
   const theme = useTheme();
@@ -115,6 +117,7 @@ export function ReconcileScreen() {
       statementBalance: statementMinor,
       eventIds: [...ticked],
       withAdjustment,
+      finishedBy: user?.id ?? null,
     });
     setBusy(false);
     setAdjustOpen(false);

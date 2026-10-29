@@ -30,34 +30,41 @@ export function FiltersSheet({
   filters,
   onClose,
   onApply,
+  /** When set (Account page), filters stay scoped to that account and the account picker is hidden. */
+  scopedAccountId,
 }: {
   snapshot: Snapshot;
   filters: TxFilters;
   onClose: () => void;
   onApply: (f: TxFilters) => void;
+  scopedAccountId?: string;
 }) {
-  const [draft, setDraft] = useState<TxFilters>({ ...filters });
+  const [draft, setDraft] = useState<TxFilters>(() =>
+    scopedAccountId ? { ...filters, accountId: scopedAccountId } : { ...filters },
+  );
   const accounts = [{ value: '', label: t('tx.filter.anyAccount') }, ...snapshot.accounts.map((a) => ({ value: a.id, label: a.name }))];
   const categories = [{ value: '', label: t('tx.filter.anyCategory') }, ...snapshot.categories.map((c) => ({ value: c.id, label: c.name }))];
   const payees = [{ value: '', label: t('tx.filter.anyPayee') }, ...snapshot.payees.map((p) => ({ value: p.id, label: p.name }))];
   const [minText, setMinText] = useState(filters.amountMin !== undefined ? (Number(filters.amountMin) / 100).toString() : '');
   const [maxText, setMaxText] = useState(filters.amountMax !== undefined ? (Number(filters.amountMax) / 100).toString() : '');
 
+  const withScope = (f: TxFilters): TxFilters => (scopedAccountId ? { ...f, accountId: scopedAccountId } : f);
+
   const matchCount = useMemo(() => {
     const minParsed = minText.trim() ? parseAmount(minText) : null;
     const maxParsed = maxText.trim() ? parseAmount(maxText) : null;
     const amountMin = minParsed && minParsed.ok ? (minParsed.minor < 0n ? -minParsed.minor : minParsed.minor) : undefined;
     const amountMax = maxParsed && maxParsed.ok ? (maxParsed.minor < 0n ? -maxParsed.minor : maxParsed.minor) : undefined;
-    const next = { ...draft, amountMin, amountMax };
+    const next = scopedAccountId ? { ...draft, amountMin, amountMax, accountId: scopedAccountId } : { ...draft, amountMin, amountMax };
     return rowsFor(snapshot).filter((r) => applyFilters(r, next, snapshot)).length;
-  }, [draft, minText, maxText, snapshot]);
+  }, [draft, minText, maxText, snapshot, scopedAccountId]);
 
   const build = (): TxFilters => {
     const minParsed = minText.trim() ? parseAmount(minText) : null;
     const maxParsed = maxText.trim() ? parseAmount(maxText) : null;
     const amountMin = minParsed && minParsed.ok ? (minParsed.minor < 0n ? -minParsed.minor : minParsed.minor) : undefined;
     const amountMax = maxParsed && maxParsed.ok ? (maxParsed.minor < 0n ? -maxParsed.minor : maxParsed.minor) : undefined;
-    return { ...draft, amountMin, amountMax };
+    return withScope({ ...draft, amountMin, amountMax });
   };
 
   return (
@@ -69,7 +76,12 @@ export function FiltersSheet({
       width={480}
       footer={
         <View style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
-          <Button kind="secondary" testID="tx-filters-clear" label={t('tx.filter.clear')} onPress={() => onApply(emptyFilters())} />
+          <Button
+            kind="secondary"
+            testID="tx-filters-clear"
+            label={t('tx.filter.clear')}
+            onPress={() => onApply(withScope(emptyFilters()))}
+          />
           <Button testID="tx-filters-apply" label={t('tx.filter.showCount', { count: matchCount })} onPress={() => onApply(build())} />
         </View>
       }
@@ -86,7 +98,9 @@ export function FiltersSheet({
       </View>
       <TextInput testID="tx-filter-from" label={t('tx.filter.from')} value={draft.dateFrom ?? ''} onChangeText={(dateFrom) => setDraft({ ...draft, dateFrom: dateFrom || undefined })} />
       <TextInput testID="tx-filter-to" label={t('tx.filter.to')} value={draft.dateTo ?? ''} onChangeText={(dateTo) => setDraft({ ...draft, dateTo: dateTo || undefined })} />
-      <Select testID="tx-filter-account" label={t('add.account')} options={accounts} value={draft.accountId ?? ''} onChange={(accountId) => setDraft({ ...draft, accountId: accountId || undefined })} />
+      {!scopedAccountId ? (
+        <Select testID="tx-filter-account" label={t('add.account')} options={accounts} value={draft.accountId ?? ''} onChange={(accountId) => setDraft({ ...draft, accountId: accountId || undefined })} />
+      ) : null}
       <Select testID="tx-filter-category" label={t('add.category')} options={categories} value={draft.categoryId ?? ''} onChange={(categoryId) => setDraft({ ...draft, categoryId: categoryId || undefined })} />
       <Select testID="tx-filter-payee" label={t('add.payee')} options={payees} value={draft.payeeId ?? ''} onChange={(payeeId) => setDraft({ ...draft, payeeId: payeeId || undefined })} />
       <TextInput testID="tx-filter-tag" label={t('tx.filter.tag')} value={draft.tag ?? ''} onChangeText={(tag) => setDraft({ ...draft, tag: tag.trim() || undefined })} />
