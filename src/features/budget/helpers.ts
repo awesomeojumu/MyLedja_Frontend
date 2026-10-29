@@ -8,6 +8,7 @@ import {
   barState,
   categoryActivity,
   envelopeBudget,
+  monthIncome,
   monthOf,
   monthsEndingAt,
   nextMonth,
