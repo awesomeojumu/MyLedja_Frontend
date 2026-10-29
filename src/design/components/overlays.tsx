@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Modal, Pressable, ScrollView, TextInput as RNTextInput, View } from 'react-native';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { t, type TextKey } from '@/i18n';
 import tokens from '../tokens.json';
@@ -7,14 +7,31 @@ import { useTheme } from '../ThemeProvider';
 import { useSizeClass } from '../size';
 import { Button } from './Button';
 import type { Option } from './controls';
-import { Text } from './Text';
+import { dateFieldError, todayIso, yesterdayIso } from './fieldKinds';
+import { PillTag } from './primitives';
+import { Text, typeStyle } from './Text';
 
 const sp = tokens.spacing;
 const r = tokens.radius;
 const backdrop = `${tokens.color['brand-dark-900']}73`;
 
 /** Quick detail of one item: a full-screen sheet on phones and tablets, a right-side panel from 1024 (DESIGN.md 4). */
-export function Panel({ visible, title, onClose, children, testID }: { visible: boolean; title: string; onClose: () => void; children: ReactNode; testID?: string }) {
+export function Panel({
+  visible,
+  title,
+  onClose,
+  children,
+  testID,
+  width = 440,
+}: {
+  visible: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  testID?: string;
+  /** Side-panel width on desktop (PU-18: 440). */
+  width?: number;
+}) {
   const theme = useTheme();
   const size = useSizeClass();
   const side = size === 'desktop' || size === 'wide';
@@ -26,7 +43,7 @@ export function Panel({ visible, title, onClose, children, testID }: { visible: 
           testID={testID}
           accessibilityViewIsModal
           style={{
-            width: side ? (size === 'wide' ? 480 : 420) : '100%',
+            width: side ? width : '100%',
             backgroundColor: theme.card,
             borderLeftWidth: side ? 1 : 0,
             borderColor: theme.border,
@@ -119,11 +136,44 @@ export function Menu({ trigger, items, testID }: { trigger: (open: () => void) =
   );
 }
 
-/** A picker for one value from a list, opened from a field-shaped button. */
-export function Select<T extends string>({ label, options, value, onChange, testID }: { label: string; options: Option<T>[]; value: T | null; onChange: (v: T) => void; testID?: string }) {
+/** A picker for one value from a list, opened from a field-shaped button (addendum §1.1 Picker). */
+export function Select<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  testID,
+  error,
+  addNewLabel,
+  onAddNew,
+  searchable,
+}: {
+  label: string;
+  options: Option<T>[];
+  value: T | null;
+  onChange: (v: T) => void;
+  testID?: string;
+  error?: string | null;
+  /** "+ Add new" at the bottom when the thing can be created. */
+  addNewLabel?: string;
+  onAddNew?: () => void;
+  /** Search field in the list (web dropdown / phone sheet). Defaults on when there are 8+ options. */
+  searchable?: boolean;
+}) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const current = options.find((o) => o.value === value);
+  const showSearch = searchable ?? options.length >= 8;
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query]);
+  const close = () => {
+    setOpen(false);
+    setQuery('');
+  };
   return (
     <View style={{ gap: sp['spacing-xs'], position: 'relative' }}>
       <Text variant="caption" tone="textSecondary">
@@ -136,30 +186,84 @@ export function Select<T extends string>({ label, options, value, onChange, test
         accessibilityState={{ expanded: open }}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-invalid={!!error}
         onPress={() => setOpen(true)}
-        style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: theme.inputBorder, borderRadius: r['rounded-sm'], paddingHorizontal: sp['spacing-md'], backgroundColor: theme.card }}
+        style={{
+          minHeight: 48,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderWidth: 1,
+          borderColor: error ? theme.error : theme.inputBorder,
+          borderRadius: r['rounded-sm'],
+          paddingHorizontal: sp['spacing-md'],
+          backgroundColor: theme.card,
+        }}
       >
         <Text>{current?.label ?? ''}</Text>
         <ChevronDown size={16} color={theme.textSecondary} />
       </Pressable>
-      <Popover visible={open} onClose={() => setOpen(false)}>
-        <View accessibilityRole="list">
-          {options.map((o) => (
+      {error ? (
+        <Text variant="caption" accessibilityRole="alert" testID={`${testID ?? 'field'}-error`}>
+          {error}
+        </Text>
+      ) : null}
+      <Popover visible={open} onClose={close}>
+        <View accessibilityRole="list" style={{ gap: sp['spacing-xs'], maxHeight: 320 }}>
+          {showSearch ? (
+            <RNTextInput
+              testID={testID ? `${testID}-search` : 'select-search'}
+              accessibilityLabel={t('fields.search')}
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('fields.search')}
+              placeholderTextColor={theme.textHelper}
+              style={[
+                typeStyle('body-md'),
+                {
+                  minHeight: 40,
+                  borderWidth: 1,
+                  borderColor: theme.inputBorder,
+                  borderRadius: r['rounded-sm'],
+                  paddingHorizontal: sp['spacing-sm'],
+                  color: theme.text,
+                  backgroundColor: theme.card,
+                },
+              ]}
+            />
+          ) : null}
+          <ScrollView style={{ maxHeight: 260 }}>
+            {filtered.map((o) => (
+              <Pressable
+                key={o.value}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: o.value === value }}
+                aria-checked={o.value === value}
+                accessibilityLabel={o.label}
+                onPress={() => {
+                  onChange(o.value);
+                  close();
+                }}
+                style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: sp['spacing-sm'], borderRadius: r['rounded-xs'], backgroundColor: o.value === value ? theme.tagFill : undefined }}
+              >
+                <Text style={o.value === value ? { color: theme.tagText } : undefined}>{o.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          {addNewLabel && onAddNew ? (
             <Pressable
-              key={o.value}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: o.value === value }}
-              aria-checked={o.value === value}
-              accessibilityLabel={o.label}
+              testID={testID ? `${testID}-add-new` : 'select-add-new'}
+              accessibilityRole="button"
+              accessibilityLabel={addNewLabel}
               onPress={() => {
-                onChange(o.value);
-                setOpen(false);
+                close();
+                onAddNew();
               }}
-              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: sp['spacing-sm'], borderRadius: r['rounded-xs'], backgroundColor: o.value === value ? theme.tagFill : undefined }}
+              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: sp['spacing-sm'] }}
             >
-              <Text style={o.value === value ? { color: theme.tagText } : undefined}>{o.label}</Text>
+              <Text tone="link">{addNewLabel}</Text>
             </Pressable>
-          ))}
+          ) : null}
         </View>
       </Popover>
     </View>
@@ -182,22 +286,60 @@ function daysIn(y: number, mo: number) {
   return new Date(Date.UTC(y, mo, 0)).getUTCDate();
 }
 
-/** Picks a YYYY-MM-DD day. The week starts on the workspace's first day (0 Sunday, 1 Monday, 6 Saturday). */
-export function DatePicker({ label, value, onChange, weekStartsOn = 1, testID }: { label: string; value: string; onChange: (v: string) => void; weekStartsOn?: 0 | 1 | 6; testID?: string }) {
+/** Picks a YYYY-MM-DD day with Today / Yesterday / Pick chips (addendum §1.1 Date). */
+export function DatePicker({
+  label,
+  value,
+  onChange,
+  weekStartsOn = 1,
+  testID,
+  allowFuture = false,
+  showError = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  weekStartsOn?: 0 | 1 | 6;
+  testID?: string;
+  allowFuture?: boolean;
+  showError?: boolean;
+}) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const [blurred, setBlurred] = useState(false);
+  const today = todayIso();
+  const yesterday = yesterdayIso();
+  const error = blurred || showError ? dateFieldError(value, { allowFuture, today }) : null;
   const [vy, vm] = value.split('-').map(Number) as [number, number];
   const [view, setView] = useState({ y: vy, m: vm });
   const first = new Date(Date.UTC(view.y, view.m - 1, 1)).getUTCDay();
   const lead = (first - weekStartsOn + 7) % 7;
   const cells: (number | null)[] = [...Array<null>(lead).fill(null), ...Array.from({ length: daysIn(view.y, view.m) }, (_, i) => i + 1)];
   const shift = (delta: number) => setView(({ y, m }) => ({ y: y + Math.floor((m - 1 + delta) / 12), m: ((((m - 1 + delta) % 12) + 12) % 12) + 1 }));
+  const pick = (day: string) => {
+    onChange(day);
+    setBlurred(true);
+    setOpen(false);
+  };
 
   return (
     <View style={{ gap: sp['spacing-xs'], position: 'relative' }}>
       <Text variant="caption" tone="textSecondary">
         {label}
       </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
+        <PillTag testID={testID ? `${testID}-today` : undefined} label={t('date.today')} selected={value === today} onPress={() => pick(today)} />
+        <PillTag testID={testID ? `${testID}-yesterday` : undefined} label={t('date.yesterday')} selected={value === yesterday} onPress={() => pick(yesterday)} />
+        <PillTag
+          testID={testID ? `${testID}-pick` : undefined}
+          label={t('date.pick')}
+          selected={value !== today && value !== yesterday}
+          onPress={() => {
+            setView({ y: vy, m: vm });
+            setOpen(true);
+          }}
+        />
+      </View>
       <Pressable
         testID={testID}
         accessibilityRole="button"
@@ -206,10 +348,23 @@ export function DatePicker({ label, value, onChange, weekStartsOn = 1, testID }:
           setView({ y: vy, m: vm });
           setOpen(true);
         }}
-        style={{ minHeight: 48, justifyContent: 'center', borderWidth: 1, borderColor: theme.inputBorder, borderRadius: r['rounded-sm'], paddingHorizontal: sp['spacing-md'], backgroundColor: theme.card }}
+        style={{
+          minHeight: 48,
+          justifyContent: 'center',
+          borderWidth: 1,
+          borderColor: error ? theme.error : theme.inputBorder,
+          borderRadius: r['rounded-sm'],
+          paddingHorizontal: sp['spacing-md'],
+          backgroundColor: theme.card,
+        }}
       >
         <Text style={{ fontVariant: ['tabular-nums'] }}>{formatDay(value)}</Text>
       </Pressable>
+      {error ? (
+        <Text variant="caption" accessibilityRole="alert" testID={`${testID ?? 'date'}-error`}>
+          {error}
+        </Text>
+      ) : null}
       <Popover visible={open} onClose={() => setOpen(false)} testID={testID ? `${testID}-calendar` : undefined}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Pressable accessibilityRole="button" accessibilityLabel={t('date.previousMonth')} onPress={() => shift(-1)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
@@ -233,10 +388,7 @@ export function DatePicker({ label, value, onChange, weekStartsOn = 1, testID }:
                 accessibilityRole="button"
                 accessibilityLabel={formatDay(day)}
                 accessibilityState={{ selected }}
-                onPress={() => {
-                  onChange(day);
-                  setOpen(false);
-                }}
+                onPress={() => pick(day)}
                 style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: selected ? theme.primaryFill : undefined }}
               >
                 <Text variant="caption" style={{ color: selected ? theme.onPrimaryFill : theme.text }}>

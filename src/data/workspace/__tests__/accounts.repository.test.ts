@@ -82,6 +82,20 @@ describe('Accounts in the repository', () => {
     expect((await repo.archiveAccount(id('OPay'), '2026-10-28')).ok).toBe(true);
   });
 
+  it('PU15: archive with balance (moveTo null) keeps money and can be restored', async () => {
+    const { repo, id } = await setup();
+    expect((await repo.archiveAccount(id('GTBank'), '2026-10-28', null)).ok).toBe(true);
+    let s = await repo.load();
+    const archived = s.accounts.find((a) => a.name === 'GTBank')!;
+    expect(archived.archived).toBe(true);
+    expect(archived.closedWithBalance).toBe(true);
+    expect(ledgerBalance(id('GTBank'), s.events)).toBe(81_230_000n);
+    expect((await repo.restoreAccount(id('GTBank'))).ok).toBe(true);
+    s = await repo.load();
+    expect(s.accounts.find((a) => a.name === 'GTBank')?.archived).toBe(false);
+    expect(s.accounts.find((a) => a.name === 'GTBank')?.closedWithBalance).toBe(false);
+  });
+
   it('P08-07: reorder', async () => {
     const { repo, id } = await setup();
     await repo.reorderAccounts([id('Card'), id('GTBank'), id('OPay'), id('House')]);

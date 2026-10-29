@@ -133,13 +133,14 @@ function cashLine(event: TxEvent, snapshot: Snapshot): { accountId: string; amou
 export function moneyBackPromptCopy(suggestion: MoneyBackSuggestion): {
   titleKey: 'debts.moneyBack.titleIncoming' | 'debts.moneyBack.titleOutgoing';
   titleVars: { name: string };
-  bodyKey: 'debts.moneyBack.body';
+  bodyKey: 'debts.moneyBack.bodyIncoming' | 'debts.moneyBack.bodyOutgoing' | 'debts.moneyBack.body';
   bodyVars: { amount: string; outstanding: string; name: string };
 } {
+  const incoming = suggestion.direction === 'incoming';
   return {
-    titleKey: suggestion.direction === 'incoming' ? 'debts.moneyBack.titleIncoming' : 'debts.moneyBack.titleOutgoing',
+    titleKey: incoming ? 'debts.moneyBack.titleIncoming' : 'debts.moneyBack.titleOutgoing',
     titleVars: { name: suggestion.personName },
-    bodyKey: 'debts.moneyBack.body',
+    bodyKey: incoming ? 'debts.moneyBack.bodyIncoming' : 'debts.moneyBack.bodyOutgoing',
     bodyVars: {
       amount: formatNaira(suggestion.amount),
       outstanding: formatNaira(suggestion.outstanding),

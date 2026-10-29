@@ -209,7 +209,13 @@ export function NotificationsScreen() {
           onClose={() => setDebtPayTarget(null)}
           onSave={async (input) => {
             setError(null);
-            const r = await repo.recordDebtPayment(debtPayTarget.debtId, { accountId: input.accountId, amount: input.principal, date: day, interest: input.interest });
+            const r = await repo.recordDebtPayment(debtPayTarget.debtId, {
+              accountId: input.accountId,
+              amount: input.principal,
+              date: 'date' in input && typeof input.date === 'string' ? input.date : day,
+              interest: input.interest,
+              overpayment: 'overpayment' in input ? input.overpayment : undefined,
+            });
             if (!r.ok) setError(ledgerMessage(r.error));
             else {
               await repo.markNotificationRead(debtPayTarget.notificationId);

@@ -1,8 +1,9 @@
+import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { ChevronLeft, ChevronRight, Circle, CircleDashed, CircleDot, MoreHorizontal } from 'lucide-react-native';
 
-import { Amount, Button, Card, EmptyState, Icon, InlineError, Placeholder, Select, Sheet, Text } from '@/design/components';
+import { Amount, Button, Card, EmptyState, Icon, InlineError, Placeholder, Select, Sheet, Text, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { IncomeStream } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
@@ -35,14 +36,22 @@ const sp = tokens.spacing;
 
 export function IncomeScreen() {
   const theme = useTheme();
+  const router = useRouter();
+  const toast = useToast();
+  const params = useGlobalSearchParams<{ stream?: string }>();
   const { snapshot, repo } = useWorkspace();
   const [month, setMonth] = useState(() => monthOf(today()));
   const year = month.slice(0, 4);
-  const [addOpen, setAddOpen] = useState(false);
-  const [editStream, setEditStream] = useState<IncomeStream | null>(null);
+  const streamParam = typeof params.stream === 'string' ? params.stream : undefined;
+  const addOpen = streamParam === 'new';
+  const editStream = useMemo(() => {
+    if (!snapshot || !streamParam || streamParam === 'new') return null;
+    return snapshot.incomeStreams.find((s) => s.id === streamParam) ?? null;
+  }, [snapshot, streamParam]);
   const [recordStream, setRecordStream] = useState<{ stream: IncomeStream; expected: bigint; received: bigint } | null>(null);
   const [linkEventId, setLinkEventId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const closeStream = () => router.setParams({ stream: undefined });
 
   const summary = useMemo(() => (snapshot ? incomeForMonth(snapshot, month) : null), [snapshot, month]);
   const grouped = useMemo(() => (summary ? groupStreamRows(summary.rows) : []), [summary]);
@@ -82,7 +91,7 @@ export function IncomeScreen() {
             <Icon icon={ChevronRight} size="tile" />
           </Pressable>
         </View>
-        <Button testID="income-add" label={t('income.addStream')} onPress={() => setAddOpen(true)} />
+        <Button testID="income-add" label={t('income.addStream')} onPress={() => router.setParams({ stream: 'new' })} />
       </View>
 
       {summary ? (
@@ -102,7 +111,7 @@ export function IncomeScreen() {
       {!summary ? (
         <Placeholder height={120} />
       ) : summary.rows.length === 0 && unmatched === 0n && investmentRows.length === 0 ? (
-        <EmptyState title={t('income.emptyTitle')} body={t('income.emptyBody')} actionLabel={t('income.addStream')} onAction={() => setAddOpen(true)} />
+        <EmptyState title={t('income.emptyTitle')} body={t('income.emptyBody')} actionLabel={t('income.addStream')} onAction={() => router.setParams({ stream: 'new' })} />
       ) : (
         <ScrollView contentContainerStyle={{ gap: sp['spacing-md'], paddingBottom: sp['spacing-xl'] }}>
           {grouped.map(({ kind, rows }) => (
@@ -118,7 +127,7 @@ export function IncomeScreen() {
                     expected={expected}
                     received={received}
                     onRecord={() => setRecordStream({ stream, expected, received })}
-                    onEdit={() => setEditStream(stream)}
+                    onEdit={() => router.setParams({ stream: stream.id })}
                   />
                 ))}
               </View>
@@ -137,7 +146,7 @@ export function IncomeScreen() {
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'] }}>
                     <Button testID={`income-link-${e.id}`} kind="secondary" size="sm" label={t('income.linkToStream')} onPress={() => setLinkEventId(e.id)} />
-                    <Button testID={`income-new-stream-${e.id}`} kind="secondary" size="sm" label={t('income.makeNewStream')} onPress={() => setAddOpen(true)} />
+                    <Button testID={`income-new-stream-${e.id}`} kind="secondary" size="sm" label={t('income.makeNewStream')} onPress={() => router.setParams({ stream: 'new' })} />
                     <Button testID={`income-oneoff-${e.id}`} kind="link" size="sm" label={t('income.markOneOff')} onPress={() => void repo.markIncomeOneOff(e.id)} />
                   </View>
                 </View>
@@ -196,10 +205,11 @@ export function IncomeScreen() {
       {addOpen && snapshot ? (
         <AddIncomeStreamSheet
           snapshot={snapshot}
-          onClose={() => setAddOpen(false)}
+          onClose={closeStream}
           onSave={async (data) => {
             await repo.addIncomeStream(data);
-            setAddOpen(false);
+            toast.show(t('income.streamAdded'));
+            closeStream();
           }}
         />
       ) : null}
@@ -207,10 +217,11 @@ export function IncomeScreen() {
         <AddIncomeStreamSheet
           snapshot={snapshot}
           existing={editStream}
-          onClose={() => setEditStream(null)}
+          onClose={closeStream}
           onSave={async (data) => {
             await repo.updateIncomeStream({ ...data, id: editStream.id });
-            setEditStream(null);
+            toast.show(t('income.streamSaved'));
+            closeStream();
           }}
         />
       ) : null}

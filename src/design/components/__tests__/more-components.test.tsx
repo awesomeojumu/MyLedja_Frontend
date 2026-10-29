@@ -45,6 +45,7 @@ describe('Tabs and SegmentedControl', () => {
   });
 });
 
+
 describe('Select', () => {
   it('opens, picks and closes', async () => {
     const onChange = jest.fn();
@@ -54,6 +55,25 @@ describe('Select', () => {
     await fireEvent.press(screen.getByRole('radio', { name: options[1].label }));
     expect(onChange).toHaveBeenCalledWith('b');
     expect(screen.queryByRole('radio')).toBeNull();
+  });
+
+  it('searches and offers + Add new (PU00-2 Picker)', async () => {
+    const onChange = jest.fn();
+    const onAddNew = jest.fn();
+    const many = [
+      { value: 'a', label: 'Alpha' },
+      { value: 'b', label: 'Bravo' },
+      { value: 'c', label: 'Charlie' },
+    ];
+    await renderWithProviders(
+      <Select label="Account" options={many} value="a" onChange={onChange} testID="sel" searchable addNewLabel={t('fields.addNew')} onAddNew={onAddNew} />,
+    );
+    await fireEvent.press(screen.getByTestId('sel'));
+    await fireEvent.changeText(screen.getByTestId('sel-search'), 'bra');
+    expect(screen.getByRole('radio', { name: 'Bravo' })).toBeTruthy();
+    expect(screen.queryByRole('radio', { name: 'Alpha' })).toBeNull();
+    await fireEvent.press(screen.getByTestId('sel-add-new'));
+    expect(onAddNew).toHaveBeenCalled();
   });
 });
 

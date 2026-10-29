@@ -180,6 +180,8 @@ export type WorkspaceSettings = {
   exchangeRates?: ExchangeRateEntry[];
   downloadDailyRates?: boolean;
   deviceSync?: DeviceSyncPrefs;
+  /** PU-28 — Due soon window in days (3 · 7 · 14 · 30). */
+  dueSoonDays?: 3 | 7 | 14 | 30;
 };
 
 /** Settings › Notifications (P26-05). */
@@ -240,14 +242,21 @@ export const budgetAssignId = (categoryId: string, month: string) => `${category
 export type Goal = {
   id: string;
   name: string;
+  icon?: string;
+  notes?: string;
   targetMinor: string;
   targetDate?: string;
   accountId: string;
   categoryId?: string;
   status: 'active' | 'paused' | 'completed';
-  /** Optional monthly schedule (P14-04). */
+  completedAt?: string;
+  /** Optional monthly schedule (P14-04 / PU-33). */
   scheduleAmountMinor?: string;
   scheduleDayOfMonth?: number;
+  scheduleEvery?: 'week' | 'month';
+  scheduleStarts?: string;
+  /** When true, allocate on the day without asking (PU-33). */
+  scheduleAutoAllocate?: boolean;
 };
 
 /** Earmark into a goal (TECH-SPEC E18); amounts are kobo strings. */
@@ -283,6 +292,8 @@ export type Recurring = {
   amountMinor: string;
   approximate?: boolean;
   accountId: string;
+  /** Transfer destination (PU-25). */
+  toAccountId?: string;
   categoryId?: string;
   payeeId?: string;
   rule: RecurrenceRule;
@@ -291,11 +302,17 @@ export type Recurring = {
   autoCreate?: boolean;
   /** DESIGN #25 — stop after this many occurrences (optional; endDate also ends the series). */
   endAfterCount?: number;
-  /** Days before due: 0 = on the day, 1, 3, or 7. */
+  /**
+   * Days before due: 0 = on the day, 1, 3, or 7.
+   * Omit / undefined = Off (PU-25 Remind me).
+   */
   reminderDays?: number;
   /** DESIGN #25 — hide amount on lock screen (default on). */
   hideAmountOnLock?: boolean;
+  /** Soft-deleted / cancelled schedule. */
   cancelled?: boolean;
+  /** TB-04 / PU-25 — paused: shown as Paused, creates no reminders. */
+  paused?: boolean;
 };
 
 export type RecurringOccurrence = {
@@ -344,6 +361,8 @@ export type IncomeStream = {
   categoryId: string;
   rule: RecurrenceRule;
   countInBudget: boolean;
+  /** Source or employer (PU-29). */
+  source?: string;
   /** For tax-class report (P13-08). */
   taxClass?: string;
   amountKind?: IncomeAmountKind;
@@ -359,6 +378,11 @@ export type IncomeStream = {
 export type DebtDirection = 'owedToMe' | 'iOwe';
 
 /** Person debt (DESIGN.md page 15); bank loans use account type loan instead. */
+export type DebtInterest =
+  | { kind: 'none' }
+  | { kind: 'fixed'; amountMinor: string }
+  | { kind: 'percent_month'; percent: number };
+
 export type PersonDebt = {
   id: string;
   name: string;
@@ -366,9 +390,12 @@ export type PersonDebt = {
   /** Ledger account id for R (asset) or P (liability). */
   ledgerAccountId: string;
   payeeId?: string;
-  status: 'open' | 'settled';
+  status: 'open' | 'settled' | 'written_off';
   nextDueDate?: string;
   notes?: string;
+  interest?: DebtInterest;
+  /** Credit kept after an overpayment (TECH-SPEC 6.9). */
+  creditMinor?: string;
   /** Instalment plan (DESIGN popup #36). */
   scheduleInstallmentCount?: number;
   scheduleAmountMinor?: string;

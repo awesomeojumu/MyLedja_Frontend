@@ -107,6 +107,7 @@ export function BudgetTabDeep() {
   const style = snapshot?.settings.budgetStyle ?? 'tracking';
   const carryOverDefault = snapshot?.settings.carryOverDefault ?? true;
   const types = { ...DEFAULT_BUDGET_TYPES_SHOWN, ...snapshot?.settings.budgetTypesShown };
+  const [pendingStyle, setPendingStyle] = useState<'tracking' | 'envelope' | null>(null);
 
   const saveTypes = async (budgetTypesShown: BudgetTypesShown) => {
     if (!snapshot) return;
@@ -118,6 +119,12 @@ export function BudgetTabDeep() {
     void saveTypes({ ...types, [key]: on });
   };
 
+  const applyStyle = async (budgetStyle: 'tracking' | 'envelope') => {
+    if (!snapshot) return;
+    await repo.updateSettings({ ...snapshot.settings, budgetStyle });
+    toast.show(t('common.saved'));
+  };
+
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }} testID="settings-budget-deep">
       <Text tone="textSecondary">{t('settings.budget.body')}</Text>
@@ -126,28 +133,26 @@ export function BudgetTabDeep() {
         label={t('settings.budget.styleLabel')}
         value={style}
         onChange={(budgetStyle) => {
-          if (!snapshot) return;
-          void repo.updateSettings({ ...snapshot.settings, budgetStyle }).then(() => toast.show(t('common.saved')));
+          if (!snapshot || budgetStyle === style) return;
+          setPendingStyle(budgetStyle as 'tracking' | 'envelope');
         }}
         options={[
           { value: 'tracking', label: t('settings.budget.tracking') },
           { value: 'envelope', label: t('settings.budget.envelope') },
         ]}
       />
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View style={{ flex: 1, paddingRight: sp['spacing-md'] }}>
-          <Text>{t('settings.budget.carryOverDefault')}</Text>
-          <Text variant="caption" tone="textSecondary">
-            {t('settings.budget.carryOverHint')}
-          </Text>
-        </View>
-        <Switch
-          testID="settings-budget-carry-default"
-          label={t('settings.budget.carryOverDefault')}
-          value={carryOverDefault}
-          onChange={(next) => snapshot && void repo.updateSettings({ ...snapshot.settings, carryOverDefault: next }).then(() => toast.show(t('common.saved')))}
-        />
-      </View>
+      <Text variant="caption" tone="textSecondary">
+        {style === 'envelope' ? t('settings.budget.envelopeMeaning') : t('settings.budget.trackingMeaning')}
+      </Text>
+      <Switch
+        testID="settings-budget-carry-default"
+        label={t('settings.budget.carryOverDefault')}
+        value={carryOverDefault}
+        onChange={(next) => snapshot && void repo.updateSettings({ ...snapshot.settings, carryOverDefault: next }).then(() => toast.show(t('common.saved')))}
+      />
+      <Text variant="caption" tone="textSecondary">
+        {t('settings.budget.carryOverHint')}
+      </Text>
       <Text variant="heading-sm">{t('settings.budget.typesShown')}</Text>
       {(['fixed', 'flexible', 'nonMonthly', 'savings'] as const).map((key) => (
         <Checkbox
@@ -158,6 +163,20 @@ export function BudgetTabDeep() {
           onChange={(checked) => toggleType(key, checked)}
         />
       ))}
+      <Confirm
+        visible={pendingStyle !== null}
+        title={t('settings.budget.switchTitle', {
+          style: pendingStyle === 'envelope' ? t('settings.budget.envelope') : t('settings.budget.tracking'),
+        })}
+        body={t('settings.budget.switchBody')}
+        confirmLabel={t('settings.budget.switchConfirm')}
+        onCancel={() => setPendingStyle(null)}
+        onConfirm={() => {
+          const next = pendingStyle;
+          setPendingStyle(null);
+          if (next) void applyStyle(next);
+        }}
+      />
     </ScrollView>
   );
 }
@@ -881,24 +900,7 @@ export function HelpTab() {
   );
 }
 
+/** @deprecated Tags CRUD lives in SettingsScreen CategoriesTab (TB-11 Phase 1). */
 export function TagsSection() {
-  const sampleTags = [
-    { name: 'Tax deductible', count: 12 },
-    { name: 'Reimbursable', count: 3 },
-  ];
-  return (
-    <View style={{ gap: sp['spacing-sm'] }}>
-      <Text variant="heading-sm">{t('settings.categories.tagsTitle')}</Text>
-      {sampleTags.map((tag) => (
-        <Card key={tag.name}>
-          <Text>
-            {tag.name} · {t('settings.categories.tagCount', { count: String(tag.count) })}
-          </Text>
-        </Card>
-      ))}
-      <Text variant="caption" tone="textSecondary">
-        {t('settings.categories.tagsLater')}
-      </Text>
-    </View>
-  );
+  return null;
 }
