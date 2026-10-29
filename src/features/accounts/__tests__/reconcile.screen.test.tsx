@@ -103,6 +103,27 @@ describe('Reconcile', () => {
     expect(monthSpent(after.chart, totals, '2026-10')).toBe(0n);
     expect(after.reconciles).toHaveLength(1);
     expect(after.reconciles[0]!.adjustment).toBe('2220000');
+    expect(after.reconciles[0]!.finishedBy).toBeNull();
+  });
+
+  it('TB03-3: finishing stores finishedBy and Details shows who', async () => {
+    const { sync, repo, id } = await seeded();
+    const opening = (await repo.load()).events.find((e) => e.type === 'opening_balance')!;
+    await repo.setEventMeta(opening.id, { cleared: true });
+    const finished = await repo.finishReconcile({
+      accountId: id('GTBank'),
+      statementDate: '2026-10-31',
+      statementBalance: 79_010_000n,
+      eventIds: [opening.id],
+      withAdjustment: false,
+      finishedBy: 'user-alice',
+    });
+    expect(finished.ok).toBe(true);
+    if (!finished.ok) throw new Error(finished.error);
+    expect(finished.value.finishedBy).toBe('user-alice');
+    setParams({ id: id('GTBank'), tab: 'details' });
+    await renderWithProviders(wrap(<AccountScreen />), { sync });
+    expect(await screen.findByTestId(`reconcile-who-${finished.value.id}`)).toHaveTextContent('user-alice', { exact: false });
   });
 
   it('P10-04: Add missing transaction opens Add with this account and the statement date', async () => {

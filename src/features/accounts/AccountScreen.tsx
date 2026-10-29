@@ -6,12 +6,16 @@ import {
   Amount,
   Button,
   Card,
+  Confirm,
   EmptyState,
   formatDay,
   Menu,
+  PillTag,
   Placeholder,
+  StatusPill,
   Tabs,
   Text,
+  TextInput,
   useToast,
 } from '@/design/components';
 import { useTabParam } from '@/design/useTabParam';
@@ -22,31 +26,41 @@ import { ACCOUNT_KIND_INFO, type Account } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
+import { applyFilters, countActive, emptyFilters, filterChips, removeChip, type TxFilters } from '@/features/transactions/filters';
+import { FiltersSheet } from '@/features/transactions/FiltersSheet';
 import { rowsFor, today, type Row } from '@/features/transactions/helpers';
+import { rowIndicators } from '@/features/transactions/panelConnected';
+import { matchesSearch } from '@/features/transactions/TransactionsScreen';
 import { TransactionPanel } from '@/features/transactions/TransactionPanel';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 import { ledgerBalance } from '@/ledger';
 
-import { aiApi, type ServerImport } from '@/api/ai';
+import { aiApi, type BankLink, type ServerImport } from '@/api/ai';
+import { ApiError } from '@/api/client';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useOnline } from '@/lib/useOnline';
 
-import { AccountImportSheet, statementCsv } from './AccountImportSheet';
+import { AccountImportSheet, classifyDroppedFile, statementCsv } from './AccountImportSheet';
 import { ArchiveSheet, EditAccountSheet, UpdateValueSheet } from './accountSheets';
 import { DividendSheet, HoldingSheet, TradeSheet } from '@/features/investments/investmentSheets';
 import { portfolioFigures } from '@/features/investments/helpers';
 
-import { groupRegisterByDay, hasHoldingsTab, hasValueTab } from './helpers';
+import { accountInitials, groupRegisterByDay, hasHoldingsTab, hasValueTab } from './helpers';
 
 const sp = tokens.spacing;
 
 type Tab = 'transactions' | 'holdings' | 'value' | 'details';
 export type RegisterRow = Row & { line: bigint; running: bigint };
 
-/** Rows that touch the account, newest first, with the balance after each (P09-01 / TB03-2). */
+type DroppedPayload =
+  | { kind: 'csv'; text: string }
+  | { kind: 'statement'; fileName: string; base64: string };
+
+/** Rows that touch the account, newest first, with the balance after each (P09-01 / TB03-2). Pending (M19) left out. */
 export function register(snapshot: Snapshot, accountId: string): RegisterRow[] {
   const rows = rowsFor(snapshot)
+    .filter((r) => r.event.status !== 'pending')
     .map((r) => ({ ...r, line: r.event.lines.filter((l) => l.ledgerAccountId === accountId).reduce((s, l) => s + l.amountMinor, 0n) }))
     .filter((r) => r.event.lines.some((l) => l.ledgerAccountId === accountId));
   let running = 0n;
@@ -93,20 +107,30 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
   const theme = useTheme();
   const toast = useToast();
   const [sheet, setSheet] = useState<'holding' | 'buy' | 'sell' | 'dividend' | null>(null);
-  const [dropped, setDropped] = useState<string | null>(null);
+  const [dropped, setDropped] = useState<DroppedPayload | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<TxFilters>(emptyFilters());
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { client, user } = useAuth();
   const online = useOnline();
   const bank = useMemo(() => aiApi(client), [client]);
   const [pending, setPending] = useState<ServerImport[]>([]);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [bankLinks, setBankLinks] = useState<BankLink[]>([]);
   const resolvedId = accountId ?? (typeof params.id === 'string' ? params.id : undefined);
   const loadPending = useCallback(() => {
     if (!online || !user || !resolvedId) return;
     bank.pendingImports(user.workspaceId, resolvedId).then((r) => setPending(r.imports.filter((i) => i.source === 'bank')), () => setPending([]));
   }, [bank, online, user, resolvedId]);
   useEffect(loadPending, [loadPending]);
+
+  const loadBankLinks = useCallback(() => {
+    if (!online || !user) return;
+    bank.bankLinks(user.workspaceId).then((r) => setBankLinks(r.links), () => setBankLinks([]));
+  }, [bank, online, user]);
+  useEffect(loadBankLinks, [loadBankLinks]);
 
   const account = snapshot?.accounts.find((a) => a.id === resolvedId);
 
@@ -127,7 +151,23 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
   };
 
   const rows = useMemo(() => (snapshot && account ? register(snapshot, account.id) : []), [snapshot, account]);
-  const dayGroups = useMemo(() => groupRegisterByDay(rows), [rows]);
+  const scopedFilters = useMemo(
+    () => (account ? { ...filters, accountId: account.id } : filters),
+    [filters, account],
+  );
+  const visibleRows = useMemo(() => {
+    if (!snapshot) return rows;
+    return rows.filter((r) => matchesSearch(r, query) && applyFilters(r, scopedFilters, snapshot));
+  }, [rows, query, scopedFilters, snapshot]);
+  const dayGroups = useMemo(() => groupRegisterByDay(visibleRows), [visibleRows]);
+  const activeFilterCount = useMemo(() => {
+    const { accountId: _a, ...rest } = scopedFilters;
+    return countActive(rest);
+  }, [scopedFilters]);
+  const chips = useMemo(() => {
+    if (!snapshot) return [];
+    return filterChips(scopedFilters, snapshot).filter((c) => c.key !== 'accountId');
+  }, [scopedFilters, snapshot]);
   const balance = snapshot && account ? ledgerBalance(account.id, snapshot.events) : 0n;
   const owes = account ? ACCOUNT_KIND_INFO[account.type].ledger === 'liability' : false;
   const tabOptions = useMemo((): readonly Tab[] => {
@@ -148,6 +188,7 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
     label: t(`account.tab.${value}` as 'account.tab.transactions' | 'account.tab.holdings' | 'account.tab.value' | 'account.tab.details'),
   }));
   const holdingRows = snapshot && account && hasHoldingsTab(account.type) ? portfolioFigures(snapshot, account.id) : [];
+  const accountLink = account ? bankLinks.find((l) => l.accountId === account.id && l.status !== 'disconnected') : undefined;
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined' || !account) return;
@@ -156,8 +197,12 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
       e.preventDefault();
       const file = e.dataTransfer?.files?.[0];
       if (!file) return;
-      void file.text().then((text) => {
-        setDropped(text);
+      void classifyDroppedFile(file).then((result) => {
+        if (result.kind === 'error') {
+          toast.show(result.error === 'size' ? t('import.tooBig') : t('import.wrongType'));
+          return;
+        }
+        setDropped(result);
         router.setParams({ import: account.id });
       });
     };
@@ -167,7 +212,7 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
       document.removeEventListener('dragover', over);
       document.removeEventListener('drop', drop);
     };
-  }, [account, router]);
+  }, [account, router, toast]);
 
   const wrap = (body: ReactNode, title: string) =>
     embedded ? (
@@ -198,7 +243,8 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
     try {
       await engine.sync({ force: true });
       if (online && user && account) {
-        const { links } = await bank.bankLinks(user.workspaceId).catch(() => ({ links: [] as { id: string; accountId: string; status: string }[] }));
+        const { links } = await bank.bankLinks(user.workspaceId).catch(() => ({ links: [] as BankLink[] }));
+        setBankLinks(links);
         for (const l of links.filter((x) => x.accountId === account.id && x.status === 'active')) await bank.syncBank(user.workspaceId, l.id).catch(() => null);
         loadPending();
       }
@@ -218,7 +264,7 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
               kind="secondary"
               label={t('account.bankReviewAction')}
               onPress={() => {
-                setDropped(statementCsv(p.rows));
+                setDropped({ kind: 'csv', text: statementCsv(p.rows) });
                 setReviewing(p.id);
                 router.setParams({ import: account!.id });
               }}
@@ -230,24 +276,39 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
           <Placeholder height={120} />
         ) : (
           <>
-            <View style={{ gap: sp['spacing-xs'] }}>
-              <Text variant="caption" tone="textSecondary">
-                {[t(`accounts.kind.${account.type}` as 'accounts.kind.bank'), account.institution].filter(Boolean).join(' · ')}
-              </Text>
-              {owes ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'] }}>
+              <View
+                testID="account-initials"
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: theme.hover,
+                }}
+              >
+                <Text variant="heading-sm">{accountInitials(account.name, account.institution)}</Text>
+              </View>
+              <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
                 <Text variant="caption" tone="textSecondary">
-                  {t('accounts.youOwe')}
+                  {[t(`accounts.kind.${account.type}` as 'accounts.kind.bank'), account.institution].filter(Boolean).join(' · ')}
                 </Text>
-              ) : null}
-              {account.closedWithBalance ? (
-                <Text variant="caption" tone="textSecondary">
-                  {t('account.closedWithBalance')}
+                {owes ? (
+                  <Text variant="caption" tone="textSecondary">
+                    {t('accounts.youOwe')}
+                  </Text>
+                ) : null}
+                {account.closedWithBalance ? (
+                  <Text variant="caption" tone="textSecondary">
+                    {t('account.closedWithBalance')}
+                  </Text>
+                ) : null}
+                <Amount testID="account-balance" minor={sign(balance)} variant="display-md" />
+                <Text testID="account-cleared" variant="caption" tone="textSecondary">
+                  {t('account.clearedLine', { cleared: fmt(sign(split.cleared)), notCleared: fmt(sign(split.notCleared)) })}
                 </Text>
-              ) : null}
-              <Amount testID="account-balance" minor={sign(balance)} variant="display-md" />
-              <Text testID="account-cleared" variant="caption" tone="textSecondary">
-                {t('account.clearedLine', { cleared: fmt(sign(split.cleared)), notCleared: fmt(sign(split.notCleared)) })}
-              </Text>
+              </View>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
               <Button
@@ -270,19 +331,44 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
             </View>
             <Tabs testID="account-tabs" options={tabs} value={tab} onChange={setTab} />
             {tab === 'transactions' ? (
-              rows.length === 0 ? (
-                <View style={{ gap: sp['spacing-md'] }}>
-                  <EmptyState
-                    title={t('account.emptyTitle')}
-                    body={t('account.emptyBody')}
-                    actionLabel={t('tx.add')}
-                    onAction={() => router.setParams({ add: 'expense', account: account.id })}
+              <View style={{ gap: sp['spacing-md'] }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], alignItems: 'flex-end' }}>
+                  <View style={{ flex: 1, minWidth: 160 }}>
+                    <TextInput testID="account-search" label={t('tx.search')} value={query} onChangeText={setQuery} />
+                  </View>
+                  <Button
+                    testID="account-filters"
+                    kind="secondary"
+                    label={activeFilterCount > 0 ? t('tx.filtersCount', { count: activeFilterCount }) : t('tx.filters')}
+                    onPress={() => setFiltersOpen(true)}
                   />
-                  <Button testID="account-empty-import" kind="secondary" label={t('account.import')} onPress={openImport} />
                 </View>
-              ) : (
-                <View style={{ gap: sp['spacing-md'] }}>
-                  {dayGroups.map((g) => (
+                {chips.length > 0 ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'] }}>
+                    {chips.map((chip) => (
+                      <PillTag
+                        key={chip.key}
+                        testID={`account-chip-${chip.key}`}
+                        label={chip.label}
+                        onPress={() => setFilters(removeChip(filters, chip.key))}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+                {rows.length === 0 ? (
+                  <View style={{ gap: sp['spacing-md'] }}>
+                    <EmptyState
+                      title={t('account.emptyTitle')}
+                      body={t('account.emptyBody')}
+                      actionLabel={t('tx.add')}
+                      onAction={() => router.setParams({ add: 'expense', account: account.id })}
+                    />
+                    <Button testID="account-empty-import" kind="secondary" label={t('account.import')} onPress={openImport} />
+                  </View>
+                ) : visibleRows.length === 0 ? (
+                  <EmptyState title={t('tx.noMatches')} body={t('tx.noMatchesBody')} actionLabel={t('tx.filter.clear')} onAction={() => { setQuery(''); setFilters(emptyFilters()); }} />
+                ) : (
+                  dayGroups.map((g) => (
                     <View key={g.day} testID={`day-${g.day}`} style={{ gap: sp['spacing-xs'] }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: sp['spacing-xs'] }}>
                         <Text variant="caption" tone="textSecondary">
@@ -296,9 +382,9 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
                         ))}
                       </Card>
                     </View>
-                  ))}
-                </View>
-              )
+                  ))
+                )}
+              </View>
             ) : tab === 'holdings' ? (
               <View testID="holdings-tab" style={{ gap: sp['spacing-md'] }}>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
@@ -353,7 +439,23 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
                 )}
               </Card>
             ) : (
-              <Details account={account} onArchive={() => setArchiveOpen(true)} />
+              <Details
+                account={account}
+                link={accountLink}
+                currentUserId={user?.id}
+                currentUserName={user?.name}
+                onArchive={() => setArchiveOpen(true)}
+                onDisconnect={async (linkId) => {
+                  if (!user) return;
+                  try {
+                    await bank.disconnectBank(user.workspaceId, linkId);
+                    toast.show(t('settings.banks.disconnected'));
+                    loadBankLinks();
+                  } catch (e) {
+                    toast.show(e instanceof ApiError ? e.body.message : t('errors.network'));
+                  }
+                }}
+              />
             )}
           </>
         )}
@@ -361,7 +463,8 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
       {account && importOpen ? (
         <AccountImportSheet
           account={account}
-          initialText={dropped}
+          initialText={dropped?.kind === 'csv' ? dropped.text : null}
+          initialStatement={dropped?.kind === 'statement' ? dropped : null}
           onClose={closeImport}
           onImported={(importId, count) => {
             toast.show(t('import.done', { count }), () => void repo.undoImport(importId, today()));
@@ -382,6 +485,19 @@ export function AccountScreen({ embedded, accountId }: { embedded?: boolean; acc
       {account && sheet === 'sell' ? <TradeSheet direction="sell" onClose={() => setSheet(null)} /> : null}
       {account && sheet === 'dividend' ? <DividendSheet onClose={() => setSheet(null)} /> : null}
       {params.tx ? <TransactionPanel id={params.tx} onClose={() => router.setParams({ tx: undefined })} /> : null}
+      {filtersOpen && snapshot && account ? (
+        <FiltersSheet
+          snapshot={snapshot}
+          filters={scopedFilters}
+          scopedAccountId={account.id}
+          onClose={() => setFiltersOpen(false)}
+          onApply={(next) => {
+            const { accountId: _a, ...rest } = next;
+            setFilters(rest);
+            setFiltersOpen(false);
+          }}
+        />
+      ) : null}
     </>,
     account?.name ?? t('accounts.title'),
   );
@@ -402,6 +518,8 @@ function RegisterLine({
   first: boolean;
   onOpen: () => void;
 }) {
+  const marks = rowIndicators(row.event);
+  const clearedMark = !row.event.reconciledBy && row.event.cleared ? t('account.clearedMark') : null;
   return (
     <Pressable
       testID={`reg-${row.event.id}`}
@@ -418,10 +536,13 @@ function RegisterLine({
     >
       <View style={{ flex: 1, gap: sp['spacing-xxs'] }}>
         <Text>{row.title}</Text>
-        <Text variant="caption" tone="textSecondary">
-          {[row.event.reconciledBy ? t('account.locked') : row.event.cleared ? t('account.clearedMark') : null].filter(Boolean).join(' · ')}
-        </Text>
+        {marks.length > 0 || clearedMark ? (
+          <Text variant="caption" tone="textSecondary" testID={`reg-marks-${row.event.id}`}>
+            {[...marks.map((m) => t(`tx.mark.${m}` as 'tx.mark.split')), clearedMark].filter(Boolean).join(' · ')}
+          </Text>
+        ) : null}
       </View>
+      {row.waiting ? <StatusPill label={t('tx.waiting')} kind="pending" /> : null}
       <View style={{ alignItems: 'flex-end' }}>
         <Amount minor={sign(row.line)} signed />
         <Text variant="caption" tone="textSecondary" testID={`running-${row.event.id}`}>
@@ -432,14 +553,42 @@ function RegisterLine({
   );
 }
 
-function Details({ account, onArchive }: { account: Account; onArchive: () => void }) {
+function Details({
+  account,
+  link,
+  currentUserId,
+  currentUserName,
+  onArchive,
+  onDisconnect,
+}: {
+  account: Account;
+  link?: BankLink;
+  currentUserId?: string;
+  currentUserName?: string;
+  onArchive: () => void;
+  onDisconnect: (linkId: string) => Promise<void>;
+}) {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
+  const [disconnectId, setDisconnectId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const history = (snapshot?.reconciles ?? []).filter((r) => r.accountId === account.id);
-  const line = (label: string, value: string) => (
+  const bankStatus = !link
+    ? t('account.notConnected')
+    : link.status === 'needs_reauth'
+      ? t('settings.banks.needsReauth')
+      : t('settings.banks.lastSync', {
+          when: link.lastSyncedAt ? formatDay(link.lastSyncedAt.slice(0, 10)) : t('settings.banks.syncNever'),
+        });
+  const who = (finishedBy: string | null | undefined) => {
+    if (!finishedBy) return t('account.finishedByUnknown');
+    if (currentUserId && finishedBy === currentUserId) return currentUserName?.trim() || t('account.finishedByYou');
+    return finishedBy;
+  };
+  const line = (label: string, value: string, testID?: string) => (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-md'] }}>
       <Text tone="textSecondary">{label}</Text>
-      <Text>{value}</Text>
+      <Text testID={testID}>{value}</Text>
     </View>
   );
   return (
@@ -450,7 +599,10 @@ function Details({ account, onArchive }: { account: Account; onArchive: () => vo
       {line(t('account.currency'), account.currency)}
       {line(t('accounts.countInBudget'), account.countInBudget ? t('common.yes') : t('common.no'))}
       {line(t('account.opened'), account.openedAt ? formatDay(account.openedAt) : t('account.none'))}
-      {line(t('account.bankConnection'), t('account.notConnected'))}
+      {line(t('account.bankConnection'), bankStatus, 'account-bank-status')}
+      {link ? (
+        <Button testID="account-bank-disconnect" kind="secondary" label={t('settings.banks.disconnect')} onPress={() => setDisconnectId(link.id)} />
+      ) : null}
       {line(t('account.importSettings'), account.importMapping ? t('account.importRemembered') : t('account.importDefault'))}
       {account.importMapping ? (
         <Button
@@ -469,15 +621,37 @@ function Details({ account, onArchive }: { account: Account; onArchive: () => vo
         <Text tone="textSecondary">{t('account.noReconciles')}</Text>
       ) : (
         history.map((r) => (
-          <View key={r.id} testID={`reconcile-${r.id}`} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-md'], flexWrap: 'wrap' }}>
-            <Text>{formatDay(r.statementDate)}</Text>
-            <Amount minor={BigInt(r.statementBalance)} />
-            <Text tone="textSecondary">{r.adjustment === '0' ? t('account.noAdjustment') : t('account.adjusted', { amount: fmt(BigInt(r.adjustment)) })}</Text>
+          <View key={r.id} testID={`reconcile-${r.id}`} style={{ gap: sp['spacing-xxs'] }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-md'], flexWrap: 'wrap' }}>
+              <Text>{formatDay(r.statementDate)}</Text>
+              <Amount minor={BigInt(r.statementBalance)} />
+              <Text tone="textSecondary">{r.adjustment === '0' ? t('account.noAdjustment') : t('account.adjusted', { amount: fmt(BigInt(r.adjustment)) })}</Text>
+            </View>
+            <Text variant="caption" tone="textSecondary" testID={`reconcile-who-${r.id}`}>
+              {t('account.finishedBy', { who: who(r.finishedBy) })}
+            </Text>
           </View>
         ))
       )}
       {!account.archived ? (
         <Button testID="details-archive" kind="secondary" label={t('account.archive')} onPress={onArchive} />
+      ) : null}
+      {disconnectId ? (
+        <Confirm
+          visible
+          title={t('settings.banks.disconnectTitle')}
+          body={t('settings.banks.disconnectBody')}
+          confirmLabel={t('settings.banks.disconnect')}
+          onCancel={() => setDisconnectId(null)}
+          onConfirm={() => {
+            if (busy) return;
+            setBusy(true);
+            void onDisconnect(disconnectId).finally(() => {
+              setBusy(false);
+              setDisconnectId(null);
+            });
+          }}
+        />
       ) : null}
     </Card>
   );

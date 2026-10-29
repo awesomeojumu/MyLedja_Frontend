@@ -8,8 +8,9 @@ import { ledgerBalance } from '@/ledger';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
 import { resetParams, router, setParams } from '../../../../test/helpers/router';
-import { AccountScreen } from '../AccountScreen';
+import { AccountScreen, register } from '../AccountScreen';
 import { AccountsScreen } from '../AccountsScreen';
+import { classifyDroppedFile } from '../AccountImportSheet';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 
@@ -157,6 +158,69 @@ describe('Account page', () => {
     expect(details).toHaveTextContent('•••1234', { exact: false });
     expect(details).toHaveTextContent('NGN', { exact: false });
     expect(details).toHaveTextContent(t('account.noReconciles'), { exact: false });
+    expect(screen.getByTestId('account-bank-status')).toHaveTextContent(t('account.notConnected'));
+    expect(screen.getByTestId('account-initials')).toHaveTextContent('GT');
+  });
+
+  it('D20 / M19: pending events are left out of the register and running balance', async () => {
+    const { repo, id } = await seeded();
+    const expense = await repo.addTransaction({
+      kind: 'expense',
+      accountId: id('GTBank'),
+      parts: [{ categoryId: id('Market'), amount: 1_000_000n }],
+      date: '2026-10-05',
+      payeeName: 'Pending Shop',
+    });
+    if (!expense.ok) throw new Error(expense.error);
+    const snapshot = await repo.load();
+    const pendingEvent = {
+      ...expense.value,
+      id: 'pending-1',
+      operationId: 'pending-1',
+      status: 'pending' as const,
+      payeeId: expense.value.payeeId,
+    };
+    const withPending = { ...snapshot, events: [...snapshot.events, pendingEvent] };
+    const rows = register(withPending, id('GTBank'));
+    expect(rows.find((r) => r.event.id === 'pending-1')).toBeUndefined();
+    expect(rows.find((r) => r.event.id === expense.value.id)).toBeTruthy();
+    const last = rows[0]!;
+    expect(last.running).toBe(ledgerBalance(id('GTBank'), snapshot.events));
+  });
+
+  it('TB-03: Search and Filters are on the Transactions tab', async () => {
+    const { sync, repo, id } = await seeded();
+    await repo.addTransaction({
+      kind: 'expense',
+      accountId: id('GTBank'),
+      parts: [{ categoryId: id('Market'), amount: 500_000n }],
+      date: '2026-10-03',
+      payeeName: 'Shoprite',
+    });
+    setParams({ id: id('GTBank') });
+    await renderWithProviders(wrap(<AccountScreen />), { sync });
+    expect(await screen.findByTestId('account-search')).toBeTruthy();
+    expect(screen.getByTestId('account-filters')).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId('account-search'), 'Shoprite');
+    expect(screen.getByText('Shoprite')).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId('account-search'), 'zzzz-no-match');
+    expect(await screen.findByText(t('tx.noMatches'))).toBeTruthy();
+  });
+
+  it('P09-07: dropped PDF is classified as a statement, not text', async () => {
+    const pdf = {
+      name: 'statement.pdf',
+      type: 'application/pdf',
+      size: 12,
+      text: async () => 'NOT-CSV',
+      arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+    };
+    const result = await classifyDroppedFile(pdf);
+    expect(result.kind).toBe('statement');
+    if (result.kind === 'statement') {
+      expect(result.fileName).toBe('statement.pdf');
+      expect(result.base64.length).toBeGreaterThan(0);
+    }
   });
 
   it('P08-07: Reorder mode moves accounts with arrows; rows open the Account page', async () => {

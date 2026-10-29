@@ -1,5 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { aiApi, type StatementImport, toBase64 } from '@/api/ai';
 import { ApiError } from '@/api/client';
@@ -27,9 +27,29 @@ type Step = 'upload' | 'map' | 'review' | 'done';
 
 type Picked = { kind: 'csv'; text: string } | { kind: 'statement'; fileName: string; base64: string };
 
-const STATEMENT_TYPES = ['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-const ALLOWED_EXT = /\.(csv|txt|pdf|xlsx)$/i;
-const MAX_BYTES = 10 * 1024 * 1024;
+export const STATEMENT_TYPES = ['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+export const ALLOWED_EXT = /\.(csv|txt|pdf|xlsx)$/i;
+export const STATEMENT_EXT = /\.(pdf|xlsx)$/i;
+export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = MAX_IMPORT_BYTES;
+
+/** Web drop / picker classification for CSV vs PDF/Excel (P09-07 / D17). */
+export type DroppedImport =
+  | { kind: 'csv'; text: string }
+  | { kind: 'statement'; fileName: string; base64: string }
+  | { kind: 'error'; error: 'type' | 'size' };
+
+export async function classifyDroppedFile(file: { name: string; type?: string; size?: number; text: () => Promise<string>; arrayBuffer: () => Promise<ArrayBuffer> }): Promise<DroppedImport> {
+  const mime = file.type ?? '';
+  const allowedMime = ['text/csv', 'text/comma-separated-values', 'text/plain', ...STATEMENT_TYPES].includes(mime);
+  if (!ALLOWED_EXT.test(file.name) && !allowedMime) return { kind: 'error', error: 'type' };
+  if (typeof file.size === 'number' && file.size > MAX_BYTES) return { kind: 'error', error: 'size' };
+  const isStatement = STATEMENT_EXT.test(file.name) || STATEMENT_TYPES.includes(mime);
+  if (!isStatement) return { kind: 'csv', text: await file.text() };
+  const buffer = await file.arrayBuffer();
+  if (buffer.byteLength > MAX_BYTES) return { kind: 'error', error: 'size' };
+  return { kind: 'statement', fileName: file.name, base64: toBase64(new Uint8Array(buffer)) };
+}
 
 type PickError = 'type' | 'size';
 
@@ -71,11 +91,14 @@ export function statementCsv(rows: StatementImport['rows']): string {
 export function AccountImportSheet({
   account,
   initialText,
+  initialStatement,
   onClose,
   onImported,
 }: {
   account: Account;
   initialText?: string | null;
+  /** Web drop of PDF/xlsx — same path as the file picker statement upload. */
+  initialStatement?: { fileName: string; base64: string } | null;
   onClose: () => void;
   onImported: (importId: string, count: number) => void;
 }) {
@@ -95,6 +118,7 @@ export function AccountImportSheet({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ importId: string; count: number } | null>(null);
+  const statementBootRef = useRef(false);
 
   const load = (text: string) => {
     const parsed = parseCsv(text);
@@ -139,6 +163,14 @@ export function AccountImportSheet({
     await ai.setConsent(user.workspaceId, { ...consent, statements: true });
     await readStatement(file, true);
   };
+
+  useEffect(() => {
+    if (!initialStatement || statementBootRef.current) return;
+    statementBootRef.current = true;
+    void readStatement(initialStatement, false);
+    // Boot once from web drop; readStatement closes over account/ai.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot
+  }, [initialStatement]);
 
   const read = useMemo(() => (table && mapping ? readRows(table, mapping) : null), [table, mapping]);
   const payeeNames = useMemo(() => new Map((snapshot?.payees ?? []).map((p) => [p.id, p.name])), [snapshot]);

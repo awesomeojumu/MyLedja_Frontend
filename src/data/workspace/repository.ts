@@ -305,7 +305,12 @@ export class WorkspaceRepository {
         .map((r) => ({ ...(r.data as Omit<Payee, 'id'>), id: r.id }))
         .filter((p) => !p.deleted),
       events: eventList,
-      reconciles: reconciles.map((r) => ({ ...(r.data as Omit<Reconcile, 'id'>), id: r.id })).sort((a, b) => b.statementDate.localeCompare(a.statementDate)),
+      reconciles: reconciles
+        .map((r) => {
+          const data = r.data as Omit<Reconcile, 'id'>;
+          return { ...data, finishedBy: data.finishedBy ?? null, id: r.id };
+        })
+        .sort((a, b) => b.statementDate.localeCompare(a.statementDate)),
       assigns,
       assignNotes,
       goals: goalRows
@@ -840,6 +845,8 @@ export class WorkspaceRepository {
     statementBalance: bigint;
     eventIds: string[];
     withAdjustment: boolean;
+    /** Current user id for Details history “who” (TB03-3). */
+    finishedBy?: string | null;
   }): Promise<Result<Reconcile>> {
     const snapshot = await this.load();
     const account = snapshot.accounts.find((a) => a.id === input.accountId);
@@ -890,6 +897,7 @@ export class WorkspaceRepository {
       calculatedBalance: calculatedAfter.toString(),
       adjustment: adjustment.toString(),
       finishedAt: new Date().toISOString(),
+      finishedBy: input.finishedBy ?? null,
     };
     const { id, ...data } = reconcile;
     await this.put('reconciles', id, data, 'reconcile.finish');
