@@ -206,14 +206,16 @@ export function NotificationsScreen() {
         <RecordDebtPaymentSheet
           max={debtPayTarget.max}
           snapshot={snapshot}
+          debtId={debtPayTarget.debtId}
           onClose={() => setDebtPayTarget(null)}
           onSave={async (input) => {
             setError(null);
             const r = await repo.recordDebtPayment(debtPayTarget.debtId, {
               accountId: input.accountId,
               amount: input.principal,
-              date: day,
+              date: input.date,
               interest: input.interest,
+              overpayment: input.overpayment,
             });
             if (!r.ok) setError(ledgerMessage(r.error));
             else {

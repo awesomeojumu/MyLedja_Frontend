@@ -77,15 +77,31 @@ export function debtSchedulePreview(input: {
   return rows;
 }
 
-/** Interest due to date for a fixed or %/month debt (TECH-SPEC 6.9 default split). */
+/** Whole calendar months from `from` to `to` (inclusive of started months; at least 1). */
+export function monthsBetween(from: string, to: string): number {
+  const [fy, fm] = from.split('-').map(Number) as [number, number, number];
+  const [ty, tm] = to.split('-').map(Number) as [number, number, number];
+  const months = (ty - fy) * 12 + (tm - fm) + 1;
+  return Math.max(1, months);
+}
+
+/** Interest due to date for a fixed or %/month debt (TECH-SPEC 6.9 default split). Accrues across months since open. */
 export function interestDueToDate(debt: PersonDebt, outstanding: bigint, onDate: string): bigint {
   const terms = debt.interest;
   if (!terms || terms.kind === 'none' || outstanding <= 0n) return 0n;
-  if (terms.kind === 'fixed') return BigInt(terms.amountMinor);
-  // percent_month: one month's interest on outstanding (simple default until accrual tracking lands).
+  const opened = debt.openedOn && debt.openedOn <= onDate ? debt.openedOn : onDate;
+  const periods = monthsBetween(opened, onDate);
+  if (terms.kind === 'fixed') return BigInt(terms.amountMinor) * BigInt(periods);
   const pct = Math.max(0, Math.min(100, terms.percent));
-  void onDate;
-  return (outstanding * BigInt(Math.round(pct * 100))) / 10_000n;
+  return (outstanding * BigInt(Math.round(pct * 100)) * BigInt(periods)) / 10_000n;
+}
+
+/** Initials monogram from a person name (DESIGN Page 16). */
+export function debtInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase();
 }
 
 export function debtIsOverdue(debt: PersonDebt, snapshot: Snapshot, onDate: string): boolean {

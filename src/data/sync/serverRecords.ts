@@ -190,6 +190,8 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         nextDueDate: str(d.nextInstalmentDate) ?? str(d.dueDate),
         notes: str(d.notes),
         interest,
+        accountId: str(d.accountId),
+        openedOn: str(d.openedOn),
         scheduleInstallmentCount: num(instalments?.count),
         scheduleAmountMinor: minorOrUndefined(instalments?.amount),
         scheduleEvery: instalments

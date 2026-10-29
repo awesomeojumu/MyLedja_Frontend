@@ -59,7 +59,11 @@ export function DebtsPaymentSheet({
   const [interestText, setInterestText] = useState(interestDefault > 0n ? formatNaira(interestDefault) : '');
   const [interestMinor, setInterestMinor] = useState<bigint>(interestDefault);
   const [splitOpen, setSplitOpen] = useState(false);
-  const [accountId, setAccountId] = useState(snapshot.accounts.find((a) => !a.archived)?.id ?? '');
+  const defaultAccount =
+    (debt?.accountId && snapshot.accounts.some((a) => a.id === debt.accountId && !a.archived) ? debt.accountId : undefined) ??
+    snapshot.accounts.find((a) => !a.archived)?.id ??
+    '';
+  const [accountId, setAccountId] = useState(defaultAccount);
   const [date, setDate] = useState(onDate);
   const [busy, setBusy] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);

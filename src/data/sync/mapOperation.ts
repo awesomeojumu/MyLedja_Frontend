@@ -184,6 +184,7 @@ const BE_TYPES = new Set([
   'debt.write_off',
   'debt.update',
   'debt.schedule',
+  'debt.settle',
   'income.stream.create',
   'income.stream.update',
 ]);

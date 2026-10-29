@@ -156,8 +156,7 @@ export type TransactionInput =
  */
 const LOCAL_ONLY = new Set([
   'debt.entry',
-  'debt.settle',
-  // debt.update / debt.schedule sync via RemoteOperation (PU-36 / Page 16)
+  // debt.settle / debt.update / debt.schedule sync via RemoteOperation (Page 16)
   'occurrence.paid',
   'occurrence.matched',
   'occurrence.unpaid',
@@ -1748,6 +1747,8 @@ export class WorkspaceRepository {
       notes: input.notes,
       interest: input.interest,
       nextDueDate: input.dueDate,
+      accountId: input.accountId,
+      openedOn: input.date,
     };
     const chart = this.chartFor(snapshot.accounts, snapshot.categories, [...snapshot.debts, debt]);
     const lines =
@@ -2010,7 +2011,14 @@ export class WorkspaceRepository {
     if (!debt || debt.status !== 'open') return { ok: false, error: 'missing_lines' };
     const balance = this.debtBalance(debt, snapshot);
     if (balance > 0n) return { ok: false, error: 'not_positive' };
-    await this.updatePersonDebt({ ...debt, status: 'settled' });
+    const baseVersion = await this.versionOf('debts', debtId);
+    const { id, ...data } = { ...debt, status: 'settled' as const };
+    await this.put('debts', id, data, 'debt.settle', baseVersion, {
+      type: 'debt.settle',
+      targetId: id,
+      payload: { baseVersion },
+      baseVersion,
+    });
     return { ok: true, value: undefined };
   }
 

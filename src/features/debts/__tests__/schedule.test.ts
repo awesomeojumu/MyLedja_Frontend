@@ -2,10 +2,13 @@ import type { PersonDebt } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 
 import {
+  debtInitials,
   debtSchedulePreview,
   debtScheduleRows,
   debtProgress,
   instalmentInterestPreview,
+  interestDueToDate,
+  monthsBetween,
   reminderMessage,
   scheduleAmounts,
 } from '../schedule';
@@ -65,5 +68,20 @@ describe('debt schedule (P16-04)', () => {
   it('PU-36: instalment preview includes interest when debt has terms', () => {
     expect(instalmentInterestPreview(debt({ interest: { kind: 'percent_month', percent: 2 } }), 100_000n)).toBe(2000n);
     expect(instalmentInterestPreview(debt({ interest: { kind: 'none' } }), 100_000n)).toBe(0n);
+  });
+
+  it('multi-month interest accrual (TECH-SPEC 6.9)', () => {
+    expect(monthsBetween('2026-01-15', '2026-03-15')).toBe(3);
+    const due = interestDueToDate(
+      debt({ interest: { kind: 'percent_month', percent: 2 }, openedOn: '2026-01-01' }),
+      100_000n,
+      '2026-03-01',
+    );
+    expect(due).toBe(6000n); // 2% × 3 months
+  });
+
+  it('debt initials monogram', () => {
+    expect(debtInitials('Tunde Okoro')).toBe('TO');
+    expect(debtInitials('Ada')).toBe('AD');
   });
 });

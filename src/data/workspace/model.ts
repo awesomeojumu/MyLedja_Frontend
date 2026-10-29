@@ -515,6 +515,10 @@ export type PersonDebt = {
   interest?: DebtInterest;
   /** Credit kept after an overpayment (TECH-SPEC 6.9). */
   creditMinor?: string;
+  /** Cash account used when the debt was opened (PU-35 default). */
+  accountId?: string;
+  /** Opened-on date for multi-month interest accrual (TECH-SPEC 6.9). */
+  openedOn?: string;
   /** Instalment plan (DESIGN popup #36). */
   scheduleInstallmentCount?: number;
   scheduleAmountMinor?: string;
