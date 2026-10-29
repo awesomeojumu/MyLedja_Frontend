@@ -2,20 +2,25 @@ import type { DashboardLayout as StoredDashboardLayout, WorkspaceSettings } from
 import type { SizeClass } from '@/design/size';
 import type { TextKey } from '@/i18n';
 
-/** DESIGN.md page 5 cards (Phase 1–2; Health and Investments are Phase 5). */
+/**
+ * DESIGN.md page 5 cards. Default order follows the phone list
+ * (checklist → NW → LTS → tiles → coming up → budget progress → charts → recent → where → health/goals/debts → investments).
+ */
 export const DASHBOARD_CARD_IDS = [
   'checklist',
   'netWorth',
   'leftToSpend',
   'statTiles',
+  'comingUp',
+  'budgetProgress',
   'incomeVsSpending',
   'spendingTrend',
-  'budgetProgress',
-  'comingUp',
-  'whereItWent',
   'recent',
+  'whereItWent',
+  'health',
   'goals',
   'debts',
+  'investments',
 ] as const;
 
 export type DashboardCardId = (typeof DASHBOARD_CARD_IDS)[number];
@@ -43,6 +48,8 @@ const CARD_LABELS: Record<DashboardCardId, TextKey> = {
   recent: 'dashboard.card.recent',
   goals: 'dashboard.card.goals',
   debts: 'dashboard.card.debts',
+  health: 'dashboard.card.health',
+  investments: 'dashboard.card.investments',
 };
 
 export function dashboardCardLabel(id: DashboardCardId): TextKey {
@@ -127,4 +134,19 @@ export function reorderCard(order: DashboardCardId[], fromId: DashboardCardId, t
   const [item] = copy.splice(from, 1);
   copy.splice(to, 0, item!);
   return copy;
+}
+
+/** Web/tablet grid span hints (12-col web; pairs on tablet). */
+export function cardColumnSpan(id: DashboardCardId, size: SizeClass): number {
+  if (size === 'phone') return 12;
+  if (size === 'tablet') {
+    if (id === 'netWorth' || id === 'checklist' || id === 'statTiles') return 12;
+    return 6;
+  }
+  // desktop / wide — DESIGN 12-col
+  if (id === 'checklist' || id === 'statTiles') return 12;
+  if (id === 'netWorth') return 7;
+  if (id === 'leftToSpend') return 5;
+  if (id === 'health' || id === 'goals' || id === 'debts') return 4;
+  return 6;
 }
