@@ -134,7 +134,7 @@ describe('Reconcile', () => {
     await waitFor(async () => expect((await repo.load()).events.find((e) => e.id === opening.id)?.reconciledBy).toBeTruthy());
   });
 
-  it('P10-05b: changing a locked row asks to unlock first', async () => {
+  it('P10-05b: changing a locked row asks Confirm then unlock', async () => {
     const { sync, repo, id } = await seeded();
     const opening = (await repo.load()).events.find((e) => e.type === 'opening_balance')!;
     const finished = await repo.finishReconcile({
@@ -148,9 +148,13 @@ describe('Reconcile', () => {
     setParams({ id: id('GTBank'), tx: opening.id });
     await renderWithProviders(wrap(<AccountScreen />), { sync });
     expect(await screen.findByTestId('panel-locked')).toBeTruthy();
-    expect(screen.getByText(t('panel.unlockTitle'))).toBeTruthy();
     expect(screen.queryByTestId('panel-edit')).toBeNull();
     await fireEvent.press(screen.getByTestId('panel-unlock'));
+    expect(await screen.findByTestId('panel-unlock-confirm')).toBeTruthy();
+    expect(screen.getByText(t('panel.unlockTitle'))).toBeTruthy();
+    expect(screen.getByText(t('panel.unlockBodyDated', { date: '31 Oct 2026' }))).toBeTruthy();
+    expect(screen.getByTestId('panel-unlock-confirm-cancel')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('panel-unlock-confirm-confirm'));
     await waitFor(async () => expect((await repo.load()).events.find((e) => e.id === opening.id)?.reconciledBy).toBeUndefined());
   });
 

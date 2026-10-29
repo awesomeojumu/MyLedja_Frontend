@@ -7,6 +7,7 @@ import {
   Amount,
   AmountInput,
   Button,
+  Confirm,
   DatePicker,
   formatDay,
   InlineError,
@@ -71,6 +72,7 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
   const event = snapshot?.events.find((e) => e.id === id);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unlockOpen, setUnlockOpen] = useState(false);
   const [unlockBusy, setUnlockBusy] = useState(false);
   const waiting = snapshot?.waiting.has(id) ?? false;
 
@@ -114,6 +116,10 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
     toast.show(t('tx.deleted'), () => void repo.restore(event));
   };
 
+  const unlockBody = reconcileDate
+    ? t('panel.unlockBodyDated', { date: formatDay(reconcileDate) })
+    : t('panel.unlockBody');
+
   const doUnlock = () => {
     if (unlockBusy) return;
     setUnlockBusy(true);
@@ -124,6 +130,7 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         }
         await repo.unlockEvent(event.id);
         toast.show(t('panel.unlockDone'));
+        setUnlockOpen(false);
       } catch {
         setError(t('errors.network'));
       } finally {
@@ -133,6 +140,7 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
   };
 
   return (
+    <>
     <Panel visible title={t('panel.title')} onClose={onClose} testID="tx-panel" width={440}>
       <View style={{ gap: sp['spacing-lg'] }}>
         <View style={{ gap: sp['spacing-xs'] }}>
@@ -164,17 +172,12 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         {event.reconciledBy ? (
           <View style={{ gap: sp['spacing-sm'] }} testID="panel-locked">
             <PillTag label={t('panel.locked')} />
-            <Text variant="heading-sm">{t('panel.unlockTitle')}</Text>
-            <Text tone="textSecondary">
-              {reconcileDate
-                ? t('panel.unlockBodyDated', { date: formatDay(reconcileDate) })
-                : t('panel.unlockBody')}
-            </Text>
+            <Text tone="textSecondary">{t('panel.unlock')}</Text>
             <Button
               kind="secondary"
               testID="panel-unlock"
               label={t('panel.unlockConfirm')}
-              onPress={doUnlock}
+              onPress={() => setUnlockOpen(true)}
             />
           </View>
         ) : null}
@@ -274,6 +277,17 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         </View>
       </View>
     </Panel>
+    {/* Sibling of Panel (GoalPanel pattern) so Confirm isn't nested inside another Modal. */}
+    <Confirm
+      visible={unlockOpen}
+      testID="panel-unlock-confirm"
+      title={t('panel.unlockTitle')}
+      body={unlockBody}
+      confirmLabel={t('panel.unlockConfirm')}
+      onCancel={() => setUnlockOpen(false)}
+      onConfirm={doUnlock}
+    />
+    </>
   );
 }
 
