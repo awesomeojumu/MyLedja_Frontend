@@ -548,6 +548,8 @@ const SERVER_COLLECTION: [string, string][] = [
   ['goal.', 'goals'],
   ['debt.', 'debts'],
   ['income.stream.', 'income_streams'],
+  ['report_dashboard.', 'report_dashboards'],
+  ['saved_report.', 'saved_reports'],
 ];
 
 /**

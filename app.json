@@ -49,7 +49,8 @@
         {
           "contactsPermission": "MyLedja uses your contacts so you can pick who you lent to or borrowed from."
         }
-      ]
+      ],
+      "expo-sharing"
     ]
   }
 }

@@ -91,8 +91,10 @@ import {
   type HoldingPrice,
   type HoldingType,
   type HealthSettings,
-  type ReportDashboard,
-  type SavedReport,
+  type ReportCardModel,
+  type ReportDashboardModel,
+  type SavedReportModel,
+  type BuilderSpecModel,
   budgetAssignId,
 } from './model';
 
@@ -123,6 +125,8 @@ export type Snapshot = {
   holdings: Holding[];
   lots: HoldingLot[];
   prices: HoldingPrice[];
+  reportDashboards: ReportDashboardModel[];
+  savedReports: SavedReportModel[];
   /** Events made on this device that haven't synced yet. */
   waiting: Set<string>;
   chart: Chart;
@@ -232,7 +236,7 @@ export class WorkspaceRepository {
   static readonly LEFT_TO_PLAN = '__left_to_plan__';
 
   async load(): Promise<Snapshot> {
-    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows, ruleRows, holdingRows, lotRows, priceRows] =
+    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows, ruleRows, holdingRows, lotRows, priceRows, dashboardRows, savedRows] =
       await Promise.all([
       this.store.list('accounts'),
       this.store.list('categories'),
@@ -255,6 +259,8 @@ export class WorkspaceRepository {
       this.store.list('holdings'),
       this.store.list('lots'),
       this.store.list('prices'),
+      this.store.list('report_dashboards'),
+      this.store.list('saved_reports'),
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
     const accountList = accounts
@@ -314,9 +320,9 @@ export class WorkspaceRepository {
       tags: raw?.tags,
       dueSoonDays: raw?.dueSoonDays === 3 || raw?.dueSoonDays === 7 || raw?.dueSoonDays === 14 || raw?.dueSoonDays === 30 ? raw.dueSoonDays : undefined,
       health: raw?.health,
-      reportDashboards: raw?.reportDashboards,
-      savedReports: raw?.savedReports,
     };
+    const live = <T,>(rows: { id: string; data: Record<string, unknown> }[]) =>
+      rows.filter((r) => !r.data.deleted).map((r) => ({ ...(r.data as Omit<T, 'id'>), id: r.id }) as T);
     const holdings = holdingRows
       .map((r) => ({ ...(r.data as Omit<Holding, 'id'> & { archived?: boolean }), id: r.id }))
       .filter((h) => !h.archived);
@@ -385,6 +391,8 @@ export class WorkspaceRepository {
       holdings,
       lots,
       prices,
+      reportDashboards: live<ReportDashboardModel>(dashboardRows).sort((a, b) => a.sortOrder - b.sortOrder),
+      savedReports: live<SavedReportModel>(savedRows),
       waiting,
       chart: this.chartFor(accountList, categoryList, debts, holdings),
     };
@@ -3003,35 +3011,62 @@ export class WorkspaceRepository {
     await this.put('settings', 'workspace', { ...snapshot.settings, health }, 'settings.update');
   }
 
-  async ensureReportDashboards(): Promise<ReportDashboard[]> {
-    const snapshot = await this.load();
-    if (snapshot.settings.reportDashboards?.length) return snapshot.settings.reportDashboards;
-    const overview: ReportDashboard = {
-      id: this.newId(),
-      name: 'Overview',
-      order: 0,
-      cards: [
-        { id: this.newId(), kind: 'spendingByCategory', title: 'Spending by category' },
-        { id: this.newId(), kind: 'incomeVsSpending', title: 'Income vs spending' },
-        { id: this.newId(), kind: 'netWorth', title: 'Net worth' },
-        { id: this.newId(), kind: 'cashFlow', title: 'Cash flow' },
-      ],
-    };
-    await this.put('settings', 'workspace', { ...snapshot.settings, reportDashboards: [overview] }, 'settings.update');
-    return [overview];
+  private async softDelete(collection: string, id: string, type: string, remote: RemoteOperation): Promise<void> {
+    const rec = await this.store.read(collection, id);
+    if (!rec) return;
+    await this.put(collection, id, { ...rec.data, deleted: true }, type, undefined, remote);
   }
 
-  async saveReportDashboards(dashboards: ReportDashboard[]): Promise<void> {
+  /** Report dashboards and builder reports (DESIGN.md pages 19 to 21). */
+  async createDashboard(name: string, cards: ReportCardModel[] = []): Promise<ReportDashboardModel> {
     const snapshot = await this.load();
-    await this.put('settings', 'workspace', { ...snapshot.settings, reportDashboards: dashboards }, 'settings.update');
+    const id = this.newId();
+    const dashboard: ReportDashboardModel = { id, name: name.trim(), sortOrder: snapshot.reportDashboards.length, cards };
+    const { id: _id, ...data } = dashboard;
+    await this.put('report_dashboards', id, data, 'report_dashboard.create', undefined, {
+      type: 'report_dashboard.create',
+      payload: { id, name: dashboard.name },
+    });
+    if (cards.length) await this.saveDashboard(dashboard);
+    return dashboard;
   }
 
-  async saveSavedReport(report: Omit<SavedReport, 'id'> & { id?: string }): Promise<SavedReport> {
-    const snapshot = await this.load();
-    const saved: SavedReport = { ...report, id: report.id ?? this.newId() };
-    const list = [...(snapshot.settings.savedReports ?? []).filter((r) => r.id !== saved.id), saved];
-    await this.put('settings', 'workspace', { ...snapshot.settings, savedReports: list }, 'settings.update');
-    return saved;
+  async saveDashboard(dashboard: ReportDashboardModel): Promise<void> {
+    const { id, ...data } = dashboard;
+    const baseVersion = await this.versionOf('report_dashboards', id);
+    await this.put('report_dashboards', id, data, 'report_dashboard.update', baseVersion, {
+      type: 'report_dashboard.update',
+      targetId: id,
+      payload: { name: dashboard.name, sortOrder: dashboard.sortOrder, cards: dashboard.cards },
+      baseVersion,
+    });
+  }
+
+  async deleteDashboard(id: string): Promise<void> {
+    await this.softDelete('report_dashboards', id, 'report_dashboard.delete', { type: 'report_dashboard.delete', targetId: id, payload: {} });
+  }
+
+  async saveReport(input: { id?: string; name: string; spec: BuilderSpecModel }): Promise<SavedReportModel> {
+    if (input.id) {
+      const baseVersion = await this.versionOf('saved_reports', input.id);
+      await this.put('saved_reports', input.id, { name: input.name, spec: input.spec }, 'saved_report.update', baseVersion, {
+        type: 'saved_report.update',
+        targetId: input.id,
+        payload: { name: input.name, spec: input.spec },
+        baseVersion,
+      });
+      return { id: input.id, name: input.name, spec: input.spec };
+    }
+    const id = this.newId();
+    await this.put('saved_reports', id, { name: input.name, spec: input.spec }, 'saved_report.create', undefined, {
+      type: 'saved_report.create',
+      payload: { id, name: input.name, spec: input.spec },
+    });
+    return { id, name: input.name, spec: input.spec };
+  }
+
+  async deleteSavedReport(id: string): Promise<void> {
+    await this.softDelete('saved_reports', id, 'saved_report.delete', { type: 'saved_report.delete', targetId: id, payload: {} });
   }
 
   /** `remote: null` when another write of the same action tells the server (a debt, a goal), so it posts once. */

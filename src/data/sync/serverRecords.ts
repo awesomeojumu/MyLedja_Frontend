@@ -393,6 +393,10 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         date: String(d.date),
         priceMinor: String(d.price ?? d.priceMinor ?? '0'),
       });
+    case 'report_dashboards':
+      return rec('report_dashboards', id, { name: d.name, sortOrder: num(d.sortOrder) ?? 0, cards: Array.isArray(d.cards) ? d.cards : [] });
+    case 'saved_reports':
+      return rec('saved_reports', id, { name: d.name, spec: d.spec });
     default:
       return null;
   }

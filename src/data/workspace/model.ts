@@ -222,35 +222,69 @@ export type HoldingPrice = {
   priceMinor: string;
 };
 
-/** Reports dashboards (PU-41…43 / TB-10). */
-export type ReportCardKind =
-  | 'spendingByCategory'
-  | 'incomeVsSpending'
-  | 'netWorth'
-  | 'cashFlow'
-  | 'budgetProgress'
-  | 'custom';
+/** Reports dashboards (DESIGN.md pages 19–21 / PU-41…43 / TB-10). */
+export const REPORT_KINDS = [
+  'net_worth',
+  'income_vs_expenses',
+  'spending_by_category',
+  'spending_trends',
+  'cash_flow',
+  'transaction_calendar',
+  'summary_number',
+  'budget_analysis',
+  'age_of_money',
+  'balance_forecast',
+  'crossover',
+  'investment_performance',
+  'debt_payoff',
+  'income_steadiness',
+  'formula',
+  'note',
+  'custom',
+] as const;
+export type ReportKind = (typeof REPORT_KINDS)[number];
 
-export type ReportCard = {
-  id: string;
-  kind: ReportCardKind;
-  title: string;
-  hidden?: boolean;
+export type ReportChart = 'bar' | 'line' | 'area' | 'donut' | 'table' | 'number' | 'sankey' | 'calendar' | 'note';
+export type RangePreset = 'this_month' | 'last_month' | 'last_3_months' | 'this_year' | 'last_12_months' | 'all';
+export type ReportInterval = 'day' | 'week' | 'month' | 'year';
+
+export type ReportFiltersModel = {
+  accountIds?: string[];
+  categoryIds?: string[];
+  payeeIds?: string[];
+  tagIds?: string[];
+  types?: string[];
 };
 
-export type ReportDashboard = {
-  id: string;
-  name: string;
-  cards: ReportCard[];
-  order: number;
+/** Report builder choices (DESIGN.md page 21). */
+export type BuilderSpecModel = {
+  show: 'spending' | 'income' | 'net' | 'balance' | 'count';
+  groupBy: 'category' | 'group' | 'payee' | 'account' | 'tag' | 'month';
+  splitBy: 'category' | 'group' | 'payee' | 'account' | 'tag' | 'month' | null;
+  chart: ReportChart;
+  filters: ReportFiltersModel;
 };
 
-export type SavedReport = {
+export type ReportCardModel = {
   id: string;
-  name: string;
-  kind: ReportCardKind;
-  dashboardId?: string;
+  kind: ReportKind;
+  title: string | null;
+  savedReportId: string | null;
+  range: RangePreset;
+  interval: ReportInterval;
+  chart: ReportChart | null;
+  spec: BuilderSpecModel | null;
+  formula: string | null;
+  text: string | null;
+  layout: { x: number; y: number; w: number; h: number };
+  hidden: boolean;
+  /** The dashboard's one gold highlight (P19-05). */
+  highlight?: boolean;
 };
+
+export type ReportDashboardModel = { id: string; name: string; sortOrder: number; cards: ReportCardModel[] };
+
+export type SavedReportModel = { id: string; name: string; spec: BuilderSpecModel };
 
 /** Health settings (PU-44 / TECH-SPEC 6.10). */
 export type HealthSettings = {
@@ -320,8 +354,6 @@ export type WorkspaceSettings = {
   /** PU-28 — Due soon window in days (3 · 7 · 14 · 30). */
   dueSoonDays?: 3 | 7 | 14 | 30;
   health?: HealthSettings;
-  reportDashboards?: ReportDashboard[];
-  savedReports?: SavedReport[];
 };
 
 /** Settings › Notifications (P26-05). */

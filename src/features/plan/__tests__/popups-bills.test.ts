@@ -38,6 +38,8 @@ function stubSnapshot(partial: Partial<Snapshot> = {}): Snapshot {
     holdings: [],
     lots: [],
     prices: [],
+    reportDashboards: [],
+    savedReports: [],
     waiting: new Set(),
     chart: {} as Snapshot['chart'],
     ...partial,
