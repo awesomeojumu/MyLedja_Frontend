@@ -61,14 +61,26 @@ export function importRulesApplied(
 }
 
 export function isInvestmentAccount(type: AccountKind): boolean {
-  return type === 'investment';
+  return type === 'investment' || type === 'fixed_deposit' || type === 'pension';
 }
 
 /** Property / valuables / untracked investments (TB-03 Value). Holdings cover tracked investment accounts. */
 export function hasValueTab(type: AccountKind): boolean {
-  return type === 'property';
+  return type === 'property' || type === 'fixed_deposit' || type === 'pension';
 }
 
 export function hasHoldingsTab(type: AccountKind): boolean {
   return type === 'investment';
+}
+
+/** Drop `fromId` onto `toId` in a custom order list (web drag reorder, P08-07). */
+export function reorderAccountIds(ids: string[], fromId: string, toId: string): string[] {
+  if (fromId === toId) return ids;
+  const next = [...ids];
+  const from = next.indexOf(fromId);
+  const to = next.indexOf(toId);
+  if (from < 0 || to < 0) return ids;
+  next.splice(from, 1);
+  next.splice(to, 0, fromId);
+  return next;
 }

@@ -44,14 +44,16 @@ const SERVER_ACCOUNT_TYPE: Record<string, AccountKind> = {
   cash: 'cash',
   wallet: 'wallet',
   savings: 'savings',
-  fixed_deposit: 'savings',
+  fixed_deposit: 'fixed_deposit',
   card: 'card',
   loan: 'loan',
   investment: 'investment',
   property: 'property',
-  pension: 'other',
-  other_asset: 'other',
-  other_liability: 'loan',
+  pension: 'pension',
+  other_asset: 'other_asset',
+  other_liability: 'other_liability',
+  /** Legacy FE coarse type from before BE parity. */
+  other: 'other_asset',
 };
 
 const STREAM_KIND_FROM: Record<string, IncomeStreamKind> = { regular: 'regular', varies: 'variable', irregular: 'irregular', passive: 'passive' };
@@ -97,7 +99,7 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
     case 'accounts':
       return rec('accounts', id, {
         name: d.name,
-        type: SERVER_ACCOUNT_TYPE[String(d.type)] ?? 'other',
+        type: SERVER_ACCOUNT_TYPE[String(d.type)] ?? 'other_asset',
         currency: d.currency ?? 'NGN',
         institution: str(d.institution),
         last4: str(d.last4),

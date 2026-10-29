@@ -1,11 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
+import { Image, View } from 'react-native';
 
 import { aiApi } from '@/api/ai';
 import { ApiError } from '@/api/client';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { openMonoConnect } from '@/features/banking/monoConnect';
-import { View } from 'react-native';
 
 import {
   AmountInput,
@@ -28,7 +28,7 @@ import { useTheme } from '@/design/ThemeProvider';
 import { ACCOUNT_GROUPS, ACCOUNT_KIND_INFO, type Account, type AccountKind } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
-import { NG_INSTITUTIONS } from '@/features/setup/institutions';
+import { matchInstitution, NG_INSTITUTIONS } from '@/features/setup/institutions';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 import { formatNaira, toInputText } from '@/money';
@@ -38,8 +38,18 @@ import { ACCOUNT_KINDS_BY_GROUP, accountInitials } from './helpers';
 
 const sp = tokens.spacing;
 
-export function AccountAvatar({ name, institution }: { name: string; institution?: string }) {
+export function AccountAvatar({
+  name,
+  institution,
+  logoUrl,
+}: {
+  name: string;
+  institution?: string;
+  logoUrl?: string | null;
+}) {
   const theme = useTheme();
+  const matched = institution ? matchInstitution(institution) ?? matchInstitution(name) : matchInstitution(name);
+  const initials = matched?.initials ?? accountInitials(name, institution);
   return (
     <View
       style={{
@@ -49,11 +59,16 @@ export function AccountAvatar({ name, institution }: { name: string; institution
         backgroundColor: theme.tagFill,
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
       }}
     >
-      <Text variant="caption" tone="link">
-        {accountInitials(name, institution)}
-      </Text>
+      {logoUrl ? (
+        <Image source={{ uri: logoUrl }} style={{ width: 40, height: 40 }} accessibilityLabel={institution ?? name} />
+      ) : (
+        <Text variant="caption" tone="link">
+          {initials}
+        </Text>
+      )}
     </View>
   );
 }
@@ -82,7 +97,10 @@ export function AccountTypeGrid({ value, onChange }: { value: AccountKind | null
   );
 }
 
-const bankOptions = [{ value: '', label: t('common.notSet') }, ...NG_INSTITUTIONS.map((i) => ({ value: i.label, label: i.label }))];
+const bankOptions = [
+  { value: '', label: t('common.notSet') },
+  ...NG_INSTITUTIONS.map((i) => ({ value: i.label, label: `${i.initials} · ${i.label}` })),
+];
 const currencyOptions = [
   { value: 'NGN', label: '₦ Naira (NGN)' },
   { value: 'USD', label: '$ US dollar (USD)' },
@@ -228,8 +246,10 @@ export function AddAccountSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Popup #16 Connect bank: choose the MyLedja account, then Mono's secure screen; new transactions go to review. */
-/** PU-16 Connect bank — four steps: choose → sign in → match → history. */
+/**
+ * PU-16 Connect bank — four steps: Choose → Sign in (Mono) → Match → History.
+ * Cancelling at any step connects nothing. Mono code is held until step 4 finishes.
+ */
 export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
   const { snapshot, repo } = useWorkspace();
   const { client, user } = useAuth();
@@ -237,27 +257,47 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
   const api = useMemo(() => aiApi(client), [client]);
   const accounts = (snapshot?.accounts ?? []).filter((a) => !a.archived && ['bank', 'savings', 'wallet', 'card'].includes(a.type));
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
+  const [monoCode, setMonoCode] = useState<string | null>(null);
+  const [pickedAccountId, setPickedAccountId] = useState<string | null>(null);
   const [createNew, setCreateNew] = useState(false);
   const [newName, setNewName] = useState('');
   const [historyMonths, setHistoryMonths] = useState<'1' | '3' | '6' | '12'>('3');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const historyDays = ({ '1': 30, '3': 90, '6': 180, '12': 365 } as const)[historyMonths];
+  const accountId = createNew ? '' : (pickedAccountId && accounts.some((a) => a.id === pickedAccountId) ? pickedAccountId : (accounts[0]?.id ?? ''));
 
-  const cancel = () => onClose();
+  const cancel = () => {
+    setMonoCode(null);
+    onClose();
+  };
 
-  const runMono = async () => {
-    if (!user) return;
+  const startMono = async () => {
     setBusy(true);
     setError(null);
     setStep(2);
     try {
       const code = await openMonoConnect();
       if (!code) {
+        setMonoCode(null);
         setStep(1);
         return;
       }
+      setMonoCode(code);
+      setStep(3);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.body.message : t('accounts.connect.failed'));
+      setStep(1);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finish = async () => {
+    if (!user || !monoCode) return;
+    setBusy(true);
+    setError(null);
+    try {
       let linkAccountId = accountId;
       if (createNew) {
         const name = newName.trim() || t('accounts.connect.newAccountName');
@@ -269,7 +309,6 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
         });
         if (!created.ok) {
           setError(ledgerMessage(created.error));
-          setStep(3);
           return;
         }
         linkAccountId = created.value.id;
@@ -279,14 +318,13 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
         setStep(3);
         return;
       }
-      setStep(4);
-      const link = await api.linkBank(user.workspaceId, { accountId: linkAccountId, code, historyDays });
+      const link = await api.linkBank(user.workspaceId, { accountId: linkAccountId, code: monoCode, historyDays });
       toast.show(t('accounts.connect.linkedImporting', { bank: link.institution }));
       await api.syncBank(user.workspaceId, link.id).catch(() => null);
+      setMonoCode(null);
       onClose();
     } catch (e) {
       setError(e instanceof ApiError ? e.body.message : t('accounts.connect.failed'));
-      setStep(3);
     } finally {
       setBusy(false);
     }
@@ -298,22 +336,23 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
       testID="connect-bank-sheet"
       title={t('accounts.connect.title')}
       onClose={cancel}
+      width={480}
       footer={
         <Footer>
           <Button kind="secondary" label={t('common.cancel')} onPress={cancel} />
           {step === 1 ? (
-            <Button testID="connect-bank-continue" label={t('accounts.connect.continue')} onPress={() => setStep(3)} />
+            <Button testID="connect-bank-continue" label={t('accounts.connect.continue')} onPress={() => void startMono()} />
+          ) : step === 2 ? (
+            <Button kind="secondary" testID="connect-bank-waiting-cancel" label={t('accounts.connect.waiting')} onPress={cancel} disabled={busy} />
           ) : step === 3 ? (
             <Button
               testID="connect-bank-match-continue"
               label={t('accounts.connect.continue')}
               disabled={!createNew && !accountId}
-              onPress={() => void runMono()}
+              onPress={() => setStep(4)}
             />
-          ) : step === 4 ? (
-            <Button testID="connect-bank-finish" label={t('accounts.connect.connect')} disabled={busy} onPress={() => void runMono()} />
           ) : (
-            <Button kind="secondary" label={t('accounts.connect.waiting')} onPress={cancel} disabled={busy} />
+            <Button testID="connect-bank-finish" label={t('accounts.connect.connect')} disabled={busy || !monoCode} onPress={() => void finish()} />
           )}
         </Footer>
       }
@@ -342,10 +381,10 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
               onChange={(v) => {
                 if (v === '__new') {
                   setCreateNew(true);
-                  setAccountId('');
+                  setPickedAccountId(null);
                 } else {
                   setCreateNew(false);
-                  setAccountId(v);
+                  setPickedAccountId(v);
                 }
               }}
             />
@@ -354,7 +393,7 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
             ) : null}
           </>
         ) : null}
-        {step >= 3 ? (
+        {step === 4 ? (
           <SegmentedControl
             testID="connect-bank-history"
             label={t('accounts.connect.history')}
@@ -374,30 +413,45 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Popup #13 — Edit account (`?account=<id>`). Type/currency lock once there are transactions. */
+/** Popup #13 — Edit account (`?account=<id>`). Type/currency lock once there are transactions. Opening change → correction. */
 export function EditAccountSheet({ account, onClose }: { account: Account; onClose: () => void }) {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
+  const owes = ACCOUNT_KIND_INFO[account.type].ledger === 'liability';
+  const currentShown = snapshot
+    ? (() => {
+        const bal = ledgerBalance(account.id, snapshot.events);
+        return owes ? -bal : bal;
+      })()
+    : 0n;
   const [name, setName] = useState(account.name);
   const [institution, setInstitution] = useState(account.institution ?? '');
   const [last4, setLast4] = useState(account.last4 ?? '');
   const [countInBudget, setCountInBudget] = useState(account.countInBudget);
+  const [opening, setOpening] = useState<{ text: string; minor: bigint | null }>({
+    text: toInputText(currentShown),
+    minor: currentShown,
+  });
+  const [error, setError] = useState<string | null>(null);
   const [nameTouched, setNameTouched] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const last4Ok = last4 === '' || /^\d{4}$/.test(last4);
   const nameOk = name.trim() !== '';
   const hasTx = (snapshot?.events ?? []).some((e) => e.status === 'posted' && e.lines.some((l) => l.ledgerAccountId === account.id));
+  const openingDirty = opening.minor !== null && opening.minor !== currentShown;
   const dirty =
     name !== account.name ||
     institution !== (account.institution ?? '') ||
     last4 !== (account.last4 ?? '') ||
-    countInBudget !== account.countInBudget;
+    countInBudget !== account.countInBudget ||
+    openingDirty;
 
   const save = async () => {
     if (!nameOk) {
       setNameTouched(true);
       return;
     }
+    setError(null);
     await repo.updateAccount({
       ...account,
       name: name.trim(),
@@ -405,6 +459,13 @@ export function EditAccountSheet({ account, onClose }: { account: Account; onClo
       last4: last4 || undefined,
       countInBudget,
     });
+    if (openingDirty && opening.minor !== null) {
+      const r = await repo.correctOpeningBalance(account.id, opening.minor, today());
+      if (!r.ok) {
+        setError(ledgerMessage(r.error));
+        return;
+      }
+    }
     toast.show(t('accounts.saved'));
     onClose();
   };
@@ -443,7 +504,7 @@ export function EditAccountSheet({ account, onClose }: { account: Account; onClo
             onChange={setInstitution}
           />
           <Text tone="textSecondary">
-            {t(`accounts.kind.${account.type}`)} · {account.currency}
+            {t(`accounts.kind.${account.type}` as 'accounts.kind.bank')} · {account.currency}
             {hasTx ? ` · ${t('accounts.lockedFields')}` : ''}
           </Text>
           <TextInput
@@ -454,7 +515,17 @@ export function EditAccountSheet({ account, onClose }: { account: Account; onClo
             keyboardType="number-pad"
             error={last4Ok ? null : t('accounts.last4Invalid')}
           />
+          <AmountInput
+            testID="edit-account-opening"
+            label={owes ? t('accounts.openingOwed') : t('accounts.editOpening')}
+            value={opening.text}
+            onChange={(text, minor) => setOpening({ text, minor })}
+          />
+          <Text variant="caption" tone="textSecondary">
+            {t('accounts.openingCorrectionNote')}
+          </Text>
           <Switch testID="edit-account-budget" label={t('accounts.countInBudget')} value={countInBudget} onChange={setCountInBudget} />
+          {error ? <InlineError message={error} /> : null}
         </View>
       </Sheet>
       <Confirm
