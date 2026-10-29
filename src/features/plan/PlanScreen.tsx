@@ -1,7 +1,7 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react-native';
-import { useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ChevronDown, ChevronLeft, ChevronRight, Info, MoreHorizontal } from 'lucide-react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Image, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 
 import {
   Amount,
@@ -73,12 +73,15 @@ export function PlanScreen() {
   const toast = useToast();
   const theme = useTheme();
   const sizeClass = useSizeClass();
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
   const calendarCompact = sizeClass === 'phone';
+  const showDayColumn = sizeClass !== 'phone' && (Platform.OS === 'web' || landscape);
   const { snapshot, repo } = useWorkspace();
   const [viewMonth, setViewMonth] = useState(() => monthOf(today()));
   const month = viewMonth;
   const planTab: PlanTab = params.tab === 'all' ? 'all' : 'month';
-  const view: ViewMode = params.view === 'calendar' ? 'calendar' : 'list';
+  const view: ViewMode = params.view === 'calendar' ? 'calendar' : params.view === 'list' ? 'list' : 'list';
   const setPlanTab = (tab: PlanTab) => router.setParams({ tab });
   const setView = (v: ViewMode) => router.setParams({ view: v });
   const [scheduleSearch, setScheduleSearch] = useState('');
@@ -89,6 +92,14 @@ export function PlanScreen() {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [scheduleAction, setScheduleAction] = useState<Recurring | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hoverDay, setHoverDay] = useState<string | null>(null);
+
+  // Tablet landscape: calendar + day column (DESIGN D24).
+  useEffect(() => {
+    if (sizeClass === 'tablet' && landscape && planTab === 'month' && params.view !== 'list') {
+      router.setParams({ view: 'calendar' });
+    }
+  }, [sizeClass, landscape, planTab, params.view, router]);
 
   const formOpen = !!params.schedule;
   const findOpen = params.find === '1';
@@ -112,7 +123,7 @@ export function PlanScreen() {
   );
   const strip = useMemo(() => (snapshot && rows ? planSummaryStrip(snapshot, month, rows) : null), [snapshot, month, rows]);
   const matchReviewCount = useMemo(() => (snapshot && rows ? billMatchReviewCount(snapshot, rows) : 0), [snapshot, rows]);
-  const byDate = useMemo(() => (rows ? rowsByDate(rows) : new Map()), [rows]);
+  const byDate = useMemo(() => (rows ? rowsByDate(rows) : new Map<string, BillRow[]>()), [rows]);
   const suggestions = useMemo(() => (snapshot ? findRecurringSuggestions(snapshot, month) : []), [snapshot, month]);
   const schedules = useMemo(
     () => (snapshot ? allScheduleRows(snapshot, today(), scheduleSearch, showCancelled) : []),
@@ -168,19 +179,27 @@ export function PlanScreen() {
         </View>
       ) : null}
       {strip ? (
-        <View testID="plan-summary-strip" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'] }}>
-          <SummaryCell label={t('plan.comingIn')} testID="plan-coming-in">
+        <View
+          testID="plan-summary-strip"
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: sp['spacing-sm'],
+            marginBottom: sp['spacing-md'],
+          }}
+        >
+          <SummaryCell label={t('plan.comingIn')} testID="plan-coming-in" phoneHalf={calendarCompact}>
             <Pressable accessibilityRole="link" onPress={() => router.push('/income')}>
               <Amount minor={strip.comingIn} signed />
             </Pressable>
           </SummaryCell>
-          <SummaryCell label={t('plan.goingOut')} testID="plan-going-out">
+          <SummaryCell label={t('plan.goingOut')} testID="plan-going-out" phoneHalf={calendarCompact}>
             <Text variant="body-tabular">{`−${formatNaira(strip.goingOut)}`}</Text>
           </SummaryCell>
-          <SummaryCell label={t('plan.leftAfter')} testID="plan-left-after">
+          <SummaryCell label={t('plan.leftAfter')} testID="plan-left-after" phoneHalf={calendarCompact}>
             <Amount minor={strip.leftAfter} />
           </SummaryCell>
-          <SummaryCell label={t('plan.missed')} testID="plan-missed">
+          <SummaryCell label={t('plan.missed')} testID="plan-missed" phoneHalf={calendarCompact}>
             {strip.missed > 0 ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: tokens.color.ruby }} />
@@ -253,12 +272,16 @@ export function PlanScreen() {
       {!rows ? (
         <Placeholder height={120} />
       ) : rows.length === 0 ? (
-        <EmptyState
-          title={t('plan.emptyMonthTitle')}
-          body={t('plan.emptyMonthBody')}
-          actionLabel={t('plan.addBill')}
-          onAction={() => openAdd('bill')}
-        />
+        <View testID="plan-empty-month" style={{ alignItems: 'center', gap: sp['spacing-md'], padding: sp['spacing-xl'] }}>
+          <Text variant="heading-sm">{t('plan.emptyMonthTitle')}</Text>
+          <Text tone="textSecondary" style={{ textAlign: 'center' }}>
+            {t('plan.emptyMonthBody')}
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], justifyContent: 'center' }}>
+            <Button testID="plan-empty-add" label={t('plan.addBill')} onPress={() => openAdd('bill')} />
+            <Button testID="plan-empty-find" kind="secondary" label={t('plan.findRecurring')} onPress={() => router.setParams({ find: '1' })} />
+          </View>
+        </View>
       ) : view === 'list' ? (
         <ScrollView contentContainerStyle={{ gap: sp['spacing-lg'] }}>
           {GROUP_ORDER.map((group) => {
@@ -277,7 +300,20 @@ export function PlanScreen() {
             }
             return (
               <View key={group} style={{ gap: sp['spacing-sm'] }}>
-                <Text variant="heading-sm">{t(`plan.group.${group}`)}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-xs'] }}>
+                  <Text variant="heading-sm">{t(`plan.group.${group}`)}</Text>
+                  {group === 'dueSoon' ? (
+                    <Pressable
+                      testID="plan-due-soon-info"
+                      accessibilityRole="button"
+                      accessibilityLabel={t('plan.upcomingTitle')}
+                      onPress={() => setUpcomingOpen(true)}
+                      style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Info size={16} color={theme.textSecondary} />
+                    </Pressable>
+                  ) : null}
+                </View>
                 {groupRows.map((row) => (
                   <BillRowView
                     key={`${row.recurring.id}-${row.dueDate}`}
@@ -296,7 +332,39 @@ export function PlanScreen() {
           })}
         </ScrollView>
       ) : (
-        <CalendarGrid month={month} today={today()} byDate={byDate} onDay={(d) => router.setParams({ day: d })} theme={theme} compact={calendarCompact} />
+        <View style={{ flexDirection: showDayColumn ? 'row' : 'column', gap: sp['spacing-md'], alignItems: 'flex-start' }}>
+          <View style={{ flex: showDayColumn ? 2 : undefined, width: showDayColumn ? undefined : '100%' }}>
+            <CalendarGrid
+              month={month}
+              today={today()}
+              byDate={byDate}
+              onDay={(d) => router.setParams({ day: d })}
+              onHoverDay={Platform.OS === 'web' ? setHoverDay : undefined}
+              hoverDay={hoverDay}
+              theme={theme}
+              compact={calendarCompact}
+            />
+          </View>
+          {showDayColumn ? (
+            <View testID="plan-day-column" style={{ flex: 1, minWidth: 220, gap: sp['spacing-sm'] }}>
+              <Text variant="heading-sm">
+                {dayListTitle(daySheet ?? hoverDay ?? today())}
+              </Text>
+              {(byDate.get(daySheet ?? hoverDay ?? today()) ?? []).map((row) => (
+                <BillRowView
+                  key={`side-${row.recurring.id}-${row.dueDate}`}
+                  row={row}
+                  snapshot={snapshot!}
+                  onMark={() => openMatch(row)}
+                  onEdit={() => router.setParams({ schedule: row.recurring.id })}
+                />
+              ))}
+              {(byDate.get(daySheet ?? hoverDay ?? today()) ?? []).length === 0 ? (
+                <Text tone="textSecondary">{t('plan.dayEmpty')}</Text>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
       )}
 
         </>
@@ -469,29 +537,50 @@ export function PlanScreen() {
         />
       </Popover>
 
-      {daySheet && rows ? (
-        <Sheet
-          visible
-          title={dayListTitle(daySheet)}
-          onClose={() => router.setParams({ day: undefined })}
-          testID="plan-day-sheet"
-        >
-          {(byDate.get(daySheet) ?? []).map((row: BillRow) => (
-            <BillRowView
-              key={`${row.recurring.id}-${row.dueDate}`}
-              row={row}
-              snapshot={snapshot!}
-              onMark={() => openMatch(row)}
-              onEdit={() => {
-                if (row.recurring.id.startsWith('stream:')) router.push(`/income?stream=${row.recurring.id.replace(/^stream:/, '')}`);
-                else router.setParams({ schedule: row.recurring.id, day: undefined });
-              }}
-            />
-          ))}
-          {(byDate.get(daySheet) ?? []).length === 0 ? (
-            <EmptyState title={t('plan.dayEmpty')} body="" actionLabel={t('plan.addBill')} onAction={() => openAdd('bill')} />
-          ) : null}
-        </Sheet>
+      {daySheet && rows && !showDayColumn ? (
+        sizeClass === 'phone' ? (
+          <Sheet
+            visible
+            title={dayListTitle(daySheet)}
+            onClose={() => router.setParams({ day: undefined })}
+            testID="plan-day-sheet"
+          >
+            {(byDate.get(daySheet) ?? []).map((row: BillRow) => (
+              <BillRowView
+                key={`${row.recurring.id}-${row.dueDate}`}
+                row={row}
+                snapshot={snapshot!}
+                onMark={() => openMatch(row)}
+                onEdit={() => {
+                  if (row.recurring.id.startsWith('stream:')) router.push(`/income?stream=${row.recurring.id.replace(/^stream:/, '')}`);
+                  else router.setParams({ schedule: row.recurring.id, day: undefined });
+                }}
+              />
+            ))}
+            {(byDate.get(daySheet) ?? []).length === 0 ? (
+              <EmptyState title={t('plan.dayEmpty')} body="" actionLabel={t('plan.addBill')} onAction={() => openAdd('bill')} />
+            ) : null}
+          </Sheet>
+        ) : (
+          <Popover visible onClose={() => router.setParams({ day: undefined })} testID="plan-day-sheet">
+            <Text variant="heading-sm">{dayListTitle(daySheet)}</Text>
+            {(byDate.get(daySheet) ?? []).map((row: BillRow) => (
+              <BillRowView
+                key={`${row.recurring.id}-${row.dueDate}`}
+                row={row}
+                snapshot={snapshot!}
+                onMark={() => openMatch(row)}
+                onEdit={() => {
+                  if (row.recurring.id.startsWith('stream:')) router.push(`/income?stream=${row.recurring.id.replace(/^stream:/, '')}`);
+                  else router.setParams({ schedule: row.recurring.id, day: undefined });
+                }}
+              />
+            ))}
+            {(byDate.get(daySheet) ?? []).length === 0 ? (
+              <EmptyState title={t('plan.dayEmpty')} body="" actionLabel={t('plan.addBill')} onAction={() => openAdd('bill')} />
+            ) : null}
+          </Popover>
+        )
       ) : null}
     </AppFrame>
   );
@@ -605,9 +694,27 @@ function AllSchedulesTable({
   );
 }
 
-function SummaryCell({ label, testID, children }: { label: string; testID: string; children: ReactNode }) {
+function SummaryCell({
+  label,
+  testID,
+  children,
+  phoneHalf,
+}: {
+  label: string;
+  testID: string;
+  children: ReactNode;
+  phoneHalf?: boolean;
+}) {
   return (
-    <Card testID={testID} style={{ flex: 1, minWidth: 140, gap: sp['spacing-xxs'] }}>
+    <Card
+      testID={testID}
+      style={{
+        flex: 1,
+        minWidth: phoneHalf ? '45%' : 140,
+        maxWidth: phoneHalf ? '48%' : undefined,
+        gap: sp['spacing-xxs'],
+      }}
+    >
       <Text variant="caption" tone="textSecondary">
         {label}
       </Text>
@@ -621,6 +728,8 @@ function CalendarGrid({
   today: todayIso,
   byDate,
   onDay,
+  onHoverDay,
+  hoverDay,
   theme,
   compact,
 }: {
@@ -628,16 +737,19 @@ function CalendarGrid({
   today: string;
   byDate: Map<string, BillRow[]>;
   onDay: (iso: string) => void;
+  onHoverDay?: (iso: string | null) => void;
+  hoverDay?: string | null;
   theme: ReturnType<typeof useTheme>;
   compact: boolean;
 }) {
   const days = calendarDays(month);
+  const ink = tokens.color.ink;
   return (
     <View testID="plan-calendar" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
       {days.map((d) => {
         const items = byDate.get(d) ?? [];
-        const overdue = items.some((r) => r.group === 'overdue' && r.occurrence?.status !== 'paid');
         const isToday = d === todayIso;
+        const hovered = hoverDay === d;
         return (
           <Pressable
             key={d}
@@ -645,17 +757,20 @@ function CalendarGrid({
             accessibilityRole="button"
             accessibilityLabel={d}
             onPress={() => onDay(d)}
+            onHoverIn={onHoverDay ? () => onHoverDay(d) : undefined}
+            onHoverOut={onHoverDay ? () => onHoverDay(null) : undefined}
             style={{
-              width: compact ? '13%' : '13%',
+              width: '13%',
               minWidth: compact ? 40 : 72,
               minHeight: compact ? undefined : 56,
               aspectRatio: compact ? 1 : undefined,
               borderWidth: 1,
-              borderColor: isToday ? theme.primaryFill : theme.border,
+              borderColor: isToday ? theme.primaryFill : hovered ? ink : theme.border,
               borderRadius: 8,
               alignItems: 'center',
               justifyContent: 'flex-start',
               padding: 4,
+              backgroundColor: hovered ? theme.hover : undefined,
             }}
           >
             <Text variant="caption">{d.slice(-2)}</Text>
@@ -669,14 +784,19 @@ function CalendarGrid({
                         width: 4,
                         height: 4,
                         borderRadius: 2,
-                        backgroundColor: r.recurring.kind === 'income' ? theme.primaryFill : overdue ? tokens.color.ruby : theme.textSecondary,
+                        backgroundColor:
+                          r.recurring.kind === 'income'
+                            ? theme.primaryFill
+                            : r.group === 'overdue' && r.occurrence?.status !== 'paid'
+                              ? tokens.color.ruby
+                              : ink,
                       }}
                     />
                   ))}
                 </View>
               ) : (
                 <View style={{ gap: 2, marginTop: 2, width: '100%' }}>
-                  {items.slice(0, 2).map((r) => (
+                  {(hovered ? items : items.slice(0, 2)).map((r) => (
                     <View
                       key={`${r.recurring.id}-${r.dueDate}`}
                       style={{
@@ -691,12 +811,12 @@ function CalendarGrid({
                       {r.group === 'overdue' && r.occurrence?.status !== 'paid' ? (
                         <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: tokens.color.ruby }} />
                       ) : null}
-                      <Text variant="caption" numberOfLines={1} style={{ flex: 1 }}>
+                      <Text variant="caption" numberOfLines={1} style={{ flex: 1, color: ink }}>
                         {r.recurring.kind === 'income' ? `+ ${r.recurring.name}` : r.recurring.name}
                       </Text>
                     </View>
                   ))}
-                  {items.length > 2 ? (
+                  {!hovered && items.length > 2 ? (
                     <Text variant="caption" tone="textSecondary">
                       +{items.length - 2}
                     </Text>
@@ -725,15 +845,40 @@ function BillRowView({
   const paid = row.occurrence?.status === 'paid';
   const income = row.recurring.kind === 'income';
   const hasMatch = !paid && !income && billMatchCandidates(snapshot, row).length > 0;
+  const payee = row.recurring.payeeId ? snapshot.payees.find((p) => p.id === row.recurring.payeeId) : undefined;
   return (
     <Card testID={`bill-${row.recurring.id}`} style={{ gap: sp['spacing-xs'] }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text variant="heading-sm">
-          {income ? '+ ' : ''}
-          {row.recurring.name}
-        </Text>
-        {row.group === 'overdue' && !paid ? <StatusPill label={t('plan.overdue')} kind="pending" /> : null}
-        {row.group === 'dueSoon' && !paid ? <StatusPill label={t('plan.dueSoon')} kind="pending" /> : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-xs'], flex: 1 }}>
+          {payee?.logoUri ? (
+            <Image
+              testID={`bill-logo-${row.recurring.id}`}
+              source={{ uri: payee.logoUri }}
+              style={{ width: 28, height: 28, borderRadius: 6 }}
+              accessibilityIgnoresInvertColors
+            />
+          ) : (
+            <View
+              testID={`bill-logo-placeholder-${row.recurring.id}`}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                backgroundColor: tokens.color.hairline,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text variant="caption">{row.recurring.name.slice(0, 1).toUpperCase()}</Text>
+            </View>
+          )}
+          <Text variant="heading-sm" style={{ flexShrink: 1 }}>
+            {income ? '+ ' : ''}
+            {row.recurring.name}
+          </Text>
+        </View>
+        {row.group === 'overdue' && !paid ? <StatusPill label={t('plan.overdue')} kind="problem" /> : null}
+        {row.group === 'dueSoon' && !paid ? <StatusPill label={t('plan.dueSoon')} kind="due-soon" /> : null}
         {paid ? <StatusPill label={income ? t('plan.received') : t('plan.paid')} kind="done" /> : null}
       </View>
       <Text tone="textSecondary">

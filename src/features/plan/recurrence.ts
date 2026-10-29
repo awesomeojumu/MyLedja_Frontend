@@ -30,7 +30,9 @@ export function dueDatesInMonth(rule: RecurrenceRule, month: string, startDate: 
 
   if (rule.every === 'month') {
     const [y, m] = month.split('-').map(Number) as [number, number];
-    const day = rule.on === 31 ? lastDayOfMonth(y, m - 1) : Math.min(rule.on, lastDayOfMonth(y, m - 1));
+    // TECH-SPEC 6.4: day 0 = last day of month; 29–31 clamp to month end.
+    const day =
+      rule.on === 0 || rule.on === 31 ? lastDayOfMonth(y, m - 1) : Math.min(rule.on, lastDayOfMonth(y, m - 1));
     const d = `${month}-${String(day).padStart(2, '0')}`;
     return inRange(d) ? [d] : [];
   }

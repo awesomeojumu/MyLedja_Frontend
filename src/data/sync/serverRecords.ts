@@ -158,6 +158,8 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         reminderDays: days[0],
         hideAmountOnLock: reminder ? reminder.hideAmountOnLockScreen !== false : true,
         cancelled: d.status === 'cancelled',
+        paused: d.status === 'paused',
+        toAccountId: str(d.toAccountId),
       };
       return rec('recurring', id, data);
     }
@@ -269,6 +271,7 @@ export function scheduleBody(id: string, r: Omit<Recurring, 'id'>) {
     payeeId: r.payeeId ?? null,
     accountId: r.accountId || null,
     categoryId: r.categoryId ?? null,
+    toAccountId: r.toAccountId ?? null,
     amount: r.amountMinor,
     amountApproximate: r.approximate === true,
     recurrence: recurrenceToServer(r.rule),
@@ -281,7 +284,8 @@ export function scheduleBody(id: string, r: Omit<Recurring, 'id'>) {
 
 export function scheduleUpdateBody(r: Omit<Recurring, 'id'>, baseVersion: number) {
   const { id: _id, kind: _kind, ...rest } = scheduleBody('', r);
-  return { ...rest, baseVersion, status: r.cancelled ? undefined : 'active' };
+  // Cancel goes through schedule.cancel; update only carries active|paused.
+  return { ...rest, baseVersion, status: r.paused ? 'paused' : 'active' };
 }
 
 const percentToBasisPoints = (p: number | undefined) => (p === undefined ? undefined : Math.round(p * 100));

@@ -7,6 +7,11 @@ describe('recurrence (P12-03)', () => {
     expect(dueDateInMonth({ every: 'month', on: 31 }, '2026-01')).toBe('2026-01-31');
   });
 
+  it('day 0 means last day of month (TECH-SPEC 6.4)', () => {
+    expect(dueDateInMonth({ every: 'month', on: 0 }, '2026-02')).toBe('2026-02-28');
+    expect(dueDateInMonth({ every: 'month', on: 0 }, '2026-11')).toBe('2026-11-30');
+  });
+
   it('every N days produces multiple dates in month', () => {
     const dates = dueDatesInMonth({ every: 'day', on: 0, interval: 7 }, '2026-10', '2026-10-01');
     expect(dates.length).toBeGreaterThan(3);

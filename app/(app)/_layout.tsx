@@ -2,6 +2,7 @@ import { Redirect, Slot } from 'expo-router';
 import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { AppLockGate } from '@/features/lock/AppLock';
+import { LocalPushBridge } from '@/features/notifications/LocalPushBridge';
 import { AddTransactionProvider } from '@/features/transactions/AddTransaction';
 
 export default function AppLayout() {
@@ -13,6 +14,7 @@ export default function AppLayout() {
     <WorkspaceProvider workspaceId={user.workspaceId}>
       <AppLockGate>
         <AddTransactionProvider>
+          <LocalPushBridge />
           <Slot />
         </AddTransactionProvider>
       </AppLockGate>
