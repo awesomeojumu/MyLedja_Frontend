@@ -181,7 +181,6 @@ const LOCAL_ONLY = new Set([
   'reconcile.finish',
   'transfer.dismiss',
   'settings.update',
-  'payee.delete',
   'notification.create',
   'notification.read',
   'notification.snooze',
@@ -1172,7 +1171,8 @@ export class WorkspaceRepository {
       if (owner) return { ok: false, error: 'missing_lines' };
     }
     const { id, ...data } = payee;
-    await this.put('payees', id, data, 'payee.update');
+    const baseVersion = await this.versionOf('payees', id);
+    await this.put('payees', id, data, 'payee.update', baseVersion);
     return { ok: true, value: undefined };
   }
 
@@ -1184,7 +1184,14 @@ export class WorkspaceRepository {
     if (snapshot.events.some((e) => e.payeeId === payeeId && e.status === 'posted')) {
       return { ok: false, error: 'missing_lines' };
     }
-    await this.put('payees', payeeId, { ...payee, deleted: true }, 'payee.delete');
+    await this.put(
+      'payees',
+      payeeId,
+      { ...payee, deleted: true },
+      'payee.delete',
+      undefined,
+      { type: 'payee.delete', targetId: payeeId, payload: {} },
+    );
     return { ok: true, value: undefined };
   }
 
@@ -1214,7 +1221,13 @@ export class WorkspaceRepository {
       if (!rec) continue;
       moved.push({ eventId: event.id, fromPayeeId: event.payeeId });
       const data = { ...(rec.data as StoredEvent), payeeId: keepId };
-      await this.engine.save({ ...rec, data }, 'event.payee', { collection: 'events', id: event.id, data }, rec.version);
+      // Server moves txs inside payee.merge; keep event patches local-only.
+      await this.engine.save(
+        { ...rec, data },
+        'event.payee',
+        { collection: 'events', id: event.id, data, remote: null },
+        rec.version,
+      );
     }
 
     const nameSrc = byId(choices?.nameId ?? keepId) ?? keepPayee;
@@ -1239,12 +1252,32 @@ export class WorkspaceRepository {
     // Drop the kept display name from aliases if it was a sibling's name we promoted.
     aliases.delete(next.name);
     next.aliases = [...aliases];
+
+    // PU-47: rules that mentioned a merged payee now match the kept name.
+    const removedNames = merged.map((p) => p.name.toLowerCase());
+    for (const rule of snapshot.rules) {
+      let changed = false;
+      const conditions = rule.conditions.map((c) => {
+        if (c.field !== 'payee') return c;
+        const value = c.value.trim().toLowerCase();
+        if (!value) return c;
+        if (removedNames.some((n) => value === n || value.includes(n) || n.includes(value))) {
+          changed = true;
+          return { ...c, value: next.name };
+        }
+        return c;
+      });
+      if (changed) await this.saveRule({ ...rule, conditions });
+    }
+
     const { id: _keepId, ...keepBody } = next;
-    await this.put('payees', next.id, keepBody, 'payee.update');
+    // Keep local write device-only; payee.merge applies the server-side keep update.
+    await this.put('payees', next.id, keepBody, 'payee.update', undefined, null);
 
     for (const id of ids) {
       const p = merged.find((m) => m.id === id)!;
-      await this.put('payees', id, { ...p, deleted: true }, 'payee.delete');
+      // Server tombstones siblings inside payee.merge.
+      await this.put('payees', id, { ...p, deleted: true }, 'payee.delete', undefined, null);
     }
 
     const mergeId = this.newId();
@@ -1259,7 +1292,16 @@ export class WorkspaceRepository {
       },
       'payee.merge',
       undefined,
-      null,
+      {
+        type: 'payee.merge',
+        payload: {
+          keepId,
+          mergeIds: ids,
+          name: next.name,
+          logoFromId: choices?.logoId,
+          categoryFromId: choices?.categoryId,
+        },
+      },
     );
     return { ok: true, value: { mergeId, moved: moved.length } };
   }
@@ -1282,7 +1324,7 @@ export class WorkspaceRepository {
       await this.engine.save(
         { ...eventRec, data: eventData },
         'event.payee',
-        { collection: 'events', id: row.eventId, data: eventData },
+        { collection: 'events', id: row.eventId, data: eventData, remote: null },
         eventRec.version,
       );
     }
@@ -1293,7 +1335,14 @@ export class WorkspaceRepository {
       const { id, deleted: _d, ...body } = p as Payee & { deleted?: boolean };
       await this.put('payees', id, body, 'payee.update');
     }
-    await this.put('payee_merges', mergeId, { ...data, undone: true }, 'payee.merge.undo', undefined, null);
+    await this.put(
+      'payee_merges',
+      mergeId,
+      { ...data, undone: true },
+      'payee.merge.undo',
+      undefined,
+      { type: 'payee.merge.undo', targetId: mergeId, payload: {} },
+    );
     return { ok: true, value: undefined };
   }
 

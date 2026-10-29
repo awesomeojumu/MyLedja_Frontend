@@ -7,7 +7,7 @@ import { t } from '@/i18n';
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
 import { resetParams, setParams } from '../../../../test/helpers/router';
 import { PayeesScreen } from '../PayeesScreen';
-import { aliasOwner } from '../helpers';
+import { aliasOwner, payeeRows } from '../helpers';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 jest.mock('expo-document-picker', () => ({
@@ -58,8 +58,10 @@ afterEach(() => {
 });
 
 describe('Payees page (PU-46 / PU-47)', () => {
-  it('P24-01: lists payees with counts', async () => {
-    const { sync } = await seeded();
+  it('P24-01: lists payees with usage (phone: name + last used)', async () => {
+    const { sync, repo } = await seeded();
+    const before = await repo.load();
+    expect(payeeRows(before, 2026).every((r) => r.txCount === 1)).toBe(true);
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
         <PayeesScreen />
@@ -68,7 +70,8 @@ describe('Payees page (PU-46 / PU-47)', () => {
     );
     expect(await screen.findByText('Shoprite')).toBeTruthy();
     expect(screen.getByText('Corner shop')).toBeTruthy();
-    expect(screen.getAllByText(t('payees.txCount', { count: 1 })).length).toBe(2);
+    // DESIGN D4 phone rows: logo, name, last used (tx count lives on tablet/desktop table).
+    expect(screen.getAllByText(/Last used|Not used yet/).length).toBeGreaterThanOrEqual(2);
   });
 
   it('PU00-5 / PU-46: ?payee= opens the panel', async () => {
@@ -142,6 +145,8 @@ describe('Payees page (PU-46 / PU-47)', () => {
       </WorkspaceProvider>,
       { sync },
     );
+    await fireEvent.press(screen.getByTestId(`payee-select-${shop.id}`));
+    await fireEvent.press(screen.getByTestId(`payee-select-${corner.id}`));
     await fireEvent.press(screen.getByTestId('payees-merge'));
     expect(screen.getByTestId('payees-merge-sheet')).toBeTruthy();
     await fireEvent.press(screen.getByTestId(`payees-merge-keep-name-${shop.id}`));

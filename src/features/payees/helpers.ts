@@ -59,11 +59,13 @@ export function sortPayeeRows(rows: PayeeRow[], sort: PayeeSort): PayeeRow[] {
   return copy;
 }
 
-/** Latest transactions for the payee panel (PU-46: latest 10). */
+/** Latest transactions for the payee panel (PU-46: latest 10, newest first). */
 export function payeeTransactions(snapshot: Snapshot, payeeId: string, limit = 10) {
   const accountIds = new Set(snapshot.accounts.map((a) => a.id));
   return snapshot.events
     .filter((e) => e.status === 'posted' && e.payeeId === payeeId && e.type !== 'transfer')
+    .slice()
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
     .slice(0, limit)
     .map((e) => {
       const categoryLine = e.lines.find((l) => !accountIds.has(l.ledgerAccountId));

@@ -245,6 +245,9 @@ const BE_TYPES = new Set([
   'category.update',
   'payee.create',
   'payee.update',
+  'payee.merge',
+  'payee.merge.undo',
+  'payee.delete',
   'tag.create',
   'budget.assign',
   'budget.template.save',
@@ -396,13 +399,41 @@ export function toBackendOperation(op: Operation, accounts: Account[]): BackendO
     };
   }
 
+  if (op.type === 'payee.merge' || op.type === 'payee.merge.undo' || op.type === 'payee.delete') {
+    return {
+      operationId: op.operationId,
+      type: op.type,
+      targetId: typeof op.payload.targetId === 'string' ? op.payload.targetId : id || null,
+      payload: (op.payload.payload as Record<string, unknown> | undefined) ?? (data as Record<string, unknown>),
+      baseVersion: op.baseVersion ?? null,
+      createdAt: op.createdAt,
+      schemaVersion: op.schemaVersion,
+    };
+  }
+
   if (op.type === 'payee.create' || collection === 'payees') {
     const create = op.type.includes('create');
+    const aliases = Array.isArray(data.aliases) ? data.aliases : undefined;
+    const logoFileId =
+      typeof data.logoFileId === 'string'
+        ? data.logoFileId
+        : typeof data.logoUri === 'string' &&
+            (data.logoUri.startsWith('http://') || data.logoUri.startsWith('https://') || data.logoUri.startsWith('data:'))
+          ? data.logoUri
+          : data.logoUri === '' || data.logoUri === null
+            ? null
+            : undefined;
     return create
       ? {
           operationId: op.operationId,
           type: 'payee.create',
-          payload: { id, name: data.name, defaultCategoryId: data.defaultCategoryId ?? null },
+          payload: {
+            id,
+            name: data.name,
+            defaultCategoryId: data.defaultCategoryId ?? null,
+            ...(aliases ? { aliases } : {}),
+            ...(logoFileId !== undefined ? { logoFileId } : {}),
+          },
           createdAt: op.createdAt,
           schemaVersion: op.schemaVersion,
         }
@@ -410,7 +441,13 @@ export function toBackendOperation(op: Operation, accounts: Account[]): BackendO
           operationId: op.operationId,
           type: 'payee.update',
           targetId: id,
-          payload: { baseVersion: op.baseVersion ?? 0, name: data.name, defaultCategoryId: data.defaultCategoryId ?? null },
+          payload: {
+            baseVersion: op.baseVersion ?? 0,
+            name: data.name,
+            defaultCategoryId: data.defaultCategoryId ?? null,
+            ...(aliases ? { aliases } : {}),
+            ...(logoFileId !== undefined ? { logoFileId } : {}),
+          },
           baseVersion: op.baseVersion ?? null,
           createdAt: op.createdAt,
           schemaVersion: op.schemaVersion,
