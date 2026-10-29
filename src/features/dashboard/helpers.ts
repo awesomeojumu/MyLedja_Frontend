@@ -10,7 +10,6 @@ import { leftToSpend } from '@/ledger/budget';
 import {
   categoryActivity,
   ledgerBalance,
-  monthIncome,
   monthOf,
   monthSpent,
   monthsEndingAt,
@@ -20,6 +19,7 @@ import {
   prevMonth,
   shownBalance,
 } from '@/ledger';
+import { budgetableIncomeReceived } from '@/features/income/budgetableIncome';
 import { t, catalogue, type TextKey } from '@/i18n';
 
 function groupLabel(group: string): string {
@@ -231,7 +231,7 @@ function worthOn(snapshot: Snapshot, onDate: string) {
 export function dashboardModel(snapshot: Snapshot, month: string) {
   const totals = periodTotals(snapshot.events);
   const prev = prevMonth(month);
-  const income = monthIncome(snapshot.chart, totals, month, true);
+  const income = budgetableIncomeReceived(snapshot, month);
   const spent = monthSpent(snapshot.chart, totals, month);
   const netCash = income - spent;
   const budget = budgetForMonth(snapshot, month);
@@ -246,7 +246,7 @@ export function dashboardModel(snapshot: Snapshot, month: string) {
   }));
   const months6 = monthsEndingAt(month, 6);
   const incomeVsSpent = months6.flatMap((m) => [
-    { label: `${shortMonthLabel(m)} ${t('dashboard.incomeShort')}`, value: monthIncome(snapshot.chart, totals, m, true) },
+    { label: `${shortMonthLabel(m)} ${t('dashboard.incomeShort')}`, value: budgetableIncomeReceived(snapshot, m) },
     { label: `${shortMonthLabel(m)} ${t('dashboard.spentShort')}`, value: monthSpent(snapshot.chart, totals, m) },
   ]);
   const byDay = cumulativeSpendingByDay(snapshot, month);
@@ -294,7 +294,7 @@ export function dashboardModel(snapshot: Snapshot, month: string) {
     spent,
     netCash,
     budgetLeft,
-    incomeChange: pctChange(income, monthIncome(snapshot.chart, totals, prev, true)),
+    incomeChange: pctChange(income, budgetableIncomeReceived(snapshot, prev)),
     spentChange: pctChange(spent, monthSpent(snapshot.chart, totals, prev)),
     worthNow,
     worthChange: worthNow - worthPrev,

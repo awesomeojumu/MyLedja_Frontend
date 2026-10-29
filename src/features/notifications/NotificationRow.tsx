@@ -25,6 +25,7 @@ export function NotificationRow({
   notification: n,
   today,
   onMarkPaid,
+  onMarkReceived,
   onMatch,
   onRemindTomorrow,
   onSeeBudget,
@@ -36,6 +37,7 @@ export function NotificationRow({
   notification: AppNotification;
   today: string;
   onMarkPaid: () => Promise<void>;
+  onMarkReceived: () => void;
   onMatch: () => void;
   onRemindTomorrow: () => void;
   onSeeBudget: () => void;
@@ -95,6 +97,18 @@ export function NotificationRow({
           {n.action === 'mark_paid' ? (
             <>
               <Button testID={`notification-action-${n.id}`} kind="secondary" size="sm" label={t('plan.markPaid')} onPress={() => void onMarkPaid()} />
+              <Button testID={`notification-snooze-${n.id}`} kind="link" size="sm" label={t('notifications.remindTomorrow')} onPress={onRemindTomorrow} />
+            </>
+          ) : null}
+          {n.action === 'mark_received' ? (
+            <>
+              <Button
+                testID={`notification-action-${n.id}`}
+                kind="secondary"
+                size="sm"
+                label={t('notifications.markReceived')}
+                onPress={onMarkReceived}
+              />
               <Button testID={`notification-snooze-${n.id}`} kind="link" size="sm" label={t('notifications.remindTomorrow')} onPress={onRemindTomorrow} />
             </>
           ) : null}

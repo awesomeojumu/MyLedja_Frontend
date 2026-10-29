@@ -103,4 +103,63 @@ describe('Income page (F2.2)', () => {
     expect(screen.getByText(t('income.matchPickTitle'))).toBeTruthy();
     expect(screen.getByTestId('income-match-create')).toBeTruthy();
   });
+
+  it('PU-26: ?occurrence= opens mark received sheet', async () => {
+    const { sync, repo } = await seeded();
+    const stream = (await repo.load()).incomeStreams[0]!;
+    setParams({ occurrence: stream.id });
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <IncomeScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(await screen.findByTestId('income-record-sheet')).toBeTruthy();
+  });
+});
+
+describe('E24 priorSameMonth gate (P0)', () => {
+  it('does not post salary_gross after a same-month partial', async () => {
+    const { repo } = await seeded();
+    const snap = await repo.load();
+    const stream = snap.incomeStreams[0]!;
+    const pension = await repo.addAccount({
+      name: 'Pension',
+      type: 'savings',
+      openingBalance: 0n,
+      openingDate: '2026-10-01',
+    });
+    const nhf = await repo.addAccount({
+      name: 'NHF',
+      type: 'savings',
+      openingBalance: 0n,
+      openingDate: '2026-10-01',
+    });
+    if (!pension.ok || !nhf.ok) throw new Error('accounts');
+    await repo.updateIncomeStream({
+      ...stream,
+      recordMode: 'gross',
+      grossMinor: '80000000',
+      expectedMinor: '62000000',
+      deductions: [
+        { kind: 'paye', amountMinor: '9600000' },
+        { kind: 'pension', amountMinor: '6400000', targetAccountId: pension.value.id },
+        { kind: 'nhf', amountMinor: '2000000', targetAccountId: nhf.value.id },
+      ],
+    });
+    const partial = await repo.recordIncomeReceived(stream.id, {
+      accountId: snap.accounts[0]!.id,
+      amount: 30_000_000n,
+      date: '2026-10-10',
+    });
+    expect(partial.ok && partial.value.type).toBe('income');
+    const topUp = await repo.recordIncomeReceived(stream.id, {
+      accountId: snap.accounts[0]!.id,
+      amount: 62_000_000n,
+      date: '2026-10-27',
+    });
+    expect(topUp.ok && topUp.value.type).toBe('income');
+    const events = (await repo.load()).events.filter((e) => e.incomeStreamId === stream.id);
+    expect(events.some((e) => e.type === 'salary_gross')).toBe(false);
+  });
 });

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Amount, AmountInput, Button, Checkbox, Sheet, Text } from '@/design/components';
+import { Amount, AmountInput, Button, Checkbox, DatePicker, Footer, formatDay, Sheet, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { IncomeStream } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
@@ -9,6 +9,7 @@ import { t } from '@/i18n';
 import { useTheme } from '@/design/ThemeProvider';
 import { today } from '@/features/transactions/helpers';
 
+import { earliestReceiptDate, latestStreamIncomeEventId } from './helpers';
 import {
   incomeMatchCandidates,
   routingConfirmRows,
@@ -38,10 +39,16 @@ export function MarkReceivedSheet({ stream, snapshot, month, expected, received,
   const [createNew, setCreateNew] = useState(false);
   const [amountText, setAmountText] = useState('');
   const [amountMinor, setAmountMinor] = useState<bigint | null>(null);
+  const [createDate, setCreateDate] = useState(today());
   const [pendingAmount, setPendingAmount] = useState<bigint | null>(null);
   const [pendingDate, setPendingDate] = useState<string>(today());
   const [routingRows, setRoutingRows] = useState<RoutingConfirmRow[]>([]);
   const [routingOn, setRoutingOn] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
+
+  const alreadyReceived = received >= expected && expected > 0n;
+  const receivedOn = earliestReceiptDate(stream, snapshot, month);
+  const undoEventId = latestStreamIncomeEventId(stream, snapshot, month);
 
   const openRouting = (amount: bigint, date: string, eventId: string | null) => {
     const rows = routingConfirmRows(stream, snapshot, amount);
@@ -69,6 +76,41 @@ export function MarkReceivedSheet({ stream, snapshot, month, expected, received,
     }
   };
 
+  const undoReceived = async () => {
+    if (!undoEventId || !receivedOn || saving) return;
+    setSaving(true);
+    await onConfirm({ kind: 'undo', eventId: undoEventId, amount: received, date: receivedOn, routing: [] });
+    setSaving(false);
+  };
+
+  if (alreadyReceived) {
+    return (
+      <Sheet
+        visible
+        title={t('income.markReceivedTitle')}
+        onClose={onClose}
+        testID="income-record-sheet"
+        footer={
+          undoEventId ? (
+            <Footer>
+              <Button testID="income-record-cancel" kind="secondary" label={t('common.cancel')} onPress={onClose} />
+              <Button testID="income-record-undo" label={t('income.undoMarkReceived')} onPress={() => void undoReceived()} disabled={saving} />
+            </Footer>
+          ) : (
+            <Footer>
+              <Button testID="income-record-cancel" kind="secondary" label={t('common.cancel')} onPress={onClose} />
+            </Footer>
+          )
+        }
+      >
+        <Text testID="income-already-received">{t('income.alreadyReceived', { date: formatDay(receivedOn ?? month) })}</Text>
+        {undoEventId ? (
+          <Button testID="income-see-transaction" kind="link" label={t('income.seeTransaction')} onPress={onClose} />
+        ) : null}
+      </Sheet>
+    );
+  }
+
   const pickDisabled = !createNew && !selectedEventId;
   const createDisabled = createNew && (amountMinor === null || amountMinor <= 0n);
 
@@ -85,7 +127,7 @@ export function MarkReceivedSheet({ stream, snapshot, month, expected, received,
             label={t('common.continue')}
             disabled={pickDisabled || createDisabled}
             onPress={() => {
-              if (createNew && amountMinor) openRouting(amountMinor, today(), null);
+              if (createNew && amountMinor) openRouting(amountMinor, createDate, null);
               else if (selectedEventId) {
                 const c = candidates.find((x) => x.eventId === selectedEventId);
                 if (c) openRouting(c.amount, c.date, c.eventId);
@@ -164,15 +206,23 @@ export function MarkReceivedSheet({ stream, snapshot, month, expected, received,
               {t('income.matchCreateHint')}
             </Text>
             {createNew ? (
-              <AmountInput
-                testID="income-record-amount"
-                label={t('income.receivedAmount')}
-                value={amountText}
-                onChange={(text, minor) => {
-                  setAmountText(text);
-                  setAmountMinor(minor);
-                }}
-              />
+              <View style={{ gap: sp['spacing-sm'] }}>
+                <AmountInput
+                  testID="income-record-amount"
+                  label={t('income.receivedAmount')}
+                  value={amountText}
+                  onChange={(text, minor) => {
+                    setAmountText(text);
+                    setAmountMinor(minor);
+                  }}
+                />
+                <DatePicker
+                  testID="income-record-date"
+                  label={t('income.createDate')}
+                  value={createDate}
+                  onChange={setCreateDate}
+                />
+              </View>
             ) : null}
           </Pressable>
         </View>
@@ -188,7 +238,7 @@ export function MarkReceivedSheet({ stream, snapshot, month, expected, received,
                 <Text>{row.label}</Text>
                 {!row.restToBudget ? <Amount minor={row.amount} variant="caption" /> : null}
               </View>
-              {row.goalId ? (
+              {row.goalId || row.categoryId ? (
                 <Checkbox
                   testID={`income-routing-${row.key}`}
                   label={t('income.routingApply')}

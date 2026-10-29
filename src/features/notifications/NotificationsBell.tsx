@@ -64,6 +64,22 @@ export function NotificationsBell({ items }: { items: AppNotification[] }) {
         />
       );
     }
+    if (n.action === 'mark_received') {
+      return (
+        <Button
+          testID={`preview-action-${n.id}`}
+          kind="secondary"
+          size="sm"
+          label={t('notifications.markReceived')}
+          onPress={() => {
+            void repo.markNotificationRead(n.id);
+            setOpen(false);
+            if (n.recurringId) router.push(`/income?occurrence=${n.recurringId}`);
+            else router.push('/income');
+          }}
+        />
+      );
+    }
     if (n.action === 'see_budget') {
       return (
         <Button

@@ -1,11 +1,11 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { ChevronLeft, ChevronRight, Circle, CircleDashed, CircleDot, MoreHorizontal } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Circle, CircleDashed, CircleDot, CircleHelp, MoreHorizontal } from 'lucide-react-native';
 
-import { Amount, Button, Card, EmptyState, Icon, InlineError, Placeholder, Select, Sheet, Text, useToast } from '@/design/components';
+import { Amount, Button, Card, EmptyState, Icon, InlineError, Placeholder, Popover, Select, Sheet, Text, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
-import type { IncomeStream } from '@/data/workspace/model';
+import { budgetAssignId, type IncomeStream } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { monthOf, nextMonth, prevMonth } from '@/ledger';
@@ -15,6 +15,7 @@ import { useTheme } from '@/design/ThemeProvider';
 
 import { AddIncomeStreamSheet } from './AddIncomeStreamSheet';
 import {
+  deductionHintLines,
   eventIncomeAmount,
   formatStreamSchedule,
   groupStreamRows,
@@ -38,11 +39,12 @@ export function IncomeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const toast = useToast();
-  const params = useGlobalSearchParams<{ stream?: string }>();
+  const params = useGlobalSearchParams<{ stream?: string; occurrence?: string }>();
   const { snapshot, repo } = useWorkspace();
   const [month, setMonth] = useState(() => monthOf(today()));
   const year = month.slice(0, 4);
   const streamParam = typeof params.stream === 'string' ? params.stream : undefined;
+  const occurrenceParam = typeof params.occurrence === 'string' ? params.occurrence : undefined;
   const addOpen = streamParam === 'new';
   const editStream = useMemo(() => {
     if (!snapshot || !streamParam || streamParam === 'new') return null;
@@ -51,7 +53,13 @@ export function IncomeScreen() {
   const [recordStream, setRecordStream] = useState<{ stream: IncomeStream; expected: bigint; received: bigint } | null>(null);
   const [linkEventId, setLinkEventId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const closeStream = () => router.setParams({ stream: undefined });
+  const [steadinessHintOpen, setSteadinessHintOpen] = useState(false);
+
+  const closeStream = () => router.setParams({ stream: undefined, occurrence: undefined });
+  const closeRecord = () => {
+    setRecordStream(null);
+    if (occurrenceParam) router.setParams({ occurrence: undefined });
+  };
 
   const summary = useMemo(() => (snapshot ? incomeForMonth(snapshot, month) : null), [snapshot, month]);
   const grouped = useMemo(() => (summary ? groupStreamRows(summary.rows) : []), [summary]);
@@ -61,6 +69,13 @@ export function IncomeScreen() {
   const taxRows = snapshot ? taxTotalsForYear(snapshot, year) : [];
   const chartPoints = useMemo(() => (snapshot ? twelveMonthIncomeSeries(snapshot, month) : []), [snapshot, month]);
   const streamOptions = snapshot?.incomeStreams.map((s) => ({ value: s.id, label: s.name })) ?? [];
+
+  // PU-26: ?occurrence=<streamId> opens Mark received for that stream.
+  useEffect(() => {
+    if (!snapshot || !occurrenceParam || !summary || recordStream) return;
+    const row = summary.rows.find((r) => r.stream.id === occurrenceParam);
+    if (row) setRecordStream({ stream: row.stream, expected: row.expected, received: row.received });
+  }, [snapshot, occurrenceParam, summary, recordStream]);
 
   const monthLabel = useMemo(() => {
     const [y, m] = month.split('-').map(Number) as [number, number];
@@ -102,6 +117,12 @@ export function IncomeScreen() {
           <SummaryTile
             label={t('income.steadinessLabel')}
             text={summary.steadiness !== null ? t('income.steadinessShort', { percent: summary.steadiness }) : t('common.notSet')}
+            hintOpen={steadinessHintOpen}
+            onHintOpen={() => setSteadinessHintOpen(true)}
+            onHintClose={() => setSteadinessHintOpen(false)}
+            hint={t('income.steadinessHint')}
+            hintA11y={t('income.steadinessHintA11y')}
+            hintTestID="income-steadiness-hint"
           />
         </View>
       ) : null}
@@ -158,19 +179,36 @@ export function IncomeScreen() {
             <Card testID="income-investment" style={{ gap: sp['spacing-sm'] }}>
               <Text variant="heading-sm">{t('income.investmentTitle')}</Text>
               <Text tone="textSecondary">{t('income.investmentHint')}</Text>
-              {investmentRows.map((row) => (
-                <View key={row.id} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-sm'] }}>
-                  <View style={{ flex: 1 }}>
-                    <Text>{row.label}</Text>
-                    {row.detail ? (
-                      <Text variant="caption" tone="textSecondary">
-                        {row.detail}
-                      </Text>
-                    ) : null}
+              {investmentRows.map((row) => {
+                const body = (
+                  <>
+                    <View style={{ flex: 1 }}>
+                      <Text>{row.label}</Text>
+                      {row.detail ? (
+                        <Text variant="caption" tone="textSecondary">
+                          {row.detail}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Amount minor={row.amount} variant="caption" />
+                  </>
+                );
+                return row.href ? (
+                  <Pressable
+                    key={row.id}
+                    testID={`income-investment-${row.id}`}
+                    accessibilityRole="link"
+                    onPress={() => router.push(row.href!)}
+                    style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-sm'], minHeight: 44, alignItems: 'center' }}
+                  >
+                    {body}
+                  </Pressable>
+                ) : (
+                  <View key={row.id} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-sm'] }}>
+                    {body}
                   </View>
-                  <Amount minor={row.amount} variant="caption" />
-                </View>
-              ))}
+                );
+              })}
             </Card>
           ) : null}
 
@@ -232,13 +270,22 @@ export function IncomeScreen() {
           month={month}
           expected={recordStream.expected}
           received={recordStream.received}
-          onClose={() => setRecordStream(null)}
+          onClose={closeRecord}
           onConfirm={async (payload: MarkReceivedPayload) => {
             setError(null);
             const { stream } = recordStream;
             const date = payload.date;
             if (payload.kind === 'match') {
               await repo.linkEventToStream(payload.eventId, stream.id);
+            } else if (payload.kind === 'undo') {
+              const r = await repo.deleteTransaction(payload.eventId, date);
+              if (!r.ok) {
+                setError(ledgerMessage(r.error));
+                return;
+              }
+              toast.show(t('income.undoMarkReceivedToast'));
+              closeRecord();
+              return;
             } else {
               const r = await repo.recordIncomeReceived(stream.id, {
                 accountId: stream.accountId,
@@ -252,10 +299,17 @@ export function IncomeScreen() {
             }
             for (const row of payload.routing) {
               if (!row.apply) continue;
-              const alloc = await repo.allocateToGoal(row.goalId, { amount: row.amount, date, fromAccountId: stream.accountId });
-              if (!alloc.ok) setError(ledgerMessage(alloc.error));
+              if (row.goalId) {
+                const alloc = await repo.allocateToGoal(row.goalId, { amount: row.amount, date, fromAccountId: stream.accountId });
+                if (!alloc.ok) setError(ledgerMessage(alloc.error));
+              } else if (row.categoryId && snapshot) {
+                const m = monthOf(date);
+                const current = snapshot.assigns.get(budgetAssignId(row.categoryId, m)) ?? 0n;
+                await repo.setAssigned(row.categoryId, m, current + row.amount);
+              }
             }
-            setRecordStream(null);
+            toast.show(t('income.markedReceived'));
+            closeRecord();
           }}
         />
       ) : null}
@@ -273,13 +327,52 @@ export function IncomeScreen() {
   );
 }
 
-function SummaryTile({ label, minor, text }: { label: string; minor?: bigint; text?: string }) {
+function SummaryTile({
+  label,
+  minor,
+  text,
+  hint,
+  hintOpen,
+  onHintOpen,
+  onHintClose,
+  hintA11y,
+  hintTestID,
+}: {
+  label: string;
+  minor?: bigint;
+  text?: string;
+  hint?: string;
+  hintOpen?: boolean;
+  onHintOpen?: () => void;
+  onHintClose?: () => void;
+  hintA11y?: string;
+  hintTestID?: string;
+}) {
+  const theme = useTheme();
   return (
     <Card style={{ flex: 1, minWidth: 140, gap: sp['spacing-xs'] }}>
-      <Text variant="caption" tone="textSecondary">
-        {label}
-      </Text>
-          {minor !== undefined ? <Amount minor={minor} /> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-xxs'] }}>
+        <Text variant="caption" tone="textSecondary">
+          {label}
+        </Text>
+        {hint && onHintOpen && onHintClose ? (
+          <>
+            <Pressable
+              testID={hintTestID}
+              accessibilityRole="button"
+              accessibilityLabel={hintA11y ?? label}
+              onPress={onHintOpen}
+              style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Icon icon={CircleHelp} size={14} color={theme.textSecondary} />
+            </Pressable>
+            <Popover visible={!!hintOpen} onClose={onHintClose} testID={`${hintTestID}-popover`}>
+              <Text>{hint}</Text>
+            </Popover>
+          </>
+        ) : null}
+      </View>
+      {minor !== undefined ? <Amount minor={minor} /> : null}
       {text ? <Text variant="heading-sm">{text}</Text> : null}
     </Card>
   );
@@ -303,10 +396,12 @@ function StreamCard({
   onEdit: () => void;
 }) {
   const theme = useTheme();
+  const [deductionsOpen, setDeductionsOpen] = useState(false);
   const dots = streamPaymentDots(stream, snapshot, month);
   const pct = expected > 0n ? Number((received * 100n) / expected) : 0;
   const route = routingSummary(stream, snapshot);
   const takeHome = takeHomeMinor(stream);
+  const deductionLines = deductionHintLines(stream);
   return (
     <Card testID={`income-stream-${stream.id}`} style={{ flex: 1, minWidth: 280, gap: sp['spacing-xs'] }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -314,6 +409,7 @@ function StreamCard({
           <Text variant="heading-sm">{stream.name}</Text>
           <Text variant="caption" tone="textSecondary">
             {formatStreamSchedule(stream.rule)}
+            {stream.source ? ` · ${stream.source}` : ''}
             {stream.taxClass ? ` · ${stream.taxClass}` : ''}
           </Text>
         </View>
@@ -333,11 +429,33 @@ function StreamCard({
         </Text>
       ) : null}
       {stream.recordMode === 'gross' && stream.grossMinor ? (
-        <Text variant="caption" tone="textSecondary">
-          {t('income.grossLabel')}{' '}
-          <Amount minor={BigInt(stream.grossMinor)} variant="caption" /> · {t('income.takeHomeLabel')}{' '}
-          <Amount minor={takeHome} variant="caption" />
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+          <Text variant="caption" tone="textSecondary">
+            {t('income.grossLabel')} <Amount minor={BigInt(stream.grossMinor)} variant="caption" /> · {t('income.takeHomeLabel')}{' '}
+            <Amount minor={takeHome} variant="caption" />
+          </Text>
+          {deductionLines.length > 0 ? (
+            <>
+              <Pressable
+                testID={`income-deductions-hint-${stream.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={t('income.deductionsHintA11y')}
+                onPress={() => setDeductionsOpen(true)}
+                style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Icon icon={CircleHelp} size={14} color={theme.textSecondary} />
+              </Pressable>
+              <Popover visible={deductionsOpen} onClose={() => setDeductionsOpen(false)} testID={`income-deductions-popover-${stream.id}`}>
+                <Text variant="heading-sm">{t('income.deductionsHintTitle')}</Text>
+                {deductionLines.map((line) => (
+                  <Text key={line} variant="caption">
+                    {line}
+                  </Text>
+                ))}
+              </Popover>
+            </>
+          ) : null}
+        </View>
       ) : null}
       <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.border, overflow: 'hidden' }}>
         <View style={{ width: `${Math.min(100, pct)}%`, height: '100%', backgroundColor: tokens.color.primary }} />

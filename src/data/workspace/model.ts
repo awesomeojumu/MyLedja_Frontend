@@ -556,6 +556,7 @@ export type NotificationCategory = 'bills' | 'budget' | 'goals' | 'debts' | 'inc
 
 export type NotificationAction =
   | 'mark_paid'
+  | 'mark_received'
   | 'match'
   | 'remind_tomorrow'
   | 'record_payment'

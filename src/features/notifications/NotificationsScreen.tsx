@@ -158,6 +158,11 @@ export function NotificationsScreen() {
                       if (!r.ok) setError(ledgerMessage(r.error));
                       else await repo.markNotificationRead(n.id);
                     }}
+                    onMarkReceived={() => {
+                      void repo.markNotificationRead(n.id);
+                      if (n.recurringId) router.push(`/income?occurrence=${n.recurringId}`);
+                      else router.push('/income');
+                    }}
                     onMatch={() => setMatchTarget(n)}
                     onRemindTomorrow={() => void repo.snoozeNotification(n.id, addDays(day, 1))}
                     onSeeBudget={() => {
