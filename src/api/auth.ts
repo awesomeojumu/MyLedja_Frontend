@@ -20,12 +20,15 @@ export type VerifyEmailBody = Body<'verifyEmail'>;
 export type ResendCodeBody = Body<'resendCode'>;
 export type RecoverBody = Body<'recover'>;
 export type NewPasswordBody = Body<'newPassword'>;
+export type SignInWithGoogleBody = Body<'signInWithGoogle'>;
 /** Opening balances and take-home are strings of kobo. */
 export type SetupBody = Body<'finishSetup'>;
 
 export function authApi(client: ApiClient) {
   return {
     signIn: (body: SignInBody) => client.request<SignInResponse>('POST', '/v1/auth/sign-in', body, { auth: false }),
+    signInWithGoogle: (body: SignInWithGoogleBody) =>
+      client.request<SignInResponse>('POST', '/v1/auth/google', body, { auth: false }),
     signUp: (body: SignUpBody) => client.request<CodeSent>('POST', '/v1/auth/sign-up', body, { auth: false }),
     verifyEmail: (body: VerifyEmailBody) =>
       client.request<SessionResponse>('POST', '/v1/auth/verify-email', body, { auth: false }),

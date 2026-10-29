@@ -28,7 +28,7 @@ export function AuthFrame({ children, offlineMessage = true }: { children: React
   return (
     <GradientMeshBackdrop>
       <SafeAreaView style={{ flex: 1 }}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
           <View style={{ flex: 1, flexDirection: 'row' }}>
             {showHero ? (
               <View testID="auth-hero" style={{ flex: 1, overflow: 'hidden', padding: tokens.spacing['spacing-huge'], justifyContent: 'center', gap: tokens.spacing['spacing-xl'] }}>

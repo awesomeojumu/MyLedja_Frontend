@@ -2,13 +2,21 @@ import { authApi } from '@/api/auth';
 import { ApiClient, type Transport } from '@/api/client';
 import { createAuthMock } from '@/api/mocks/auth';
 import { createMemorySessionStore } from '@/data/session';
+import { obtainGoogleIdToken } from '../googleIdToken';
 import {
   googleClientId,
   googleSignInEnabled,
   loadGoogleSignIn,
+  peekGoogleLinkPending,
   resetGoogleSignInCache,
   runGoogleSignIn,
 } from '../googleSignIn';
+
+jest.mock('../googleIdToken', () => ({
+  obtainGoogleIdToken: jest.fn(),
+}));
+
+const obtain = obtainGoogleIdToken as jest.MockedFunction<typeof obtainGoogleIdToken>;
 
 function apiWithPublicConfig(google: { enabled: boolean; clientId: string | null }) {
   const mock = createAuthMock();
@@ -31,6 +39,7 @@ function apiWithPublicConfig(google: { enabled: boolean; clientId: string | null
 
 beforeEach(() => {
   resetGoogleSignInCache();
+  obtain.mockReset();
 });
 
 describe('googleSignIn (public-config)', () => {
@@ -83,5 +92,32 @@ describe('googleSignIn (public-config)', () => {
     await loadGoogleSignIn(api);
     await loadGoogleSignIn(api);
     expect(hits).toBe(1);
+  });
+
+  it('POSTs the ID token to /v1/auth/google and returns a session (P02-05 / T0.2)', async () => {
+    obtain.mockResolvedValue({ ok: true, idToken: 'email:new.google@example.test' });
+    const api = apiWithPublicConfig({ enabled: true, clientId: 'test.apps.googleusercontent.com' });
+    const res = await runGoogleSignIn(api);
+    expect(res.ok).toBe(true);
+    if (res.ok && 'user' in res.session) {
+      expect(res.session.user.email).toBe('new.google@example.test');
+      expect(res.session.user.setupComplete).toBe(false);
+    } else {
+      throw new Error('expected a session with user');
+    }
+  });
+
+  it('maps 409 google_link_needed to link_password and stores the pending token', async () => {
+    obtain.mockResolvedValue({ ok: true, idToken: 'link:ada@example.test' });
+    const api = apiWithPublicConfig({ enabled: true, clientId: 'test.apps.googleusercontent.com' });
+    const res = await runGoogleSignIn(api);
+    expect(res).toMatchObject({ ok: false, reason: 'link_password', email: 'ada@example.test' });
+    expect(peekGoogleLinkPending()).toEqual({ email: 'ada@example.test', linkToken: 'link-token-ada@example.test' });
+  });
+
+  it('returns cancelled when the user dismisses Google', async () => {
+    obtain.mockResolvedValue({ ok: false, reason: 'cancelled' });
+    const api = apiWithPublicConfig({ enabled: true, clientId: 'test.apps.googleusercontent.com' });
+    await expect(runGoogleSignIn(api)).resolves.toEqual({ ok: false, reason: 'cancelled' });
   });
 });
