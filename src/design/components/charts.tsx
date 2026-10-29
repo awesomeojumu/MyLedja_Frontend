@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Line as SvgLine, Path } from 'react-native-svg';
 
 import { t } from '@/i18n';
@@ -125,25 +125,72 @@ function BarShape({ x, width, height, fill, testID }: { x: number; width: number
   return <Path testID={testID} d={d} fill={fill} />;
 }
 
-/** A 2.2px primary line; the latest point is gold, which is that view's gold mark. */
-export function LineChart({ goldLatest = true, ...props }: Omit<Frame, 'children'> & { goldLatest?: boolean }) {
+/** A 2.2px primary line; the latest point is gold, which is that view's gold mark. Optional dashed `compare` (cost) and scrub readout (P18). */
+export function LineChart({
+  goldLatest = true,
+  compare,
+  ...props
+}: Omit<Frame, 'children'> & { goldLatest?: boolean; compare?: bigint[] }) {
   const theme = useTheme();
-  const values = props.rows.map((p) => p.value);
+  const { privacy } = useDesign();
+  const [scrub, setScrub] = useState<number | null>(null);
+  const values = [...props.rows.map((p) => p.value), ...(compare ?? [])];
   const min = values.reduce((m, v) => (v < m ? v : m), values[0] ?? 0n);
-  const y = scale(values.map((v) => v - min));
+  const max = values.reduce((m, v) => (v > m ? v : m), values[0] ?? 0n);
+  const span = max - min || 1n;
+  const yOf = (v: bigint) => 4 + (1 - Number(((v - min) * 10_000n) / span) / 10_000) * (HEIGHT - 8);
+  const format = props.format ?? formatNaira;
+  const show = (v: bigint) => (privacy ? PRIVACY_MASK : format(v));
+  const active = scrub !== null ? scrub : props.rows.length - 1;
+  const activeRow = props.rows[active];
+  const activeCompare = compare?.[active];
+
   return (
     <ChartFrame {...props}>
       {(width) => {
         const step = props.rows.length > 1 ? (width - 8) / (props.rows.length - 1) : 0;
-        const pts = props.rows.map((p, i) => ({ x: 4 + i * step, y: 4 + (1 - y(p.value - min)) * (HEIGHT - 8) }));
+        const pts = props.rows.map((p, i) => ({ x: 4 + i * step, y: yOf(p.value) }));
         const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+        const comparePts = compare?.map((v, i) => ({ x: 4 + i * step, y: yOf(v) })) ?? [];
+        const compareD = comparePts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
         const last = pts.at(-1);
+        const pick = (e: GestureResponderEvent) => {
+          if (props.rows.length === 0) return;
+          const x = e.nativeEvent.locationX;
+          const i = Math.max(0, Math.min(props.rows.length - 1, Math.round((x - 4) / (step || 1))));
+          setScrub(i);
+        };
         return (
-          <Svg width={width} height={HEIGHT}>
-            <SvgLine x1={0} x2={width} y1={HEIGHT - 0.5} y2={HEIGHT - 0.5} stroke={theme.border} strokeWidth={1} />
-            {pts.length > 1 ? <Path d={d} stroke={theme.primaryFill} strokeWidth={2.2} fill="none" /> : null}
-            {last ? <Circle testID="chart-latest" cx={last.x} cy={last.y} r={4} fill={goldLatest ? c.gold : theme.primaryFill} /> : null}
-          </Svg>
+          <View style={{ gap: sp['spacing-xs'] }}>
+            {activeRow ? (
+              <Text testID={props.testID ? `${props.testID}-readout` : undefined} variant="caption" tone="textSecondary">
+                {activeRow.label}
+                {' · '}
+                {show(activeRow.value)}
+                {activeCompare !== undefined ? ` · ${t('investments.cost')}: ${show(activeCompare)}` : ''}
+              </Text>
+            ) : null}
+            <Pressable
+              testID={props.testID ? `${props.testID}-scrub` : undefined}
+              onPress={pick}
+              onMoveShouldSetResponder={() => true}
+              onResponderMove={pick}
+              accessibilityRole="adjustable"
+              accessibilityLabel={props.title}
+            >
+              <Svg width={width} height={HEIGHT}>
+                <SvgLine x1={0} x2={width} y1={HEIGHT - 0.5} y2={HEIGHT - 0.5} stroke={theme.border} strokeWidth={1} />
+                {comparePts.length > 1 ? (
+                  <Path d={compareD} stroke={theme.textSecondary} strokeWidth={1.5} strokeDasharray="4 4" fill="none" />
+                ) : null}
+                {pts.length > 1 ? <Path d={d} stroke={theme.primaryFill} strokeWidth={2.2} fill="none" /> : null}
+                {last ? <Circle testID="chart-latest" cx={last.x} cy={last.y} r={4} fill={goldLatest ? c.gold : theme.primaryFill} /> : null}
+                {pts[active] ? (
+                  <Circle testID="chart-scrub" cx={pts[active].x} cy={pts[active].y} r={5} fill={theme.primaryFill} />
+                ) : null}
+              </Svg>
+            </Pressable>
+          </View>
         );
       }}
     </ChartFrame>

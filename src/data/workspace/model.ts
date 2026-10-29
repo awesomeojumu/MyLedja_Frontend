@@ -194,6 +194,8 @@ export type HoldingLot = {
   pricePerUnitMinor: string;
   feesMinor: string;
   buyEventId?: string;
+  /** Realised gain of units sold from this lot (E21), minor units. */
+  realisedMinor?: string;
 };
 
 export type HoldingPrice = {
@@ -586,6 +588,8 @@ export type StoredEvent = {
   recurringId?: string;
   incomeStreamId?: string;
   oneOff?: boolean;
+  /** Investment buy / sell / dividend (TECH-SPEC 6.8 / E20–E22). */
+  holdingId?: string;
 };
 
 export type EventMeta = {
@@ -599,6 +603,8 @@ export type EventMeta = {
   recurringId?: string;
   incomeStreamId?: string;
   oneOff?: boolean;
+  /** Investment buy / sell / dividend (TECH-SPEC 6.8 / E20–E22). */
+  holdingId?: string;
 };
 
 export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & EventMeta): StoredEvent {
@@ -620,6 +626,7 @@ export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & 
     recurringId: e.recurringId,
     incomeStreamId: e.incomeStreamId,
     oneOff: e.oneOff,
+    holdingId: e.holdingId,
   };
 }
 
@@ -645,6 +652,7 @@ export function fromStored(id: string, operationId: string, s: StoredEvent, reve
     debtId: s.debtId,
     recurringId: s.recurringId,
     incomeStreamId: s.incomeStreamId,
+    holdingId: s.holdingId,
     oneOff: s.oneOff,
   };
 }

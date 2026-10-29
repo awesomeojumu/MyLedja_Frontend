@@ -20,10 +20,10 @@ import type { Holding, HoldingType } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
-import { formatNaira } from '@/money';
+import { formatNaira, toInputText } from '@/money';
 import { costOfPurchase } from '@/ledger';
 
-import { HOLDING_TYPES, fifoCost, holdingUnits } from './helpers';
+import { HOLDING_TYPES, fifoCost, holdingUnits, latestPrice, lotsFor, openUnits } from './helpers';
 
 const sp = tokens.spacing;
 
@@ -158,31 +158,66 @@ export function TradeSheet({
 }) {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
-  const holdings = snapshot?.holdings ?? [];
+  const holdings = useMemo(() => snapshot?.holdings ?? [], [snapshot?.holdings]);
   const cashAccounts = (snapshot?.accounts ?? []).filter((a) => !a.archived && ['bank', 'savings', 'cash', 'wallet'].includes(a.type));
   const [direction, setDirection] = useState<'buy' | 'sell'>(initial);
   const [holding, setHolding] = useState(holdingId ?? holdings[0]?.id ?? '');
   const [units, setUnits] = useState('');
-  const [priceText, setPriceText] = useState('');
-  const [priceMinor, setPriceMinor] = useState<bigint | null>(null);
+  const seedPrice = holdingId && snapshot ? latestPrice(snapshot, holdingId) : null;
+  const [priceText, setPriceText] = useState(seedPrice ? toInputText(BigInt(seedPrice.priceMinor)) : '');
+  const [priceMinor, setPriceMinor] = useState<bigint | null>(seedPrice ? BigInt(seedPrice.priceMinor) : null);
   const [feesText, setFeesText] = useState('');
   const [feesMinor, setFeesMinor] = useState<bigint | null>(0n);
   const [cashId, setCashId] = useState(cashAccounts[0]?.id ?? '');
   const [date, setDate] = useState(today());
+  const [chooseLots, setChooseLots] = useState(false);
+  const [chosen, setChosen] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const held = useMemo(() => (snapshot && holding ? holdingUnits(snapshot, holding) : 0), [snapshot, holding]);
+  const openLots = useMemo(
+    () => (snapshot && holding ? lotsFor(snapshot, holding).filter((l) => openUnits(l) > 0) : []),
+    [snapshot, holding],
+  );
   const unitsNum = Number(units);
   const fees = feesMinor ?? 0n;
   const total =
     priceMinor !== null && units && !Number.isNaN(unitsNum) && unitsNum > 0
       ? costOfPurchase(units, priceMinor, direction === 'buy' ? fees : 0n)
       : null;
-  const sellCost = useMemo(() => {
-    if (!snapshot || direction !== 'sell' || !holding || !(unitsNum > 0)) return null;
-    return fifoCost(snapshot, holding, unitsNum);
-  }, [snapshot, direction, holding, unitsNum]);
+  const lotsInput = chooseLots
+    ? Object.entries(chosen)
+        .filter(([, v]) => v.trim() !== '' && Number(v) > 0)
+        .map(([lotId, v]) => ({ lotId, units: v.trim() }))
+    : undefined;
+  let sellCost: { cost: bigint; ok: boolean } | null = null;
+  if (snapshot && direction === 'sell' && holding && unitsNum > 0) {
+    if (lotsInput?.length) {
+      let cost = 0n;
+      let sum = 0;
+      let ok = true;
+      for (const pick of lotsInput) {
+        const lot = openLots.find((l) => l.id === pick.lotId);
+        if (!lot) {
+          ok = false;
+          break;
+        }
+        const take = Number(pick.units);
+        const available = openUnits(lot);
+        if (take > available + 1e-9) {
+          ok = false;
+          break;
+        }
+        const lotUnits = Number(lot.units);
+        cost += lotUnits > 0 ? (BigInt(lot.costMinor) * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(lotUnits * 1e6)) : 0n;
+        sum += take;
+      }
+      sellCost = { cost, ok: ok && Math.abs(sum - unitsNum) <= 1e-6 };
+    } else {
+      sellCost = fifoCost(snapshot, holding, unitsNum);
+    }
+  }
   const proceeds =
     direction === 'sell' && priceMinor !== null && unitsNum > 0
       ? costOfPurchase(units, priceMinor, 0n) - fees
@@ -220,6 +255,7 @@ export function TradeSheet({
               cashAccountId: cashId,
               date,
               costOfLots: sellCost?.cost,
+              lots: lotsInput,
             });
       if (!r.ok) return setError(ledgerMessage(r.error));
       toast.show(direction === 'buy' ? t('investments.purchaseRecorded') : t('investments.saleRecorded'));
@@ -297,11 +333,32 @@ export function TradeSheet({
           options={cashAccounts.map((a) => ({ value: a.id, label: a.name }))}
         />
         <DatePicker testID="trade-date" label={t('common.date')} value={date} onChange={setDate} />
+        {direction === 'sell' ? (
+          <View style={{ gap: sp['spacing-sm'] }}>
+            <Switch testID="trade-choose-lots" label={t('investments.chooseLots')} value={chooseLots} onChange={setChooseLots} />
+            {chooseLots ? (
+              openLots.map((l) => (
+                <TextInput
+                  key={l.id}
+                  testID={`trade-lot-${l.id}`}
+                  label={t('investments.lotLabel', { date: l.date, units: String(openUnits(l)) })}
+                  value={chosen[l.id] ?? ''}
+                  onChangeText={(v) => setChosen({ ...chosen, [l.id]: v })}
+                  keyboardType="decimal-pad"
+                />
+              ))
+            ) : (
+              <Text variant="caption" tone="textSecondary">
+                {t('investments.oldestFirst')}
+              </Text>
+            )}
+          </View>
+        ) : null}
         {direction === 'buy' && total !== null ? (
           <Text tone="textSecondary">{t('investments.buyTotal', { amount: formatNaira(total) })}</Text>
         ) : null}
         {direction === 'sell' && proceeds !== null && sellCost?.ok && gain !== null ? (
-          <Text tone="textSecondary">
+          <Text testID="trade-preview" tone="textSecondary">
             {t('investments.sellPreview', {
               receive: formatNaira(proceeds),
               cost: formatNaira(sellCost.cost),
@@ -469,15 +526,26 @@ export function UpdatePricesSheet({ holdingId, onClose }: { holdingId?: string; 
     >
       <View style={{ gap: sp['spacing-md'] }}>
         <DatePicker label={t('common.date')} value={date} onChange={setDate} />
-        {rows.map((h) => (
-          <AmountInput
-            key={h.id}
-            testID={`price-row-${h.id}`}
-            label={h.name}
-            value={values[h.id]?.text ?? ''}
-            onChange={(text, minor) => setValues((v) => ({ ...v, [h.id]: { text, minor } }))}
-          />
-        ))}
+        {rows.map((h) => {
+          const last = snapshot ? latestPrice(snapshot, h.id, date) : null;
+          return (
+            <AmountInput
+              key={h.id}
+              testID={`price-row-${h.id}`}
+              label={
+                last
+                  ? t('investments.priceField', {
+                      name: h.name,
+                      price: formatNaira(BigInt(last.priceMinor)),
+                      date: last.date,
+                    })
+                  : t('investments.priceFieldNone', { name: h.name })
+              }
+              value={values[h.id]?.text ?? ''}
+              onChange={(text, minor) => setValues((v) => ({ ...v, [h.id]: { text, minor } }))}
+            />
+          );
+        })}
         <Text variant="caption" tone="textSecondary">
           {t('investments.pricesCaption')}
         </Text>

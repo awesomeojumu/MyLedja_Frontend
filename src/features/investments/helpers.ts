@@ -92,3 +92,62 @@ export function rangeStart(range: '1M' | '3M' | '1Y' | 'All', today: string): st
   if (range === '1Y') dt.setUTCFullYear(dt.getUTCFullYear() - 1);
   return dt.toISOString().slice(0, 10);
 }
+
+export type Range = '1M' | '3M' | '1Y' | 'All';
+export const RANGES: Range[] = ['1M', '3M', '1Y', 'All'];
+
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Sample dates for a holding performance series (value vs cost). */
+export function seriesDates(range: Range, today: string, first: string | null): string[] {
+  const start = rangeStart(range, today) ?? (first && first < today ? first : today);
+  const out: string[] = [];
+  if (range === '1M' || range === '3M') {
+    for (let d = today; d >= start; d = addDays(d, -7)) out.unshift(d);
+    return out.length ? out : [today];
+  }
+  let cursor = today;
+  out.unshift(today);
+  for (let i = 0; i < 24; i++) {
+    cursor = addDays(cursor, -30);
+    if (cursor < start) break;
+    out.unshift(cursor);
+  }
+  return out;
+}
+
+/** First buy/reinvest date for "All". */
+export function firstHoldingDate(snapshot: Snapshot, holdingId: string): string | null {
+  const lots = lotsFor(snapshot, holdingId);
+  return lots[0]?.date ?? null;
+}
+
+/** Remaining cost of open units in a lot. */
+export function lotOpenCost(lot: HoldingLot): bigint {
+  const open = openUnits(lot);
+  const bought = Number(lot.units);
+  if (bought <= 0 || open <= 0) return 0n;
+  return (BigInt(lot.costMinor) * BigInt(Math.round(open * 1e6))) / BigInt(Math.round(bought * 1e6));
+}
+
+/** Performance series for one holding: market value and remaining cost on each sample date. */
+export function holdingSeries(
+  snapshot: Snapshot,
+  holding: Holding,
+  range: Range,
+  today: string,
+): { date: string; value: bigint; cost: bigint }[] {
+  const first = firstHoldingDate(snapshot, holding.id);
+  return seriesDates(range, today, first).map((date) => {
+    const figs = holdingFigures(snapshot, holding, date);
+    // Cost uses ledger balance which is "as of now"; approximate open cost from lots dated ≤ date.
+    const cost = lotsFor(snapshot, holding.id)
+      .filter((l) => l.date <= date)
+      .reduce((s, l) => s + lotOpenCost(l), 0n);
+    return { date, value: figs.value, cost: cost > 0n ? cost : figs.cost };
+  });
+}

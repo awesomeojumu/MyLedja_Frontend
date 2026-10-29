@@ -345,6 +345,70 @@ export function toBackendOperation(op: Operation, accounts: Account[]): BackendO
         };
   }
 
+  if (op.type === 'holding.create') {
+    return {
+      operationId: op.operationId,
+      type: 'holding.create',
+      payload: {
+        id,
+        name: data.name,
+        symbol: data.symbol ?? null,
+        type: data.type,
+        accountId: data.accountId,
+      },
+      createdAt: op.createdAt,
+      schemaVersion: op.schemaVersion,
+    };
+  }
+  if (op.type === 'holding.update') {
+    return {
+      operationId: op.operationId,
+      type: 'holding.update',
+      targetId: id,
+      payload: {
+        baseVersion: op.baseVersion ?? 0,
+        name: data.name,
+        symbol: data.symbol ?? null,
+        type: data.type,
+      },
+      baseVersion: op.baseVersion ?? null,
+      createdAt: op.createdAt,
+      schemaVersion: op.schemaVersion,
+    };
+  }
+  if (op.type === 'holding.archive') {
+    return {
+      operationId: op.operationId,
+      type: 'holding.archive',
+      targetId: id,
+      payload: {},
+      createdAt: op.createdAt,
+      schemaVersion: op.schemaVersion,
+    };
+  }
+  if (op.type === 'holding.prices') {
+    return {
+      operationId: op.operationId,
+      type: 'holding.prices',
+      payload: {
+        date: data.date,
+        prices: [{ holdingId: data.holdingId, price: data.priceMinor }],
+      },
+      createdAt: op.createdAt,
+      schemaVersion: op.schemaVersion,
+    };
+  }
+  if (op.type === 'holding.price.delete') {
+    return {
+      operationId: op.operationId,
+      type: 'holding.price.delete',
+      targetId: typeof data.holdingId === 'string' ? data.holdingId : id,
+      payload: { date: data.date },
+      createdAt: op.createdAt,
+      schemaVersion: op.schemaVersion,
+    };
+  }
+
   return { reject: 'unsupported_operation' };
 }
 

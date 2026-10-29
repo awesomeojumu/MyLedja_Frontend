@@ -159,12 +159,9 @@ const LOCAL_ONLY = new Set([
   'notification.create',
   'notification.read',
   'notification.snooze',
-  'holding.create',
-  'holding.update',
-  'holding.delete',
+  // Lots stay on-device; the server rebuilds them from investment transactions (TECH-SPEC 6.8).
   'lot.create',
   'lot.update',
-  'price.upsert',
 ]);
 
 const todayInLagos = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(new Date());
@@ -274,9 +271,13 @@ export class WorkspaceRepository {
       reportDashboards: raw?.reportDashboards,
       savedReports: raw?.savedReports,
     };
-    const holdings = holdingRows.map((r) => ({ ...(r.data as Omit<Holding, 'id'>), id: r.id }));
+    const holdings = holdingRows
+      .map((r) => ({ ...(r.data as Omit<Holding, 'id'> & { archived?: boolean }), id: r.id }))
+      .filter((h) => !h.archived);
     const lots = lotRows.map((r) => ({ ...(r.data as Omit<HoldingLot, 'id'>), id: r.id }));
-    const prices = priceRows.map((r) => ({ ...(r.data as Omit<HoldingPrice, 'id'>), id: r.id }));
+    const prices = priceRows
+      .map((r) => ({ ...(r.data as Omit<HoldingPrice, 'id'> & { deleted?: boolean }), id: r.id }))
+      .filter((p) => !p.deleted);
     const debts = debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id }));
     const assigns = new Map<string, bigint>();
     const assignNotes = new Map<string, string>();
@@ -2153,14 +2154,29 @@ export class WorkspaceRepository {
       ledgerAccountId,
     };
     const { id: _id, ...data } = holding;
-    await this.put('holdings', id, data, 'holding.create');
+    await this.put('holdings', id, data, 'holding.create', undefined, {
+      type: 'holding.create',
+      payload: {
+        id,
+        name: holding.name,
+        symbol: holding.symbol ?? null,
+        type: holding.type,
+        accountId: holding.accountId,
+        ...(input.currentPriceMinor !== undefined && input.currentPriceMinor > 0n
+          ? { price: input.currentPriceMinor.toString(), priceDate: todayInLagos() }
+          : {}),
+      },
+    });
     if (input.currentPriceMinor !== undefined && input.currentPriceMinor > 0n) {
       const priceId = this.newId();
+      const date = todayInLagos();
       await this.put(
         'prices',
         priceId,
-        { holdingId: id, date: todayInLagos(), priceMinor: input.currentPriceMinor.toString() } satisfies Omit<HoldingPrice, 'id'>,
-        'price.upsert',
+        { holdingId: id, date, priceMinor: input.currentPriceMinor.toString() } satisfies Omit<HoldingPrice, 'id'>,
+        'holding.prices',
+        undefined,
+        null,
       );
     }
     return { ok: true, value: holding };
@@ -2168,7 +2184,31 @@ export class WorkspaceRepository {
 
   async updateHolding(holding: Holding): Promise<void> {
     const { id, ...data } = holding;
-    await this.put('holdings', id, data, 'holding.update');
+    const baseVersion = await this.versionOf('holdings', id);
+    await this.put('holdings', id, data, 'holding.update', baseVersion, {
+      type: 'holding.update',
+      targetId: id,
+      baseVersion,
+      payload: { baseVersion, name: holding.name, symbol: holding.symbol ?? null, type: holding.type },
+    });
+  }
+
+  /** DESIGN.md page 18: remove a holding with no units left (BE archive). */
+  async archiveHolding(holdingId: string): Promise<Result> {
+    const snapshot = await this.load();
+    const holding = snapshot.holdings.find((h) => h.id === holdingId);
+    if (!holding) return { ok: false, error: 'unknown_account' };
+    const open = snapshot.lots
+      .filter((l) => l.holdingId === holdingId)
+      .reduce((s, l) => s + (Number(l.units) - Number(l.soldUnits || '0')), 0);
+    if (open > 1e-9) return { ok: false, error: 'not_positive' };
+    const { id, ...data } = holding;
+    await this.put('holdings', id, { ...data, archived: true }, 'holding.archive', undefined, {
+      type: 'holding.archive',
+      targetId: id,
+      payload: {},
+    });
+    return { ok: true, value: undefined };
   }
 
   /** PU-38 buy (E20): cash → holding at cost; records a lot. */
@@ -2193,11 +2233,23 @@ export class WorkspaceRepository {
       fees,
     });
     if (!lines.ok) return lines;
-    const posted = await this.postEvent(chart, snapshot.events, {
-      type: 'investment_buy',
-      date: input.date,
-      lines: lines.value,
-    });
+    const posted = await this.postEvent(
+      chart,
+      snapshot.events,
+      { type: 'investment_buy', date: input.date, lines: lines.value, holdingId: holding.id },
+      {
+        type: 'transaction.create',
+        payload: {
+          type: 'investment_buy',
+          holdingId: holding.id,
+          accountId: input.cashAccountId,
+          units: input.units,
+          price: input.pricePerUnit.toString(),
+          fees: fees.toString(),
+          date: input.date,
+        },
+      },
+    );
     if (!posted.ok) return posted;
     const cost = costOfPurchase(input.units, input.pricePerUnit, fees);
     const lotId = this.newId();
@@ -2219,7 +2271,7 @@ export class WorkspaceRepository {
     return posted;
   }
 
-  /** PU-38 sell (E21): FIFO by default. */
+  /** PU-38 sell (E21): FIFO by default, or chosen lots. */
   async sellHolding(input: {
     holdingId: string;
     units: string;
@@ -2228,6 +2280,8 @@ export class WorkspaceRepository {
     cashAccountId: string;
     date: string;
     costOfLots?: bigint;
+    /** Chosen lots (lot id → units). Omit for oldest-first. */
+    lots?: { lotId: string; units: string }[];
   }): Promise<Result<TxEvent>> {
     const snapshot = await this.load();
     const holding = snapshot.holdings.find((h) => h.id === input.holdingId);
@@ -2238,40 +2292,75 @@ export class WorkspaceRepository {
       .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
     let left = want;
     let cost = 0n;
-    const consumes: { lot: HoldingLot; take: number }[] = [];
-    for (const lot of open) {
-      const available = Number(lot.units) - Number(lot.soldUnits || '0');
-      if (available <= 0) continue;
-      const take = Math.min(available, left);
-      const lotUnits = Number(lot.units);
-      const portion = lotUnits > 0 ? (BigInt(lot.costMinor) * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(lotUnits * 1e6)) : 0n;
-      cost += portion;
-      consumes.push({ lot, take });
-      left -= take;
-      if (left <= 1e-9) break;
+    const consumes: { lot: HoldingLot; take: number; portion: bigint }[] = [];
+    if (input.lots?.length) {
+      const byId = new Map(open.map((l) => [l.id, l]));
+      let chosen = 0;
+      for (const pick of input.lots) {
+        const lot = byId.get(pick.lotId);
+        if (!lot) return { ok: false, error: 'not_positive' };
+        const take = Number(pick.units);
+        const available = Number(lot.units) - Number(lot.soldUnits || '0');
+        if (!(take > 0) || take > available + 1e-9) return { ok: false, error: 'not_positive' };
+        const lotUnits = Number(lot.units);
+        const portion = lotUnits > 0 ? (BigInt(lot.costMinor) * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(lotUnits * 1e6)) : 0n;
+        cost += portion;
+        consumes.push({ lot, take, portion });
+        chosen += take;
+      }
+      if (Math.abs(chosen - want) > 1e-6) return { ok: false, error: 'not_positive' };
+    } else {
+      for (const lot of open) {
+        const available = Number(lot.units) - Number(lot.soldUnits || '0');
+        if (available <= 0) continue;
+        const take = Math.min(available, left);
+        const lotUnits = Number(lot.units);
+        const portion = lotUnits > 0 ? (BigInt(lot.costMinor) * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(lotUnits * 1e6)) : 0n;
+        cost += portion;
+        consumes.push({ lot, take, portion });
+        left -= take;
+        if (left <= 1e-9) break;
+      }
+      if (left > 1e-9) return { ok: false, error: 'not_positive' };
     }
-    if (left > 1e-9) return { ok: false, error: 'not_positive' };
     const costOfLots = input.costOfLots ?? cost;
+    const fees = input.fees ?? 0n;
     const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
     const lines = buildInvestmentSell(chart, {
       holdingAccountId: holding.ledgerAccountId,
       cashAccountId: input.cashAccountId,
       units: input.units,
       pricePerUnit: input.pricePerUnit,
-      fees: input.fees ?? 0n,
+      fees,
       costOfLots,
     });
     if (!lines.ok) return lines;
-    const posted = await this.postEvent(chart, snapshot.events, {
-      type: 'investment_sell',
-      date: input.date,
-      lines: lines.value,
-    });
+    const posted = await this.postEvent(
+      chart,
+      snapshot.events,
+      { type: 'investment_sell', date: input.date, lines: lines.value, holdingId: holding.id },
+      {
+        type: 'transaction.create',
+        payload: {
+          type: 'investment_sell',
+          holdingId: holding.id,
+          accountId: input.cashAccountId,
+          units: input.units,
+          price: input.pricePerUnit.toString(),
+          fees: fees.toString(),
+          date: input.date,
+          ...(input.lots?.length ? { lots: input.lots } : {}),
+        },
+      },
+    );
     if (!posted.ok) return posted;
-    for (const { lot, take } of consumes) {
+    const proceeds = costOfPurchase(input.units, input.pricePerUnit, 0n) - fees;
+    for (const { lot, take, portion } of consumes) {
       const sold = (Number(lot.soldUnits || '0') + take).toString();
+      const share = want > 0 ? (proceeds * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(want * 1e6)) : 0n;
+      const realised = (BigInt(lot.realisedMinor ?? '0') + (share - portion)).toString();
       const { id, ...data } = lot;
-      await this.put('lots', id, { ...data, soldUnits: sold }, 'lot.update');
+      await this.put('lots', id, { ...data, soldUnits: sold, realisedMinor: realised }, 'lot.update');
     }
     return posted;
   }
@@ -2292,18 +2381,34 @@ export class WorkspaceRepository {
     const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
     const sys = chart.system('investment_income');
     if (!sys) return { ok: false, error: 'unknown_account' };
+    const remoteDividend = (extra: Record<string, unknown>): RemoteOperation => ({
+      type: 'transaction.create',
+      payload: {
+        type: 'dividend',
+        holdingId: holding.id,
+        amount: input.amount.toString(),
+        date: input.date,
+        ...extra,
+      },
+    });
     if (input.reinvested && input.units && input.pricePerUnit !== undefined) {
       // Reinvested: Dr H · Cr investment income; new lot (TECH-SPEC E22).
       const cost = costOfPurchase(input.units, input.pricePerUnit, 0n);
       if (cost <= 0n) return { ok: false, error: 'not_positive' };
-      const posted = await this.postEvent(chart, snapshot.events, {
-        type: 'income',
-        date: input.date,
-        lines: [
-          { ledgerAccountId: holding.ledgerAccountId, amountMinor: cost, currency: holding.currency },
-          { ledgerAccountId: sys.id, amountMinor: -cost, currency: holding.currency },
-        ],
-      });
+      const posted = await this.postEvent(
+        chart,
+        snapshot.events,
+        {
+          type: 'income',
+          date: input.date,
+          holdingId: holding.id,
+          lines: [
+            { ledgerAccountId: holding.ledgerAccountId, amountMinor: cost, currency: holding.currency },
+            { ledgerAccountId: sys.id, amountMinor: -cost, currency: holding.currency },
+          ],
+        },
+        remoteDividend({ reinvestedUnits: input.units }),
+      );
       if (!posted.ok) return posted;
       await this.put(
         'lots',
@@ -2325,27 +2430,56 @@ export class WorkspaceRepository {
     const cash = chart.get(input.cashAccountId);
     if (!cash) return { ok: false, error: 'unknown_account' };
     if (input.amount <= 0n) return { ok: false, error: 'not_positive' };
-    return this.postEvent(chart, snapshot.events, {
-      type: 'income',
-      date: input.date,
-      lines: [
-        { ledgerAccountId: cash.id, amountMinor: input.amount, currency: cash.currency },
-        { ledgerAccountId: sys.id, amountMinor: -input.amount, currency: cash.currency },
-      ],
-    });
+    return this.postEvent(
+      chart,
+      snapshot.events,
+      {
+        type: 'income',
+        date: input.date,
+        holdingId: holding.id,
+        lines: [
+          { ledgerAccountId: cash.id, amountMinor: input.amount, currency: cash.currency },
+          { ledgerAccountId: sys.id, amountMinor: -input.amount, currency: cash.currency },
+        ],
+      },
+      remoteDividend({ accountId: cash.id }),
+    );
   }
 
   /** PU-40: save filled prices; empty rows keep the old price. */
   async savePrices(rows: { holdingId: string; priceMinor: bigint }[], date: string): Promise<void> {
-    for (const row of rows) {
-      if (row.priceMinor <= 0n) continue;
+    const filled = rows.filter((row) => row.priceMinor > 0n);
+    if (filled.length === 0) return;
+    let first = true;
+    for (const row of filled) {
       await this.put(
         'prices',
         this.newId(),
         { holdingId: row.holdingId, date, priceMinor: row.priceMinor.toString() } satisfies Omit<HoldingPrice, 'id'>,
-        'price.upsert',
+        'holding.prices',
+        undefined,
+        first
+          ? {
+              type: 'holding.prices',
+              payload: {
+                date,
+                prices: filled.map((x) => ({ holdingId: x.holdingId, price: x.priceMinor.toString() })),
+              },
+            }
+          : null,
       );
+      first = false;
     }
+  }
+
+  /** Remove one price from history (BE DELETE …/prices/:date). */
+  async deletePrice(price: HoldingPrice): Promise<void> {
+    const { id, ...data } = price;
+    await this.put('prices', id, { ...data, deleted: true }, 'holding.price.delete', undefined, {
+      type: 'holding.price.delete',
+      targetId: price.holdingId,
+      payload: { date: price.date },
+    });
   }
 
   defaultHealthSettings(snapshot: Snapshot): HealthSettings {
@@ -2401,13 +2535,19 @@ export class WorkspaceRepository {
     chart: Chart,
     events: TxEvent[],
     input: Omit<MoneyEvent, 'id' | 'operationId' | 'status' | 'lines'> & { lines: Line[] } & EventMeta,
-    remote?: null,
+    remote?: RemoteOperation | null,
   ): Promise<Result<TxEvent>> {
     const id = this.newId();
     const event: TxEvent = { ...input, id, operationId: id, status: 'posted' };
     const checked = checkEvent(chart, event, new Map(events.map((e) => [e.id, e])));
     if (!checked.ok) return checked;
-    await this.put('events', id, { ...toStored(input), operationId: id }, `event.${input.type}`, undefined, remote);
+    const remoteOp =
+      remote === undefined
+        ? undefined
+        : remote === null
+          ? null
+          : { ...remote, transactionIds: remote.transactionIds ?? [id] };
+    await this.put('events', id, { ...toStored(input), operationId: id }, `event.${input.type}`, undefined, remoteOp);
     return { ok: true, value: event };
   }
 }

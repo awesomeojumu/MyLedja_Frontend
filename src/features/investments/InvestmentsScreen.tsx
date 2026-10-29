@@ -127,7 +127,16 @@ export function InvestmentsScreen() {
         )}
       </ScrollView>
 
-      {sheet === 'add' ? <HoldingSheet onClose={() => setSheet(null)} /> : null}
+      {sheet === 'add' ? (
+        <HoldingSheet
+          onClose={() => setSheet(null)}
+          onCreated={(h) => {
+            setSheet(null);
+            // PU-37: after add, open buy for that holding ("Record a purchase").
+            router.push({ pathname: '/investments/[id]', params: { id: h.id, trade: 'buy' } });
+          }}
+        />
+      ) : null}
       {sheet === 'buy' ? <TradeSheet direction="buy" onClose={() => setSheet(null)} /> : null}
       {sheet === 'sell' ? <TradeSheet direction="sell" onClose={() => setSheet(null)} /> : null}
       {sheet === 'dividend' ? <DividendSheet onClose={() => setSheet(null)} /> : null}
