@@ -1841,7 +1841,6 @@
   "settings.banks.consentUntil": "Consent until {date}",
   "settings.banks.consentOngoing": "Consent ongoing until you disconnect",
   "settings.banks.reconnected": "Bank reconnected",
-<<<<<<< HEAD
   "dashboard.customizeSave": "Save layout",
   "dashboard.layoutSaved": "Dashboard saved",
   "budget.planSaved": "Plan saved",
@@ -1871,8 +1870,7 @@
   "category.deleteMoveThem": "Move them to",
   "category.deleteConfirmFull": "Delete category",
   "category.newGroup": "+ New group",
-  "category.newGroupName": "New group name"
-=======
+  "category.newGroupName": "New group name",
   "goals.accountRequired": "Choose the account this money sits in",
   "goals.targetDateFuture": "Choose a date after today",
   "goals.alreadySaved": "Already saved (optional)",
@@ -1942,5 +1940,4 @@
   "debts.moneyBack.bodyOutgoing": "You owe {outstanding}.",
   "debts.loanRecorded": "Loan recorded",
   "debts.paymentRecorded": "Payment recorded"
->>>>>>> origin/local/pops-goals-debts
 }
