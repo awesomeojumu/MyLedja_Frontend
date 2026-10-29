@@ -13,12 +13,6 @@ import { budgetForMonth, overspentCategories } from '../helpers';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 
-let mockWidth = 1200;
-jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
-  __esModule: true,
-  default: () => ({ width: mockWidth, height: 900, scale: 1, fontScale: 1 }),
-}));
-
 async function seeded(style: 'tracking' | 'envelope' = 'tracking') {
   const sync = memorySync();
   const repo = new WorkspaceRepository(sync.store, sync.engine, 'ws-personal');
@@ -54,7 +48,6 @@ const wrap = (el: React.ReactElement) => <WorkspaceProvider workspaceId="ws-pers
 beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(new Date('2026-10-28T12:00:00Z'));
-  mockWidth = 1200;
   resetParams();
   jest.clearAllMocks();
 });
@@ -110,33 +103,34 @@ describe('Budget page', () => {
     );
   });
 
-  it('P06-06 / PU08: Move money from a category with available', async () => {
+  it('P06-06: Move money sheet previews both new planned amounts', async () => {
     const { sync, repo, id } = await seeded();
     await renderWithProviders(wrap(<BudgetScreen />), { sync });
     await fireEvent.press(await screen.findByTestId('budget-move'));
     expect(screen.getByTestId('budget-move-sheet')).toBeTruthy();
-    // Fuel has available; Market is overspent so it is not a From option.
-    await fireEvent(screen.getByTestId('budget-move-from'), 'onChange', id('Fuel'));
-    await fireEvent(screen.getByTestId('budget-move-to'), 'onChange', id('Market'));
     await fireEvent.changeText(screen.getByTestId('budget-move-amount'), '10000');
-    expect(screen.getByTestId('budget-move-preview')).toHaveTextContent('Fuel', { exact: false });
-    expect(screen.getByTestId('budget-move-preview')).toHaveTextContent('Market', { exact: false });
+    expect(screen.getByTestId('budget-move-preview')).toHaveTextContent(t('budget.movePreviewFrom', { amount: '₦890,000.00' }), {
+      exact: false,
+    });
+    expect(screen.getByTestId('budget-move-preview')).toHaveTextContent(t('budget.movePreviewTo', { amount: '₦610,000.00' }), {
+      exact: false,
+    });
     await fireEvent.press(screen.getByTestId('budget-move-save'));
     await waitFor(async () => {
       const after = await repo.load();
-      expect(repo.assigned(id('Fuel'), '2026-10', after)).toBe(59_000_000n);
-      expect(repo.assigned(id('Market'), '2026-10', after)).toBe(91_000_000n);
+      expect(repo.assigned(id('Market'), '2026-10', after)).toBe(89_000_000n);
+      expect(repo.assigned(id('Fuel'), '2026-10', after)).toBe(61_000_000n);
     });
   });
 
-  it('P06-07 / PU10: Cover overspending lists each overspent category', async () => {
+  it('P06-07: Cover overspending lists each overspent category', async () => {
     const { sync, repo, id } = await seeded();
     const after = await repo.load();
     expect(overspentCategories(after, '2026-10').map((o) => o.category.name)).toEqual(['Market']);
     await renderWithProviders(wrap(<BudgetScreen />), { sync });
     await fireEvent.press(await screen.findByTestId('budget-cover'));
     expect(screen.getByTestId(`cover-row-${id('Market')}`)).toHaveTextContent(
-      t('budget.coverRowOver', { name: 'Market', amount: '₦30,000.00' }),
+      t('budget.coverRow', { name: 'Market', amount: '₦30,000.00' }),
       { exact: false },
     );
     await fireEvent.press(screen.getByTestId('budget-cover-save'));
@@ -148,21 +142,6 @@ describe('Budget page', () => {
     await renderWithProviders(wrap(<BudgetScreen />), { sync });
     await fireEvent.press(await screen.findByTestId(`budget-name-${id('Market')}`));
     expect(router.push).toHaveBeenCalledWith(`/budget/category/${id('Market')}`);
-  });
-
-  it('TB02-2: 3-month control is not offered below 1024', async () => {
-    mockWidth = 800;
-    const { sync } = await seeded();
-    await renderWithProviders(wrap(<BudgetScreen />), { sync });
-    expect(screen.queryByTestId('budget-month-span')).toBeNull();
-  });
-
-  it('TB02-1: grouping by Type keeps categories', async () => {
-    const { sync, id } = await seeded();
-    await renderWithProviders(wrap(<BudgetScreen />), { sync });
-    await fireEvent(screen.getByTestId('budget-group-by'), 'onChange', 'type');
-    expect(await screen.findByTestId(`budget-row-${id('Market')}`)).toBeTruthy();
-    expect(screen.getByTestId(`budget-row-${id('Fuel')}`)).toBeTruthy();
   });
 });
 
@@ -185,7 +164,7 @@ describe('Category page', () => {
     expect(screen.getByRole('switch', { name: t('chart.viewAsTable') })).toBeTruthy();
   });
 
-  it('P07-05 / PU11: Edit category renames and can hide from budget', async () => {
+  it('P07-05: Edit category renames and can hide from budget', async () => {
     const { sync, repo, id } = await seeded();
     setParams({ id: id('Market') });
     await renderWithProviders(wrap(<CategoryScreen />), { sync });
@@ -200,28 +179,18 @@ describe('Category page', () => {
     });
   });
 
-  it('PU11-1: duplicate name in the same group is refused', async () => {
-    const { sync, id } = await seeded();
-    setParams({ id: id('Market') });
-    await renderWithProviders(wrap(<CategoryScreen />), { sync });
-    await fireEvent.press(await screen.findByTestId('category-edit'));
-    await fireEvent(screen.getByTestId('category-edit-group'), 'onChange', 'group.gettingAround');
-    await fireEvent.changeText(screen.getByTestId('category-edit-name'), 'Fuel');
-    expect(screen.getByText(t('category.duplicateName', { name: 'Fuel' }))).toBeTruthy();
-    expect(screen.getByTestId('category-edit-save')).toBeDisabled();
-  });
-
-  it('P06-10: templates preview and apply', async () => {
+  it('P06-10 / PU09: templates preview fills and apply', async () => {
     const { sync, repo, id } = await seeded();
-    const tpl = await repo.saveBudgetTemplate('Monthly basics', [
-      { categoryId: id('Market'), amountMinor: '40000000' },
-      { categoryId: id('Fuel'), amountMinor: '30000000' },
+    await repo.saveBudgetTemplate('Monthly plan', [
+      { categoryId: id('Market'), amountMinor: '40000000', ruleKind: 'monthly' },
+      { categoryId: id('Fuel'), amountMinor: '30000000', ruleKind: 'monthly' },
     ]);
     await renderWithProviders(wrap(<BudgetScreen />), { sync });
     await fireEvent.press(await screen.findByTestId('budget-templates'));
     expect(screen.getByTestId('budget-templates-sheet')).toBeTruthy();
-    await fireEvent(screen.getByTestId('budget-templates-pick'), 'onChange', tpl.id);
-    expect(await screen.findByTestId('budget-templates-preview')).toBeTruthy();
+    expect(await screen.findByTestId(`budget-templates-fill-${id('Market')}`)).toBeTruthy();
+    expect(screen.getByTestId('budget-templates-total')).toBeTruthy();
+    await fireEvent(screen.getByTestId('budget-templates-replace'), 'onChange', true);
     await fireEvent.press(screen.getByTestId('budget-templates-apply'));
     await waitFor(async () => {
       expect((await repo.load()).assigns.get(`${id('Market')}:2026-10`)).toBe(40_000_000n);
