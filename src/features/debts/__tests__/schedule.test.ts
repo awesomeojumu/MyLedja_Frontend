@@ -1,7 +1,7 @@
 import type { PersonDebt } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 
-import { debtSchedulePreview, debtScheduleRows, debtProgress } from '../schedule';
+import { debtSchedulePreview, debtScheduleRows, debtProgress, scheduleAmounts } from '../schedule';
 
 function debt(over: Partial<PersonDebt> = {}): PersonDebt {
   return {
@@ -39,5 +39,12 @@ describe('debt schedule (P16-04)', () => {
   it('computes progress from balance', () => {
     const prog = debtProgress('d1', { debtEntries: [{ debtId: 'd1', kind: 'lend', amountMinor: '10000' }] } as unknown as Snapshot, 4000n);
     expect(prog).toBeCloseTo(0.6);
+  });
+
+  it('PU36-1: last instalment absorbs remainder so rows sum to total', () => {
+    const amounts = scheduleAmounts(3, 10_000n);
+    expect(amounts.reduce((s, a) => s + a, 0n)).toBe(10_000n);
+    const rows = debtSchedulePreview({ count: 3, amountMinor: 3333n, every: 'month', firstDue: '2026-01-15', totalMinor: 10_000n });
+    expect(rows.reduce((s, r) => s + r.amountMinor, 0n)).toBe(10_000n);
   });
 });

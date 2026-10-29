@@ -9,10 +9,11 @@ export type DebtRow = {
 };
 
 export function debtRows(snapshot: Snapshot, filter: DebtFilter, onDate?: string): DebtRow[] {
+  const today = onDate ?? '9999-12-31';
   return snapshot.debts
     .filter((d) => {
-      if (filter === 'all') return true;
-      if (filter === 'settled') return d.status === 'settled';
+      if (filter === 'all') return d.status === 'open';
+      if (filter === 'settled') return d.status === 'settled' || d.status === 'written_off';
       if (filter === 'owedToMe') return d.direction === 'owedToMe' && d.status === 'open';
       return d.direction === 'iOwe' && d.status === 'open';
     })
@@ -20,7 +21,15 @@ export function debtRows(snapshot: Snapshot, filter: DebtFilter, onDate?: string
       debt,
       balance: snapshot.chart.get(debt.ledgerAccountId) ? balanceFor(snapshot, debt, onDate) : 0n,
     }))
-    .sort((a, b) => (a.balance === b.balance ? 0 : a.balance > b.balance ? -1 : 1));
+    .sort((a, b) => {
+      const aOver = a.debt.nextDueDate && a.debt.nextDueDate < today && a.debt.status === 'open' ? 0 : 1;
+      const bOver = b.debt.nextDueDate && b.debt.nextDueDate < today && b.debt.status === 'open' ? 0 : 1;
+      if (aOver !== bOver) return aOver - bOver;
+      const aDue = a.debt.nextDueDate ?? '9999-12-31';
+      const bDue = b.debt.nextDueDate ?? '9999-12-31';
+      if (aDue !== bDue) return aDue.localeCompare(bDue);
+      return a.balance === b.balance ? 0 : a.balance > b.balance ? -1 : 1;
+    });
 }
 
 function balanceFor(snapshot: Snapshot, debt: PersonDebt, onDate?: string): bigint {

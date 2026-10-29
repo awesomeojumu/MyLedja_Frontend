@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 
-import { Button, Footer, Sheet, Text } from '@/design/components';
+import { Button, Footer, Sheet, Text, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { t } from '@/i18n';
 
@@ -8,7 +8,7 @@ import { moneyBackPromptCopy, type MoneyBackChoice, type MoneyBackSuggestion } f
 
 const sp = tokens.spacing;
 
-/** A-13 / TECH-SPEC 6.15: never post money back without an explicit choice. */
+/** PU-58 Money back? — never auto-decides; Always-do-this hidden until Phase 4 rules. */
 export function MoneyBackPrompt({
   suggestion,
   onChoice,
@@ -18,7 +18,9 @@ export function MoneyBackPrompt({
   onChoice: (choice: MoneyBackChoice) => void;
   onClose: () => void;
 }) {
+  const toast = useToast();
   const copy = moneyBackPromptCopy(suggestion);
+  const incoming = suggestion.direction === 'incoming';
   return (
     <Sheet
       visible
@@ -30,13 +32,16 @@ export function MoneyBackPrompt({
           <Button
             testID="money-back-income"
             kind="secondary"
-            label={t('debts.moneyBack.itsIncome')}
+            label={incoming ? t('debts.moneyBack.itsIncome') : t('debts.moneyBack.itsSpending')}
             onPress={() => onChoice('income')}
           />
           <Button
             testID="money-back-confirm"
-            label={t('debts.moneyBack.record')}
-            onPress={() => onChoice('money_back')}
+            label={incoming ? t('debts.moneyBack.record') : t('debts.moneyBack.recordRepayment')}
+            onPress={() => {
+              onChoice('money_back');
+              toast.show(t('debts.moneyBack.toast'));
+            }}
           />
         </Footer>
       }
