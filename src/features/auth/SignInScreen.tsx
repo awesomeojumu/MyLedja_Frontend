@@ -10,7 +10,7 @@ import { useOnline } from '@/lib/useOnline';
 import { AuthFrame } from './AuthFrame';
 import { useAuth } from './AuthProvider';
 import { GoogleSignInButton } from './GoogleSignInButton';
-import { loadGoogleSignIn, runGoogleSignIn } from './googleSignIn';
+import { loadGoogleSignIn, peekGoogleLinkPending, runGoogleSignIn, takeGoogleLinkPending } from './googleSignIn';
 import { EMAIL_PATTERN } from './password';
 import { passkeyAssertion, passkeysAvailable } from './passkey';
 import { rememberTrustedDevice, trustedDeviceToken } from './trustedDevice';
@@ -131,12 +131,17 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
     setBusy(true);
     setError(null);
     try {
+      const link = peekGoogleLinkPending();
+      const googleLinkToken =
+        link && link.email.toLowerCase() === email.trim().toLowerCase() ? link.linkToken : undefined;
       const res = await api.signIn({
         email: email.trim(),
         password,
         staySignedIn: signedInStay,
         trustedDeviceToken: await trustedDeviceToken(email),
+        ...(googleLinkToken ? { googleLinkToken } : {}),
       });
+      if (googleLinkToken) takeGoogleLinkPending();
       await finishSession(res, signedInStay);
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {

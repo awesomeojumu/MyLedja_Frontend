@@ -115,6 +115,14 @@ export function SignUpScreen() {
           await completeSignIn(session, false);
           router.replace('/welcome');
         }
+      } else if (res.reason === 'link_password') {
+        // Existing password account — prove ownership on Sign in (TECH-SPEC 5.8).
+        setErrors({ form: t('signIn.googleLinkPassword') });
+        router.replace('/sign-in');
+      } else if (res.reason === 'network') {
+        setErrors({ form: t('errors.network') });
+      } else if (res.reason !== 'cancelled') {
+        setErrors({ form: t('errors.network') });
       }
     } finally {
       setBusy(false);
@@ -237,7 +245,7 @@ export function SignUpScreen() {
         width={tokens.width.reading}
         testID="reading-sheet"
       >
-        <Text>{t('signUp.legalPending')}</Text>
+        <Text testID="reading-body">{reading === 'privacy' ? t('signUp.privacyBody') : t('signUp.termsBody')}</Text>
       </Sheet>
     </AuthFrame>
   );

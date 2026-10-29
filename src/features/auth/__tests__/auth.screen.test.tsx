@@ -7,8 +7,17 @@ import { router } from '../../../../test/helpers/router';
 import { RecoverScreen } from '../RecoverScreen';
 import { SignInScreen } from '../SignInScreen';
 import { SignUpScreen } from '../SignUpScreen';
+import { loadGoogleSignIn, runGoogleSignIn } from '../googleSignIn';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
+jest.mock('../googleSignIn', () => {
+  const actual = jest.requireActual('../googleSignIn');
+  return {
+    ...actual,
+    loadGoogleSignIn: jest.fn(actual.loadGoogleSignIn),
+    runGoogleSignIn: jest.fn(actual.runGoogleSignIn),
+  };
+});
 
 let mockOnline = true;
 jest.mock('@/lib/useOnline', () => ({ useOnline: () => mockOnline }));
@@ -16,6 +25,7 @@ jest.mock('@/lib/useOnline', () => ({ useOnline: () => mockOnline }));
 beforeEach(() => {
   jest.clearAllMocks();
   mockOnline = true;
+  (loadGoogleSignIn as jest.Mock).mockImplementation(async () => ({ enabled: false, clientId: null }));
 });
 
 async function signIn(email: string, password: string) {
@@ -111,7 +121,10 @@ describe('P02 Sign up', () => {
     expect(await screen.findByText(t('errors.termsRequired'))).toBeTruthy();
     await fireEvent.press(screen.getByText(t('signUp.termsLink')));
     expect(screen.getByTestId('reading-sheet')).toBeTruthy();
+    expect(screen.getByTestId('reading-body')).toHaveTextContent(t('signUp.termsBody'));
     expect(screen.getByTestId('name')).toHaveProp('value', 'Tunde');
+    await fireEvent.press(screen.getByText(t('signUp.privacyLink')));
+    expect(screen.getByTestId('reading-body')).toHaveTextContent(t('signUp.privacyBody'));
   });
 
   it('P02-03 and P02-06: code step, then ready, then Welcome', async () => {
@@ -144,6 +157,35 @@ describe('P02 Sign up', () => {
     await fireEvent.press(screen.getByTestId('terms'));
     await fireEvent.press(screen.getByTestId('create'));
     expect(await screen.findByText(t('signUp.checkTitle'))).toBeTruthy();
+  });
+
+  it('P02-05 Continue with Google skips the email code and goes to Welcome', async () => {
+    (loadGoogleSignIn as jest.Mock).mockResolvedValue({
+      enabled: true,
+      clientId: 'test.apps.googleusercontent.com',
+    });
+    (runGoogleSignIn as jest.Mock).mockResolvedValue({
+      ok: true,
+      staySignedIn: false,
+      session: {
+        accessToken: 'access-google',
+        accessTokenExpiresIn: 900,
+        refreshToken: 'refresh-google',
+        user: {
+          id: 'user-google',
+          name: 'Google User',
+          email: 'google@example.test',
+          setupComplete: false,
+          workspaceId: 'ws-google',
+          workspaceName: 'Personal',
+        },
+      },
+    });
+    await renderWithProviders(<SignUpScreen />);
+    expect(await screen.findByTestId('google-sign-in')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('google-sign-in'));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/welcome'));
+    expect(screen.queryByText(t('signUp.checkTitle'))).toBeNull();
   });
 });
 
