@@ -83,14 +83,12 @@ describe('PU-05 / TB-12 notifications', () => {
       collection: 'notifications',
       id: 'bill-1',
       version: 1,
-      updatedAt: new Date().toISOString(),
       data: { createdAt: '2026-10-28T10:00:00.000Z', title: 'Rent', category: 'bills', read: false, action: 'mark_paid' },
     });
     await sync.store.replace({
       collection: 'notifications',
       id: 'sec-1',
       version: 1,
-      updatedAt: new Date().toISOString(),
       data: { createdAt: '2026-10-28T11:00:00.000Z', title: 'New sign-in', category: 'security', read: false },
     });
     await repo.markAllNotificationsRead('bills');
