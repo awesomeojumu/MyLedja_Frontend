@@ -644,6 +644,10 @@ export type AppNotification = {
   /** Lock-screen safe: omit amount in push copy when true (default). */
   hideAmount?: boolean;
   snoozedUntil?: string;
+  /** Server security notices cannot be muted (DESIGN.md page 27). */
+  security?: boolean;
+  /** Dismissed on server; hidden from the inbox. */
+  dismissed?: boolean;
 };
 
 export type StoredLine = { a: string; m: string; c: string };

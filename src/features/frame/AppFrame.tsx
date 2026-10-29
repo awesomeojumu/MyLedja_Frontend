@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Image, Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,9 +13,13 @@ import { useSyncStatus } from '@/data/sync/SyncProvider';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { CommandBar, CommandSearchButton } from '@/features/command/CommandBar';
+import { mergeDerivedNotifications, unreadCount } from '@/features/notifications/helpers';
+import { setUnreadBadge } from '@/features/notifications/localPush';
 import { NotificationsBell } from '@/features/notifications/NotificationsBell';
+import { useUnreadDocumentTitle } from '@/features/notifications/useUnreadDocumentTitle';
 import { SyncIssuesBanner } from '@/features/sync/SyncIssues';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
+import { today } from '@/features/transactions/helpers';
 import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, WEALTH_PAGES, PHONE_BOTTOM_PAGES, type NavItem } from './navigation';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
@@ -383,6 +387,16 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
   const [drawer, setDrawer] = useState(false);
   const phone = size === 'phone';
   const navWidth = size === 'tablet' ? tokens.frame.rail : tokens.frame.sidebar;
+  const day = today();
+  const inbox = useMemo(
+    () => (snapshot ? mergeDerivedNotifications(snapshot, snapshot.notifications, day) : []),
+    [snapshot, day],
+  );
+  useUnreadDocumentTitle(inbox);
+  useEffect(() => {
+    void setUnreadBadge(unreadCount(inbox));
+  }, [inbox]);
+  // Taps on a system notification are handled by LocalPushBridge (Bills reminders and the inbox).
 
   const content = (
     <View style={{ flex: 1, backgroundColor: theme.page }}>
@@ -459,7 +473,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
           {title}
         </Text>
         <CommandSearchButton />
-        <NotificationsBell items={snapshot?.notifications ?? []} />
+        <NotificationsBell items={inbox} />
         <PrivacyToggle color={theme.textSecondary} />
       </View>
       {content}

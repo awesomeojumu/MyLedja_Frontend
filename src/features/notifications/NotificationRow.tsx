@@ -1,8 +1,10 @@
-import { Pressable, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { PanResponder, Pressable, View } from 'react-native';
 import { AlertTriangle, Check, CircleDot, Lock, MoreHorizontal, X } from 'lucide-react-native';
 
 import { Amount, Button, Card, Icon, Menu, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
+import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
 import type { AppNotification } from '@/data/workspace/model';
 import { t } from '@/i18n';
@@ -21,9 +23,52 @@ const ICONS = {
   default: CircleDot,
 } as const;
 
+/** Phone: swipe left to dismiss (D27-08). Web keeps the ⋯ menu. */
+function PhoneSwipe({
+  enabled,
+  onDismiss,
+  children,
+}: {
+  enabled: boolean;
+  onDismiss: () => void;
+  children: React.ReactNode;
+}) {
+  const [dx, setDx] = useState(0);
+  const panHandlers = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, g) =>
+          enabled && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
+        onPanResponderMove: (_, g) => {
+          if (g.dx < 0) setDx(Math.max(g.dx, -160));
+        },
+        onPanResponderRelease: (_, g) => {
+          if (g.dx < -72) onDismiss();
+          setDx(0);
+        },
+        onPanResponderTerminate: () => setDx(0),
+      }).panHandlers,
+    [enabled, onDismiss],
+  );
+
+  if (!enabled) return <>{children}</>;
+  return (
+    <View
+      testID="notification-swipe"
+      collapsable={false}
+      style={{ transform: [{ translateX: dx }] }}
+      {...panHandlers}
+    >
+      {children}
+    </View>
+  );
+}
+
 export function NotificationRow({
   notification: n,
   today,
+  selected,
+  onSelect,
   onMarkPaid,
   onMarkReceived,
   onMatch,
@@ -36,6 +81,8 @@ export function NotificationRow({
 }: {
   notification: AppNotification;
   today: string;
+  selected?: boolean;
+  onSelect?: () => void;
   onMarkPaid: () => Promise<void>;
   onMarkReceived: () => void;
   onMatch: () => void;
@@ -47,20 +94,24 @@ export function NotificationRow({
   onDismiss: () => void;
 }) {
   const theme = useTheme();
+  const phone = useSizeClass() === 'phone';
   const iconKey = notificationIcon(n);
   const Glyph = ICONS[iconKey];
   const when = formatNotificationWhen(n.createdAt, today);
   const unread = !n.read;
+  const canSwipe = phone && n.category !== 'security';
 
-  return (
+  const body = (
     <Card
       testID={`notification-${n.id}`}
       style={{
         gap: sp['spacing-sm'],
         flexDirection: 'row',
         alignItems: 'flex-start',
-        backgroundColor: unread ? c['primary-bg-subdued-hover'] : undefined,
-        opacity: n.read ? 0.92 : 1,
+        backgroundColor: unread || selected ? c['primary-bg-subdued-hover'] : undefined,
+        opacity: n.read && !selected ? 0.92 : 1,
+        borderWidth: selected ? 1 : undefined,
+        borderColor: selected ? theme.primaryFill : undefined,
       }}
     >
       <View style={{ paddingTop: 2, width: 20, alignItems: 'center' }}>
@@ -146,5 +197,19 @@ export function NotificationRow({
         </View>
       </View>
     </Card>
+  );
+
+  const selectable = onSelect ? (
+    <Pressable accessibilityRole="button" onPress={onSelect}>
+      {body}
+    </Pressable>
+  ) : (
+    body
+  );
+
+  return (
+    <PhoneSwipe enabled={canSwipe} onDismiss={onDismiss}>
+      {selectable}
+    </PhoneSwipe>
   );
 }

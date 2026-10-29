@@ -9,10 +9,14 @@ import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
 import type { AppNotification } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { debtRows } from '@/features/debts/helpers';
+import { ChangePasswordSheet, useSecurityApi } from '@/features/settings/SecuritySheets';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
 import { formatNotificationWhen, unreadCount } from './helpers';
+import { MatchBillSheet } from './MatchBillSheet';
+import { RecordDebtPaymentSheet } from './RecordDebtPaymentSheet';
 
 const sp = tokens.spacing;
 const c = tokens.color;
@@ -23,8 +27,12 @@ export function NotificationsBell({ items }: { items: AppNotification[] }) {
   const router = useRouter();
   const toast = useToast();
   const { snapshot, repo } = useWorkspace();
+  const security = useSecurityApi();
   const phone = useSizeClass() === 'phone';
   const [open, setOpen] = useState(false);
+  const [matchTarget, setMatchTarget] = useState<AppNotification | null>(null);
+  const [debtPayTarget, setDebtPayTarget] = useState<{ notificationId: string; debtId: string; max: bigint } | null>(null);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const unread = unreadCount(items);
   const latest = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
   const day = today();
@@ -50,6 +58,17 @@ export function NotificationsBell({ items }: { items: AppNotification[] }) {
       await repo.markNotificationRead(n.id);
       toast.show(t('notifications.markedPaid'));
     }
+  };
+
+  const onSecurityNo = async (n: AppNotification) => {
+    try {
+      await security.signOutOthers();
+    } catch {
+      /* still prompt password change */
+    }
+    toast.show(t('notifications.securityRevoked'));
+    setPasswordOpen(true);
+    await repo.markNotificationRead(n.id);
   };
 
   const primaryAction = (n: AppNotification) => {
@@ -102,10 +121,7 @@ export function NotificationsBell({ items }: { items: AppNotification[] }) {
           kind="secondary"
           size="sm"
           label={t('notifications.match')}
-          onPress={() => {
-            setOpen(false);
-            router.push('/notifications');
-          }}
+          onPress={() => setMatchTarget(n)}
         />
       );
     }
@@ -117,21 +133,35 @@ export function NotificationsBell({ items }: { items: AppNotification[] }) {
           size="sm"
           label={t('debts.recordPayment')}
           onPress={() => {
-            setOpen(false);
-            router.push(n.debtId ? `/debts/${n.debtId}` : '/debts');
+            if (!n.debtId || !snapshot) {
+              setOpen(false);
+              router.push('/debts');
+              return;
+            }
+            const max = debtRows(snapshot, 'all', day).find((r) => r.debt.id === n.debtId)?.balance ?? 0n;
+            setDebtPayTarget({ notificationId: n.id, debtId: n.debtId, max });
           }}
         />
       );
     }
     if (n.category === 'security') {
       return (
-        <Button
-          testID={`preview-action-${n.id}`}
-          kind="secondary"
-          size="sm"
-          label={t('notifications.securityYes')}
-          onPress={() => void repo.markNotificationRead(n.id)}
-        />
+        <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
+          <Button
+            testID={`preview-action-${n.id}`}
+            kind="secondary"
+            size="sm"
+            label={t('notifications.securityYes')}
+            onPress={() => void repo.markNotificationRead(n.id)}
+          />
+          <Button
+            testID={`preview-security-no-${n.id}`}
+            kind="link"
+            size="sm"
+            label={t('notifications.securityNo')}
+            onPress={() => void onSecurityNo(n)}
+          />
+        </View>
       );
     }
     return null;
@@ -222,6 +252,50 @@ export function NotificationsBell({ items }: { items: AppNotification[] }) {
           </View>
         </Popover>
       ) : null}
+      {matchTarget && snapshot ? (
+        <MatchBillSheet
+          notification={matchTarget}
+          snapshot={snapshot}
+          today={day}
+          onClose={() => setMatchTarget(null)}
+          onMatch={async (eventId) => {
+            if (!matchTarget.recurringId || !matchTarget.dueDate) return;
+            const r = await repo.matchBillToEvent(matchTarget.recurringId, matchTarget.dueDate, eventId);
+            if (!r.ok) toast.show(ledgerMessage(r.error));
+            else {
+              await repo.markNotificationRead(matchTarget.id);
+              setMatchTarget(null);
+            }
+          }}
+        />
+      ) : null}
+      {debtPayTarget && snapshot ? (
+        <RecordDebtPaymentSheet
+          max={debtPayTarget.max}
+          snapshot={snapshot}
+          onClose={() => setDebtPayTarget(null)}
+          onSave={async (input) => {
+            const r = await repo.recordDebtPayment(debtPayTarget.debtId, {
+              accountId: input.accountId,
+              amount: input.principal,
+              date: day,
+              interest: input.interest,
+            });
+            if (!r.ok) toast.show(ledgerMessage(r.error));
+            else {
+              await repo.markNotificationRead(debtPayTarget.notificationId);
+              setDebtPayTarget(null);
+            }
+          }}
+        />
+      ) : null}
+      <ChangePasswordSheet
+        visible={passwordOpen}
+        onClose={() => setPasswordOpen(false)}
+        guard={async (action) => {
+          await action();
+        }}
+      />
     </View>
   );
 }

@@ -1244,6 +1244,8 @@
   "notifications.securityYes": "It was me",
   "notifications.securityNo": "It wasn't me",
   "notifications.securityAck": "Thanks. We'll keep an eye on your account.",
+  "notifications.securityRevoked": "Other devices were signed out. Change your password to finish securing your account.",
+  "notifications.securityChangePassword": "Change password",
   "notifications.dismiss": "Dismiss",
   "notifications.more": "More",
   "notifications.budgetHigh": "{name} is at {pct}% of plan",

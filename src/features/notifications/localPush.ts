@@ -206,3 +206,6 @@ export async function syncAppBadge(unread: number): Promise<void> {
   if (!mod) return;
   await mod.setBadgeCountAsync(Math.max(0, unread)).catch(() => undefined);
 }
+
+/** Keep the app icon badge equal to the unread inbox count (DESIGN page 27). */
+export const setUnreadBadge = syncAppBadge;
