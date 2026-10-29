@@ -41,8 +41,6 @@ const sp = tokens.spacing;
 type Tab = 'transactions' | 'value' | 'details';
 export type RegisterRow = Row & { line: bigint; running: bigint };
 
-const TAB_KEYS: Tab[] = ['transactions', 'value', 'details'];
-
 /** Rows that touch the account, newest first, with the balance after each (P09-01 / TB03-2). */
 export function register(snapshot: Snapshot, accountId: string): RegisterRow[] {
   const rows = rowsFor(snapshot)
@@ -113,9 +111,6 @@ export function AccountScreen() {
   useEffect(loadPending, [loadPending]);
 
   const account = snapshot?.accounts.find((a) => a.id === params.id);
-  const allowValue = account ? hasValueTab(account.type) : false;
-  const tab = parseTab(params.tab, allowValue);
-  const setTab = (next: Tab) => router.setParams({ tab: next });
 
   // `?account=` is PU-13; Add transaction also uses `account` as a prefill when `?add=` is set.
   const editOpen = !!account && params.account === account.id && !params.add;
@@ -143,6 +138,7 @@ export function AccountScreen() {
     keys.push('details');
     return keys;
   }, [account]);
+  // Prefer foundation useTabParam (URL + remembered last tab) over accounts' one-shot parseTab.
   const { value: tab, setValue: setTab } = useTabParam<Tab>({
     pageKey: `account:${params.id ?? 'none'}`,
     personId: user?.id,
