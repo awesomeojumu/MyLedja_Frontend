@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
-import { Amount, Button, Footer, Select, Sheet, Text } from '@/design/components';
+import { Amount, Button, Footer, Sheet, Text, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
@@ -12,11 +12,11 @@ import { rowsFor } from './helpers';
 
 const sp = tokens.spacing;
 
-/** Popup #21 — link opposite legs as a transfer, or dismiss (DESIGN page 11 / P11-09). */
+/** Popup #21 — link opposite legs as a transfer, or dismiss (addendum PU-21). */
 export function TransferMatchSheet({ snapshot, onClose }: { snapshot: Snapshot; onClose: () => void }) {
   const { repo } = useWorkspace();
+  const toast = useToast();
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,8 +25,11 @@ export function TransferMatchSheet({ snapshot, onClose }: { snapshot: Snapshot; 
   }, [repo, snapshot]);
 
   const candidates = useMemo(() => transferMatchCandidates(snapshot, dismissed).slice(0, 20), [snapshot, dismissed]);
-  const pair = candidates.find((p) => pairKey(p.out.id, p.in.id) === selected);
   const labels = useMemo(() => labelMap(snapshot), [snapshot]);
+
+  useEffect(() => {
+    if (candidates.length === 0 && dismissed.size > 0) onClose();
+  }, [candidates.length, dismissed.size, onClose]);
 
   const link = async (p: TransferMatchPair) => {
     setBusy(true);
@@ -37,7 +40,8 @@ export function TransferMatchSheet({ snapshot, onClose }: { snapshot: Snapshot; 
       setError(t(`ledger.error.${r.error}` as 'ledger.error.missing_lines'));
       return;
     }
-    onClose();
+    toast.show(t('tx.transferLinked'));
+    if (candidates.length <= 1) onClose();
   };
 
   const dismiss = async (p: TransferMatchPair) => {
@@ -45,30 +49,10 @@ export function TransferMatchSheet({ snapshot, onClose }: { snapshot: Snapshot; 
     await repo.dismissTransferMatch(p.out.id, p.in.id);
     setBusy(false);
     setDismissed(new Set([...dismissed, pairKey(p.out.id, p.in.id)]));
-    setSelected(null);
   };
 
   return (
-    <Sheet
-      visible
-      testID="tx-transfer-match"
-      title={t('tx.transferMatchTitle')}
-      onClose={onClose}
-      footer={
-        pair ? (
-          <Footer>
-            <Button
-              testID="tx-transfer-dismiss"
-              kind="secondary"
-              label={t('tx.transferMatchDismiss')}
-              disabled={busy}
-              onPress={() => void dismiss(pair)}
-            />
-            <Button testID="tx-transfer-link" label={t('tx.transferMatchLink')} disabled={busy} onPress={() => void link(pair)} />
-          </Footer>
-        ) : undefined
-      }
-    >
+    <Sheet visible testID="tx-transfer-match" title={t('tx.transferMatchTitle')} onClose={onClose} width={640}>
       <Text tone="textSecondary">{t('tx.transferMatchBody')}</Text>
       {error ? (
         <Text tone="textSecondary" style={{ marginTop: sp['spacing-sm'] }}>
@@ -78,29 +62,48 @@ export function TransferMatchSheet({ snapshot, onClose }: { snapshot: Snapshot; 
       {candidates.length === 0 ? (
         <Text style={{ marginTop: sp['spacing-md'] }}>{t('tx.transferMatchEmpty')}</Text>
       ) : (
-        <View style={{ marginTop: sp['spacing-md'], gap: sp['spacing-sm'] }}>
-          <Select
-            testID="tx-transfer-pair"
-            label={t('tx.transferMatchPick')}
-            options={candidates.map((p) => ({
-              value: pairKey(p.out.id, p.in.id),
-              label: t('tx.transferMatchPairLabel', {
-                out: labels.get(p.out.id) ?? p.out.id,
-                in: labels.get(p.in.id) ?? p.in.id,
-              }),
-            }))}
-            value={selected}
-            onChange={setSelected}
-          />
-          {pair ? (
-            <View style={{ gap: sp['spacing-xs'] }}>
-              <Text>{t('tx.transferMatchAmount')}</Text>
-              <Amount minor={pair.amount} />
+        <View style={{ marginTop: sp['spacing-md'], gap: sp['spacing-lg'] }}>
+          {candidates.map((p) => (
+            <View
+              key={pairKey(p.out.id, p.in.id)}
+              testID={`tx-transfer-pair-${pairKey(p.out.id, p.in.id)}`}
+              style={{ gap: sp['spacing-sm'], borderWidth: 1, borderColor: 'transparent' }}
+            >
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-md'] }}>
+                <View style={{ flex: 1, minWidth: 160, gap: sp['spacing-xxs'] }}>
+                  <Text variant="caption" tone="textSecondary">
+                    {t('tx.transferMatchOut')}
+                  </Text>
+                  <Text>{labels.get(p.out.id) ?? p.out.id}</Text>
+                </View>
+                <View style={{ flex: 1, minWidth: 160, gap: sp['spacing-xxs'] }}>
+                  <Text variant="caption" tone="textSecondary">
+                    {t('tx.transferMatchIn')}
+                  </Text>
+                  <Text>{labels.get(p.in.id) ?? p.in.id}</Text>
+                </View>
+              </View>
+              <Amount minor={p.amount} />
               <Text variant="caption" tone="textSecondary">
-                {t('tx.transferMatchDays', { days: pair.daysApart })}
+                {t('tx.transferMatchDays', { days: p.daysApart })}
               </Text>
+              <Footer>
+                <Button
+                  testID={`tx-transfer-dismiss-${pairKey(p.out.id, p.in.id)}`}
+                  kind="secondary"
+                  label={t('tx.transferMatchDismiss')}
+                  disabled={busy}
+                  onPress={() => void dismiss(p)}
+                />
+                <Button
+                  testID={`tx-transfer-link-${pairKey(p.out.id, p.in.id)}`}
+                  label={t('tx.transferMatchLink')}
+                  disabled={busy}
+                  onPress={() => void link(p)}
+                />
+              </Footer>
             </View>
-          ) : null}
+          ))}
         </View>
       )}
     </Sheet>
