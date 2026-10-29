@@ -5,7 +5,17 @@ import { formatDay } from '@/design/components/overlays';
 import { budgetForMonth, resolveTemplateLineAmount, rowFor } from '@/features/budget/helpers';
 import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import type { RemoteOperation } from '../sync/mapOperation';
-import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
+import {
+  debtScheduleBody,
+  debtUpdateBody,
+  goalBody,
+  goalUpdateBody,
+  incomeStreamBody,
+  incomeStreamUpdateBody,
+  scheduleBody,
+  scheduleUpdateBody,
+} from '../sync/serverRecords';
+import { debtScheduleRows } from '@/features/debts/schedule';
 import { t, type TextKey } from '@/i18n';
 import {
   buildAdjustment,
@@ -147,7 +157,7 @@ export type TransactionInput =
 const LOCAL_ONLY = new Set([
   'debt.entry',
   'debt.settle',
-  'debt.update',
+  // debt.update / debt.schedule sync via RemoteOperation (PU-36 / Page 16)
   'occurrence.paid',
   'occurrence.matched',
   'occurrence.unpaid',
@@ -1954,18 +1964,44 @@ export class WorkspaceRepository {
     }, null);
     if (!posted.ok) return posted;
     const baseVersion = await this.versionOf('debts', debtId);
+    const reason = input.reason.trim();
     await this.put('debts', debtId, { ...debt, status: 'written_off' }, 'debt.write_off', undefined, {
       type: 'debt.write_off',
       targetId: debtId,
-      payload: { date: input.date, baseVersion },
+      payload: { date: input.date, baseVersion, reason },
       transactionIds: [posted.value.id],
     });
     return { ok: true, value: posted.value };
   }
 
-  async updatePersonDebt(debt: PersonDebt): Promise<void> {
+  /**
+   * Save debt fields locally and queue a remote op.
+   * `mode: 'schedule'` → PUT …/schedule (PU-36); otherwise PATCH notes/interest/due.
+   */
+  async updatePersonDebt(debt: PersonDebt, mode: 'edit' | 'schedule' = 'edit'): Promise<void> {
     const { id, ...data } = debt;
-    await this.put('debts', id, data, 'debt.update');
+    const baseVersion = await this.versionOf('debts', id);
+    if (mode === 'schedule') {
+      const payload = debtScheduleBody(data, baseVersion);
+      if (!payload) {
+        await this.put('debts', id, data, 'debt.update', baseVersion, null);
+        return;
+      }
+      await this.put('debts', id, data, 'debt.update', baseVersion, {
+        type: 'debt.schedule',
+        targetId: id,
+        payload,
+        baseVersion,
+      });
+      await this.refreshDebtNotifications();
+      return;
+    }
+    await this.put('debts', id, data, 'debt.update', baseVersion, {
+      type: 'debt.update',
+      targetId: id,
+      payload: debtUpdateBody(data, baseVersion),
+      baseVersion,
+    });
   }
 
   async markPersonDebtSettled(debtId: string): Promise<Result<void>> {
@@ -2009,6 +2045,40 @@ export class WorkspaceRepository {
       };
       const { id: nid, ...data } = notification;
       await this.put('notifications', id, data, 'notification.create');
+    }
+    await this.refreshDebtNotifications();
+  }
+
+  /** PU-36-2: debt-due notifications from instalment schedule dates. */
+  async refreshDebtNotifications(): Promise<void> {
+    const snapshot = await this.load();
+    const today = workspaceToday();
+    const existing = new Map(snapshot.notifications.map((n) => [n.id, n]));
+    for (const debt of snapshot.debts) {
+      if (debt.status !== 'open' || debt.direction !== 'owedToMe') continue;
+      const rows = debtScheduleRows(debt, snapshot, today);
+      for (const inst of rows) {
+        if (inst.status === 'paid' || inst.status === 'upcoming') continue;
+        const id = `debt:${debt.id}:${inst.dueDate}`;
+        if (existing.has(id)) continue;
+        const overdue = inst.status === 'overdue';
+        const notification: AppNotification = {
+          id,
+          createdAt: new Date().toISOString(),
+          title: overdue
+            ? t('notifications.debtMissed', { name: debt.name, dueDate: formatDay(inst.dueDate) })
+            : t('notifications.debtDue', { name: debt.name }),
+          category: 'debts',
+          read: false,
+          action: 'record_payment',
+          debtId: debt.id,
+          dueDate: inst.dueDate,
+          amountMinor: inst.amountMinor.toString(),
+          hideAmount: true,
+        };
+        const { id: _nid, ...data } = notification;
+        await this.put('notifications', id, data, 'notification.create');
+      }
     }
   }
 

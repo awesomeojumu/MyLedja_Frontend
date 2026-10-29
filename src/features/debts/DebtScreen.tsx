@@ -7,6 +7,7 @@ import {
   Amount,
   Button,
   Card,
+  Checkbox,
   Confirm,
   formatDay,
   Icon,
@@ -67,6 +68,8 @@ export function DebtScreen() {
   const scheduleOpen = debtSchedule === id;
   const [writeOffOpen, setWriteOffOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderOmitAmount, setReminderOmitAmount] = useState(false);
   const [duplicateConfirm, setDuplicateConfirm] = useState<{ accountId: string; principal: bigint; interest: bigint; date: string; overpayment?: 'gift' | 'credit' } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,15 +102,27 @@ export function DebtScreen() {
   const directionLabel = debt.direction === 'owedToMe' ? t('debts.theyOweLabel') : t('debts.iOweLabel');
   const recordLabel = debt.direction === 'owedToMe' ? t('debts.recordMoneyBack') : t('debts.recordPayment');
 
-  const sendReminder = async () => {
-    const polite = reminderMessage(debt, balance, next);
+  const sendReminder = async (omitAmount: boolean) => {
+    const polite = reminderMessage(debt, balance, next, { omitAmount });
     try {
-      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(polite);
-        toast.show(t('debts.reminderCopied'));
-        return;
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
+        const nav = navigator as Navigator & { share?: (data: { text: string }) => Promise<void> };
+        if (typeof nav.share === 'function') {
+          await nav.share({ text: polite });
+          return;
+        }
+        if (nav.clipboard) {
+          await nav.clipboard.writeText(polite);
+          toast.show(t('debts.reminderCopied'));
+          return;
+        }
       }
-      await Share.share({ message: polite });
+      // Prefer WhatsApp when available on native (P16-06); fall back to system share sheet.
+      try {
+        await Share.share({ message: polite, url: `whatsapp://send?text=${encodeURIComponent(polite)}` });
+      } catch {
+        await Share.share({ message: polite });
+      }
     } catch {
       toast.show(t('debts.reminderCopied'));
     }
@@ -213,6 +228,11 @@ export function DebtScreen() {
           );
         })
       )}
+      {debt.interest?.kind === 'percent_month' ? (
+        <Text testID="debt-interest-rate" variant="caption" tone="textSecondary">
+          {t('debts.interestRateMonth', { rate: String(debt.interest.percent) })}
+        </Text>
+      ) : null}
       {interestTotal > 0n ? (
         <Text variant="caption" tone="textSecondary">
           {debt.direction === 'owedToMe' ? t('debts.interestEarned') : t('debts.interestPaid')}: <Amount minor={interestTotal} variant="caption" />
@@ -280,7 +300,7 @@ export function DebtScreen() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'], alignItems: 'center' }}>
           <Button testID="debt-record-payment" label={recordLabel} onPress={() => router.setParams({ [DEBT_URL.payment]: id })} />
           {debt.direction === 'owedToMe' ? (
-            <Button testID="debt-send-reminder" kind="secondary" label={t('debts.sendReminder')} onPress={() => void sendReminder()} />
+            <Button testID="debt-send-reminder" kind="secondary" label={t('debts.sendReminder')} onPress={() => setReminderOpen(true)} />
           ) : null}
           <Menu
             testID="debt-menu"
@@ -339,14 +359,17 @@ export function DebtScreen() {
           onClose={() => router.setParams({ [DEBT_URL.debtSchedule]: undefined })}
           onSave={async (input) => {
             setError(null);
-            await repo.updatePersonDebt({
-              ...debt,
-              scheduleInstallmentCount: input.count,
-              scheduleAmountMinor: input.amountMinor.toString(),
-              scheduleEvery: input.every,
-              scheduleFirstDue: input.firstDue,
-              nextDueDate: input.firstDue,
-            });
+            await repo.updatePersonDebt(
+              {
+                ...debt,
+                scheduleInstallmentCount: input.count,
+                scheduleAmountMinor: input.amountMinor.toString(),
+                scheduleEvery: input.every,
+                scheduleFirstDue: input.firstDue,
+                nextDueDate: input.firstDue,
+              },
+              'schedule',
+            );
             toast.show(t('debts.scheduleSaved'));
             router.setParams({ [DEBT_URL.debtSchedule]: undefined });
           }}
@@ -357,11 +380,37 @@ export function DebtScreen() {
           debt={debt}
           onClose={() => setEditOpen(false)}
           onSave={async (input) => {
-            await repo.updatePersonDebt({ ...debt, name: input.name, notes: input.notes || undefined });
+            await repo.updatePersonDebt({ ...debt, name: input.name, notes: input.notes || undefined }, 'edit');
             toast.show(t('common.saved'));
             setEditOpen(false);
           }}
         />
+      ) : null}
+      {reminderOpen ? (
+        <Sheet
+          visible
+          title={t('debts.sendReminder')}
+          onClose={() => setReminderOpen(false)}
+          testID="debt-reminder-sheet"
+          footer={
+            <Button
+              testID="debt-reminder-send"
+              label={t('debts.sendReminder')}
+              onPress={() => {
+                void sendReminder(reminderOmitAmount);
+                setReminderOpen(false);
+              }}
+            />
+          }
+        >
+          <Text tone="textSecondary">{t('debts.reminderCaption')}</Text>
+          <Checkbox
+            testID="debt-reminder-omit-amount"
+            label={t('debts.reminderLeaveAmountOut')}
+            checked={reminderOmitAmount}
+            onChange={setReminderOmitAmount}
+          />
+        </Sheet>
       ) : null}
       {writeOffOpen ? (
         <WriteOffSheet

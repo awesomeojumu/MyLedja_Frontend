@@ -7,7 +7,7 @@ import { formatNaira } from '@/money';
 import type { PersonDebt } from '@/data/workspace/model';
 import { t } from '@/i18n';
 
-import { debtSchedulePreview } from './schedule';
+import { debtSchedulePreview, instalmentInterestPreview } from './schedule';
 
 const sp = tokens.spacing;
 
@@ -94,11 +94,20 @@ export function DebtScheduleSheet({
         {preview.length > 0 ? (
           <View testID="debt-schedule-preview" style={{ gap: sp['spacing-xs'], marginTop: sp['spacing-sm'] }}>
             <Text variant="heading-sm">{t('debts.schedulePreview')}</Text>
-            {preview.slice(0, 6).map((row) => (
-              <Text key={row.dueDate} variant="caption" tone="textSecondary">
-                {formatDay(row.dueDate)} · <Amount minor={row.amountMinor} variant="caption" />
-              </Text>
-            ))}
+            {preview.slice(0, 6).map((row) => {
+              const interest = instalmentInterestPreview(debt, row.amountMinor);
+              return (
+                <Text key={row.dueDate} variant="caption" tone="textSecondary">
+                  {formatDay(row.dueDate)} · <Amount minor={row.amountMinor} variant="caption" />
+                  {interest > 0n ? (
+                    <>
+                      {' '}
+                      (+ <Amount minor={interest} variant="caption" /> {t('debts.interestLabel')})
+                    </>
+                  ) : null}
+                </Text>
+              );
+            })}
             {preview.length > 6 ? (
               <Text variant="caption" tone="textSecondary">
                 {t('debts.scheduleMore', { count: preview.length - 6 })}

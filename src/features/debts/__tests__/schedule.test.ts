@@ -1,7 +1,14 @@
 import type { PersonDebt } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 
-import { debtSchedulePreview, debtScheduleRows, debtProgress, scheduleAmounts } from '../schedule';
+import {
+  debtSchedulePreview,
+  debtScheduleRows,
+  debtProgress,
+  instalmentInterestPreview,
+  reminderMessage,
+  scheduleAmounts,
+} from '../schedule';
 
 function debt(over: Partial<PersonDebt> = {}): PersonDebt {
   return {
@@ -46,5 +53,17 @@ describe('debt schedule (P16-04)', () => {
     expect(amounts.reduce((s, a) => s + a, 0n)).toBe(10_000n);
     const rows = debtSchedulePreview({ count: 3, amountMinor: 3333n, every: 'month', firstDue: '2026-01-15', totalMinor: 10_000n });
     expect(rows.reduce((s, r) => s + r.amountMinor, 0n)).toBe(10_000n);
+  });
+
+  it('P16-06: reminder can leave the amount out', () => {
+    const withAmount = reminderMessage(debt(), 5000n, { dueDate: '2026-11-15', amountMinor: 2000n, status: 'due' });
+    const without = reminderMessage(debt(), 5000n, { dueDate: '2026-11-15', amountMinor: 2000n, status: 'due' }, { omitAmount: true });
+    expect(withAmount).toContain('₦');
+    expect(without).not.toMatch(/₦|NGN|\d{1,3}(,\d{3})+/);
+  });
+
+  it('PU-36: instalment preview includes interest when debt has terms', () => {
+    expect(instalmentInterestPreview(debt({ interest: { kind: 'percent_month', percent: 2 } }), 100_000n)).toBe(2000n);
+    expect(instalmentInterestPreview(debt({ interest: { kind: 'none' } }), 100_000n)).toBe(0n);
   });
 });

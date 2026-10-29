@@ -147,9 +147,27 @@ export function timelineKindLabel(kind: string): string {
   }
 }
 
-export function reminderMessage(debt: PersonDebt, balance: bigint, next: DebtInstallment | null): string {
+export function reminderMessage(
+  debt: PersonDebt,
+  balance: bigint,
+  next: DebtInstallment | null,
+  opts?: { omitAmount?: boolean },
+): string {
+  if (opts?.omitAmount) {
+    if (next) return t('debts.reminderWithDueNoAmount', { name: debt.name, date: formatDay(next.dueDate) });
+    return t('debts.reminderGenericNoAmount', { name: debt.name });
+  }
   if (next) {
     return t('debts.reminderWithDue', { name: debt.name, amount: formatNaira(next.amountMinor), date: formatDay(next.dueDate) });
   }
   return t('debts.reminderGeneric', { name: debt.name, balance: formatNaira(balance) });
+}
+
+/** Interest portion to show on an instalment preview row when the debt has interest terms (PU-36). */
+export function instalmentInterestPreview(debt: PersonDebt, principalMinor: bigint): bigint {
+  const terms = debt.interest;
+  if (!terms || terms.kind === 'none' || principalMinor <= 0n) return 0n;
+  if (terms.kind === 'fixed') return BigInt(terms.amountMinor);
+  const pct = Math.max(0, Math.min(100, terms.percent));
+  return (principalMinor * BigInt(Math.round(pct * 100))) / 10_000n;
 }

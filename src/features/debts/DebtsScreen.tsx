@@ -241,14 +241,17 @@ export function DebtsScreen() {
             router.setParams({ [DEBT_URL.debtSchedule]: undefined });
           }}
           onSave={async (input) => {
-            await repo.updatePersonDebt({
-              ...scheduleDebt,
-              scheduleInstallmentCount: input.count,
-              scheduleAmountMinor: input.amountMinor.toString(),
-              scheduleEvery: input.every,
-              scheduleFirstDue: input.firstDue,
-              nextDueDate: input.firstDue,
-            });
+            await repo.updatePersonDebt(
+              {
+                ...scheduleDebt,
+                scheduleInstallmentCount: input.count,
+                scheduleAmountMinor: input.amountMinor.toString(),
+                scheduleEvery: input.every,
+                scheduleFirstDue: input.firstDue,
+                nextDueDate: input.firstDue,
+              },
+              'schedule',
+            );
             toast.show(t('debts.scheduleSaved'));
             setPendingScheduleId(null);
             router.setParams({ [DEBT_URL.debtSchedule]: undefined });
