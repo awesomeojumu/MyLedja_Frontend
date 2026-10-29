@@ -36,6 +36,7 @@
       "expo-font",
       "expo-sqlite",
       "expo-asset",
+      "expo-notifications",
       [
         "expo-local-authentication",
         {

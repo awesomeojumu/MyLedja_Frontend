@@ -126,8 +126,14 @@ export function RecurringFormSheet({
           setCustomUnit(unit);
         }
         setEveryN(String(interval));
-        setLastDayOfMonth(existing.rule.every === 'month' && existing.rule.on === 31);
-        setOnDay(String(existing.rule.every === 'month' && existing.rule.on === 31 ? 1 : existing.rule.on));
+        setLastDayOfMonth(existing.rule.every === 'month' && (existing.rule.on === 0 || existing.rule.on === 31));
+        setOnDay(
+          String(
+            existing.rule.every === 'month' && (existing.rule.on === 0 || existing.rule.on === 31)
+              ? 1
+              : existing.rule.on,
+          ),
+        );
         setMonthOfYear(String(existing.rule.monthOfYear ?? Number(existing.startDate.slice(5, 7))));
         setStartDate(existing.startDate);
         setEndMode(existing.endAfterCount ? 'afterCount' : existing.endDate ? 'onDate' : 'never');
@@ -193,10 +199,11 @@ export function RecurringFormSheet({
       const interval = Math.max(1, Number(everyN) || 1);
       if (customUnit === 'day') return { every: 'day', on: 0, interval };
       if (customUnit === 'week') return { every: 'week', on: Math.min(6, Math.max(0, Number(onDay) || 0)), interval };
-      const day = lastDayOfMonth ? 31 : Math.min(31, Math.max(1, Number(onDay) || 1));
+      const day = lastDayOfMonth ? 0 : Math.min(31, Math.max(1, Number(onDay) || 1));
       return { every: 'month', on: day, interval };
     }
-    const day = lastDayOfMonth ? 31 : Math.min(31, Math.max(1, Number(onDay) || 1));
+    // dayOfMonth 0 = last day of month (TECH-SPEC 6.4 / BE round-trip).
+    const day = lastDayOfMonth ? 0 : Math.min(31, Math.max(1, Number(onDay) || 1));
     return { every: 'month', on: day, interval: 1 };
   };
 

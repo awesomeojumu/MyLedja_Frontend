@@ -105,10 +105,91 @@ describe('WorkspaceRepository', () => {
     expect(await repo.matchBillToEvent(bill.id, '2026-10-05', tx.value.id)).toEqual({ ok: false, error: 'already_reversed' });
   });
 
+  it('PU-26 unmarkBillPaid queues occurrence.unmark (leaves the device)', async () => {
+    const { repo, id, store } = await setup();
+    const bill = await repo.addRecurring({
+      kind: 'bill',
+      name: 'Rent',
+      amountMinor: '10000000',
+      accountId: id('GTBank'),
+      categoryId: id('Rent'),
+      rule: { every: 'month', on: 5 },
+      startDate: '2026-10-01',
+    });
+    const paid = await repo.markBillPaid(bill.id, '2026-10-05', {
+      accountId: id('GTBank'),
+      categoryId: id('Rent'),
+      amount: 10_000_000n,
+      date: '2026-10-05',
+    });
+    expect(paid.ok).toBe(true);
+    const eventId = paid.ok ? paid.value.eventId : undefined;
+    const undone = await repo.unmarkBillPaid(bill.id, '2026-10-05');
+    expect(undone.ok).toBe(true);
+    const s = await repo.load();
+    expect(s.occurrences.find((o) => o.id === `${bill.id}:2026-10-05`)?.status).toBe('upcoming');
+    expect(s.occurrences.find((o) => o.id === `${bill.id}:2026-10-05`)?.eventId).toBeUndefined();
+    // Transaction kept on device (PU-26).
+    expect(s.events.some((e) => e.id === eventId && e.status === 'posted')).toBe(true);
+    const outbox = await store.outbox();
+    const unmarkOp = outbox.find((op) => {
+      const remote = (op.payload as { remote?: { type?: string; payload?: Record<string, unknown> } }).remote;
+      return remote?.type === 'occurrence.unmark';
+    });
+    expect(unmarkOp).toBeTruthy();
+    expect((unmarkOp!.payload as { remote: { payload: { scheduleId: string; date: string } } }).remote.payload).toMatchObject({
+      scheduleId: bill.id,
+      date: '2026-10-05',
+    });
+  });
+
   it('syncs what it saved', async () => {
     const { engine, server, store } = await setup();
     await engine.sync();
     expect(await store.outbox()).toHaveLength(0);
     expect([...server.records.keys()].some((k) => k.startsWith('events:'))).toBe(true);
+  });
+
+  it('P12-08 createDueAutoTransactions posts once when autoCreate is on', async () => {
+    const { repo, id } = await setup();
+    await repo.addRecurring({
+      kind: 'bill',
+      name: 'NEPA',
+      amountMinor: '5000000',
+      accountId: id('GTBank'),
+      categoryId: id('Rent'),
+      rule: { every: 'month', on: 1 },
+      startDate: '2026-10-01',
+      autoCreate: true,
+    });
+    const first = await repo.createDueAutoTransactions('2026-10-28');
+    expect(first).toBe(1);
+    const second = await repo.createDueAutoTransactions('2026-10-28');
+    expect(second).toBe(0);
+    const s = await repo.load();
+    expect(s.occurrences.some((o) => o.status === 'paid' && o.dueDate === '2026-10-01')).toBe(true);
+  });
+
+  it('transfer mark paid posts M3 transfer not expense', async () => {
+    const { repo, id } = await setup();
+    const bill = await repo.addRecurring({
+      kind: 'transfer',
+      name: 'To savings',
+      amountMinor: '1000000',
+      accountId: id('GTBank'),
+      toAccountId: id('Card'),
+      rule: { every: 'month', on: 2 },
+      startDate: '2026-10-01',
+    });
+    const r = await repo.markBillPaid(bill.id, '2026-10-02', {
+      accountId: id('GTBank'),
+      categoryId: id('Rent'),
+      amount: 1_000_000n,
+      date: '2026-10-02',
+    });
+    expect(r.ok).toBe(true);
+    const s = await repo.load();
+    const event = s.events.find((e) => e.id === (r.ok ? r.value.eventId : ''));
+    expect(event?.type).toBe('transfer');
   });
 });

@@ -126,7 +126,7 @@ function billDueInMonth(rule: RecurrenceRule, month: string): string | null {
   const [y, m] = month.split('-').map(Number) as [number, number];
   if (rule.every !== 'month') return null;
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const day = rule.on === 31 ? last : Math.min(rule.on, last);
+  const day = rule.on === 0 || rule.on === 31 ? last : Math.min(rule.on, last);
   return `${month}-${String(day).padStart(2, '0')}`;
 }
 
@@ -1786,6 +1786,14 @@ export class WorkspaceRepository {
   async updateRecurring(recurring: Recurring): Promise<void> {
     const { id, ...data } = recurring;
     const baseVersion = await this.versionOf('recurring', id);
+    if (data.cancelled) {
+      await this.put('recurring', id, data, 'recurring.update', undefined, {
+        type: 'schedule.cancel',
+        targetId: id,
+        payload: { baseVersion },
+      });
+      return;
+    }
     await this.put('recurring', id, data, 'recurring.update', undefined, {
       type: 'schedule.update',
       targetId: id,
@@ -1804,10 +1812,14 @@ export class WorkspaceRepository {
     const occId = `${recurringId}:${dueDate}`;
     const existing = snapshot.occurrences.find((o) => o.id === occId);
     if (existing?.status === 'paid') return { ok: false, error: 'already_reversed' };
-    const lines = buildExpense(snapshot.chart, { accountId: input.accountId, parts: [{ categoryId: input.categoryId, amount: input.amount }] });
+    // DESIGN money: M3 for scheduled transfer; M2 expense for bills/subscriptions.
+    const lines =
+      bill.kind === 'transfer' && bill.toAccountId
+        ? buildTransfer(snapshot.chart, { fromId: input.accountId, toId: bill.toAccountId, amount: input.amount })
+        : buildExpense(snapshot.chart, { accountId: input.accountId, parts: [{ categoryId: input.categoryId, amount: input.amount }] });
     if (!lines.ok) return lines;
     const posted = await this.postEvent(snapshot.chart, snapshot.events, {
-      type: 'expense',
+      type: bill.kind === 'transfer' && bill.toAccountId ? 'transfer' : 'expense',
       date: input.date,
       lines: lines.value,
       payeeId: input.payeeId ?? bill.payeeId,
@@ -1822,7 +1834,18 @@ export class WorkspaceRepository {
       status: 'paid',
       eventId: posted.value.id,
     };
-    await this.put('occurrences', occId, { recurringId, dueDate, amountMinor: input.amount.toString(), status: 'paid', eventId: posted.value.id }, 'occurrence.paid');
+    await this.put(
+      'occurrences',
+      occId,
+      { recurringId, dueDate, amountMinor: input.amount.toString(), status: 'paid', eventId: posted.value.id },
+      'occurrence.paid',
+      undefined,
+      {
+        type: 'occurrence.mark_paid',
+        targetId: null,
+        payload: { scheduleId: recurringId, date: dueDate, matchTransactionId: posted.value.id },
+      },
+    );
     return { ok: true, value: occurrence };
   }
 
@@ -1832,7 +1855,7 @@ export class WorkspaceRepository {
     const bill = snapshot.recurring.find((r) => r.id === recurringId);
     if (!bill) return { ok: false, error: 'missing_lines' };
     const event = snapshot.events.find((e) => e.id === eventId && e.status === 'posted');
-    if (!event || event.type !== 'expense') return { ok: false, error: 'missing_lines' };
+    if (!event || (event.type !== 'expense' && event.type !== 'transfer')) return { ok: false, error: 'missing_lines' };
     const occId = `${recurringId}:${dueDate}`;
     if (snapshot.occurrences.some((o) => o.id === occId && o.status === 'paid')) return { ok: false, error: 'already_reversed' };
     // PU26-1: one transaction can't pay two occurrences.
@@ -1849,7 +1872,18 @@ export class WorkspaceRepository {
       status: 'paid',
       eventId,
     };
-    await this.put('occurrences', occId, { recurringId, dueDate, amountMinor: amountMinor.toString(), status: 'paid', eventId }, 'occurrence.matched');
+    await this.put(
+      'occurrences',
+      occId,
+      { recurringId, dueDate, amountMinor: amountMinor.toString(), status: 'paid', eventId },
+      'occurrence.matched',
+      undefined,
+      {
+        type: 'occurrence.mark_paid',
+        targetId: null,
+        payload: { scheduleId: recurringId, date: dueDate, matchTransactionId: eventId },
+      },
+    );
     const billNotificationId = `bill:${occId}`;
     const note = await this.store.read('notifications', billNotificationId);
     if (note) {
@@ -1858,7 +1892,7 @@ export class WorkspaceRepository {
     return { ok: true, value: occurrence };
   }
 
-  /** PU-26 — Undo mark paid (unlink occurrence; keeps the transaction). */
+  /** PU-26 — Undo mark paid (unlink occurrence; keeps the transaction). Syncs via occurrence.unmark. */
   async unmarkBillPaid(recurringId: string, dueDate: string): Promise<Result<void>> {
     const snapshot = await this.load();
     const occId = `${recurringId}:${dueDate}`;
@@ -1869,8 +1903,44 @@ export class WorkspaceRepository {
       occId,
       { recurringId, dueDate, amountMinor: existing.amountMinor, status: 'upcoming', eventId: undefined },
       'occurrence.unpaid',
+      undefined,
+      {
+        type: 'occurrence.unmark',
+        targetId: null,
+        payload: { scheduleId: recurringId, date: dueDate },
+      },
     );
     return { ok: true, value: undefined };
+  }
+
+  /**
+   * P12-08 — With "Create the transaction for me" on, post due occurrences once on this device
+   * (offline companion to the BE midnight job).
+   */
+  async createDueAutoTransactions(today = workspaceToday()): Promise<number> {
+    const snapshot = await this.load();
+    let posted = 0;
+    for (const bill of snapshot.recurring) {
+      if (bill.cancelled || bill.paused || !bill.autoCreate) continue;
+      if (bill.kind === 'income') continue;
+      const dueDate = billDueInMonth(bill.rule, monthOf(today));
+      if (!dueDate || dueDate > today || dueDate < bill.startDate) continue;
+      if (bill.endDate && dueDate > bill.endDate) continue;
+      const occId = `${bill.id}:${dueDate}`;
+      if (snapshot.occurrences.some((o) => o.id === occId && o.status === 'paid')) continue;
+      const categoryId = bill.categoryId ?? snapshot.categories.find((c) => c.kind === 'expense')?.id;
+      if (!categoryId && bill.kind !== 'transfer') continue;
+      if (bill.kind === 'transfer' && !bill.toAccountId) continue;
+      const result = await this.markBillPaid(bill.id, dueDate, {
+        accountId: bill.accountId,
+        categoryId: categoryId ?? bill.accountId,
+        amount: BigInt(bill.amountMinor),
+        date: dueDate,
+        payeeId: bill.payeeId,
+      });
+      if (result.ok) posted += 1;
+    }
+    return posted;
   }
 
   async addIncomeStream(input: Omit<IncomeStream, 'id'>): Promise<IncomeStream> {

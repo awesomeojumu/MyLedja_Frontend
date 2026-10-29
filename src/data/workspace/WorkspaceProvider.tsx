@@ -25,6 +25,10 @@ export function WorkspaceProvider({ workspaceId, children }: { workspaceId: stri
       void repo.load().then((s) => alive && setSnapshot(s));
     };
     refresh();
+    // P12-08: post due auto-create bills once when the workspace opens.
+    void repo.createDueAutoTransactions().then(() => {
+      if (alive) refresh();
+    });
     const unsubscribe = store.subscribe(refresh);
     return () => {
       alive = false;
