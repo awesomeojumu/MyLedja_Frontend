@@ -1,11 +1,13 @@
 import { fireEvent, screen } from '@testing-library/react-native';
 
+import { formatDay } from '@/design/components';
 import { WorkspaceRepository } from '@/data/workspace/repository';
 import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
 import { DebtsScreen } from '../DebtsScreen';
+import { debtClosedDate } from '../helpers';
 import { moneyBackPromptCopy, suggestMoneyBack } from '../moneyBack';
 import { scheduleAmounts } from '../schedule';
 
@@ -259,7 +261,7 @@ describe('Debts popups (PU-34…36, 58, TB-06)', () => {
     expect(screen.getByTestId('debts-summary')).toBeTruthy();
   });
 
-  it('TB06-2: written-off debt appears under Settled', async () => {
+  it('TB06-2: written-off debt appears under Settled with write-off date', async () => {
     const { sync, repo } = await seeded();
     const snap = await repo.load();
     const opened = await repo.openPersonDebt({
@@ -271,6 +273,11 @@ describe('Debts popups (PU-34…36, 58, TB-06)', () => {
     });
     if (!opened.ok) throw new Error(opened.error);
     await repo.writeOffDebt(opened.value.id, { amount: 500_000n, date: '2026-10-20', reason: 'forgiveness' });
+    const after = await repo.load();
+    expect(after.debtEntries.some((e) => e.debtId === opened.value.id && e.kind === 'write_off' && e.date === '2026-10-20')).toBe(
+      true,
+    );
+    expect(debtClosedDate(opened.value.id, after)).toBe('2026-10-20');
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
         <DebtsScreen />
@@ -279,6 +286,7 @@ describe('Debts popups (PU-34…36, 58, TB-06)', () => {
     );
     await fireEvent.press(screen.getByTestId('debts-filter-settled'));
     expect(await screen.findByText('Chi')).toBeTruthy();
-    expect(screen.getAllByText(t('debts.writtenOff')).length).toBeGreaterThan(0);
+    expect(screen.getByTestId(`debt-closed-${opened.value.id}`)).toBeTruthy();
+    expect(screen.getByText(t('debts.writtenOffOn', { date: formatDay('2026-10-20') }))).toBeTruthy();
   });
 });

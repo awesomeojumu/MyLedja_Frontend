@@ -77,7 +77,7 @@ describe('server records into local records (Phase 2 join)', () => {
     expect(localFromServer('debts', 'd1', { personName: 'Tunde', direction: 'they_owe_me', ledgerAccountId: 'la-r', status: 'written_off' }, 'ws')!.data).toMatchObject({
       name: 'Tunde',
       direction: 'owedToMe',
-      status: 'settled',
+      status: 'written_off',
     });
     expect(localFromServer('goals', 'g1', { name: 'Car', targetAmount: '500', accountId: 'a', status: 'in_progress' }, 'ws')!.data).toMatchObject({ status: 'active' });
   });

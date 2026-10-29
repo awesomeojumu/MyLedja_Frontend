@@ -18,6 +18,8 @@ import type { DebtInterest, PersonDebt } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { t } from '@/i18n';
 
+import { contactsAvailable, pickContact } from './contacts';
+
 const sp = tokens.spacing;
 
 export type OpenDebtInput = {
@@ -164,6 +166,18 @@ export function OpenDebtSheet({
             ]}
           />
           <TextInput testID="debt-name" label={t('debts.personName')} value={name} onChangeText={setName} />
+          {contactsAvailable() ? (
+            <Button
+              testID="debt-pick-contact"
+              kind="secondary"
+              label={t('debts.pickContact')}
+              onPress={() => {
+                void pickContact().then((c) => {
+                  if (c?.name) setName(c.name);
+                });
+              }}
+            />
+          ) : null}
           <AmountInput
             testID="debt-amount"
             label={t('add.amount')}

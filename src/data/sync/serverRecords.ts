@@ -259,14 +259,24 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
     }
     case 'debts': {
       const instalments = d.instalments as Doc | null | undefined;
+      const interestDoc = d.interest as Doc | null | undefined;
+      let interest: PersonDebt['interest'];
+      if (interestDoc?.kind === 'fixed') {
+        interest = { kind: 'fixed', amountMinor: String(interestDoc.amount ?? '0') };
+      } else if (interestDoc?.kind === 'percent') {
+        interest = { kind: 'percent_month', percent: (num(interestDoc.rateBasisPoints) ?? 0) / 100 };
+      } else if (interestDoc?.kind === 'none') {
+        interest = { kind: 'none' };
+      }
       const data: Omit<PersonDebt, 'id'> = {
         name: String(d.personName),
         direction: d.direction === 'they_owe_me' ? 'owedToMe' : 'iOwe',
         ledgerAccountId: String(d.ledgerAccountId),
         payeeId: str(d.payeeId),
-        status: d.status === 'open' ? 'open' : 'settled',
+        status: d.status === 'written_off' ? 'written_off' : d.status === 'open' ? 'open' : 'settled',
         nextDueDate: str(d.nextInstalmentDate) ?? str(d.dueDate),
         notes: str(d.notes),
+        interest,
         scheduleInstallmentCount: num(instalments?.count),
         scheduleAmountMinor: minorOrUndefined(instalments?.amount),
         scheduleEvery: instalments ? 'month' : undefined,

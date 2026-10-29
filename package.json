@@ -27,6 +27,7 @@
     "expo-asset": "~58.0.19",
     "expo-auth-session": "~58.0.16",
     "expo-constants": "58.0.13",
+    "expo-contacts": "~58.0.10",
     "expo-crypto": "58.0.7",
     "expo-document-picker": "~58.0.4",
     "expo-font": "58.0.10",

@@ -72,3 +72,36 @@ export function findRecentPayment(debtId: string, snapshot: Snapshot, amount: bi
   const recent = snapshot.debtEntries.find((e) => e.debtId === debtId && e.kind === 'payment' && e.date === date && BigInt(e.amountMinor) === amount);
   return recent ? recent.date : null;
 }
+
+/** DESIGN row monogram: "(TO) Tunde O." */
+export function debtInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase();
+}
+
+/**
+ * Settled / written-off date (TB-06).
+ * Prefer a write_off entry (its own date), else the latest debt entry, else the
+ * write-off / last collect / repayment event on the debt.
+ */
+export function debtClosedDate(debtId: string, snapshot: Snapshot): string | undefined {
+  const entries = snapshot.debtEntries.filter((e) => e.debtId === debtId);
+  const writeOff = entries
+    .filter((e) => e.kind === 'write_off')
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  if (writeOff) return writeOff.date;
+  if (entries.length > 0) {
+    return [...entries].sort((a, b) => b.date.localeCompare(a.date))[0]!.date;
+  }
+  const events = snapshot.events
+    .filter(
+      (e) =>
+        e.debtId === debtId &&
+        e.status === 'posted' &&
+        (e.type === 'write_off' || e.type === 'collect' || e.type === 'loan_repayment'),
+    )
+    .sort((a, b) => b.date.localeCompare(a.date));
+  return events[0]?.date;
+}
