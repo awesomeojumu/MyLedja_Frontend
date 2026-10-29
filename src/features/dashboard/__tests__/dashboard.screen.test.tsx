@@ -106,7 +106,44 @@ describe('Dashboard', () => {
       { sync },
     );
     fireEvent.press(await screen.findByTestId('dashboard-net-worth'));
-    expect(router.push).toHaveBeenCalledWith('/reports/view/default-0');
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/reports', params: { kind: 'netWorth' } });
+  });
+
+  it('D20: income vs spending opens the matching report', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <DashboardScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    fireEvent.press(await screen.findByTestId('dashboard-income-vs-spending'));
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/reports', params: { kind: 'incomeVsSpending' } });
+  });
+
+  it('PU-26: coming-up income stream opens Plan Mark received', async () => {
+    const { sync, repo } = await seeded();
+    const s = await repo.load();
+    const stream = await repo.addIncomeStream({
+      name: 'Salary',
+      kind: 'regular',
+      expectedMinor: '64000000',
+      accountId: s.accounts[0]!.id,
+      categoryId: s.categories.find((c) => c.kind === 'income')!.id,
+      rule: { every: 'month', on: 27 },
+      countInBudget: true,
+    });
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <DashboardScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    fireEvent.press(await screen.findByTestId(`dashboard-coming-up-row-stream:${stream.id}:2026-10-27`));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/plan',
+      params: { occurrence: `stream:${stream.id}:2026-10-27` },
+    });
   });
 
   it('P05-08: Customize opens popup #6', async () => {

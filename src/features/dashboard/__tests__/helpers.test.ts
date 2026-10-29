@@ -77,6 +77,57 @@ describe('dashboard coming up', () => {
     jest.useRealTimers();
   });
 
+  it('D14: where-it-went keeps top 6 groups plus Other', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-28T12:00:00Z'));
+    const sync = memorySync();
+    const repo = new WorkspaceRepository(sync.store, sync.engine, 'ws');
+    await repo.seedFromSetup({
+      workspaceName: 'Personal',
+      currency: 'NGN',
+      weekStart: 'monday',
+      accounts: [{ name: 'GTBank', type: 'bank', openingBalance: '500000000', openingDate: '2026-10-01' }],
+      categories: [
+        { key: 'cat.a', group: 'group.food', name: 'A' },
+        { key: 'cat.b', group: 'group.transport', name: 'B' },
+        { key: 'cat.c', group: 'group.home', name: 'C' },
+        { key: 'cat.d', group: 'group.bills', name: 'D' },
+        { key: 'cat.e', group: 'group.fun', name: 'E' },
+        { key: 'cat.f', group: 'group.health', name: 'F' },
+        { key: 'cat.g', group: 'group.other', name: 'G' },
+      ],
+      budgetStyle: 'tracking',
+      monthlyTakeHome: null,
+      skippedSteps: [],
+    });
+    const s = await repo.load();
+    const accountId = s.accounts[0]!.id;
+    const byName = (name: string) => s.categories.find((c) => c.name === name)!.id;
+    const spends: [string, bigint][] = [
+      ['A', 70_000_000n],
+      ['B', 60_000_000n],
+      ['C', 50_000_000n],
+      ['D', 40_000_000n],
+      ['E', 30_000_000n],
+      ['F', 20_000_000n],
+      ['G', 10_000_000n],
+    ];
+    for (const [name, amount] of spends) {
+      await repo.addTransaction({
+        kind: 'expense',
+        accountId,
+        parts: [{ categoryId: byName(name), amount }],
+        date: '2026-10-12',
+      });
+    }
+    const snap = await repo.load();
+    const model = dashboardModel(snap, '2026-10');
+    expect(model.where).toHaveLength(7);
+    expect(model.where[model.where.length - 1]!.label.toLowerCase()).toContain('other');
+    expect(model.where[model.where.length - 1]!.value).toBe(10_000_000n);
+    jest.useRealTimers();
+  });
+
   it('D11: cumulative spending by day grows for this month', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-10-28T12:00:00Z'));

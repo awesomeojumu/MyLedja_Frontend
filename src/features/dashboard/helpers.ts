@@ -262,9 +262,9 @@ export function dashboardModel(snapshot: Snapshot, month: string) {
     groupSpend.set(c.group, (groupSpend.get(c.group) ?? 0n) + activity);
   }
   const sortedGroups = [...groupSpend.entries()].sort((a, b) => (a[1] > b[1] ? -1 : 1));
-  // DESIGN: top 6 + Other. DonutChart caps at 5 segments — show top 4 + Other until shared maxSegments lands.
-  const top = sortedGroups.slice(0, 4);
-  const rest = sortedGroups.slice(4).reduce((s, [, v]) => s + v, 0n);
+  // DESIGN: top 6 groups + Other (local WhereItWentChart allows 7 segments).
+  const top = sortedGroups.slice(0, 6);
+  const rest = sortedGroups.slice(6).reduce((s, [, v]) => s + v, 0n);
   const where = top.map(([group, value]) => ({ label: groupLabel(group), value }));
   if (rest > 0n) where.push({ label: t('dashboard.other'), value: rest });
   const recent = rowsFor(snapshot)

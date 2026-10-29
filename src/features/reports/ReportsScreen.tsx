@@ -22,7 +22,8 @@ export function ReportsScreen() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const router = useRouter();
-  const params = useGlobalSearchParams<{ dashboard?: string; from?: string; to?: string }>();
+  const params = useGlobalSearchParams<{ dashboard?: string; from?: string; to?: string; kind?: string }>();
+  const focusKind = (params.kind as ReportCardKind | undefined) ?? undefined;
   const [dashboards, setDashboards] = useState<ReportDashboard[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(params.dashboard ?? null);
   const [editLayout, setEditLayout] = useState(false);
@@ -37,9 +38,17 @@ export function ReportsScreen() {
   useEffect(() => {
     void repo.ensureReportDashboards().then((list) => {
       setDashboards(list);
-      setActiveId((id) => id ?? list[0]?.id ?? null);
+      setActiveId((id) => {
+        // Dashboard doorways (Page 5 D20) land with ?kind= so the matching report card is in view.
+        if (focusKind) {
+          const match = list.find((d) => d.cards.some((c) => c.kind === focusKind && !c.hidden));
+          if (match) return match.id;
+        }
+        if (params.dashboard && list.some((d) => d.id === params.dashboard)) return params.dashboard;
+        return id ?? list[0]?.id ?? null;
+      });
     });
-  }, [repo, snapshot?.settings.reportDashboards]);
+  }, [repo, snapshot?.settings.reportDashboards, focusKind, params.dashboard]);
 
   const active = dashboards?.find((d) => d.id === activeId) ?? dashboards?.[0] ?? null;
 
@@ -104,32 +113,50 @@ export function ReportsScreen() {
             {!active || active.cards.filter((c) => !c.hidden).length === 0 ? (
               <EmptyState title={t('reports.emptyTitle')} body={t('reports.emptyBody')} actionLabel={t('reports.addReport')} onAction={() => setAddOpen(true)} />
             ) : (
-              active.cards
+              [...active.cards]
                 .filter((c) => editLayout || !c.hidden)
-                .map((card) => (
-                  <Card key={card.id} testID={`report-card-${card.id}`} style={{ gap: sp['spacing-sm'], opacity: card.hidden ? 0.5 : 1 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text variant="heading-sm">{card.title}</Text>
-                      {editLayout ? (
-                        <Switch
-                          label={t('reports.showCard')}
-                          value={!card.hidden}
-                          onChange={(show) => {
-                            if (!active || !dashboards) return;
-                            void persist(
-                              dashboards.map((d) =>
-                                d.id !== active.id
-                                  ? d
-                                  : { ...d, cards: d.cards.map((c) => (c.id === card.id ? { ...c, hidden: !show } : c)) },
-                              ),
-                            );
-                          }}
-                        />
-                      ) : null}
-                    </View>
-                    <Text>{cardBody(card.kind)}</Text>
-                  </Card>
-                ))
+                .sort((a, b) => {
+                  if (!focusKind) return 0;
+                  if (a.kind === focusKind && b.kind !== focusKind) return -1;
+                  if (b.kind === focusKind && a.kind !== focusKind) return 1;
+                  return 0;
+                })
+                .map((card) => {
+                  const focused = focusKind === card.kind;
+                  return (
+                    <Card
+                      key={card.id}
+                      testID={focused ? `report-card-focus-${card.kind}` : `report-card-${card.id}`}
+                      style={{
+                        gap: sp['spacing-sm'],
+                        opacity: card.hidden ? 0.5 : 1,
+                        borderWidth: focused ? 2 : undefined,
+                        borderColor: focused ? tokens.color.primary : undefined,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text variant="heading-sm">{card.title}</Text>
+                        {editLayout ? (
+                          <Switch
+                            label={t('reports.showCard')}
+                            value={!card.hidden}
+                            onChange={(show) => {
+                              if (!active || !dashboards) return;
+                              void persist(
+                                dashboards.map((d) =>
+                                  d.id !== active.id
+                                    ? d
+                                    : { ...d, cards: d.cards.map((c) => (c.id === card.id ? { ...c, hidden: !show } : c)) },
+                                ),
+                              );
+                            }}
+                          />
+                        ) : null}
+                      </View>
+                      <Text>{cardBody(card.kind)}</Text>
+                    </Card>
+                  );
+                })
             )}
           </>
         )}
