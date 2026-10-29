@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, TextInput as RNTextInput, useWindowDimensions, View } from 'react-native';
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight, CircleDot, RotateCcw } from 'lucide-react-native';
+import { ChevronDown, ChevronLeft, ChevronRight, CircleDot, RotateCcw } from 'lucide-react-native';
 
 import {
   Amount,
@@ -13,6 +13,7 @@ import {
   InlineError,
   Placeholder,
   Popover,
+  ProgressRing,
   Select,
   SegmentedControl,
   Text,
@@ -25,22 +26,28 @@ import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { catalogue, t, type TextKey } from '@/i18n';
-import { formatNaira } from '@/money';
+import { formatNaira, parseAmount, toInputText } from '@/money';
 import { monthOf } from '@/ledger';
 
+import { categoryIconByName, defaultIconForName } from './categoryIcons';
 import {
   barFor,
+  budgetableIncomeOf,
   budgetCategories,
   budgetForMonth,
   categoryTemplateLines,
+  groupTotals,
   groupedBudgetCategories,
+  incomeReceivedOf,
   monthLabel,
   nextMonth,
   overspentCategories,
+  plannedTotalOf,
   prevMonth,
   resolveTemplateLineAmount,
   rowFor,
   shortMonth,
+  summaryByType,
   type BudgetGroupBy,
 } from './helpers';
 import { CoverSheet } from './CoverSheet';
@@ -65,13 +72,25 @@ function barFill(state: ReturnType<typeof barFor>) {
   return c['primary-soft'];
 }
 
+function remainingColor(state: ReturnType<typeof barFor>, theme: ReturnType<typeof useTheme>) {
+  if (state === 'over') return theme.error;
+  if (state === 'near') return theme.primaryFill;
+  return theme.text;
+}
+
 export function BudgetScreen() {
   const { snapshot, repo } = useWorkspace();
   const theme = useTheme();
   const toast = useToast();
   const router = useRouter();
   const size = useSizeClass();
-  const wideEnough = size === 'desktop' || size === 'wide';
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
+  // D21: tablet landscape gets 3-month + summary; desktop/wide always; portrait tablet uses strip only.
+  const tabletLandscape = size === 'tablet' && landscape;
+  const wideEnough = size === 'desktop' || size === 'wide' || tabletLandscape;
+  const showSummaryColumn = wideEnough;
+  const useInlinePlanned = Platform.OS === 'web';
   const params = useGlobalSearchParams<{
     plan?: string;
     move?: string;
@@ -90,6 +109,9 @@ export function BudgetScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [rowMenuId, setRowMenuId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
+  const swipeStartX = useRef<number | null>(null);
 
   const monthSpan: '1' | '3' = params.months === '3' && wideEnough ? '3' : '1';
   const groupBy: BudgetGroupBy = params.group === 'type' ? 'type' : 'groups';
@@ -102,9 +124,17 @@ export function BudgetScreen() {
   const setGroupBy = (v: BudgetGroupBy) => router.setParams({ group: v === 'groups' ? undefined : v });
   const openEdit = (catId: string) => {
     setRowMenuId(null);
+    // D12: web edits Planned in the grid cell (Enter/Tab); phone/tablet keep sheet/popover via ?plan=.
+    if (useInlinePlanned) {
+      setInlineEditId(catId);
+      return;
+    }
     router.setParams({ plan: catId });
   };
-  const closeEdit = () => router.setParams({ plan: undefined });
+  const closeEdit = () => {
+    setInlineEditId(null);
+    router.setParams({ plan: undefined });
+  };
   const openMove = (fromId?: string) => router.setParams({ move: fromId ?? '1' });
   const closeMove = () => router.setParams({ move: undefined });
   const openCover = () => router.setParams({ cover: '1' });
@@ -126,7 +156,10 @@ export function BudgetScreen() {
       groups,
       overspent: overspentCategories(snapshot, month),
       style: snapshot.settings.budgetStyle,
-      income: budget.leftToPlan,
+      planned: plannedTotalOf(snapshot, month),
+      budgetableIncome: budgetableIncomeOf(snapshot, month),
+      incomeReceived: incomeReceivedOf(snapshot, month),
+      byType: summaryByType(snapshot, month),
     };
   }, [snapshot, month, groupBy]);
 
@@ -135,32 +168,79 @@ export function BudgetScreen() {
     return model.groups.flatMap(([, cats]) => cats.map((cat) => cat.id));
   }, [model]);
 
-  const savePlanned = async (amount: bigint, opts: { carryOver: boolean; note: string }) => {
-    if (!editId || !snapshot) return;
+  const savePlannedFor = async (
+    catId: string,
+    amount: bigint,
+    opts: { carryOver: boolean; note: string },
+    andNext?: boolean,
+  ) => {
+    if (!snapshot) return;
     setError(null);
-    const cat = snapshot.categories.find((c) => c.id === editId);
-    const prevAmount = repo.assigned(editId, month, snapshot);
+    const cat = snapshot.categories.find((c) => c.id === catId);
+    const prevAmount = repo.assigned(catId, month, snapshot);
     const prevCarry = cat?.carryOver ?? false;
-    const prevNote = snapshot.assignNotes.get(`${editId}:${month}`) ?? '';
+    const prevNote = snapshot.assignNotes.get(`${catId}:${month}`) ?? '';
     if (cat && cat.carryOver !== opts.carryOver) {
       await repo.updateCategory({ ...cat, carryOver: opts.carryOver });
     }
-    await repo.setAssigned(editId, month, amount, { note: opts.note });
+    await repo.setAssigned(catId, month, amount, { note: opts.note });
     toast.show(t('budget.planSaved'), () => {
       void (async () => {
         const current = await repo.load();
-        const c2 = current.categories.find((x) => x.id === editId);
+        const c2 = current.categories.find((x) => x.id === catId);
         if (c2 && c2.carryOver !== prevCarry) await repo.updateCategory({ ...c2, carryOver: prevCarry });
-        await repo.setAssigned(editId, month, prevAmount, { note: prevNote });
+        await repo.setAssigned(catId, month, prevAmount, { note: prevNote });
       })();
     });
+    if (andNext) {
+      const i = categoryOrder.indexOf(catId);
+      const nextId = i >= 0 ? categoryOrder[i + 1] : undefined;
+      if (nextId && useInlinePlanned) {
+        setInlineEditId(nextId);
+        return;
+      }
+      if (nextId) {
+        router.setParams({ plan: nextId });
+        return;
+      }
+    }
     closeEdit();
   };
+
+  const savePlanned = async (amount: bigint, opts: { carryOver: boolean; note: string }) => {
+    if (!editId) return;
+    await savePlannedFor(editId, amount, opts);
+  };
+
+  const saveInlinePlanned = async (catId: string, amount: bigint, andNext: boolean) => {
+    if (!snapshot) return;
+    const cat = snapshot.categories.find((c) => c.id === catId);
+    const note = snapshot.assignNotes.get(`${catId}:${month}`) ?? '';
+    await savePlannedFor(catId, amount, { carryOver: cat?.carryOver ?? false, note }, andNext);
+  };
+
+  const openRowMenu = (catId: string) => setRowMenuId(catId);
 
   return (
     <AppFrame title={t('budget.title')}>
       <ScrollView contentContainerStyle={{ gap: sp['spacing-lg'] }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp['spacing-md'] }}>
+        <View
+          testID="budget-month-swipe"
+          onTouchStart={(e) => {
+            if (size !== 'phone') return;
+            swipeStartX.current = e.nativeEvent.pageX;
+          }}
+          onTouchEnd={(e) => {
+            if (size !== 'phone') return;
+            const start = swipeStartX.current;
+            swipeStartX.current = null;
+            if (start == null) return;
+            const dx = e.nativeEvent.pageX - start;
+            if (dx < -40) setMonth(nextMonth(month));
+            else if (dx > 40) setMonth(prevMonth(month));
+          }}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp['spacing-md'] }}
+        >
           <Pressable
             testID="budget-prev-month"
             accessibilityRole="button"
@@ -219,10 +299,12 @@ export function BudgetScreen() {
             <BudgetBanner
               style={model.style}
               leftToPlan={model.budget.leftToPlan}
+              planned={model.planned}
+              budgetableIncome={model.budgetableIncome}
               overspentCount={model.overspent.length}
               onCover={openCover}
             />
-            <BudgetSummaryStrip snapshot={snapshot!} budget={model.budget} />
+            {!showSummaryColumn ? <BudgetSummaryStrip snapshot={snapshot!} budget={model.budget} /> : null}
             <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
               <Button testID="budget-move" kind="secondary" label={t('budget.moveMoney')} onPress={() => openMove()} />
               {snapshot && snapshot.assigns.size > 0 ? (
@@ -238,171 +320,322 @@ export function BudgetScreen() {
               ) : null}
             </View>
             {error ? <InlineError message={error} /> : null}
-            {monthSpan === '3' ? (
-              <View testID="budget-three-months" style={{ gap: sp['spacing-sm'] }}>
-                <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
-                  {displayMonths.map((m) => (
-                    <Text key={m} variant="caption" tone={m === month ? undefined : 'textSecondary'}>
-                      {shortMonth(m)}
-                    </Text>
-                  ))}
-                </View>
-                <View testID="budget-columns-3" style={{ flexDirection: 'row', gap: sp['spacing-sm'], paddingHorizontal: sp['spacing-md'] }}>
-                  <Text variant="caption" tone="textSecondary" style={{ flex: 1 }}>
-                    {t('budget.col.category')}
-                  </Text>
-                  {displayMonths.map((m) => (
-                    <View key={m} style={{ width: 168, flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text variant="micro" tone={m === month ? undefined : 'textSecondary'}>
-                        {t('budget.col.planned')}
-                      </Text>
-                      <Text variant="micro" tone={m === month ? undefined : 'textSecondary'}>
-                        {t('budget.col.spent')}
-                      </Text>
-                      <Text variant="micro" tone={m === month ? undefined : 'textSecondary'}>
-                        {t('budget.col.remaining')}
-                      </Text>
+
+            <View style={{ flexDirection: showSummaryColumn ? 'row' : 'column', gap: sp['spacing-lg'], alignItems: 'flex-start' }}>
+              <View style={{ flex: 1, gap: sp['spacing-md'], minWidth: 0, width: '100%' }}>
+                {monthSpan === '3' ? (
+                  <View testID="budget-three-months" style={{ gap: sp['spacing-sm'] }}>
+                    <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap' }}>
+                      {displayMonths.map((m) => (
+                        <Text key={m} variant="caption" tone={m === month ? undefined : 'textSecondary'}>
+                          {shortMonth(m)}
+                        </Text>
+                      ))}
                     </View>
-                  ))}
-                </View>
-              </View>
-            ) : (
-              <View testID="budget-columns" style={{ flexDirection: 'row', gap: sp['spacing-md'], paddingHorizontal: sp['spacing-md'] }}>
-                <Text variant="caption" tone="textSecondary" style={{ flex: 1 }}>
-                  {t('budget.col.category')}
-                </Text>
-                <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
-                  {t('budget.col.planned')}
-                </Text>
-                <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
-                  {t('budget.col.spent')}
-                </Text>
-                <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
-                  {t('budget.col.remaining')}
-                </Text>
-              </View>
-            )}
-            {model.groups.map(([group, cats]) => (
-              <Card key={group} testID={`budget-group-${group}`} style={{ padding: 0, gap: 0 }}>
-                <View style={{ padding: sp['spacing-md'] }}>
-                  <Text variant="heading-sm">{groupLabel(group)}</Text>
-                </View>
-                {cats.map((cat) => {
-                  const row = rowFor(snapshot!, month, cat.id);
-                  const state = barFor(snapshot!, month, cat.id);
-                  const plan = row.carried + row.assigned;
-                  const pct = plan <= 0n ? (row.activity > 0n ? 1 : 0) : Number((row.activity * 1000n) / plan) / 1000;
-                  const tplLines = categoryTemplateLines(snapshot!, cat.id);
-                  const tplMet =
-                    tplLines.length > 0 &&
-                    tplLines.every(({ line }) => resolveTemplateLineAmount(snapshot!, month, line) <= row.assigned);
-                  return (
-                    <View
-                      key={cat.id}
-                      testID={`budget-row-${cat.id}`}
-                      style={{
-                        paddingHorizontal: sp['spacing-md'],
-                        paddingVertical: sp['spacing-sm'],
-                        borderTopWidth: 1,
-                        borderTopColor: theme.border,
-                        gap: sp['spacing-xs'],
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'] }}>
-                        <Pressable
-                          testID={`budget-name-${cat.id}`}
-                          accessibilityRole="link"
-                          accessibilityLabel={cat.name}
-                          onPress={() => router.push(`/budget/category/${cat.id}`)}
-                          onLongPress={() => setRowMenuId(cat.id)}
-                          style={{ flex: 1, minHeight: 44, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}
+                    <View testID="budget-columns-3" style={{ flexDirection: 'row', gap: sp['spacing-sm'], paddingHorizontal: sp['spacing-md'] }}>
+                      <Text variant="caption" tone="textSecondary" style={{ flex: 1 }}>
+                        {t('budget.col.category')}
+                      </Text>
+                      {displayMonths.map((m) => (
+                        <View
+                          key={m}
+                          style={{
+                            width: 168,
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            backgroundColor: m === month ? c['primary-bg-subdued-hover'] : undefined,
+                            borderRadius: tokens.radius['rounded-sm'],
+                            paddingHorizontal: 2,
+                          }}
                         >
-                          <Text>{cat.name}</Text>
-                          {cat.carryOver ? (
-                            <View testID={`budget-mark-carry-${cat.id}`} accessibilityLabel={t('budget.markCarryOver')}>
-                              <Icon icon={RotateCcw} size="row" color={theme.textSecondary} />
-                            </View>
-                          ) : null}
-                          {tplLines.length > 0 ? (
-                            <View
-                              testID={`budget-mark-template-${cat.id}`}
-                              accessibilityLabel={tplMet ? t('budget.markTemplate') : t('budget.markTemplateUnmet')}
-                            >
-                              <Icon icon={CircleDot} size="row" color={tplMet ? theme.textSecondary : c.ruby} />
-                            </View>
-                          ) : null}
-                        </Pressable>
-                        {monthSpan === '3'
-                          ? displayMonths.map((m) => {
-                              const r = rowFor(snapshot!, m, cat.id);
-                              return (
-                                <View key={m} testID={`budget-month-cols-${cat.id}-${m}`} style={{ width: 168, flexDirection: 'row', justifyContent: 'space-between' }}>
-                                  <Pressable
-                                    testID={m === month ? `budget-planned-${cat.id}` : undefined}
-                                    accessibilityRole="button"
-                                    onPress={() => {
-                                      setMonth(m);
-                                      openEdit(cat.id);
-                                    }}
-                                    style={{ minWidth: 48, alignItems: 'flex-end' }}
-                                  >
-                                    <Amount minor={r.assigned} variant="caption" />
-                                  </Pressable>
-                                  <Amount minor={r.activity} variant="caption" />
-                                  <Amount minor={r.available} variant="caption" />
-                                </View>
-                              );
-                            })
-                          : (
-                            <>
-                              <Pressable
-                                testID={`budget-planned-${cat.id}`}
-                                accessibilityRole="button"
-                                accessibilityLabel={t('budget.editPlanned', { name: cat.name })}
-                                onPress={() => openEdit(cat.id)}
-                                onLongPress={() => setRowMenuId(cat.id)}
-                                style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
-                              >
-                                <Amount minor={row.assigned} />
-                              </Pressable>
-                              <Pressable
-                                testID={`budget-spent-${cat.id}`}
-                                accessibilityRole="link"
-                                accessibilityLabel={t('budget.spentLink', { name: cat.name })}
-                                onPress={() => router.push({ pathname: '/transactions', params: { category: cat.id, month } })}
-                                style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
-                              >
-                                <Amount minor={row.activity} />
-                              </Pressable>
-                              <View style={{ width: 88, alignItems: 'flex-end' }} testID={`budget-remaining-${cat.id}`}>
-                                <Amount minor={row.available} />
-                                {state === 'near' ? (
-                                  <Text variant="micro" tone="textSecondary">
-                                    {t('budget.nearLimit')}
-                                  </Text>
-                                ) : null}
-                                {state === 'over' ? (
-                                  <Text variant="micro" style={{ color: theme.error }}>
-                                    {t('budget.overBy', { amount: formatNaira(-row.available) })}
-                                  </Text>
-                                ) : null}
-                              </View>
-                            </>
-                          )}
-                      </View>
-                      <View
-                        testID={`budget-bar-${cat.id}`}
-                        accessibilityRole="progressbar"
-                        accessibilityValue={{ min: 0, max: 100, now: Math.min(100, Math.round(pct * 100)) }}
-                        style={{ height: 3, width: '90%', backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden' }}
-                      >
-                        <View style={{ height: 3, width: `${Math.min(100, pct * 100)}%`, backgroundColor: barFill(state) }} />
-                      </View>
+                          <Text variant="micro" tone={m === month ? undefined : 'textSecondary'}>
+                            {t('budget.col.planned')}
+                          </Text>
+                          <Text variant="micro" tone={m === month ? undefined : 'textSecondary'}>
+                            {t('budget.col.spent')}
+                          </Text>
+                          <Text variant="micro" tone={m === month ? undefined : 'textSecondary'}>
+                            {t('budget.col.remaining')}
+                          </Text>
+                        </View>
+                      ))}
                     </View>
+                  </View>
+                ) : (
+                  <View testID="budget-columns" style={{ flexDirection: 'row', gap: sp['spacing-md'], paddingHorizontal: sp['spacing-md'] }}>
+                    <Text variant="caption" tone="textSecondary" style={{ flex: 1 }}>
+                      {t('budget.col.category')}
+                    </Text>
+                    <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
+                      {t('budget.col.planned')}
+                    </Text>
+                    <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
+                      {t('budget.col.spent')}
+                    </Text>
+                    <Text variant="caption" tone="textSecondary" style={{ width: 88, textAlign: 'right' }}>
+                      {t('budget.col.remaining')}
+                    </Text>
+                  </View>
+                )}
+
+                {model.groups.map(([group, cats]) => {
+                  const isCollapsed = !!collapsed[group];
+                  const totals = groupTotals(
+                    snapshot!,
+                    month,
+                    cats.map((x) => x.id),
+                  );
+                  const label = groupLabel(group);
+                  return (
+                    <Card key={group} testID={`budget-group-${group}`} style={{ padding: 0, gap: 0 }}>
+                      <Pressable
+                        testID={`budget-group-toggle-${group}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={isCollapsed ? t('budget.expandGroup', { name: label }) : t('budget.collapseGroup', { name: label })}
+                        onPress={() => setCollapsed((prev) => ({ ...prev, [group]: !prev[group] }))}
+                        style={{
+                          padding: sp['spacing-md'],
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: sp['spacing-sm'],
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'], flexShrink: 1 }}>
+                          <Icon icon={ChevronDown} size="row" color={theme.textSecondary} />
+                          <Text variant="heading-sm">{label}</Text>
+                        </View>
+                        <Text variant="caption" tone="textSecondary" testID={`budget-group-total-${group}`}>
+                          {t('budget.groupTotal', {
+                            planned: formatNaira(totals.planned),
+                            spent: formatNaira(totals.spent),
+                            remaining: formatNaira(totals.remaining),
+                          })}
+                        </Text>
+                      </Pressable>
+                      {isCollapsed
+                        ? null
+                        : cats.map((cat) => {
+                            const row = rowFor(snapshot!, month, cat.id);
+                            const state = barFor(snapshot!, month, cat.id);
+                            const plan = row.carried + row.assigned;
+                            const pct = plan <= 0n ? (row.activity > 0n ? 1 : 0) : Number((row.activity * 1000n) / plan) / 1000;
+                            const tplLines = categoryTemplateLines(snapshot!, cat.id);
+                            const tplMet =
+                              tplLines.length > 0 &&
+                              tplLines.every(({ line }) => resolveTemplateLineAmount(snapshot!, month, line) <= row.assigned);
+                            const IconTile = categoryIconByName(cat.icon ?? defaultIconForName(cat.name));
+                            return (
+                              <View
+                                key={cat.id}
+                                testID={`budget-row-${cat.id}`}
+                                style={{
+                                  paddingHorizontal: sp['spacing-md'],
+                                  paddingVertical: sp['spacing-sm'],
+                                  borderTopWidth: 1,
+                                  borderTopColor: theme.border,
+                                  gap: sp['spacing-xs'],
+                                }}
+                                // Web right-click menu (D22)
+                                {...(Platform.OS === 'web'
+                                  ? {
+                                      onContextMenu: (e: { preventDefault?: () => void }) => {
+                                        e.preventDefault?.();
+                                        openRowMenu(cat.id);
+                                      },
+                                    }
+                                  : {})}
+                              >
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'] }}>
+                                  <Pressable
+                                    testID={`budget-name-${cat.id}`}
+                                    accessibilityRole="link"
+                                    accessibilityLabel={cat.name}
+                                    onPress={() => router.push(`/budget/category/${cat.id}`)}
+                                    onLongPress={() => openRowMenu(cat.id)}
+                                    style={{
+                                      flex: 1,
+                                      minHeight: 44,
+                                      justifyContent: 'center',
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: sp['spacing-sm'],
+                                      flexWrap: 'wrap',
+                                    }}
+                                  >
+                                    <View
+                                      testID={`budget-icon-${cat.id}`}
+                                      style={{
+                                        width: 28,
+                                        height: 28,
+                                        borderRadius: tokens.radius['rounded-sm'],
+                                        backgroundColor: c['primary-bg-subdued-hover'],
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                      }}
+                                    >
+                                      <IconTile size={16} color={theme.textSecondary} />
+                                    </View>
+                                    <Text>{cat.name}</Text>
+                                    {cat.carryOver ? (
+                                      <View
+                                        testID={`budget-mark-carry-${cat.id}`}
+                                        accessibilityLabel={t('budget.markCarryOver')}
+                                        // @ts-expect-error web title tooltip
+                                        title={t('budget.markCarryOver')}
+                                      >
+                                        <Icon icon={RotateCcw} size="row" color={theme.textSecondary} />
+                                      </View>
+                                    ) : null}
+                                    {tplLines.length > 0 ? (
+                                      <View
+                                        testID={`budget-mark-template-${cat.id}`}
+                                        accessibilityLabel={tplMet ? t('budget.markTemplate') : t('budget.markTemplateUnmet')}
+                                        // @ts-expect-error web title tooltip
+                                        title={tplMet ? t('budget.markTemplate') : t('budget.markTemplateUnmet')}
+                                      >
+                                        <Icon icon={CircleDot} size="row" color={tplMet ? theme.textSecondary : c.ruby} />
+                                      </View>
+                                    ) : null}
+                                  </Pressable>
+                                  {monthSpan === '3'
+                                    ? displayMonths.map((m) => {
+                                        const r = rowFor(snapshot!, m, cat.id);
+                                        const st = barFor(snapshot!, m, cat.id);
+                                        return (
+                                          <View
+                                            key={m}
+                                            testID={`budget-month-cols-${cat.id}-${m}`}
+                                            style={{
+                                              width: 168,
+                                              flexDirection: 'row',
+                                              justifyContent: 'space-between',
+                                              backgroundColor: m === month ? c['primary-bg-subdued-hover'] : undefined,
+                                              borderRadius: tokens.radius['rounded-sm'],
+                                              paddingHorizontal: 2,
+                                            }}
+                                          >
+                                            {m === month && inlineEditId === cat.id ? (
+                                              <InlinePlannedInput
+                                                catId={cat.id}
+                                                assigned={r.assigned}
+                                                onCommit={(amount, andNext) => void saveInlinePlanned(cat.id, amount, andNext)}
+                                                onCancel={() => setInlineEditId(null)}
+                                              />
+                                            ) : (
+                                              <Pressable
+                                                testID={m === month ? `budget-planned-${cat.id}` : undefined}
+                                                accessibilityRole="button"
+                                                onPress={() => {
+                                                  setMonth(m);
+                                                  openEdit(cat.id);
+                                                }}
+                                                style={{ minWidth: 48, alignItems: 'flex-end' }}
+                                              >
+                                                <Amount minor={r.assigned} variant="caption" />
+                                              </Pressable>
+                                            )}
+                                            <Pressable
+                                              testID={`budget-spent-${cat.id}-${m}`}
+                                              accessibilityRole="link"
+                                              accessibilityLabel={t('budget.spentLink', { name: cat.name })}
+                                              onPress={() =>
+                                                router.push({ pathname: '/transactions', params: { category: cat.id, month: m } })
+                                              }
+                                              style={{ minWidth: 48, alignItems: 'flex-end' }}
+                                            >
+                                              <Amount minor={r.activity} variant="caption" />
+                                            </Pressable>
+                                            <Text
+                                              variant="caption"
+                                              style={{ color: remainingColor(st, theme), fontVariant: ['tabular-nums'] }}
+                                            >
+                                              {formatNaira(r.available)}
+                                            </Text>
+                                          </View>
+                                        );
+                                      })
+                                    : (
+                                      <>
+                                        {inlineEditId === cat.id ? (
+                                          <InlinePlannedInput
+                                            catId={cat.id}
+                                            assigned={row.assigned}
+                                            onCommit={(amount, andNext) => void saveInlinePlanned(cat.id, amount, andNext)}
+                                            onCancel={() => setInlineEditId(null)}
+                                          />
+                                        ) : (
+                                          <Pressable
+                                            testID={`budget-planned-${cat.id}`}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={t('budget.editPlanned', { name: cat.name })}
+                                            onPress={() => openEdit(cat.id)}
+                                            onLongPress={() => openRowMenu(cat.id)}
+                                            style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+                                          >
+                                            <Amount minor={row.assigned} />
+                                          </Pressable>
+                                        )}
+                                        <Pressable
+                                          testID={`budget-spent-${cat.id}`}
+                                          accessibilityRole="link"
+                                          accessibilityLabel={t('budget.spentLink', { name: cat.name })}
+                                          onPress={() =>
+                                            router.push({ pathname: '/transactions', params: { category: cat.id, month } })
+                                          }
+                                          style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+                                        >
+                                          <Amount minor={row.activity} />
+                                        </Pressable>
+                                        <View style={{ width: 88, alignItems: 'flex-end' }} testID={`budget-remaining-${cat.id}`}>
+                                          <Text
+                                            variant="body-tabular"
+                                            style={{ color: remainingColor(state, theme), fontVariant: ['tabular-nums'] }}
+                                          >
+                                            {formatNaira(row.available)}
+                                          </Text>
+                                          {state === 'near' ? (
+                                            <Text variant="micro" tone="textSecondary">
+                                              {t('budget.nearLimit')}
+                                            </Text>
+                                          ) : null}
+                                          {state === 'over' ? (
+                                            <Text variant="micro" style={{ color: theme.error }}>
+                                              {t('budget.overBy', { amount: formatNaira(-row.available) })}
+                                            </Text>
+                                          ) : null}
+                                        </View>
+                                      </>
+                                    )}
+                                </View>
+                                <View
+                                  testID={`budget-bar-${cat.id}`}
+                                  accessibilityRole="progressbar"
+                                  accessibilityValue={{ min: 0, max: 100, now: Math.min(100, Math.round(pct * 100)) }}
+                                  style={{ height: 3, width: '90%', backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden' }}
+                                >
+                                  <View style={{ height: 3, width: `${Math.min(100, pct * 100)}%`, backgroundColor: barFill(state) }} />
+                                </View>
+                              </View>
+                            );
+                          })}
+                    </Card>
                   );
                 })}
-              </Card>
-            ))}
+              </View>
+
+              {showSummaryColumn && snapshot ? (
+                <BudgetSummaryColumn
+                  snapshot={snapshot}
+                  month={month}
+                  budget={model.budget}
+                  planned={model.planned}
+                  incomeReceived={model.incomeReceived}
+                  budgetableIncome={model.budgetableIncome}
+                  byType={model.byType}
+                />
+              ) : null}
+            </View>
           </>
         )}
       </ScrollView>
@@ -550,6 +783,76 @@ export function BudgetScreen() {
   );
 }
 
+/** D12 — web in-grid Planned edit: Enter saves, Tab saves and moves down. */
+function InlinePlannedInput({
+  catId,
+  assigned,
+  onCommit,
+  onCancel,
+}: {
+  catId: string;
+  assigned: bigint;
+  onCommit: (amount: bigint, andNext: boolean) => void;
+  onCancel: () => void;
+}) {
+  const theme = useTheme();
+  const [text, setText] = useState(() => toInputText(assigned));
+  const [minor, setMinor] = useState<bigint | null>(assigned);
+  const done = useRef(false);
+  const commit = (andNext: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    if (minor === null || minor < 0n) {
+      onCancel();
+      return;
+    }
+    onCommit(minor, andNext);
+  };
+  return (
+    <RNTextInput
+      testID={`budget-planned-inline-${catId}`}
+      accessibilityLabel={t('budget.editPlanned', { name: catId })}
+      autoFocus
+      value={text}
+      keyboardType="decimal-pad"
+      inputMode="decimal"
+      selectTextOnFocus
+      onChangeText={(next) => {
+        setText(next);
+        if (next.trim() === '') {
+          setMinor(null);
+          return;
+        }
+        const parsed = parseAmount(next);
+        setMinor(parsed.ok ? parsed.minor : null);
+      }}
+      onSubmitEditing={() => commit(false)}
+      onKeyPress={(e) => {
+        const key = e.nativeEvent.key;
+        if (key === 'Tab') {
+          (e as { preventDefault?: () => void }).preventDefault?.();
+          commit(true);
+        } else if (key === 'Escape') {
+          done.current = true;
+          onCancel();
+        }
+      }}
+      onBlur={() => commit(false)}
+      style={{
+        width: 88,
+        minHeight: 44,
+        textAlign: 'right',
+        color: theme.text,
+        borderWidth: 1,
+        borderColor: theme.link,
+        borderRadius: tokens.radius['rounded-sm'],
+        paddingHorizontal: sp['spacing-xs'],
+        fontVariant: ['tabular-nums'],
+      }}
+    />
+  );
+}
+
 function BudgetSummaryStrip({
   snapshot,
   budget,
@@ -580,19 +883,108 @@ function BudgetSummaryStrip({
   );
 }
 
+function BudgetSummaryColumn({
+  snapshot,
+  month,
+  budget,
+  planned,
+  incomeReceived,
+  budgetableIncome,
+  byType,
+}: {
+  snapshot: NonNullable<ReturnType<typeof useWorkspace>['snapshot']>;
+  month: string;
+  budget: ReturnType<typeof budgetForMonth>;
+  planned: bigint;
+  incomeReceived: bigint;
+  budgetableIncome: bigint;
+  byType: ReturnType<typeof summaryByType>;
+}) {
+  let spent = 0n;
+  for (const cat of budgetCategories(snapshot)) {
+    const row = budget.rows.get(cat.id);
+    if (row) spent += row.activity;
+  }
+  const incomeBase = budgetableIncome > 0n ? budgetableIncome : 1n;
+  const ringValue =
+    budget.leftToPlan <= 0n
+      ? 1
+      : Math.max(0, Math.min(1, Number(((incomeBase - budget.leftToPlan) * 1000n) / incomeBase) / 1000));
+
+  return (
+    <View
+      testID="budget-summary-column"
+      style={{
+        width: 220,
+        gap: sp['spacing-md'],
+        padding: sp['spacing-md'],
+        backgroundColor: c['primary-bg-subdued-hover'],
+        borderRadius: tokens.radius['rounded-md'],
+      }}
+    >
+      <Text variant="heading-sm">{t('budget.summaryTitle')}</Text>
+      <View style={{ alignItems: 'center', gap: sp['spacing-sm'] }}>
+        <ProgressRing value={ringValue} label={t('budget.summaryRingLabel')} size={72} />
+        <Text variant="caption" testID="budget-summary-left-to-plan">
+          {t('budget.summaryLeft', { amount: formatNaira(budget.leftToPlan) })}
+        </Text>
+      </View>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summaryIncomePlanned', { amount: formatNaira(budgetableIncome) })}
+      </Text>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summaryIncomeReceived', { amount: formatNaira(incomeReceived) })}
+      </Text>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summarySpendingPlanned', { amount: formatNaira(planned) })}
+      </Text>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summarySpendingSpent', { amount: formatNaira(spent) })}
+      </Text>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summarySavings', { amount: formatNaira(byType.savings.planned) })}
+      </Text>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summaryTypeFixed', { amount: formatNaira(byType.fixed.planned) })}
+      </Text>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summaryTypeFlexible', { amount: formatNaira(byType.flexible.planned) })}
+      </Text>
+      <Text variant="caption" tone="textSecondary">
+        {t('budget.summaryTypeNonMonthly', { amount: formatNaira(byType.nonMonthly.planned) })}
+      </Text>
+      <Text variant="micro" tone="textSecondary">
+        {monthLabel(month)}
+      </Text>
+    </View>
+  );
+}
+
 function BudgetBanner({
   style,
   leftToPlan,
+  planned,
+  budgetableIncome,
   overspentCount,
   onCover,
 }: {
   style: 'tracking' | 'envelope';
   leftToPlan: bigint;
+  planned: bigint;
+  budgetableIncome: bigint;
   overspentCount: number;
   onCover: () => void;
 }) {
   if (style === 'tracking') {
-    return <Banner testID="budget-banner" message={t('budget.trackingBanner')} />;
+    return (
+      <Banner
+        testID="budget-banner"
+        message={t('budget.trackingBanner', {
+          planned: formatNaira(planned),
+          income: formatNaira(budgetableIncome),
+        })}
+      />
+    );
   }
   const over = leftToPlan < 0n;
   return (

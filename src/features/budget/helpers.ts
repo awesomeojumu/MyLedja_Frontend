@@ -206,4 +206,58 @@ export function categoryTemplateLines(snapshot: Snapshot, categoryId: string) {
   return out;
 }
 
+/** Budgetable income for the month (tracking banner / summary). */
+export function budgetableIncomeOf(snapshot: Snapshot, month: string): bigint {
+  return monthIncome(snapshot.chart, periodTotals(snapshot.events), month, true);
+}
+
+/** All income received in the month (summary Income received). */
+export function incomeReceivedOf(snapshot: Snapshot, month: string): bigint {
+  return monthIncome(snapshot.chart, periodTotals(snapshot.events), month, false);
+}
+
+/** Sum of carried + assigned across budget expense categories. */
+export function plannedTotalOf(snapshot: Snapshot, month: string): bigint {
+  const budget = budgetForMonth(snapshot, month);
+  let planned = 0n;
+  for (const cat of budgetCategories(snapshot)) {
+    const row = budget.rows.get(cat.id);
+    if (row) planned += row.carried + row.assigned;
+  }
+  return planned;
+}
+
+/** Totals for a group of categories in one month. */
+export function groupTotals(snapshot: Snapshot, month: string, categoryIds: string[]) {
+  let planned = 0n;
+  let spent = 0n;
+  let remaining = 0n;
+  for (const id of categoryIds) {
+    const row = rowFor(snapshot, month, id);
+    planned += row.carried + row.assigned;
+    spent += row.activity;
+    remaining += row.available;
+  }
+  return { planned, spent, remaining };
+}
+
+/** Summary breakdown by budget type for the summary column (D18). */
+export function summaryByType(snapshot: Snapshot, month: string) {
+  const budget = budgetForMonth(snapshot, month);
+  const byType = {
+    fixed: { planned: 0n, spent: 0n },
+    flexible: { planned: 0n, spent: 0n },
+    nonMonthly: { planned: 0n, spent: 0n },
+    savings: { planned: 0n, spent: 0n },
+  };
+  for (const cat of budgetCategories(snapshot)) {
+    const row = budget.rows.get(cat.id);
+    if (!row) continue;
+    const bucket = byType[cat.budgetType] ?? byType.flexible;
+    bucket.planned += row.carried + row.assigned;
+    bucket.spent += row.activity;
+  }
+  return byType;
+}
+
 export { monthOf, nextMonth, prevMonth, monthsEndingAt, periodTotals, categoryActivity };
