@@ -11,6 +11,8 @@ import { AppFrame } from '@/features/frame/AppFrame';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
+import { successHaptic } from '@/features/budget/haptics';
+
 import { GoalCardView } from './GoalCard';
 import { GoalPanel } from './GoalPanel';
 import { AddGoalSheet, AllocateSheet, GoalScheduleSheet, SpendFromGoalSheet } from './goalSheets';
@@ -106,6 +108,18 @@ export function GoalsScreen() {
                 today={todayStr}
                 onOpen={() => router.setParams({ [GOAL_URL.goal]: card.goal.id })}
                 onAllocate={() => router.setParams({ [GOAL_URL.allocate]: card.goal.id })}
+                onMenu={(key) => {
+                  if (key === 'edit') {
+                    setEditGoal(card.goal);
+                    router.setParams({ [GOAL_URL.goal]: 'new' });
+                    return;
+                  }
+                  if (key === 'schedule') {
+                    router.setParams({ [GOAL_URL.goalSchedule]: card.goal.id });
+                    return;
+                  }
+                  router.setParams({ [GOAL_URL.goal]: card.goal.id });
+                }}
               />
             </View>
           ))}
@@ -164,7 +178,10 @@ export function GoalsScreen() {
               setError(ledgerMessage(r.error));
               return;
             }
-            if (r.value.completed) toast.show(t('goals.reached'));
+            if (r.value.completed) {
+              successHaptic();
+              toast.show(t('goals.reached'));
+            }
             clearParams(GOAL_URL.allocate);
           }}
         />

@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
+import { GraduationCap, Home, Laptop, MoreHorizontal, PiggyBank, Plane, Target } from 'lucide-react-native';
 
-import { Amount, Button, Card, StatusPill, Text, formatDay } from '@/design/components';
+import { Amount, Button, Card, Icon, Menu, StatusPill, Text, formatDay } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import { t } from '@/i18n';
@@ -10,22 +11,35 @@ import { type GoalCard, goalStatusKind, statusPillFor } from './helpers';
 
 const sp = tokens.spacing;
 
+const ICON_MAP = {
+  target: Target,
+  piggy: PiggyBank,
+  home: Home,
+  laptop: Laptop,
+  plane: Plane,
+  school: GraduationCap,
+} as const;
+
 export function GoalCardView({
   card,
   today,
   onOpen,
   onAllocate,
+  onMenu,
 }: {
   card: GoalCard;
   today: string;
   onOpen: () => void;
   onAllocate: () => void;
+  onMenu?: (key: 'edit' | 'schedule' | 'delete') => void;
 }) {
   const theme = useTheme();
   const kind = goalStatusKind(card, today);
   const pill = statusPillFor(kind);
   const done = kind === 'done';
   const pct = Math.round(card.progress * 100);
+  const iconKey = (card.goal.icon ?? 'target') as keyof typeof ICON_MAP;
+  const Glyph = ICON_MAP[iconKey] ?? Target;
 
   return (
     <Card
@@ -34,8 +48,35 @@ export function GoalCardView({
     >
       <Pressable accessibilityRole="button" onPress={onOpen}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text variant="heading-sm">{card.goal.name}</Text>
-          <StatusPill label={t(pill.labelKey)} kind={pill.pill} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'], flex: 1 }}>
+            <Icon icon={Glyph} size="nav" color={theme.textSecondary} />
+            <Text variant="heading-sm" style={{ flexShrink: 1 }}>
+              {card.goal.name}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-xs'] }}>
+            <StatusPill label={t(pill.labelKey)} kind={pill.pill} />
+            {onMenu && !done ? (
+              <Menu
+                testID={`goal-card-menu-${card.goal.id}`}
+                trigger={(open) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.options')}
+                    onPress={open}
+                    style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Icon icon={MoreHorizontal} size="nav" color={theme.textSecondary} />
+                  </Pressable>
+                )}
+                items={[
+                  { key: 'edit', label: t('goals.editGoal'), onPress: () => onMenu('edit') },
+                  { key: 'schedule', label: card.goal.scheduleAmountMinor ? t('goals.editSchedule') : t('goals.addSchedule'), onPress: () => onMenu('schedule') },
+                  { key: 'delete', label: t('goals.deleteGoal'), onPress: () => onMenu('delete') },
+                ]}
+              />
+            ) : null}
+          </View>
         </View>
         {done && card.goal.completedAt ? (
           <Text variant="caption" tone="textSecondary" testID={`goal-done-date-${card.goal.id}`}>

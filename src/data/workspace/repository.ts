@@ -5,7 +5,15 @@ import { formatDay } from '@/design/components/overlays';
 import { budgetForMonth, resolveTemplateLineAmount, rowFor } from '@/features/budget/helpers';
 import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import type { RemoteOperation } from '../sync/mapOperation';
-import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
+import {
+  goalBody,
+  goalScheduleBody,
+  goalUpdateBody,
+  incomeStreamBody,
+  incomeStreamUpdateBody,
+  scheduleBody,
+  scheduleUpdateBody,
+} from '../sync/serverRecords';
 import { t, type TextKey } from '@/i18n';
 import {
   buildAdjustment,
@@ -1506,12 +1514,25 @@ export class WorkspaceRepository {
       await this.put('allocations', a.id, { ...a, deleted: true }, 'goal.allocation.clear', undefined, null);
     }
     const baseVersion = await this.versionOf('goals', goalId);
-    await this.put('goals', goalId, { ...goal, deleted: true }, 'goal.delete', undefined, {
+    await this.put('goals', goalId, { ...goal, deleted: true }, 'goal.delete', baseVersion, {
       type: 'goal.delete',
       targetId: goalId,
       payload: { baseVersion },
+      baseVersion,
     });
     return { ok: true, value: undefined };
+  }
+
+  /** PU-33: persist recurring allocation locally and via sync `goal.schedule` (PUT …/schedule). */
+  async setGoalSchedule(goal: Goal): Promise<void> {
+    const { id, ...data } = goal;
+    const baseVersion = await this.versionOf('goals', id);
+    await this.put('goals', id, data, 'goal.schedule', baseVersion, {
+      type: 'goal.schedule',
+      targetId: id,
+      payload: goalScheduleBody(data, baseVersion),
+      baseVersion,
+    });
   }
 
   /** E18: earmark money for a goal; transfer when the source account differs. */
@@ -1556,7 +1577,22 @@ export class WorkspaceRepository {
     const saved = this.savedForGoal(goalId, await this.load());
     const completed = saved >= BigInt(goal.targetMinor);
     if (completed) {
-      await this.updateGoal({ ...goal, status: 'completed' });
+      const completedAt = new Date().toISOString();
+      await this.updateGoal({ ...goal, status: 'completed', completedAt });
+      const noteId = `goal-reached:${goalId}`;
+      const existing = await this.store.read('notifications', noteId);
+      if (!existing) {
+        const notification: AppNotification = {
+          id: noteId,
+          createdAt: completedAt,
+          title: t('goals.reached'),
+          body: t('notifications.goalReached', { name: goal.name }),
+          category: 'goals',
+          read: false,
+        };
+        const { id: nid, ...noteData } = notification;
+        await this.put('notifications', nid, noteData, 'notification.create');
+      }
     }
     return { ok: true, value: { allocation, completed } };
   }

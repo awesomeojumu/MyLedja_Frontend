@@ -793,7 +793,7 @@
   "goals.inAccount": "In: {name}",
   "goals.addMoney": "Add money",
   "goals.allocateTitle": "Add money to goal",
-  "goals.allocateCaption": "Moving money to a goal is not spending.",
+  "goals.allocateCaption": "Saving to a goal isn't spending.",
   "goals.allocateSaved": "Added to goal",
   "goals.fromAccount": "From account",
   "goals.reached": "Goal reached",
@@ -2235,5 +2235,9 @@
   "common.saveChanges": "Save changes",
   "settings.banks.disconnectTitle": "Disconnect this bank?",
   "settings.banks.disconnectBody": "Transactions already imported stay. You can connect again later.",
-  "settings.popup.deleteAccountTypedWord": "DELETE"
+  "settings.popup.deleteAccountTypedWord": "DELETE",
+  "goals.alreadySavedTooHigh": "Already saved cannot be more than the account balance.",
+  "goals.pauseSchedule": "Pause schedule",
+  "goals.resumeSchedule": "Resume schedule",
+  "notifications.goalReached": "{name} reached its target."
 }

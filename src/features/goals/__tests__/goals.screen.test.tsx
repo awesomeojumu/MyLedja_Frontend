@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 describe('Goals page (F2.3)', () => {
-  it('P14-02: requires an account when creating a goal', async () => {
+  it('P14-02: account required — defaults to main savings', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -49,9 +49,7 @@ describe('Goals page (F2.3)', () => {
     await fireEvent.press(screen.getByTestId('goals-add'));
     await fireEvent.changeText(screen.getByTestId('goal-name'), 'Emergency fund');
     await fireEvent.changeText(screen.getByTestId('goal-target'), '1000000');
-    expect(screen.getByTestId('goal-save')).toBeDisabled();
-    await fireEvent.press(screen.getByTestId('goal-account'));
-    await fireEvent.press(screen.getByRole('radio', { name: 'Savings' }));
+    // Savings is pre-selected (DESIGN default main savings account).
     await waitFor(() => expect(screen.getByTestId('goal-save')).not.toBeDisabled());
   });
 

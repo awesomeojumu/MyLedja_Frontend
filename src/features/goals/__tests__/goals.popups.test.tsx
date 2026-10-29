@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 describe('Goals popups (PU-30…33, TB-05)', () => {
-  it('PU31-1: cannot save without an account', async () => {
+  it('PU31-1: account is required (defaults to main savings)', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -52,7 +52,8 @@ describe('Goals popups (PU-30…33, TB-05)', () => {
     await fireEvent.press(screen.getByTestId('goals-add'));
     await fireEvent.changeText(screen.getByTestId('goal-name'), 'Emergency fund');
     await fireEvent.changeText(screen.getByTestId('goal-target'), '1000000');
-    expect(screen.getByTestId('goal-save')).toBeDisabled();
+    // DESIGN: default the main savings account so Add is usable without an extra tap.
+    expect(screen.getByTestId('goal-save')).not.toBeDisabled();
   });
 
   it('PU31-2: monthly needed updates with target/date', () => {
@@ -134,5 +135,41 @@ describe('Goals popups (PU-30…33, TB-05)', () => {
     await fireEvent.press(screen.getByTestId(`goal-allocate-${goalId}`));
     await fireEvent.changeText(screen.getByTestId('goal-allocate-amount'), '');
     expect(screen.getByTestId('goal-allocate-save')).toBeDisabled();
+  });
+
+  it('P14 reach: sets completedAt and creates a goals notification', async () => {
+    const { repo } = await seeded();
+    const s = await repo.load();
+    const savings = s.accounts.find((a) => a.name === 'Savings')!;
+    const created = await repo.addGoal({ name: 'Done soon', targetMinor: 10_000n, accountId: savings.id });
+    if (!created.ok) throw new Error(created.error);
+    const r = await repo.allocateToGoal(created.value.id, { amount: 10_000n, date: '2026-10-28' });
+    expect(r.ok && r.value.completed).toBe(true);
+    const after = await repo.load();
+    const goal = after.goals.find((g) => g.id === created.value.id)!;
+    expect(goal.status).toBe('completed');
+    expect(goal.completedAt).toBeTruthy();
+    expect(after.notifications.some((n) => n.id === `goal-reached:${goal.id}` && n.category === 'goals')).toBe(true);
+  });
+
+  it('PU-33: setGoalSchedule stores schedule fields', async () => {
+    const { repo } = await seeded();
+    const s = await repo.load();
+    const savings = s.accounts.find((a) => a.name === 'Savings')!;
+    const created = await repo.addGoal({ name: 'Sched', targetMinor: 100_000_00n, accountId: savings.id });
+    if (!created.ok) throw new Error(created.error);
+    await repo.setGoalSchedule({
+      ...created.value,
+      scheduleAmountMinor: '2500000',
+      scheduleDayOfMonth: 28,
+      scheduleEvery: 'month',
+      scheduleStarts: '2026-10-28',
+      scheduleAutoAllocate: true,
+    });
+    const after = await repo.load();
+    const goal = after.goals.find((g) => g.id === created.value.id)!;
+    expect(goal.scheduleAmountMinor).toBe('2500000');
+    expect(goal.scheduleDayOfMonth).toBe(28);
+    expect(goal.scheduleAutoAllocate).toBe(true);
   });
 });

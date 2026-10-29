@@ -9,3 +9,13 @@ export function warningHaptic(): void {
     /* unsupported */
   }
 }
+
+/** Success haptic when a goal is reached (DESIGN page 14). No-op on web. */
+export function successHaptic(): void {
+  if (Platform.OS === 'web') return;
+  try {
+    Vibration.vibrate([0, 30, 40, 30]);
+  } catch {
+    /* unsupported */
+  }
+}

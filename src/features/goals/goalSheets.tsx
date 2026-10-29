@@ -24,6 +24,7 @@ import type { Goal } from '@/data/workspace/model';
 import type { Snapshot, WorkspaceRepository } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
+import { ledgerBalance } from '@/ledger';
 import { formatNaira } from '@/money';
 
 import { goalProgress, goalSaved, monthlyNeeded, reachesByDate } from './helpers';
@@ -67,7 +68,13 @@ export function AddGoalSheet({
   const [name, setName] = useState(existing?.name ?? initialName ?? '');
   const [amountText, setAmountText] = useState(existing ? formatNaira(BigInt(existing.targetMinor)) : '');
   const [amountMinor, setAmountMinor] = useState<bigint | null>(existing ? BigInt(existing.targetMinor) : null);
-  const [accountId, setAccountId] = useState(existing?.accountId ?? '');
+  const defaultAccountId =
+    existing?.accountId ??
+    snapshot.accounts.find((a) => !a.archived && a.type === 'savings')?.id ??
+    snapshot.accounts.find((a) => !a.archived && a.countInBudget)?.id ??
+    snapshot.accounts.find((a) => !a.archived)?.id ??
+    '';
+  const [accountId, setAccountId] = useState(defaultAccountId);
   const [targetDate, setTargetDate] = useState(existing?.targetDate ?? '');
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? '');
   const [icon, setIcon] = useState(existing?.icon ?? 'target');
@@ -75,6 +82,7 @@ export function AddGoalSheet({
   const [alreadyText, setAlreadyText] = useState('');
   const [alreadyMinor, setAlreadyMinor] = useState<bigint | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [alreadyError, setAlreadyError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -82,6 +90,7 @@ export function AddGoalSheet({
   const accounts = snapshot.accounts.filter((a) => !a.archived).map((a) => ({ value: a.id, label: a.name }));
   const categories = snapshot.categories.filter((c) => c.kind === 'expense' && !c.deleted).map((c) => ({ value: c.id, label: c.name }));
   const categoryOptions = [{ value: '__none__' as const, label: t('goals.noCategory') }, ...categories];
+  const balanceOf = (id: string) => (id ? ledgerBalance(id, snapshot.events) : 0n);
 
   const monthly = useMemo(() => {
     if (amountMinor === null || amountMinor <= 0n || !targetDate) return null;
@@ -101,6 +110,10 @@ export function AddGoalSheet({
     }
     if (targetDate && targetDate <= today) {
       setDateError(t('goals.targetDateFuture'));
+      return;
+    }
+    if (!existing && alreadyMinor !== null && alreadyMinor > balanceOf(accountId)) {
+      setAlreadyError(t('goals.alreadySavedTooHigh'));
       return;
     }
     if (!valid || amountMinor === null) return;
@@ -198,15 +211,19 @@ export function AddGoalSheet({
           />
           {dateError ? <InlineError testID="goal-date-error" message={dateError} /> : null}
           {!existing ? (
-            <AmountInput
-              testID="goal-already-saved"
-              label={t('goals.alreadySaved')}
-              value={alreadyText}
-              onChange={(text, minor) => {
-                setAlreadyText(text);
-                setAlreadyMinor(minor);
-              }}
-            />
+            <>
+              <AmountInput
+                testID="goal-already-saved"
+                label={t('goals.alreadySaved')}
+                value={alreadyText}
+                onChange={(text, minor) => {
+                  setAlreadyText(text);
+                  setAlreadyMinor(minor);
+                  setAlreadyError(null);
+                }}
+              />
+              {alreadyError ? <InlineError testID="goal-already-error" message={alreadyError} /> : null}
+            </>
           ) : null}
           {monthly !== null ? (
             <Text testID="goal-monthly-needed" tone="textSecondary">
@@ -372,7 +389,7 @@ export function GoalScheduleSheet({
               if (amountMinor === null) return;
               setBusy(true);
               void repo
-                .updateGoal({
+                .setGoalSchedule({
                   ...goal,
                   scheduleAmountMinor: amountMinor.toString(),
                   scheduleDayOfMonth: Math.min(31, Math.max(1, Number(day) || 1)),
