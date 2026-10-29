@@ -1,5 +1,5 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { ChevronLeft, ChevronRight, Circle, CircleDashed, CircleDot, CircleHelp, MoreHorizontal } from 'lucide-react-native';
 
@@ -70,12 +70,11 @@ export function IncomeScreen() {
   const chartPoints = useMemo(() => (snapshot ? twelveMonthIncomeSeries(snapshot, month) : []), [snapshot, month]);
   const streamOptions = snapshot?.incomeStreams.map((s) => ({ value: s.id, label: s.name })) ?? [];
 
-  // PU-26: ?occurrence=<streamId> opens Mark received for that stream.
-  useEffect(() => {
-    if (!snapshot || !occurrenceParam || !summary || recordStream) return;
+  // PU-26: ?occurrence=<streamId> opens Mark received for that stream (set during render, not in an effect).
+  if (snapshot && occurrenceParam && summary && !recordStream) {
     const row = summary.rows.find((r) => r.stream.id === occurrenceParam);
     if (row) setRecordStream({ stream: row.stream, expected: row.expected, received: row.received });
-  }, [snapshot, occurrenceParam, summary, recordStream]);
+  }
 
   const monthLabel = useMemo(() => {
     const [y, m] = month.split('-').map(Number) as [number, number];

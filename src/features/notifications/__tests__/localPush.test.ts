@@ -1,4 +1,18 @@
 import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import {
+  ACTION_MARK_PAID,
+  ACTION_REMIND_TOMORROW,
+  BILLS_CHANNEL_ID,
+  BILL_CATEGORY_ID,
+  __resetLocalPushForTests,
+  attachLocalPushHandlers,
+  buildLockScreenContent,
+  ensureLocalPushReady,
+  reminderFireDay,
+  shouldHideAmountOnLock,
+  syncLocalBillReminder,
+} from '../localPush';
 
 jest.mock('expo-notifications', () => {
   const state: {
@@ -33,20 +47,6 @@ jest.mock('expo-notifications', () => {
   };
 });
 
-import * as Notifications from 'expo-notifications';
-import {
-  ACTION_MARK_PAID,
-  ACTION_REMIND_TOMORROW,
-  BILLS_CHANNEL_ID,
-  BILL_CATEGORY_ID,
-  __resetLocalPushForTests,
-  attachLocalPushHandlers,
-  buildLockScreenContent,
-  ensureLocalPushReady,
-  reminderFireDay,
-  shouldHideAmountOnLock,
-  syncLocalBillReminder,
-} from '../localPush';
 
 const mod = Notifications as typeof Notifications & {
   __state: { listener: ((r: unknown) => void) | null };
