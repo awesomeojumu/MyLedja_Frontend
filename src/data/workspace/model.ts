@@ -236,14 +236,21 @@ export const budgetAssignId = (categoryId: string, month: string) => `${category
 export type Goal = {
   id: string;
   name: string;
+  icon?: string;
+  notes?: string;
   targetMinor: string;
   targetDate?: string;
   accountId: string;
   categoryId?: string;
   status: 'active' | 'paused' | 'completed';
-  /** Optional monthly schedule (P14-04). */
+  completedAt?: string;
+  /** Optional monthly schedule (P14-04 / PU-33). */
   scheduleAmountMinor?: string;
   scheduleDayOfMonth?: number;
+  scheduleEvery?: 'week' | 'month';
+  scheduleStarts?: string;
+  /** When true, allocate on the day without asking (PU-33). */
+  scheduleAutoAllocate?: boolean;
 };
 
 /** Earmark into a goal (TECH-SPEC E18); amounts are kobo strings. */
@@ -355,6 +362,11 @@ export type IncomeStream = {
 export type DebtDirection = 'owedToMe' | 'iOwe';
 
 /** Person debt (DESIGN.md page 15); bank loans use account type loan instead. */
+export type DebtInterest =
+  | { kind: 'none' }
+  | { kind: 'fixed'; amountMinor: string }
+  | { kind: 'percent_month'; percent: number };
+
 export type PersonDebt = {
   id: string;
   name: string;
@@ -362,9 +374,12 @@ export type PersonDebt = {
   /** Ledger account id for R (asset) or P (liability). */
   ledgerAccountId: string;
   payeeId?: string;
-  status: 'open' | 'settled';
+  status: 'open' | 'settled' | 'written_off';
   nextDueDate?: string;
   notes?: string;
+  interest?: DebtInterest;
+  /** Credit kept after an overpayment (TECH-SPEC 6.9). */
+  creditMinor?: string;
   /** Instalment plan (DESIGN popup #36). */
   scheduleInstallmentCount?: number;
   scheduleAmountMinor?: string;

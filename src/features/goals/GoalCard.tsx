@@ -28,12 +28,20 @@ export function GoalCardView({
   const pct = Math.round(card.progress * 100);
 
   return (
-    <Card testID={`goal-${card.goal.id}`} style={{ gap: sp['spacing-sm'], flexGrow: 1 }}>
+    <Card
+      testID={`goal-${card.goal.id}`}
+      style={{ gap: sp['spacing-sm'], flexGrow: 1, opacity: done ? 0.72 : 1 }}
+    >
       <Pressable accessibilityRole="button" onPress={onOpen}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text variant="heading-sm">{card.goal.name}</Text>
           <StatusPill label={t(pill.labelKey)} kind={pill.pill} />
         </View>
+        {done && card.goal.completedAt ? (
+          <Text variant="caption" tone="textSecondary" testID={`goal-done-date-${card.goal.id}`}>
+            {formatDay(card.goal.completedAt.slice(0, 10))}
+          </Text>
+        ) : null}
         <Text tone="textSecondary">
           <Amount minor={card.saved} variant="caption" /> {t('goals.of')} <Amount minor={card.target} variant="caption" />
         </Text>
