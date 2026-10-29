@@ -14,6 +14,7 @@ import {
   Text,
   useToast,
 } from '@/design/components';
+import { useTabParam } from '@/design/useTabParam';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import { useSync } from '@/data/sync/SyncProvider';
@@ -76,11 +77,10 @@ const revalued = (snapshot: Snapshot, accountId: string) =>
 export function AccountScreen() {
   const { snapshot, repo } = useWorkspace();
   const { engine } = useSync();
-  const params = useGlobalSearchParams<{ id?: string; tx?: string }>();
+  const params = useGlobalSearchParams<{ id?: string; tx?: string; tab?: string }>();
   const router = useRouter();
   const theme = useTheme();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>('transactions');
   const [sheet, setSheet] = useState<'import' | 'edit' | 'value' | 'archive' | null>(null);
   const [dropped, setDropped] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -101,6 +101,22 @@ export function AccountScreen() {
   const dayGroups = useMemo(() => groupRegisterByDay(rows), [rows]);
   const balance = snapshot && account ? ledgerBalance(account.id, snapshot.events) : 0n;
   const owes = account ? ACCOUNT_KIND_INFO[account.type].ledger === 'liability' : false;
+  const tabOptions = useMemo((): readonly Tab[] => {
+    const keys: Tab[] = ['transactions'];
+    if (account && hasValueTab(account.type)) keys.push('value');
+    keys.push('details');
+    return keys;
+  }, [account]);
+  const { value: tab, setValue: setTab } = useTabParam<Tab>({
+    pageKey: `account:${params.id ?? 'none'}`,
+    personId: user?.id,
+    options: tabOptions,
+    defaultValue: 'transactions',
+  });
+  const tabs: { value: Tab; label: string }[] = tabOptions.map((value) => ({
+    value,
+    label: t(`account.tab.${value}` as 'account.tab.transactions' | 'account.tab.value' | 'account.tab.details'),
+  }));
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined' || !account) return;
@@ -136,11 +152,6 @@ export function AccountScreen() {
   }
 
   const split = clearedSplit(rows);
-  const tabs: { value: Tab; label: string }[] = [
-    { value: 'transactions', label: t('account.tab.transactions') },
-    ...(account && hasValueTab(account.type) ? [{ value: 'value' as const, label: t('account.tab.value') }] : []),
-    { value: 'details', label: t('account.tab.details') },
-  ];
   const sign = (v: bigint) => (owes ? -v : v);
 
   const syncNow = async () => {

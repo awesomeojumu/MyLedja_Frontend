@@ -75,4 +75,14 @@ describe('App frame (F0.6, E-09)', () => {
     await fireEvent.press(toggle);
     expect(screen.getByTestId('privacy-toggle')).toBeChecked();
   });
+
+  it('PU04-1 workspace switcher shows the workspace and Workspace settings only', async () => {
+    atWidth(1100);
+    await frame(<AppFrame title={t('dashboard.title')}>{null}</AppFrame>);
+    await fireEvent.press(screen.getByTestId('workspace-switcher'));
+    expect(screen.getByTestId('workspace-switcher-menu')).toBeTruthy();
+    expect(screen.getByTestId('workspace-current-tick')).toBeTruthy();
+    expect(screen.getByTestId('workspace-settings')).toBeTruthy();
+    expect(screen.queryByText(/Create workspace/i)).toBeNull();
+  });
 });
