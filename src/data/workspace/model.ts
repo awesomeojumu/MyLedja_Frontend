@@ -211,6 +211,8 @@ export type HoldingLot = {
   pricePerUnitMinor: string;
   feesMinor: string;
   buyEventId?: string;
+  /** Realised gain of units sold from this lot (E21), minor units. */
+  realisedMinor?: string;
 };
 
 export type HoldingPrice = {
@@ -693,10 +695,10 @@ export function fromStored(id: string, operationId: string, s: StoredEvent, reve
     debtId: s.debtId,
     recurringId: s.recurringId,
     incomeStreamId: s.incomeStreamId,
+    holdingId: s.holdingId,
     oneOff: s.oneOff,
     createdBy: s.createdBy,
     deviceId: s.deviceId,
-    holdingId: s.holdingId,
     investmentUnits: s.investmentUnits,
     investmentPriceMinor: s.investmentPriceMinor,
     investmentFeesMinor: s.investmentFeesMinor,

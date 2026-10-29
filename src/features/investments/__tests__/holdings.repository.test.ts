@@ -80,4 +80,43 @@ describe('holdings repository (PU-37…40)', () => {
     expect(after.prices.filter((p) => p.holdingId === h.value.id)).toHaveLength(1);
     expect(after.prices[0]!.priceMinor).toBe('21000');
   });
+
+  it('P18: dividend stores holdingId; archive refuses units then succeeds when empty', async () => {
+    const repo = await setup();
+    const snap = await repo.load();
+    const cash = snap.accounts.find((a) => a.type === 'bank')!;
+    const inv = snap.accounts.find((a) => a.type === 'investment')!;
+    const h = await repo.createHolding({ name: 'MTN', type: 'stock', accountId: inv.id });
+    if (!h.ok) throw new Error('holding');
+    const buy = await repo.buyHolding({
+      holdingId: h.value.id,
+      units: '10',
+      pricePerUnit: 10000n,
+      cashAccountId: cash.id,
+      date: '2026-10-28',
+    });
+    expect(buy.ok).toBe(true);
+    const div = await repo.recordDividend({
+      holdingId: h.value.id,
+      amount: 50000n,
+      date: '2026-10-29',
+      cashAccountId: cash.id,
+    });
+    expect(div.ok).toBe(true);
+    if (div.ok) expect(div.value.holdingId).toBe(h.value.id);
+    const blocked = await repo.archiveHolding(h.value.id);
+    expect(blocked.ok).toBe(false);
+    const sell = await repo.sellHolding({
+      holdingId: h.value.id,
+      units: '10',
+      pricePerUnit: 11000n,
+      cashAccountId: cash.id,
+      date: '2026-10-30',
+    });
+    expect(sell.ok).toBe(true);
+    const archived = await repo.archiveHolding(h.value.id);
+    expect(archived.ok).toBe(true);
+    const after = await repo.load();
+    expect(after.holdings.find((x) => x.id === h.value.id)).toBeUndefined();
+  });
 });

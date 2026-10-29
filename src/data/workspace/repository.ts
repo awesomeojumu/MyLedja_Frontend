@@ -317,9 +317,13 @@ export class WorkspaceRepository {
       reportDashboards: raw?.reportDashboards,
       savedReports: raw?.savedReports,
     };
-    const holdings = holdingRows.map((r) => ({ ...(r.data as Omit<Holding, 'id'>), id: r.id }));
+    const holdings = holdingRows
+      .map((r) => ({ ...(r.data as Omit<Holding, 'id'> & { archived?: boolean }), id: r.id }))
+      .filter((h) => !h.archived);
     const lots = lotRows.map((r) => ({ ...(r.data as Omit<HoldingLot, 'id'>), id: r.id }));
-    const prices = priceRows.map((r) => ({ ...(r.data as Omit<HoldingPrice, 'id'>), id: r.id }));
+    const prices = priceRows
+      .map((r) => ({ ...(r.data as Omit<HoldingPrice, 'id'> & { deleted?: boolean }), id: r.id }))
+      .filter((p) => !p.deleted);
     const debts = debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id }));
     const assigns = new Map<string, bigint>();
     const assignNotes = new Map<string, string>();
@@ -2673,6 +2677,24 @@ export class WorkspaceRepository {
     });
   }
 
+  /** DESIGN.md page 18: remove a holding with no units left (BE archive). */
+  async archiveHolding(holdingId: string): Promise<Result> {
+    const snapshot = await this.load();
+    const holding = snapshot.holdings.find((h) => h.id === holdingId);
+    if (!holding) return { ok: false, error: 'unknown_account' };
+    const open = snapshot.lots
+      .filter((l) => l.holdingId === holdingId)
+      .reduce((s, l) => s + (Number(l.units) - Number(l.soldUnits || '0')), 0);
+    if (open > 1e-9) return { ok: false, error: 'not_positive' };
+    const { id, ...data } = holding;
+    await this.put('holdings', id, { ...data, archived: true }, 'holding.archive', undefined, {
+      type: 'holding.archive',
+      targetId: id,
+      payload: {},
+    });
+    return { ok: true, value: undefined };
+  }
+
   /** PU-38 buy (E20): cash → holding at cost; records a lot. */
   async buyHolding(input: {
     holdingId: string;
@@ -2743,7 +2765,7 @@ export class WorkspaceRepository {
     return posted;
   }
 
-  /** PU-38 sell (E21): FIFO by default. */
+  /** PU-38 sell (E21): FIFO by default, or chosen lots. */
   async sellHolding(input: {
     holdingId: string;
     units: string;
@@ -2752,6 +2774,8 @@ export class WorkspaceRepository {
     cashAccountId: string;
     date: string;
     costOfLots?: bigint;
+    /** Chosen lots (lot id → units). Omit for oldest-first. */
+    lots?: { lotId: string; units: string }[];
   }): Promise<Result<TxEvent>> {
     const snapshot = await this.load();
     const holding = snapshot.holdings.find((h) => h.id === input.holdingId);
@@ -2762,19 +2786,37 @@ export class WorkspaceRepository {
       .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
     let left = want;
     let cost = 0n;
-    const consumes: { lot: HoldingLot; take: number }[] = [];
-    for (const lot of open) {
-      const available = Number(lot.units) - Number(lot.soldUnits || '0');
-      if (available <= 0) continue;
-      const take = Math.min(available, left);
-      const lotUnits = Number(lot.units);
-      const portion = lotUnits > 0 ? (BigInt(lot.costMinor) * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(lotUnits * 1e6)) : 0n;
-      cost += portion;
-      consumes.push({ lot, take });
-      left -= take;
-      if (left <= 1e-9) break;
+    const consumes: { lot: HoldingLot; take: number; portion: bigint }[] = [];
+    if (input.lots?.length) {
+      const byId = new Map(open.map((l) => [l.id, l]));
+      let chosen = 0;
+      for (const pick of input.lots) {
+        const lot = byId.get(pick.lotId);
+        if (!lot) return { ok: false, error: 'not_positive' };
+        const take = Number(pick.units);
+        const available = Number(lot.units) - Number(lot.soldUnits || '0');
+        if (!(take > 0) || take > available + 1e-9) return { ok: false, error: 'not_positive' };
+        const lotUnits = Number(lot.units);
+        const portion = lotUnits > 0 ? (BigInt(lot.costMinor) * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(lotUnits * 1e6)) : 0n;
+        cost += portion;
+        consumes.push({ lot, take, portion });
+        chosen += take;
+      }
+      if (Math.abs(chosen - want) > 1e-6) return { ok: false, error: 'not_positive' };
+    } else {
+      for (const lot of open) {
+        const available = Number(lot.units) - Number(lot.soldUnits || '0');
+        if (available <= 0) continue;
+        const take = Math.min(available, left);
+        const lotUnits = Number(lot.units);
+        const portion = lotUnits > 0 ? (BigInt(lot.costMinor) * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(lotUnits * 1e6)) : 0n;
+        cost += portion;
+        consumes.push({ lot, take, portion });
+        left -= take;
+        if (left <= 1e-9) break;
+      }
+      if (left > 1e-9) return { ok: false, error: 'not_positive' };
     }
-    if (left > 1e-9) return { ok: false, error: 'not_positive' };
     const costOfLots = input.costOfLots ?? cost;
     const fees = input.fees ?? 0n;
     const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
@@ -2809,14 +2851,18 @@ export class WorkspaceRepository {
           price: input.pricePerUnit.toString(),
           fees: fees.toString(),
           date: input.date,
+          ...(input.lots?.length ? { lots: input.lots } : {}),
         },
       },
     );
     if (!posted.ok) return posted;
-    for (const { lot, take } of consumes) {
+    const proceeds = costOfPurchase(input.units, input.pricePerUnit, 0n) - fees;
+    for (const { lot, take, portion } of consumes) {
       const sold = (Number(lot.soldUnits || '0') + take).toString();
+      const share = want > 0 ? (proceeds * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(want * 1e6)) : 0n;
+      const realised = (BigInt(lot.realisedMinor ?? '0') + (share - portion)).toString();
       const { id, ...data } = lot;
-      await this.put('lots', id, { ...data, soldUnits: sold }, 'lot.update', undefined, null);
+      await this.put('lots', id, { ...data, soldUnits: sold, realisedMinor: realised }, 'lot.update', undefined, null);
     }
     return posted;
   }
@@ -2837,6 +2883,16 @@ export class WorkspaceRepository {
     const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
     const sys = chart.system('investment_income');
     if (!sys) return { ok: false, error: 'unknown_account' };
+    const remoteDividend = (extra: Record<string, unknown>): RemoteOperation => ({
+      type: 'transaction.create',
+      payload: {
+        type: 'dividend',
+        holdingId: holding.id,
+        amount: input.amount.toString(),
+        date: input.date,
+        ...extra,
+      },
+    });
     if (input.reinvested && input.units && input.pricePerUnit !== undefined) {
       const cost = costOfPurchase(input.units, input.pricePerUnit, 0n);
       if (cost <= 0n) return { ok: false, error: 'not_positive' };
@@ -2853,16 +2909,7 @@ export class WorkspaceRepository {
           holdingId: holding.id,
           investmentUnits: input.units,
         },
-        {
-          type: 'transaction.create',
-          payload: {
-            type: 'dividend',
-            holdingId: holding.id,
-            amount: input.amount.toString(),
-            reinvestedUnits: input.units,
-            date: input.date,
-          },
-        },
+        remoteDividend({ reinvestedUnits: input.units }),
       );
       if (!posted.ok) return posted;
       await this.put(
@@ -2899,16 +2946,7 @@ export class WorkspaceRepository {
         ],
         holdingId: holding.id,
       },
-      {
-        type: 'transaction.create',
-        payload: {
-          type: 'dividend',
-          holdingId: holding.id,
-          amount: input.amount.toString(),
-          accountId: cash.id,
-          date: input.date,
-        },
-      },
+      remoteDividend({ accountId: cash.id }),
     );
   }
 
@@ -2936,6 +2974,16 @@ export class WorkspaceRepository {
       );
       first = false;
     }
+  }
+
+  /** Remove one price from history (BE DELETE …/prices/:date). */
+  async deletePrice(price: HoldingPrice): Promise<void> {
+    const { id, ...data } = price;
+    await this.put('prices', id, { ...data, deleted: true }, 'holding.price.delete', undefined, {
+      type: 'holding.price.delete',
+      targetId: price.holdingId,
+      payload: { date: price.date },
+    });
   }
 
   defaultHealthSettings(snapshot: Snapshot): HealthSettings {
@@ -3002,11 +3050,13 @@ export class WorkspaceRepository {
     const event: TxEvent = { ...stamped, id, operationId: id, status: 'posted' };
     const checked = checkEvent(chart, event, new Map(events.map((e) => [e.id, e])));
     if (!checked.ok) return checked;
-    const remoteWithIds =
-      remote && remote !== null
-        ? { ...remote, transactionIds: remote.transactionIds ?? [id] }
-        : remote;
-    await this.put('events', id, { ...toStored(stamped), operationId: id }, `event.${input.type}`, undefined, remoteWithIds);
+    const remoteOp =
+      remote === undefined
+        ? undefined
+        : remote === null
+          ? null
+          : { ...remote, transactionIds: remote.transactionIds ?? [id] };
+    await this.put('events', id, { ...toStored(stamped), operationId: id }, `event.${input.type}`, undefined, remoteOp);
     return { ok: true, value: event };
   }
 }
