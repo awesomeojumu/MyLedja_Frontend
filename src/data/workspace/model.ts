@@ -502,6 +502,8 @@ export type ReportCardModel = {
   text: string | null;
   layout: { x: number; y: number; w: number; h: number };
   hidden: boolean;
+  /** The dashboard's one gold highlight (P19-05). */
+  highlight?: boolean;
 };
 
 export type ReportDashboardModel = { id: string; name: string; sortOrder: number; cards: ReportCardModel[] };

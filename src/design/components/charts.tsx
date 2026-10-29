@@ -83,8 +83,8 @@ function scale(values: bigint[]): (v: bigint) => number {
   return (v) => Number((v > 0n ? v : 0n) * 10_000n / max) / 10_000;
 }
 
-/** Up to 12 bars; over-plan bars are ruby; at most one gold bar, and only if the view has no other gold mark. */
-export function BarChart({ highlight, ...props }: Omit<Frame, 'children'> & { highlight?: number }) {
+/** Up to 12 bars; over-plan bars are ruby; at most one gold bar, and only if the view has no other gold mark. A pressed bar can open its transactions. */
+export function BarChart({ highlight, onBarPress, ...props }: Omit<Frame, 'children'> & { highlight?: number; onBarPress?: (row: Point) => void }) {
   const theme = useTheme();
   const bars = props.rows.slice(-12);
   const y = scale(bars.map((b) => b.value));
@@ -100,7 +100,17 @@ export function BarChart({ highlight, ...props }: Omit<Frame, 'children'> & { hi
               {bars.map((b, i) => {
                 const h = Math.max(b.value > 0n ? 2 : 0, y(b.value) * (HEIGHT - 4));
                 const fill = b.over ? c.ruby : i === highlight ? c.gold : c['primary-soft'];
-                return <BarShape key={b.label} testID={`chart-bar-${i}`} x={i * (barW + gap)} width={barW} height={h} fill={fill} />;
+                return (
+                  <BarShape
+                    key={b.label}
+                    testID={`chart-bar-${i}`}
+                    x={i * (barW + gap)}
+                    width={barW}
+                    height={h}
+                    fill={fill}
+                    onPress={onBarPress && (() => onBarPress(b))}
+                  />
+                );
               })}
             </Svg>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -117,12 +127,12 @@ export function BarChart({ highlight, ...props }: Omit<Frame, 'children'> & { hi
   );
 }
 
-function BarShape({ x, width, height, fill, testID }: { x: number; width: number; height: number; fill: string; testID: string }) {
+function BarShape({ x, width, height, fill, testID, onPress }: { x: number; width: number; height: number; fill: string; testID: string; onPress?: () => void }) {
   const radius = Math.min(r['rounded-xs'], height / 2, width / 2);
   const top = HEIGHT - height;
   if (height === 0) return null;
   const d = `M${x},${HEIGHT} V${top + radius} Q${x},${top} ${x + radius},${top} H${x + width - radius} Q${x + width},${top} ${x + width},${top + radius} V${HEIGHT} Z`;
-  return <Path testID={testID} d={d} fill={fill} />;
+  return <Path testID={testID} d={d} fill={fill} onPress={onPress} />;
 }
 
 /**
