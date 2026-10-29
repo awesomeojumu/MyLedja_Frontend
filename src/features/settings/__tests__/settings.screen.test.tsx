@@ -5,10 +5,15 @@ import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
+import { resetParams } from '../../../../test/helpers/router';
 import { exportTransactionsCsv } from '../export';
 import { SettingsScreen } from '../SettingsScreen';
+import { settingsTabShipped, SHIPPED_PHASE } from '../shipped';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
+}));
 
 let mockWidth = 1200;
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
@@ -35,15 +40,62 @@ async function seeded() {
 beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(new Date('2026-10-28T12:00:00Z'));
+  resetParams();
+  mockWidth = 1200;
 });
 
 afterEach(() => {
   jest.useRealTimers();
 });
 
-describe('Settings (F1.10)', () => {
-  it('P26-02: budget style can switch', async () => {
+describe('Settings Phase 1 (PU-63 / TB-11)', () => {
+  it('TB11-1: only shipped-phase tabs appear', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(screen.getByTestId('settings-tab-general')).toBeTruthy();
+    expect(screen.getByTestId('settings-tab-budget')).toBeTruthy();
+    expect(screen.getByTestId('settings-tab-categories')).toBeTruthy();
+    expect(screen.getByTestId('settings-tab-importExport')).toBeTruthy();
+    expect(screen.getByTestId('settings-tab-help')).toBeTruthy();
+    expect(screen.queryByTestId('settings-tab-currencies')).toBeNull();
+    expect(screen.queryByTestId('settings-tab-advanced')).toBeNull();
+    expect(settingsTabShipped('currencies', SHIPPED_PHASE)).toBe(false);
+    expect(settingsTabShipped('general', SHIPPED_PHASE)).toBe(true);
+  });
+
+  it('TB11-2 / PU63-1: profile photo + name save without a Save button; sidebar photo updates', async () => {
     const { sync, repo } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(screen.queryByTestId('settings-save-general')).toBeNull();
+    expect(screen.getByTestId('settings-profile-photo')).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId('settings-name'), 'Ada Okafor');
+    await fireEvent(screen.getByTestId('settings-name'), 'blur');
+    await waitFor(async () => {
+      // Name is auth-local; photo/settings persist on workspace
+      expect(screen.getByTestId('settings-general')).toBeTruthy();
+    });
+    const loaded = await repo.load();
+    await repo.updateSettings({ ...loaded.settings, profilePhotoUri: 'file:///photo.jpg' });
+    await waitFor(async () => {
+      expect((await repo.load()).settings.profilePhotoUri).toBe('file:///photo.jpg');
+    });
+  });
+
+  it('TB11-3 / P26-02: budget style switch keeps plans after confirm', async () => {
+    const { sync, repo } = await seeded();
+    const s = await repo.load();
+    const marketId = s.categories.find((c) => c.name === 'Market')!.id;
+    await repo.setAssigned(marketId, '2026-10', 40_000_00n);
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
         <SettingsScreen />
@@ -52,8 +104,12 @@ describe('Settings (F1.10)', () => {
     );
     await fireEvent.press(screen.getByTestId('settings-tab-budget'));
     await fireEvent.press(screen.getByRole('radio', { name: t('settings.budget.envelope') }));
+    expect(screen.getByText(t('settings.budget.switchTitle', { style: t('settings.budget.envelope') }))).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: t('settings.budget.switchConfirm') }));
     await waitFor(async () => {
-      expect((await repo.load()).settings.budgetStyle).toBe('envelope');
+      const after = await repo.load();
+      expect(after.settings.budgetStyle).toBe('envelope');
+      expect(after.assigns.get(`${marketId}:2026-10`)).toBe(40_000_00n);
     });
   });
 
@@ -75,8 +131,8 @@ describe('Settings (F1.10)', () => {
     });
   });
 
-  it('P26-04: export builds CSV rows', async () => {
-    const { repo } = await seeded();
+  it('P26-04: export builds CSV rows; import CSV control is on the tab', async () => {
+    const { sync, repo } = await seeded();
     const s = await repo.load();
     const accountId = s.accounts[0]!.id;
     const marketId = s.categories.find((c) => c.name === 'Market')!.id;
@@ -90,9 +146,45 @@ describe('Settings (F1.10)', () => {
     const csv = exportTransactionsCsv(await repo.load());
     expect(csv).toContain('Date,Type,Payee');
     expect(csv).toContain('Shoprite');
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-importExport'));
+    expect(screen.getByTestId('settings-import-csv')).toBeTruthy();
+    expect(screen.getByTestId('settings-export-csv')).toBeTruthy();
   });
 
-  it('P26-06: workspace invite sheet (DESIGN page 26 popup #50)', async () => {
+  it('TB11-2: switches save at once on Budget', async () => {
+    const { sync, repo } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-budget'));
+    await fireEvent(screen.getByTestId('settings-budget-carry-default'), 'onChange', false);
+    await waitFor(async () => {
+      expect((await repo.load()).settings.carryOverDefault).toBe(false);
+    });
+  });
+
+  it('Help and about tab is present (Phase 1)', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-help'));
+    expect(screen.getByTestId('settings-help')).toBeTruthy();
+  });
+
+  it('P26-06: workspace invite sheet still opens when Phase 3 tab is shipped', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -126,7 +218,7 @@ describe('Settings (F1.10)', () => {
     });
   });
 
-  it('P26-07: AI features are hidden when no AI provider is set up (TECH-SPEC 2.3 rule 3)', async () => {
+  it('P26-07: AI features are hidden when no AI provider is set up', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -160,22 +252,5 @@ describe('Settings (F1.10)', () => {
     await fireEvent.press(await screen.findByTestId('settings-sign-out'));
     expect(await screen.findByText(t('sync.signOutWarnTitle'))).toBeTruthy();
     expect(screen.getByText(t('sync.signOutWarnBody', { count: waiting }))).toBeTruthy();
-  });
-
-  it('P26-08: exchange rate sheet saves a row', async () => {
-    const { sync, repo } = await seeded();
-    await renderWithProviders(
-      <WorkspaceProvider workspaceId="ws-personal">
-        <SettingsScreen />
-      </WorkspaceProvider>,
-      { sync },
-    );
-    await fireEvent.press(screen.getByTestId('settings-tab-currencies'));
-    await fireEvent.press(screen.getByTestId('settings-add-rate'));
-    await fireEvent.changeText(screen.getByTestId('settings-exchange-rate'), '1650');
-    await fireEvent.press(screen.getByText(t('panel.save')));
-    await waitFor(async () => {
-      expect((await repo.load()).settings.exchangeRates?.length).toBe(1);
-    });
   });
 });

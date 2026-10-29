@@ -401,7 +401,20 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
             </>
           ) : (
             <>
-              <TextInput testID="add-payee" label={t('add.payee')} value={payee} onChangeText={setPayee} onBlur={() => payee.trim() && suggestCategory(payee.trim())} />
+              <TextInput
+                testID="add-payee"
+                label={t('add.payee')}
+                value={payee}
+                onChangeText={setPayee}
+                onBlur={() => {
+                  const name = payee.trim();
+                  if (!name || !snapshot) return;
+                  const found =
+                    snapshot.payees.find((p) => p.name.toLowerCase() === name.toLowerCase()) ??
+                    snapshot.payees.find((p) => (p.aliases ?? []).some((a) => a.toLowerCase() === name.toLowerCase()));
+                  suggestCategory(name, found?.defaultCategoryId);
+                }}
+              />
               {recentPayees.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'] }}>
                   {recentPayees.map((p) => (

@@ -242,6 +242,9 @@ export class WorkspaceRepository {
       exchangeRates: raw?.exchangeRates,
       downloadDailyRates: raw?.downloadDailyRates,
       deviceSync: raw?.deviceSync,
+      profilePhotoUri: raw?.profilePhotoUri,
+      hapticsEnabled: raw?.hapticsEnabled,
+      tags: raw?.tags,
     };
     const assigns = new Map<string, bigint>();
     const assignNotes = new Map<string, string>();
@@ -952,40 +955,142 @@ export class WorkspaceRepository {
     await this.updateCategory({ ...b, order: a.order ?? index });
   }
 
-  async updatePayee(payee: Payee): Promise<void> {
+  async updatePayee(payee: Payee): Promise<Result> {
+    const snapshot = await this.load();
+    const aliases = payee.aliases ?? [];
+    for (const alias of aliases) {
+      const key = alias.trim().toLowerCase();
+      if (!key) continue;
+      const owner = snapshot.payees.find((p) => {
+        if (p.id === payee.id) return false;
+        if (p.name.toLowerCase() === key) return true;
+        return (p.aliases ?? []).some((a) => a.toLowerCase() === key);
+      });
+      if (owner) return { ok: false, error: 'missing_lines' };
+    }
     const { id, ...data } = payee;
     await this.put('payees', id, data, 'payee.update');
+    return { ok: true, value: undefined };
   }
 
-  /** P24-04: move every transaction to the kept payee and remove the others. */
-  async mergePayees(keepId: string, mergeIds: string[]): Promise<Result> {
+  /** Soft-delete only when the payee has no transactions (PU-46). */
+  async deletePayee(payeeId: string): Promise<Result> {
+    const snapshot = await this.load();
+    const payee = snapshot.payees.find((p) => p.id === payeeId);
+    if (!payee) return { ok: false, error: 'missing_lines' };
+    if (snapshot.events.some((e) => e.payeeId === payeeId && e.status === 'posted')) {
+      return { ok: false, error: 'missing_lines' };
+    }
+    await this.put('payees', payeeId, { ...payee, deleted: true }, 'payee.delete');
+    return { ok: true, value: undefined };
+  }
+
+  /**
+   * P24-04 / PU-47: move every transaction and bank name to the kept payee.
+   * Returns mergeId so Undo can restore (TECH-SPEC merge undo).
+   */
+  async mergePayees(
+    keepId: string,
+    mergeIds: string[],
+    choices?: { nameId?: string; logoId?: string; categoryId?: string },
+  ): Promise<Result<{ mergeId: string; moved: number }>> {
     const ids = mergeIds.filter((id) => id !== keepId);
     if (ids.length === 0) return { ok: false, error: 'not_positive' };
     const snapshot = await this.load();
-    const keep = snapshot.payees.find((p) => p.id === keepId);
-    if (!keep) return { ok: false, error: 'missing_lines' };
-    const merged = ids.map((id) => snapshot.payees.find((p) => p.id === id)).filter(Boolean) as Payee[];
+    const all = snapshot.payees;
+    const byId = (id: string) => all.find((p) => p.id === id);
+    const keepPayee = byId(keepId);
+    if (!keepPayee) return { ok: false, error: 'missing_lines' };
+    const merged = ids.map((id) => byId(id)).filter(Boolean) as Payee[];
     if (merged.length !== ids.length) return { ok: false, error: 'missing_lines' };
 
+    const moved: { eventId: string; fromPayeeId: string }[] = [];
     for (const event of snapshot.events) {
       if (!event.payeeId || !ids.includes(event.payeeId)) continue;
       const rec = await this.store.read('events', event.id);
       if (!rec) continue;
+      moved.push({ eventId: event.id, fromPayeeId: event.payeeId });
       const data = { ...(rec.data as StoredEvent), payeeId: keepId };
       await this.engine.save({ ...rec, data }, 'event.payee', { collection: 'events', id: event.id, data }, rec.version);
     }
 
-    const aliases = new Set(keep.aliases ?? []);
+    const nameSrc = byId(choices?.nameId ?? keepId) ?? keepPayee;
+    const logoSrc = byId(choices?.logoId ?? keepId) ?? keepPayee;
+    const catSrc = byId(choices?.categoryId ?? keepId) ?? keepPayee;
+    const next: Payee = {
+      ...keepPayee,
+      // Name stays on keepId (radio chooses which payee id is kept); logo/category may come from a sibling.
+      name: keepPayee.name,
+      logoUri: logoSrc.logoUri,
+      defaultCategoryId: catSrc.defaultCategoryId,
+    };
+    // If the user chose another payee's name, rename the kept record to that name.
+    if (choices?.nameId && choices.nameId !== keepId && nameSrc) {
+      next.name = nameSrc.name;
+    }
+    const aliases = new Set(next.aliases ?? []);
     for (const p of merged) {
       aliases.add(p.name);
       for (const a of p.aliases ?? []) aliases.add(a);
     }
-    await this.updatePayee({ ...keep, aliases: [...aliases] });
+    // Drop the kept display name from aliases if it was a sibling's name we promoted.
+    aliases.delete(next.name);
+    next.aliases = [...aliases];
+    const { id: _keepId, ...keepBody } = next;
+    await this.put('payees', next.id, keepBody, 'payee.update');
 
     for (const id of ids) {
       const p = merged.find((m) => m.id === id)!;
       await this.put('payees', id, { ...p, deleted: true }, 'payee.delete');
     }
+
+    const mergeId = this.newId();
+    await this.put(
+      'payee_merges',
+      mergeId,
+      {
+        keepId,
+        previousKeep: keepPayee,
+        removed: merged,
+        moved,
+      },
+      'payee.merge',
+      undefined,
+      null,
+    );
+    return { ok: true, value: { mergeId, moved: moved.length } };
+  }
+
+  /** PU47-2: restore payees and transaction links exactly as before the merge. */
+  async undoMergePayees(mergeId: string): Promise<Result> {
+    const rec = await this.store.read('payee_merges', mergeId);
+    if (!rec) return { ok: false, error: 'missing_lines' };
+    const data = rec.data as {
+      keepId: string;
+      previousKeep: Payee;
+      removed: Payee[];
+      moved: { eventId: string; fromPayeeId: string }[];
+    };
+
+    for (const row of data.moved) {
+      const eventRec = await this.store.read('events', row.eventId);
+      if (!eventRec) continue;
+      const eventData = { ...(eventRec.data as StoredEvent), payeeId: row.fromPayeeId };
+      await this.engine.save(
+        { ...eventRec, data: eventData },
+        'event.payee',
+        { collection: 'events', id: row.eventId, data: eventData },
+        eventRec.version,
+      );
+    }
+
+    const { id: keepId, ...keepBody } = data.previousKeep;
+    await this.put('payees', keepId, keepBody, 'payee.update');
+    for (const p of data.removed) {
+      const { id, deleted: _d, ...body } = p as Payee & { deleted?: boolean };
+      await this.put('payees', id, body, 'payee.update');
+    }
+    await this.put('payee_merges', mergeId, { ...data, undone: true }, 'payee.merge.undo', undefined, null);
     return { ok: true, value: undefined };
   }
 
