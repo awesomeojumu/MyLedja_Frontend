@@ -31,13 +31,16 @@ export function RangeBar({
   onChange,
   compare,
   onCompareChange,
+  /** When true, always show presets inline (e.g. already inside Report builder's phone Edit sheet). */
+  embedded = false,
 }: {
   range: DateRange;
   onChange: (r: DateRange) => void;
   compare?: boolean;
   onCompareChange?: (v: boolean) => void;
+  embedded?: boolean;
 }) {
-  const phone = useSizeClass() === 'phone';
+  const phone = useSizeClass() === 'phone' && !embedded;
   const [preset, setPreset] = useState<Preset>('thisMonth');
   const [filtersOpen, setFiltersOpen] = useState(false);
 

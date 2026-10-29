@@ -156,6 +156,7 @@ export function ReportBuilderScreen() {
         options={CHARTS.map((k) => ({ value: k, label: t(`reports.chart.${k}` as TextKey) }))}
       />
       <RangeBar
+        embedded
         range={range}
         onChange={(r) => {
           setDirty(true);

@@ -125,8 +125,15 @@ function BarShape({ x, width, height, fill, testID }: { x: number; width: number
   return <Path testID={testID} d={d} fill={fill} />;
 }
 
-/** A 2.2px primary line; the latest point is gold, which is that view's gold mark. */
-export function LineChart({ goldLatest = true, ...props }: Omit<Frame, 'children'> & { goldLatest?: boolean }) {
+/**
+ * A 2.2px primary line; the latest point is gold, which is that view's gold mark.
+ * `filled` draws a closed area under the line (DESIGN report builder "area" chart).
+ */
+export function LineChart({
+  goldLatest = true,
+  filled = false,
+  ...props
+}: Omit<Frame, 'children'> & { goldLatest?: boolean; filled?: boolean }) {
   const theme = useTheme();
   const values = props.rows.map((p) => p.value);
   const min = values.reduce((m, v) => (v < m ? v : m), values[0] ?? 0n);
@@ -138,9 +145,15 @@ export function LineChart({ goldLatest = true, ...props }: Omit<Frame, 'children
         const pts = props.rows.map((p, i) => ({ x: 4 + i * step, y: 4 + (1 - y(p.value - min)) * (HEIGHT - 8) }));
         const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
         const last = pts.at(-1);
+        const first = pts[0];
+        const area =
+          filled && pts.length > 1 && first && last
+            ? `${d} L${last.x},${HEIGHT} L${first.x},${HEIGHT} Z`
+            : null;
         return (
           <Svg width={width} height={HEIGHT}>
             <SvgLine x1={0} x2={width} y1={HEIGHT - 0.5} y2={HEIGHT - 0.5} stroke={theme.border} strokeWidth={1} />
+            {area ? <Path testID="chart-area-fill" d={area} fill={c['primary-soft']} stroke="none" /> : null}
             {pts.length > 1 ? <Path d={d} stroke={theme.primaryFill} strokeWidth={2.2} fill="none" /> : null}
             {last ? <Circle testID="chart-latest" cx={last.x} cy={last.y} r={4} fill={goldLatest ? c.gold : theme.primaryFill} /> : null}
           </Svg>

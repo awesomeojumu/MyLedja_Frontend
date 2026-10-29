@@ -87,4 +87,23 @@ describe('Report builder (Page 21)', () => {
     fireEvent.press(screen.getByTestId('builder-filters'));
     await waitFor(() => expect(screen.getByTestId('tx-filters-sheet')).toBeTruthy());
   });
+
+  it('P0 #3: area chart mounts filled LineChart (see builder-preview.split + charts filled tests)', async () => {
+    const { sync } = await seeded();
+    await openBuilder(sync);
+    await act(async () => {
+      fireEvent.press(screen.getAllByRole('radio', { name: t('reports.chart.area') })[0]!);
+    });
+    // Empty seed has 0 series points so Path is skipped; assert area chart frame + table switch.
+    expect(await screen.findByTestId('builder-preview-chart')).toBeTruthy();
+    expect(screen.getByTestId('builder-preview-chart-switch')).toBeTruthy();
+  });
+
+  it('TB-14 / P1 #7: builder RangeBar is embedded (no nested range-filters)', async () => {
+    const { sync } = await seeded();
+    await openBuilder(sync);
+    expect(screen.getByTestId('range-presets')).toBeTruthy();
+    expect(screen.queryByTestId('range-filters')).toBeNull();
+  });
 });
+
