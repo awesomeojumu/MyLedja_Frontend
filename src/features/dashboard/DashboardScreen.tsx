@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 
-import { Amount, BarChart, Button, Card, DonutChart, LineChart, Placeholder, StatusPill, Text, formatDay } from '@/design/components';
+import { Amount, BarChart, Button, Card, DonutChart, LineChart, Placeholder, StatusPill, Text, formatDay, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
+import { useSizeClass } from '@/design/size';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { monthLabel, nextMonth, prevMonth } from '@/features/budget/helpers';
 import { AppFrame } from '@/features/frame/AppFrame';
@@ -17,7 +18,7 @@ import { monthOf } from '@/ledger';
 
 import { CustomizeDashboardSheet } from './CustomizeDashboardSheet';
 import { checklist, dashboardModel, type ComingUpRow } from './helpers';
-import { resolveDashboardLayout, toStoredLayout, visibleDashboardCards, type DashboardLayout, type DashboardCardId } from './layout';
+import { resolveLayoutForDevice, visibleDashboardCards, withStoredLayoutForDevice, type DashboardLayout, type DashboardCardId } from './layout';
 
 const sp = tokens.spacing;
 
@@ -31,15 +32,18 @@ export function DashboardScreen() {
   const { snapshot, repo } = useWorkspace();
   const { user } = useAuth();
   const theme = useTheme();
+  const toast = useToast();
   const router = useRouter();
+  const size = useSizeClass();
+  const params = useGlobalSearchParams<{ customize?: string }>();
+  const customizeOpen = params.customize === '1';
   const [month, setMonth] = useState(() => monthOf(today()));
   const [checklistHidden, setChecklistHidden] = useState(false);
-  const [customizeOpen, setCustomizeOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const model = useMemo(() => (snapshot ? dashboardModel(snapshot, month) : null), [snapshot, month]);
   const items = useMemo(() => (snapshot ? checklist(snapshot, checklistHidden || !!snapshot.settings.checklistHidden) : []), [snapshot, checklistHidden]);
-  const layout = useMemo(() => resolveDashboardLayout(snapshot?.settings.dashboardLayout), [snapshot?.settings.dashboardLayout]);
+  const layout = useMemo(() => resolveLayoutForDevice(snapshot?.settings, size), [snapshot?.settings, size]);
   const cards = useMemo(() => visibleDashboardCards(layout), [layout]);
 
   const hideChecklist = () => {
@@ -47,9 +51,13 @@ export function DashboardScreen() {
     if (snapshot) void repo.updateSettings({ ...snapshot.settings, checklistHidden: true });
   };
 
-  const saveLayout = (next: DashboardLayout) => {
+  const openCustomize = () => router.setParams({ customize: '1' });
+  const closeCustomize = () => router.setParams({ customize: undefined });
+
+  const saveLayout = async (next: DashboardLayout) => {
     if (!snapshot) return;
-    void repo.updateSettings({ ...snapshot.settings, dashboardLayout: toStoredLayout(next) });
+    await repo.updateSettings(withStoredLayoutForDevice(snapshot.settings, size, next));
+    toast.show(t('dashboard.layoutSaved'));
   };
 
   const onRefresh = useCallback(async () => {
@@ -324,7 +332,7 @@ export function DashboardScreen() {
               <ChevronRight size={20} color={theme.textSecondary} />
             </Pressable>
           </View>
-          <Button testID="dashboard-customize" kind="link" label={t('dashboard.customize')} onPress={() => setCustomizeOpen(true)} />
+          <Button testID="dashboard-customize" kind="link" label={t('dashboard.customize')} onPress={openCustomize} />
         </View>
 
         {!model ? (
@@ -333,7 +341,7 @@ export function DashboardScreen() {
           cards.map((id) => renderCard(id))
         )}
       </ScrollView>
-      <CustomizeDashboardSheet visible={customizeOpen} layout={layout} onClose={() => setCustomizeOpen(false)} onSave={saveLayout} />
+      <CustomizeDashboardSheet visible={customizeOpen} layout={layout} onClose={closeCustomize} onSave={saveLayout} />
     </AppFrame>
   );
 }

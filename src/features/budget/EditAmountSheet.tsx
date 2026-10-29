@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { AmountInput, Button, Sheet, Switch, Text, TextInput } from '@/design/components';
+import { AmountInput, Button, Confirm, Footer, Sheet, Switch, Text, TextInput } from '@/design/components';
 import tokens from '@/design/tokens.json';
+import { useTheme } from '@/design/ThemeProvider';
+import { useSizeClass } from '@/design/size';
 import type { Category } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { t } from '@/i18n';
@@ -12,11 +14,43 @@ import {
   assignNoteOf,
   assignedOf,
   prevMonth,
+  rowFor,
   templateAmountForCategory,
   threeMonthAverage,
 } from './helpers';
+import { warningHaptic } from './haptics';
 
 const sp = tokens.spacing;
+
+function Chip({
+  testID,
+  label,
+  onPress,
+}: {
+  testID?: string;
+  label: string;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        paddingHorizontal: sp['spacing-md'],
+        paddingVertical: sp['spacing-sm'],
+        borderRadius: tokens.radius['rounded-md'],
+        borderWidth: 1,
+        borderColor: theme.border,
+        minHeight: 44,
+        justifyContent: 'center',
+      }}
+    >
+      <Text variant="caption">{label}</Text>
+    </Pressable>
+  );
+}
 
 export function EditAmountSheet({
   visible,
@@ -34,18 +68,19 @@ export function EditAmountSheet({
   category: Category | undefined;
   month: string;
   snapshot: Snapshot;
-  /** Flat category ids in display order for Next (#7). */
   categoryOrder: string[];
   onClose: () => void;
   onSave: (amount: bigint, opts: { carryOver: boolean; note: string }) => Promise<void>;
   onNext?: (nextId: string) => void;
 }) {
+  const phone = useSizeClass() === 'phone';
   const [editText, setEditText] = useState('');
   const [editMinor, setEditMinor] = useState<bigint | null>(null);
   const [carryOver, setCarryOver] = useState(false);
   const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
-  // Fill the form each time it opens for a category and month (not on every snapshot refresh).
   const openKey = visible && categoryId ? `${categoryId}:${month}` : null;
   const [filledFor, setFilledFor] = useState<string | null>(null);
   if (openKey !== filledFor) {
@@ -56,8 +91,16 @@ export function EditAmountSheet({
       setEditMinor(assigned);
       setCarryOver(category?.carryOver ?? false);
       setNote(assignNoteOf(snapshot, categoryId, month));
+      setBusy(false);
     }
   }
+
+  const initialAssigned = categoryId ? assignedOf(snapshot, categoryId, month) : 0n;
+  const initialNote = categoryId ? assignNoteOf(snapshot, categoryId, month) : '';
+  const dirty =
+    (editMinor ?? 0n) !== initialAssigned ||
+    note !== initialNote ||
+    carryOver !== (category?.carryOver ?? false);
 
   const templateAmount = useMemo(
     () => (categoryId ? templateAmountForCategory(snapshot, categoryId, month) : null),
@@ -71,73 +114,109 @@ export function EditAmountSheet({
     return categoryOrder[i + 1] ?? null;
   }, [categoryId, categoryOrder]);
 
-  const save = async () => {
-    if (editMinor === null || editMinor < 0n) return;
-    await onSave(editMinor, { carryOver, note });
-  };
+  // Envelope: always (addendum). Tracking: always so carry can be turned on (existing P06-12).
+  const showCarry = true;
 
-  const saveAndNext = async () => {
-    await save();
-    if (nextId && onNext) onNext(nextId);
+  const requestClose = () => (dirty ? setConfirmDiscard(true) : onClose());
+
+  const save = async (andNext: boolean) => {
+    if (editMinor === null || editMinor < 0n || busy || !categoryId) return;
+    setBusy(true);
+    try {
+      const row = rowFor(snapshot, month, categoryId);
+      const plan = editMinor;
+      if (plan < row.activity && phone) warningHaptic();
+      await onSave(editMinor, { carryOver, note });
+      if (andNext && nextId && onNext) onNext(nextId);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <Sheet
-      visible={visible && categoryId !== null}
-      title={t('budget.editAmount', { name: category?.name ?? '' })}
-      onClose={onClose}
-      testID="budget-edit-sheet"
-      footer={
-        <View style={{ gap: sp['spacing-sm'] }}>
-          <Button testID="budget-edit-save" label={t('budget.save')} onPress={() => void save()} disabled={editMinor === null || editMinor < 0n} />
-          {nextId ? (
-            <Button testID="budget-edit-next" kind="secondary" label={t('budget.editNext')} onPress={() => void saveAndNext()} disabled={editMinor === null || editMinor < 0n} />
-          ) : null}
-        </View>
-      }
-    >
-      <AmountInput label={t('budget.col.planned')} value={editText} onChange={(text, minor) => { setEditText(text); setEditMinor(minor); }} testID="budget-edit-amount" />
-      {categoryId ? (
-        <View style={{ gap: sp['spacing-xs'] }}>
-          <Button
-            kind="link"
-            label={t('budget.quickLastMonth', { amount: formatNaira(assignedOf(snapshot, categoryId, prevMonth(month))) })}
-            onPress={() => {
-              const v = assignedOf(snapshot, categoryId, prevMonth(month));
-              setEditMinor(v);
-              setEditText(toInputText(v));
-            }}
-          />
-          <Button
-            kind="link"
-            label={t('budget.quickThreeMonthAvg', { amount: formatNaira(threeMonthAverage(snapshot, categoryId, month)) })}
-            onPress={() => {
-              const v = threeMonthAverage(snapshot, categoryId, month);
-              setEditMinor(v);
-              setEditText(toInputText(v));
-            }}
-          />
-          {templateAmount !== null ? (
+    <>
+      <Sheet
+        visible={visible && categoryId !== null}
+        title={t('budget.editAmount', { name: category?.name ?? '' })}
+        onClose={requestClose}
+        testID="budget-edit-sheet"
+        width={phone ? 480 : 420}
+        footer={
+          <Footer>
+            <Button kind="secondary" label={t('common.cancel')} onPress={requestClose} disabled={busy} />
             <Button
-              testID="budget-edit-template-pick"
-              kind="link"
-              label={t('budget.quickTemplate', { amount: formatNaira(templateAmount) })}
+              testID="budget-edit-save"
+              label={t('budget.savePlan')}
+              onPress={() => void save(false)}
+              disabled={editMinor === null || editMinor < 0n || busy}
+            />
+          </Footer>
+        }
+      >
+        <AmountInput
+          label={t('budget.plannedFor', { name: category?.name ?? '' })}
+          value={editText}
+          onChange={(text, minor) => {
+            setEditText(text);
+            setEditMinor(minor);
+          }}
+          testID="budget-edit-amount"
+        />
+        {categoryId ? (
+          <View testID="budget-edit-quick-picks" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
+            <Chip
+              label={t('budget.quickLastMonth', { amount: formatNaira(assignedOf(snapshot, categoryId, prevMonth(month))) })}
               onPress={() => {
-                setEditMinor(templateAmount);
-                setEditText(toInputText(templateAmount));
+                const v = assignedOf(snapshot, categoryId, prevMonth(month));
+                setEditMinor(v);
+                setEditText(toInputText(v));
               }}
             />
-          ) : null}
-        </View>
-      ) : null}
-      {snapshot.settings.budgetStyle === 'tracking' ? (
-        <Switch testID="budget-edit-carry" label={t('budget.carryOverSwitch')} value={carryOver} onChange={setCarryOver} />
-      ) : (
-        <Text variant="caption" tone="textSecondary">
-          {t('budget.carryOverEnvelopeHint')}
-        </Text>
-      )}
-      <TextInput testID="budget-edit-note" label={t('budget.planNote')} value={note} onChangeText={setNote} multiline />
-    </Sheet>
+            <Chip
+              label={t('budget.quickThreeMonthAvg', { amount: formatNaira(threeMonthAverage(snapshot, categoryId, month)) })}
+              onPress={() => {
+                const v = threeMonthAverage(snapshot, categoryId, month);
+                setEditMinor(v);
+                setEditText(toInputText(v));
+              }}
+            />
+            {templateAmount !== null ? (
+              <Chip
+                testID="budget-edit-template-pick"
+                label={t('budget.quickTemplate', { amount: formatNaira(templateAmount) })}
+                onPress={() => {
+                  setEditMinor(templateAmount);
+                  setEditText(toInputText(templateAmount));
+                }}
+              />
+            ) : null}
+          </View>
+        ) : null}
+        {showCarry ? (
+          <Switch testID="budget-edit-carry" label={t('budget.carryOverSwitch')} value={carryOver} onChange={setCarryOver} />
+        ) : null}
+        <TextInput testID="budget-edit-note" label={t('budget.notesOptional')} value={note} onChangeText={setNote} multiline />
+        {nextId ? (
+          <Button
+            testID="budget-edit-next"
+            kind="secondary"
+            label={phone ? t('budget.editNext') : t('budget.editNext')}
+            onPress={() => void save(true)}
+            disabled={editMinor === null || editMinor < 0n || busy}
+          />
+        ) : null}
+      </Sheet>
+      <Confirm
+        visible={confirmDiscard}
+        title={t('common.discardTitle')}
+        body={t('common.discardBody')}
+        confirmLabel={t('common.discardConfirm')}
+        onCancel={() => setConfirmDiscard(false)}
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          onClose();
+        }}
+      />
+    </>
   );
 }
