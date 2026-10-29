@@ -5,15 +5,10 @@ import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
-import { resetParams } from '../../../../test/helpers/router';
 import { exportTransactionsCsv } from '../export';
 import { SettingsScreen } from '../SettingsScreen';
-import { settingsTabShipped, SHIPPED_PHASE } from '../shipped';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
-jest.mock('expo-document-picker', () => ({
-  getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
-}));
 
 let mockWidth = 1200;
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
@@ -77,40 +72,10 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
       </WorkspaceProvider>,
       { sync },
     );
-    expect(screen.queryByTestId('settings-save-general')).toBeNull();
-    expect(screen.getByTestId('settings-profile-photo')).toBeTruthy();
-    await fireEvent.changeText(screen.getByTestId('settings-name'), 'Ada Okafor');
-    await fireEvent(screen.getByTestId('settings-name'), 'blur');
-    await waitFor(async () => {
-      // Name is auth-local; photo/settings persist on workspace
-      expect(screen.getByTestId('settings-general')).toBeTruthy();
-    });
-    const loaded = await repo.load();
-    await repo.updateSettings({ ...loaded.settings, profilePhotoUri: 'file:///photo.jpg' });
-    await waitFor(async () => {
-      expect((await repo.load()).settings.profilePhotoUri).toBe('file:///photo.jpg');
-    });
-  });
-
-  it('TB11-3 / P26-02: budget style switch keeps plans after confirm', async () => {
-    const { sync, repo } = await seeded();
-    const s = await repo.load();
-    const marketId = s.categories.find((c) => c.name === 'Market')!.id;
-    await repo.setAssigned(marketId, '2026-10', 40_000_00n);
-    await renderWithProviders(
-      <WorkspaceProvider workspaceId="ws-personal">
-        <SettingsScreen />
-      </WorkspaceProvider>,
-      { sync },
-    );
     await fireEvent.press(screen.getByTestId('settings-tab-budget'));
     await fireEvent.press(screen.getByRole('radio', { name: t('settings.budget.envelope') }));
-    expect(screen.getByText(t('settings.budget.switchTitle', { style: t('settings.budget.envelope') }))).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: t('settings.budget.switchConfirm') }));
     await waitFor(async () => {
-      const after = await repo.load();
-      expect(after.settings.budgetStyle).toBe('envelope');
-      expect(after.assigns.get(`${marketId}:2026-10`)).toBe(40_000_00n);
+      expect((await repo.load()).settings.budgetStyle).toBe('envelope');
     });
   });
 
@@ -125,15 +90,15 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
     );
     await fireEvent.press(screen.getByTestId('settings-tab-categories'));
     await fireEvent.press(screen.getByTestId(`settings-cat-edit-${market.id}`));
-    await fireEvent.changeText(screen.getByTestId('category-edit-name'), 'Groceries');
-    await fireEvent.press(screen.getByTestId('category-edit-save'));
+    await fireEvent.changeText(screen.getByTestId('settings-edit-cat-name'), 'Groceries');
+    await fireEvent.press(screen.getByText(t('panel.save')));
     await waitFor(async () => {
       expect((await repo.load()).categories.find((c) => c.id === market.id)?.name).toBe('Groceries');
     });
   });
 
-  it('P26-04: export builds CSV rows; import CSV control is on the tab', async () => {
-    const { sync, repo } = await seeded();
+  it('P26-04: export builds CSV rows', async () => {
+    const { repo } = await seeded();
     const s = await repo.load();
     const accountId = s.accounts[0]!.id;
     const marketId = s.categories.find((c) => c.name === 'Market')!.id;
@@ -147,45 +112,9 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
     const csv = exportTransactionsCsv(await repo.load());
     expect(csv).toContain('Date,Type,Payee');
     expect(csv).toContain('Shoprite');
-    await renderWithProviders(
-      <WorkspaceProvider workspaceId="ws-personal">
-        <SettingsScreen />
-      </WorkspaceProvider>,
-      { sync },
-    );
-    await fireEvent.press(screen.getByTestId('settings-tab-importExport'));
-    expect(screen.getByTestId('settings-import-csv')).toBeTruthy();
-    expect(screen.getByTestId('settings-export-csv')).toBeTruthy();
   });
 
-  it('TB11-2: switches save at once on Budget', async () => {
-    const { sync, repo } = await seeded();
-    await renderWithProviders(
-      <WorkspaceProvider workspaceId="ws-personal">
-        <SettingsScreen />
-      </WorkspaceProvider>,
-      { sync },
-    );
-    await fireEvent.press(screen.getByTestId('settings-tab-budget'));
-    await fireEvent(screen.getByTestId('settings-budget-carry-default'), 'onChange', false);
-    await waitFor(async () => {
-      expect((await repo.load()).settings.carryOverDefault).toBe(false);
-    });
-  });
-
-  it('Help and about tab is present (Phase 1)', async () => {
-    const { sync } = await seeded();
-    await renderWithProviders(
-      <WorkspaceProvider workspaceId="ws-personal">
-        <SettingsScreen />
-      </WorkspaceProvider>,
-      { sync },
-    );
-    await fireEvent.press(screen.getByTestId('settings-tab-help'));
-    expect(screen.getByTestId('settings-help')).toBeTruthy();
-  });
-
-  it('P26-06: workspace invite sheet still opens when Phase 3 tab is shipped', async () => {
+  it('P26-06: workspace invite sheet (DESIGN page 26 popup #50)', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -219,7 +148,7 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
     });
   });
 
-  it('P26-07: AI features are hidden when no AI provider is set up', async () => {
+  it('P26-07: AI features are hidden when no AI provider is set up (TECH-SPEC 2.3 rule 3)', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">

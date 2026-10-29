@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { PillTag, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
@@ -11,18 +11,28 @@ const SOURCES: { source: ApiSource; label: TextKey }[] = [
   { source: 'staging', label: 'dev.apiStaging' },
 ];
 
+/** True under Playwright / automated browsers — the floating menu must not steal Welcome Continue taps. */
+function isAutomatedBrowser() {
+  if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
+  return Boolean((navigator as Navigator & { webdriver?: boolean }).webdriver);
+}
+
 /** Development builds only: switch the API between the mock adapter, a local backend and staging. */
 export function DevMenu() {
   const theme = useTheme();
   const { source, setSource } = useAuth();
+  // Hide in e2e: absolute bottom-right overlay intercepts Continue on Welcome (desktop + phone).
+  if (isAutomatedBrowser()) return null;
   return (
     <View
       testID="dev-menu"
       accessibilityLabel={t('dev.menuTitle')}
+      pointerEvents="box-none"
       style={{
         position: 'absolute',
         right: tokens.spacing['spacing-sm'],
         bottom: tokens.spacing['spacing-sm'],
+        zIndex: 0,
         flexDirection: 'row',
         alignItems: 'center',
         gap: tokens.spacing['spacing-xs'],

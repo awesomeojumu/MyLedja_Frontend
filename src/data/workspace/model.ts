@@ -30,10 +30,6 @@ export type Account = {
   last4?: string;
   countInBudget: boolean;
   archived: boolean;
-  /** Archived while still holding a balance; still counts in net worth (PU-15). */
-  closedWithBalance?: boolean;
-  /** ISO date the account was opened / created (TB-03 Details). */
-  openedAt?: string;
   order: number;
   /** The last CSV column mapping used for this account (P09-05). */
   importMapping?: ImportMapping;
@@ -65,8 +61,6 @@ export type Category = {
   group: string;
   /** For starter categories, the catalogue key; the name follows the person's edits. */
   key?: TextKey;
-  /** Lucide icon name (PU-11). */
-  icon?: string | null;
   /** Hide from the Budget page (P07-05). */
   hidden: boolean;
   countInBudget: boolean;
@@ -74,8 +68,6 @@ export type Category = {
   budgetType: BudgetType;
   /** Tracking style: leftover carries when on (TECH-SPEC 6.6). */
   carryOver: boolean;
-  /** Counts towards runway in Health (PU-11 / TECH-SPEC 6.10). */
-  essential?: boolean;
   /** Soft-deleted after reassignment (Q-18); filtered out of the snapshot. */
   deleted?: boolean;
 };
@@ -267,22 +259,13 @@ export const DEFAULT_DEVICE_SYNC: DeviceSyncPrefs = {
   lastSyncedLabel: undefined,
 };
 
-/** Settings › Categories and tags — tag list (DESIGN page 26). */
-export type WorkspaceTag = { id: string; name: string };
-
 /** Workspace preferences chosen in Welcome and Settings (Phase 1 subset). */
 export type WorkspaceSettings = {
   budgetStyle: BudgetStyle;
   currency: string;
   weekStart: 'monday' | 'sunday' | 'saturday';
-  /** Workspace display name (TB-11 Workspace). */
-  workspaceName?: string;
-  /** Default Africa/Lagos (TB-11 Workspace). */
-  timeZone?: string;
   checklistHidden?: boolean;
-  /** Larger screens (tablet+); phone layout is `dashboardLayoutPhone` (PU-06). */
   dashboardLayout?: DashboardLayout;
-  dashboardLayoutPhone?: DashboardLayout;
   notificationPrefs?: NotificationPrefs;
   aiPrefs?: AiFeaturePrefs;
   carryOverDefault?: boolean;
@@ -361,21 +344,14 @@ export const budgetAssignId = (categoryId: string, month: string) => `${category
 export type Goal = {
   id: string;
   name: string;
-  icon?: string;
-  notes?: string;
   targetMinor: string;
   targetDate?: string;
   accountId: string;
   categoryId?: string;
   status: 'active' | 'paused' | 'completed';
-  completedAt?: string;
-  /** Optional monthly schedule (P14-04 / PU-33). */
+  /** Optional monthly schedule (P14-04). */
   scheduleAmountMinor?: string;
   scheduleDayOfMonth?: number;
-  scheduleEvery?: 'week' | 'month';
-  scheduleStarts?: string;
-  /** When true, allocate on the day without asking (PU-33). */
-  scheduleAutoAllocate?: boolean;
 };
 
 /** Earmark into a goal (TECH-SPEC E18); amounts are kobo strings. */
@@ -411,8 +387,6 @@ export type Recurring = {
   amountMinor: string;
   approximate?: boolean;
   accountId: string;
-  /** Transfer destination (PU-25). */
-  toAccountId?: string;
   categoryId?: string;
   payeeId?: string;
   rule: RecurrenceRule;
@@ -421,17 +395,11 @@ export type Recurring = {
   autoCreate?: boolean;
   /** DESIGN #25 — stop after this many occurrences (optional; endDate also ends the series). */
   endAfterCount?: number;
-  /**
-   * Days before due: 0 = on the day, 1, 3, or 7.
-   * Omit / undefined = Off (PU-25 Remind me).
-   */
+  /** Days before due: 0 = on the day, 1, 3, or 7. */
   reminderDays?: number;
   /** DESIGN #25 — hide amount on lock screen (default on). */
   hideAmountOnLock?: boolean;
-  /** Soft-deleted / cancelled schedule. */
   cancelled?: boolean;
-  /** TB-04 / PU-25 — paused: shown as Paused, creates no reminders. */
-  paused?: boolean;
 };
 
 export type RecurringOccurrence = {
@@ -480,8 +448,6 @@ export type IncomeStream = {
   categoryId: string;
   rule: RecurrenceRule;
   countInBudget: boolean;
-  /** Source or employer (PU-29). */
-  source?: string;
   /** For tax-class report (P13-08). */
   taxClass?: string;
   amountKind?: IncomeAmountKind;
@@ -497,11 +463,6 @@ export type IncomeStream = {
 export type DebtDirection = 'owedToMe' | 'iOwe';
 
 /** Person debt (DESIGN.md page 15); bank loans use account type loan instead. */
-export type DebtInterest =
-  | { kind: 'none' }
-  | { kind: 'fixed'; amountMinor: string }
-  | { kind: 'percent_month'; percent: number };
-
 export type PersonDebt = {
   id: string;
   name: string;
@@ -509,12 +470,9 @@ export type PersonDebt = {
   /** Ledger account id for R (asset) or P (liability). */
   ledgerAccountId: string;
   payeeId?: string;
-  status: 'open' | 'settled' | 'written_off';
+  status: 'open' | 'settled';
   nextDueDate?: string;
   notes?: string;
-  interest?: DebtInterest;
-  /** Credit kept after an overpayment (TECH-SPEC 6.9). */
-  creditMinor?: string;
   /** Instalment plan (DESIGN popup #36). */
   scheduleInstallmentCount?: number;
   scheduleAmountMinor?: string;
