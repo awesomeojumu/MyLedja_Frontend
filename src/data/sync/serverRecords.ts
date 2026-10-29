@@ -1,6 +1,9 @@
 import type {
   AccountKind,
   Goal,
+  IncomeDeduction,
+  IncomeDeductionKind,
+  IncomeRouting,
   IncomeStream,
   IncomeStreamKind,
   PersonDebt,
@@ -59,6 +62,76 @@ const STREAM_KIND_TO: Record<IncomeStreamKind, string> = { regular: 'regular', v
 
 const minorOrUndefined = (v: unknown) => (typeof v === 'string' ? v : undefined);
 
+const TAX_CLASS_TO_SERVER: Record<string, string> = {
+  PAYE: 'paye',
+  'Self-employed': 'self_employed',
+  Rental: 'rental',
+  Investment: 'investment',
+  Other: 'other',
+  paye: 'paye',
+  self_employed: 'self_employed',
+  rental: 'rental',
+  investment: 'investment',
+  other: 'other',
+};
+
+const TAX_CLASS_FROM_SERVER: Record<string, string> = {
+  paye: 'PAYE',
+  self_employed: 'Self-employed',
+  rental: 'Rental',
+  investment: 'Investment',
+  other: 'Other',
+};
+
+function taxClassToServer(v: string | undefined): string {
+  if (!v) return 'other';
+  return TAX_CLASS_TO_SERVER[v] ?? 'other';
+}
+
+function taxClassFromServer(v: unknown): string | undefined {
+  const s = str(v);
+  if (!s) return undefined;
+  return TAX_CLASS_FROM_SERVER[s] ?? s;
+}
+
+function deductionKindFromLabel(label: string | undefined): IncomeDeductionKind {
+  const l = (label ?? '').toLowerCase();
+  if (l.includes('paye') || l.includes('tax')) return 'paye';
+  if (l.includes('pension')) return 'pension';
+  if (l.includes('nhf')) return 'nhf';
+  return 'other';
+}
+
+function deductionsFromServer(raw: unknown): IncomeDeduction[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  return raw.map((row) => {
+    const d = row as Doc;
+    const label = str(d.label);
+    return {
+      kind: deductionKindFromLabel(label),
+      label,
+      amountMinor: minorOrUndefined(d.amount),
+      percent: typeof d.percentBasisPoints === 'number' ? d.percentBasisPoints / 100 : undefined,
+      targetCategoryId: str(d.categoryId) ?? undefined,
+      targetAccountId: str(d.ledgerAccountId) ?? undefined,
+    };
+  });
+}
+
+function routingFromServer(raw: unknown): IncomeRouting[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  return raw.map((row) => {
+    const d = row as Doc;
+    return {
+      goalId: str(d.goalId) ?? undefined,
+      categoryId: str(d.categoryId) ?? undefined,
+      amountMinor: minorOrUndefined(d.amount),
+      percent: typeof d.percentBasisPoints === 'number' ? d.percentBasisPoints / 100 : undefined,
+      restToBudget: d.remainderToBudget === true,
+    };
+  });
+}
+
 function eventFromServer(doc: Doc, workspaceId: string): StoredEvent & { operationId: string } {
   const lines = (doc.lines as Doc[] | undefined) ?? [];
   const links = (doc.links as Doc | undefined) ?? {};
@@ -82,6 +155,7 @@ function eventFromServer(doc: Doc, workspaceId: string): StoredEvent & { operati
     goalId: str(links.goalId),
     debtId: str(links.debtId),
     recurringId: str(links.scheduleId),
+    oneOff: doc.oneOff === true ? true : undefined,
   };
 }
 
@@ -230,12 +304,15 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         categoryId: str(d.categoryId) ?? '',
         rule: recurrenceFromServer(d.recurrence as Doc, start),
         countInBudget: d.countInBudget !== false,
-        taxClass: str(d.taxClass),
+        taxClass: taxClassFromServer(d.taxClass),
+        source: str(d.employerOrSource) ?? undefined,
         amountKind: range ? 'range' : d.amountApproximate ? 'approximate' : 'exact',
         rangeMinMinor: minorOrUndefined(range?.min),
         rangeMaxMinor: minorOrUndefined(range?.max),
         recordMode: d.recordAs === 'gross' ? 'gross' : 'takeHome',
         grossMinor: minorOrUndefined(d.grossAmount),
+        deductions: deductionsFromServer(d.deductions),
+        routing: routingFromServer(d.routing),
         reminder: days.length === 0 ? 'none' : days[0] === 0 ? 'sameDay' : (String(days[0]) as IncomeStream['reminder']),
       };
       return rec('income_streams', id, data);
@@ -291,6 +368,7 @@ export function incomeStreamBody(id: string, s: Omit<IncomeStream, 'id'>, startD
   return {
     id,
     name: s.name,
+    employerOrSource: s.source?.trim() ? s.source.trim() : null,
     streamKind: STREAM_KIND_TO[s.kind],
     accountId: s.accountId,
     categoryId: s.categoryId,
@@ -299,7 +377,7 @@ export function incomeStreamBody(id: string, s: Omit<IncomeStream, 'id'>, startD
     amountApproximate: s.amountKind === 'approximate',
     recurrence: recurrenceToServer(s.rule),
     startDate,
-    taxClass: (['paye', 'self_employed', 'rental', 'investment', 'other'].includes(s.taxClass ?? '') ? s.taxClass : 'other') as string,
+    taxClass: taxClassToServer(s.taxClass),
     countInBudget: s.countInBudget,
     recordAs: s.recordMode === 'gross' ? 'gross' : 'take_home',
     grossAmount: s.grossMinor ?? null,

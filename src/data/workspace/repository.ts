@@ -12,6 +12,7 @@ import {
   buildCollect,
   buildExpense,
   buildIncome,
+  buildSalaryGross,
   buildInvestmentBuy,
   buildInvestmentSell,
   buildLend,
@@ -1684,6 +1685,29 @@ export class WorkspaceRepository {
     const snapshot = await this.load();
     const stream = snapshot.incomeStreams.find((s) => s.id === streamId);
     if (!stream) return { ok: false, error: 'missing_lines' };
+    const { grossSplitParts } = await import('@/features/income/grossSplit');
+    const split = grossSplitParts(stream);
+    // Full E24 when recording the take-home (or more) for a gross stream (case 18).
+    if (split && input.amount >= split.takeHome) {
+      const lines = buildSalaryGross(snapshot.chart, {
+        accountId: input.accountId,
+        categoryId: stream.categoryId,
+        gross: split.gross,
+        takeHome: split.takeHome,
+        paye: split.paye,
+        pensionAccountId: split.pensionAccountId,
+        pension: split.pension,
+        nhfAccountId: split.nhfAccountId,
+        nhf: split.nhf,
+      });
+      if (!lines.ok) return lines;
+      return this.postEvent(snapshot.chart, snapshot.events, {
+        type: 'salary_gross',
+        date: input.date,
+        lines: lines.value,
+        incomeStreamId: streamId,
+      });
+    }
     const lines = buildIncome(snapshot.chart, { accountId: input.accountId, categoryId: stream.categoryId, amount: input.amount });
     if (!lines.ok) return lines;
     return this.postEvent(snapshot.chart, snapshot.events, {
@@ -2056,7 +2080,17 @@ export class WorkspaceRepository {
     const rec = await this.store.read('events', eventId);
     if (!rec) return;
     const data = { ...(rec.data as StoredEvent), incomeStreamId: undefined, oneOff: true };
-    await this.engine.save({ ...rec, data }, 'event.one_off', { collection: 'events', id: eventId, data }, rec.version);
+    await this.engine.save(
+      { ...rec, data },
+      'event.one_off',
+      {
+        collection: 'events',
+        id: eventId,
+        data,
+        remote: { type: 'income.mark_one_off', targetId: eventId, payload: { baseVersion: rec.version } },
+      },
+      rec.version,
+    );
   }
 
   /** E19: expense linked to a goal; lowers earmarked savings without budget overspend messaging in UI. */

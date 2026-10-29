@@ -32,10 +32,15 @@ export type TwelveMonthPoint = {
   byStream: { streamId: string; name: string; amount: bigint }[];
 };
 
+/** Income page counts plain income and E24 salary_gross toward a stream. */
+export function isStreamIncomeEvent(e: { type: string; oneOff?: boolean }): boolean {
+  return (e.type === 'income' || e.type === 'salary_gross') && !e.oneOff;
+}
+
 function receivedForStreamInMonth(stream: IncomeStream, snapshot: Snapshot, month: string): bigint {
   let received = 0n;
   for (const e of snapshot.events) {
-    if (e.status !== 'posted' || e.type !== 'income' || e.incomeStreamId !== stream.id || e.oneOff) continue;
+    if (e.status !== 'posted' || !isStreamIncomeEvent(e) || e.incomeStreamId !== stream.id) continue;
     if (monthOf(e.date) !== month) continue;
     for (const l of e.lines) {
       const account = snapshot.chart.get(l.ledgerAccountId);
@@ -43,6 +48,25 @@ function receivedForStreamInMonth(stream: IncomeStream, snapshot: Snapshot, mont
     }
   }
   return received;
+}
+
+function earliestReceiptDate(stream: IncomeStream, snapshot: Snapshot, month: string): string | null {
+  let earliest: string | null = null;
+  for (const e of snapshot.events) {
+    if (e.status !== 'posted' || !isStreamIncomeEvent(e) || e.incomeStreamId !== stream.id) continue;
+    if (monthOf(e.date) !== month) continue;
+    if (!earliest || e.date < earliest) earliest = e.date;
+  }
+  return earliest;
+}
+
+/** Due date for a stream in a calendar month (YYYY-MM-DD), or null when irregular. */
+export function streamDueDateInMonth(stream: IncomeStream, month: string): string | null {
+  if (stream.kind === 'irregular') return null;
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const day = Math.min(Math.max(1, stream.rule.on), lastDay);
+  return `${month}-${String(day).padStart(2, '0')}`;
 }
 
 export function incomeForMonth(snapshot: Snapshot, month: string): { rows: StreamRow[]; expected: bigint; received: bigint; steadiness: number | null } {
@@ -83,8 +107,13 @@ function dotForMonth(stream: IncomeStream, snapshot: Snapshot, month: string): P
   const expected = BigInt(stream.expectedMinor);
   const received = receivedForStreamInMonth(stream, snapshot, month);
   if (received === 0n) return month < monthOf(new Date().toISOString().slice(0, 10)) ? 'missed' : 'none';
-  if (received >= expected) return 'onTime';
-  if (received > 0n) return 'partial';
+  if (received > 0n && received < expected) return 'partial';
+  if (received >= expected) {
+    const due = streamDueDateInMonth(stream, month);
+    const first = earliestReceiptDate(stream, snapshot, month);
+    if (due && first && first > due) return 'late';
+    return 'onTime';
+  }
   return 'missed';
 }
 
@@ -166,10 +195,7 @@ export function routingSummary(stream: IncomeStream, snapshot: Snapshot): string
 
 export function unmatchedIncome(snapshot: Snapshot, month: string): bigint {
   let sum = 0n;
-  for (const e of snapshot.events) {
-    if (e.status !== 'posted' || e.type !== 'income' || e.incomeStreamId || e.oneOff) continue;
-    if (monthOf(e.date) !== month) continue;
-    if (isInvestmentIncomeEvent(snapshot, e)) continue;
+  for (const e of unmatchedEvents(snapshot, month)) {
     for (const l of e.lines) {
       const account = snapshot.chart.get(l.ledgerAccountId);
       if (account?.kind === 'asset' && l.amountMinor > 0n) sum += l.amountMinor;
@@ -182,9 +208,8 @@ export function unmatchedEvents(snapshot: Snapshot, month: string) {
   return snapshot.events.filter(
     (e) =>
       e.status === 'posted' &&
-      e.type === 'income' &&
+      isStreamIncomeEvent(e) &&
       !e.incomeStreamId &&
-      !e.oneOff &&
       monthOf(e.date) === month &&
       !isInvestmentIncomeEvent(snapshot, e),
   );
@@ -206,7 +231,7 @@ export function investmentIncomeForMonth(snapshot: Snapshot, month: string): Inv
   const income = snapshot.chart.system('investment_income')?.id;
   const gain = snapshot.chart.system('investment_gain')?.id;
   for (const e of snapshot.events) {
-    if (e.status !== 'posted' || e.type !== 'income' || monthOf(e.date) !== month) continue;
+    if (e.status !== 'posted' || !isStreamIncomeEvent(e) || monthOf(e.date) !== month) continue;
     let amount = 0n;
     let kind: 'interest' | 'gain' | null = null;
     for (const l of e.lines) {
@@ -250,10 +275,21 @@ export function taxTotalsForYear(snapshot: Snapshot, year: string): { label: str
     const label = stream.taxClass && TAX_CLASS_PRESETS.includes(stream.taxClass as (typeof TAX_CLASS_PRESETS)[number]) ? stream.taxClass : stream.taxClass ?? 'Other';
     if (!map.has(label)) map.set(label, 0n);
     let sum = 0n;
+    const grossMonths = new Set<string>();
     for (const e of snapshot.events) {
-      if (e.status !== 'posted' || e.type !== 'income' || e.incomeStreamId !== stream.id || e.oneOff) continue;
+      if (e.status !== 'posted' || !isStreamIncomeEvent(e) || e.incomeStreamId !== stream.id) continue;
       if (!e.date.startsWith(`${year}-`)) continue;
+      if (e.type === 'salary_gross') {
+        for (const l of e.lines) {
+          const cat = snapshot.chart.get(l.ledgerAccountId);
+          if (cat?.kind === 'income' && l.amountMinor < 0n) sum += -l.amountMinor;
+        }
+        continue;
+      }
       if (stream.recordMode === 'gross' && stream.grossMinor) {
+        const m = monthOf(e.date);
+        if (grossMonths.has(m)) continue;
+        grossMonths.add(m);
         sum += BigInt(stream.grossMinor);
         continue;
       }

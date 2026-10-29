@@ -92,6 +92,30 @@ export function eventInputFromStored(
         amount: real[0].amountMinor.toString(),
         ...common,
       };
+    case 'salary_gross': {
+      // E24 lines: Dr cash · Dr taxes · Dr pension · Dr NHF · Cr income (gross).
+      const incomeCat = lines.find((l) => !isReal(refs.get(l.ledgerAccountId)) && l.amountMinor < 0n);
+      const paye = lines.find((l) => !isReal(refs.get(l.ledgerAccountId)) && l.amountMinor > 0n);
+      const assetDebits = real.filter((l) => l.amountMinor > 0n);
+      // Builder posts cash first, then pension, then NHF among asset debits.
+      const cash = assetDebits[0];
+      const pension = assetDebits[1];
+      const nhf = assetDebits[2];
+      if (!cash || !incomeCat || !pension || !nhf) return null;
+      return {
+        type: 'salary_gross',
+        accountId: cash.ledgerAccountId,
+        categoryId: incomeCat.ledgerAccountId,
+        gross: (-incomeCat.amountMinor).toString(),
+        takeHome: cash.amountMinor.toString(),
+        paye: (paye?.amountMinor ?? 0n).toString(),
+        pensionAccountId: pension.ledgerAccountId,
+        pension: pension.amountMinor.toString(),
+        nhfAccountId: nhf.ledgerAccountId,
+        nhf: nhf.amountMinor.toString(),
+        ...common,
+      };
+    }
     case 'expense': {
       if (!real[0]) return null;
       const total = (-real[0].amountMinor).toString();
@@ -184,6 +208,7 @@ const BE_TYPES = new Set([
   'debt.write_off',
   'income.stream.create',
   'income.stream.update',
+  'income.mark_one_off',
 ]);
 
 /**

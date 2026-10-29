@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Circle, CircleDashed, CircleDot, MoreHorizon
 
 import { Amount, Button, Card, EmptyState, Icon, InlineError, Placeholder, Select, Sheet, Text, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
-import type { IncomeStream } from '@/data/workspace/model';
+import { budgetAssignId, type IncomeStream } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { monthOf, nextMonth, prevMonth } from '@/ledger';
@@ -252,9 +252,16 @@ export function IncomeScreen() {
             }
             for (const row of payload.routing) {
               if (!row.apply) continue;
-              const alloc = await repo.allocateToGoal(row.goalId, { amount: row.amount, date, fromAccountId: stream.accountId });
-              if (!alloc.ok) setError(ledgerMessage(alloc.error));
+              if (row.goalId) {
+                const alloc = await repo.allocateToGoal(row.goalId, { amount: row.amount, date, fromAccountId: stream.accountId });
+                if (!alloc.ok) setError(ledgerMessage(alloc.error));
+              } else if (row.categoryId && snapshot) {
+                const m = monthOf(date);
+                const current = snapshot.assigns.get(budgetAssignId(row.categoryId, m)) ?? 0n;
+                await repo.setAssigned(row.categoryId, m, current + row.amount);
+              }
             }
+            toast.show(t('income.markedReceived'));
             setRecordStream(null);
           }}
         />
@@ -314,6 +321,7 @@ function StreamCard({
           <Text variant="heading-sm">{stream.name}</Text>
           <Text variant="caption" tone="textSecondary">
             {formatStreamSchedule(stream.rule)}
+            {stream.source ? ` · ${stream.source}` : ''}
             {stream.taxClass ? ` · ${stream.taxClass}` : ''}
           </Text>
         </View>

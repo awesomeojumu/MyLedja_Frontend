@@ -4,7 +4,7 @@ import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 import { monthOf } from '@/ledger';
 
-import { isInvestmentIncomeEvent } from './helpers';
+import { isInvestmentIncomeEvent, isStreamIncomeEvent } from './helpers';
 
 export type IncomeMatchCandidate = {
   eventId: string;
@@ -25,9 +25,16 @@ export type RoutingConfirmRow = {
   restToBudget?: boolean;
 };
 
+export type RoutingApply = {
+  goalId?: string;
+  categoryId?: string;
+  amount: bigint;
+  apply: boolean;
+};
+
 export type MarkReceivedPayload =
-  | { kind: 'match'; eventId: string; amount: bigint; date: string; routing: { goalId: string; amount: bigint; apply: boolean }[] }
-  | { kind: 'create'; amount: bigint; date: string; routing: { goalId: string; amount: bigint; apply: boolean }[] };
+  | { kind: 'match'; eventId: string; amount: bigint; date: string; routing: RoutingApply[] }
+  | { kind: 'create'; amount: bigint; date: string; routing: RoutingApply[] };
 
 function eventTitle(snapshot: Snapshot, eventId: string): string {
   const e = snapshot.events.find((x) => x.id === eventId);
@@ -62,7 +69,7 @@ export function incomeMatchCandidates(
 ): IncomeMatchCandidate[] {
   const out: IncomeMatchCandidate[] = [];
   for (const e of snapshot.events) {
-    if (e.status !== 'posted' || e.type !== 'income' || e.incomeStreamId || e.oneOff) continue;
+    if (e.status !== 'posted' || !isStreamIncomeEvent(e) || e.incomeStreamId) continue;
     if (monthOf(e.date) !== month) continue;
     if (isInvestmentIncomeEvent(snapshot, e)) continue;
     const amount = amountOnAccount(e, stream.accountId);
@@ -119,11 +126,13 @@ export function routingConfirmRows(stream: IncomeStream, snapshot: Snapshot, tak
   return rows;
 }
 
-export function routingPayload(
-  rows: RoutingConfirmRow[],
-  toggles: Record<string, boolean>,
-): { goalId: string; amount: bigint; apply: boolean }[] {
+export function routingPayload(rows: RoutingConfirmRow[], toggles: Record<string, boolean>): RoutingApply[] {
   return rows
-    .filter((r) => r.goalId && r.amount > 0n)
-    .map((r) => ({ goalId: r.goalId!, amount: r.amount, apply: toggles[r.key] ?? true }));
+    .filter((r) => (r.goalId || r.categoryId) && r.amount > 0n && !r.restToBudget)
+    .map((r) => ({
+      goalId: r.goalId,
+      categoryId: r.categoryId,
+      amount: r.amount,
+      apply: toggles[r.key] ?? true,
+    }));
 }

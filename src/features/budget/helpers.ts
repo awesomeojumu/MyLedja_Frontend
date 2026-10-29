@@ -58,7 +58,22 @@ export function budgetForMonth(snapshot: Snapshot, month: string): BudgetMonth {
     categories: cats.map((c) => ({ ledgerAccountId: c.id, carryOver: c.carryOver })),
     assigned: (id, m) => assignedOf(snapshot, id, m),
     activity: (id, m) => categoryActivity(totals, m, id),
-    budgetableIncome: (m) => monthIncome(snapshot.chart, incomeTotals, m, true),
+    budgetableIncome: (m) => {
+      let income = monthIncome(snapshot.chart, incomeTotals, m, true);
+      // DESIGN §9.4: stream "Count in budget" off — exclude that stream's income credits.
+      for (const stream of snapshot.incomeStreams) {
+        if (stream.countInBudget) continue;
+        for (const e of snapshot.events) {
+          if (e.status !== 'posted' || e.incomeStreamId !== stream.id || e.oneOff) continue;
+          if ((e.type !== 'income' && e.type !== 'salary_gross') || monthOf(e.date) !== m) continue;
+          for (const l of e.lines) {
+            const acc = snapshot.chart.get(l.ledgerAccountId);
+            if (acc?.kind === 'income' && l.amountMinor < 0n) income -= -l.amountMinor;
+          }
+        }
+      }
+      return income;
+    },
     goalAllocations: (m) =>
       snapshot.allocations
         .filter((a) => a.kind !== 'spend' && monthOf(a.date) === m)

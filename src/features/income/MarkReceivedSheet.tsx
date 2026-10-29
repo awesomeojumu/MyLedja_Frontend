@@ -188,7 +188,7 @@ export function MarkReceivedSheet({ stream, snapshot, month, expected, received,
                 <Text>{row.label}</Text>
                 {!row.restToBudget ? <Amount minor={row.amount} variant="caption" /> : null}
               </View>
-              {row.goalId ? (
+              {row.goalId || row.categoryId ? (
                 <Checkbox
                   testID={`income-routing-${row.key}`}
                   label={t('income.routingApply')}

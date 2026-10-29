@@ -101,7 +101,7 @@ export function AddIncomeStreamSheet({ snapshot, existing, onClose, onSave }: Pr
       accountId,
       categoryId,
       rule: { every, on: kind === 'irregular' ? 1 : Math.min(31, Math.max(1, Number(onDay) || 1)) },
-      countInBudget: kind === 'passive' ? countInBudget : true,
+      countInBudget,
       taxClass,
       amountKind,
       rangeMinMinor: amountKind === 'range' && rangeMinMinor ? rangeMinMinor.toString() : undefined,
