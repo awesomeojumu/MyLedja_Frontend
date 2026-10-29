@@ -1,5 +1,5 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Amount, Button, Card, EmptyState, Placeholder, SegmentedControl, Text } from '@/design/components';
@@ -27,31 +27,31 @@ export function HoldingScreen() {
 
   const holding = snapshot?.holdings.find((h) => h.id === params.id);
   const figures = snapshot && holding ? holdingFigures(snapshot, holding) : null;
-  const lots = useMemo(() => (snapshot && holding ? lotsFor(snapshot, holding.id) : []), [snapshot, holding]);
-  const prices = useMemo(() => (snapshot && holding ? pricesFor(snapshot, holding.id) : []), [snapshot, holding]);
-  const trades = useMemo(() => {
-    if (!snapshot || !holding) return [];
-    return snapshot.events
-      .filter(
-        (e) =>
-          (e.type === 'investment_buy' || e.type === 'investment_sell') &&
-          e.status === 'posted' &&
-          e.lines.some((l) => l.ledgerAccountId === holding.ledgerAccountId),
-      )
-      .sort((a, b) => b.date.localeCompare(a.date));
-  }, [snapshot, holding]);
-  const dividends = useMemo(() => {
-    if (!snapshot || !holding) return [];
-    return snapshot.events
-      .filter(
-        (e) =>
-          e.type === 'income' &&
-          e.status === 'posted' &&
-          e.lines.some((l) => l.ledgerAccountId === holding.ledgerAccountId || l.ledgerAccountId.endsWith(':investment_income')),
-      )
-      .filter((e) => e.lines.some((l) => l.ledgerAccountId === holding.ledgerAccountId) || trades.length >= 0)
-      .sort((a, b) => b.date.localeCompare(a.date));
-  }, [snapshot, holding, trades.length]);
+  const lots = snapshot && holding ? lotsFor(snapshot, holding.id) : [];
+  const prices = snapshot && holding ? pricesFor(snapshot, holding.id) : [];
+  const trades =
+    !snapshot || !holding
+      ? []
+      : snapshot.events
+          .filter(
+            (e) =>
+              (e.type === 'investment_buy' || e.type === 'investment_sell') &&
+              e.status === 'posted' &&
+              e.lines.some((l) => l.ledgerAccountId === holding.ledgerAccountId),
+          )
+          .sort((a, b) => b.date.localeCompare(a.date));
+  const dividends =
+    !snapshot || !holding
+      ? []
+      : snapshot.events
+          .filter(
+            (e) =>
+              e.type === 'income' &&
+              e.status === 'posted' &&
+              e.lines.some((l) => l.ledgerAccountId === holding.ledgerAccountId || l.ledgerAccountId.endsWith(':investment_income')),
+          )
+          .filter((e) => e.lines.some((l) => l.ledgerAccountId === holding.ledgerAccountId) || trades.length >= 0)
+          .sort((a, b) => b.date.localeCompare(a.date));
 
   if (snapshot && !holding) {
     return (

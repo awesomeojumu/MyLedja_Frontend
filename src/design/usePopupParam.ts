@@ -35,14 +35,19 @@ export function usePopupParam<TDraft>({
   const [draft, setDraftState] = useState<TDraft>(emptyDraft);
   const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    if (!shouldOpen) {
-      setDraftState(emptyDraft);
-      setHydrated(false);
-      return;
-    }
-    let cancelled = false;
+  if (!shouldOpen && hydrated) {
+    setDraftState(emptyDraft);
     setHydrated(false);
+  }
+
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  if (shouldOpen && loadedKey !== draftKey && hydrated) {
+    setHydrated(false);
+  }
+
+  useEffect(() => {
+    if (!shouldOpen) return;
+    let cancelled = false;
     void openKeyValue()
       .get(draftKey)
       .then((rawDraft) => {
@@ -56,6 +61,7 @@ export function usePopupParam<TDraft>({
         } else {
           setDraftState(emptyDraft);
         }
+        setLoadedKey(draftKey);
         setHydrated(true);
       });
     return () => {

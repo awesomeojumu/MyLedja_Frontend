@@ -119,6 +119,8 @@ export function TemplatesSheet({
   const groups = useMemo(() => (snapshot ? groupedBudgetCategories(snapshot, 'groups') : []), [snapshot]);
   const bills = useMemo(() => snapshot?.recurring.filter((r) => r.kind === 'bill' || r.kind === 'subscription') ?? [], [snapshot]);
 
+  if (!visible && loaded) setLoaded(false);
+
   useEffect(() => {
     if (!visible || !snapshot || loaded) return;
     const byCat = new Map<string, BudgetTemplateLine>();
@@ -126,15 +128,12 @@ export function TemplatesSheet({
     for (const tpl of preferred ? [preferred] : snapshot.budgetTemplates) {
       for (const line of tpl.lines) byCat.set(line.categoryId, line);
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate draft rows when the sheet opens
     setRows(cats.map((c) => draftFromLine(c.id, byCat.get(c.id))));
     setReplace(false);
     setError(null);
     setLoaded(true);
   }, [visible, snapshot, cats, loaded]);
-
-  useEffect(() => {
-    if (!visible) setLoaded(false);
-  }, [visible]);
 
   const previews = useMemo(() => {
     if (!snapshot) return [] as { categoryId: string; fill: bigint; keep: boolean }[];

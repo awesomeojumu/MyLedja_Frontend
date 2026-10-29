@@ -118,9 +118,11 @@ export function CommandBar() {
     return flattenHits(groups);
   }, [groups, recent, query]);
 
-  useEffect(() => {
+  const [activeKey, setActiveKey] = useState(`${open}:${query}`);
+  if (`${open}:${query}` !== activeKey) {
+    setActiveKey(`${open}:${query}`);
     setActive(0);
-  }, [query, open]);
+  }
 
   const run = useCallback(
     async (hit: SearchHit) => {

@@ -16,7 +16,6 @@ import {
   Popover,
   StatusPill,
   Text,
-  useToast,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
@@ -60,7 +59,6 @@ const SORT_OPTIONS: { value: AccountSort; label: string }[] = [
 export function AccountsScreen() {
   const { snapshot } = useWorkspace();
   const theme = useTheme();
-  const toast = useToast();
   const router = useRouter();
   const params = useGlobalSearchParams<{ account?: string; value?: string; connect?: string }>();
   const [connectOpen, setConnectOpen] = useState(params.connect === '1');

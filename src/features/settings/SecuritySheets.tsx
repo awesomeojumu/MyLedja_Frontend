@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Platform, ScrollView, Share, View } from 'react-native';
+import { Platform, Share, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import * as DocumentPicker from 'expo-document-picker';
 

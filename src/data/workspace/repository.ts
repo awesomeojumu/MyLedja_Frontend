@@ -77,9 +77,7 @@ import {
   type HoldingType,
   type HealthSettings,
   type ReportDashboard,
-  type ReportCard,
   type SavedReport,
-  type ReportCardKind,
   budgetAssignId,
 } from './model';
 

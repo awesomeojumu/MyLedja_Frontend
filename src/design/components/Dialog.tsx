@@ -35,10 +35,7 @@ export function Sheet({
   const theme = useTheme();
   const phone = useSizeClass() === 'phone';
   const [discard, setDiscard] = useState(false);
-
-  useEffect(() => {
-    if (!visible) setDiscard(false);
-  }, [visible]);
+  if (!visible && discard) setDiscard(false);
 
   const requestClose = () => {
     if (dirty) setDiscard(true);

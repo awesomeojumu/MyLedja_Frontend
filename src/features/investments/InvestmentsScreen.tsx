@@ -1,17 +1,16 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { Amount, Button, Card, EmptyState, Placeholder, SegmentedControl, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
-import { today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
 import { DividendSheet, HoldingSheet, TradeSheet, UpdatePricesSheet } from './investmentSheets';
-import { portfolioFigures, rangeStart } from './helpers';
+import { portfolioFigures } from './helpers';
 
 const sp = tokens.spacing;
 
@@ -29,16 +28,13 @@ export function InvestmentsScreen() {
     params.holding === 'new' ? 'add' : params.trade === 'buy' ? 'buy' : params.trade === 'sell' ? 'sell' : params.dividend ? 'dividend' : params.prices ? 'prices' : null,
   );
 
-  const figures = useMemo(() => (snapshot ? portfolioFigures(snapshot) : []), [snapshot]);
-  const start = rangeStart(range, today());
+  const figures = snapshot ? portfolioFigures(snapshot) : [];
   // Range changes the gain line only — holdings list stays full (TB08-1).
-  const rangeGain = useMemo(() => {
-    if (!snapshot) return 0n;
-    return figures.reduce((s, f) => s + f.gain, 0n);
-  }, [figures, snapshot, start]);
+  // Unrealised total is current mark-to-market; range filters the chart elsewhere.
+  const rangeGain = figures.reduce((s, f) => s + f.gain, 0n);
   const totalValue = figures.reduce((s, f) => s + f.value, 0n);
 
-  const breakdown = useMemo(() => {
+  const breakdown = (() => {
     const map = new Map<string, bigint>();
     for (const f of figures) {
       const key =
@@ -48,7 +44,7 @@ export function InvestmentsScreen() {
       map.set(key, (map.get(key) ?? 0n) + f.value);
     }
     return [...map.entries()].sort((a, b) => (a[1] === b[1] ? a[0].localeCompare(b[0]) : a[1] > b[1] ? -1 : 1));
-  }, [figures, by, snapshot]);
+  })();
 
   return (
     <AppFrame title={t('investments.title')}>
