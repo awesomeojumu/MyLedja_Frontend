@@ -52,8 +52,12 @@ export function usePopupParam<TDraft>({
     try {
       kv = openKeyValue();
     } catch {
-      setLoadedKey(draftKey);
-      setHydrated(true);
+      // No device store (Jest native SQLite). Hydrate empty on next tick.
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setLoadedKey(draftKey);
+        setHydrated(true);
+      });
       return;
     }
     void kv
