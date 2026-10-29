@@ -11,9 +11,10 @@ import {
 } from '../layout';
 
 describe('dashboard layout', () => {
-  it('P05-08: defaults include all Phase 1–2 cards', () => {
-    expect(DEFAULT_DASHBOARD_LAYOUT.order.length).toBe(12);
-    expect(visibleDashboardCards(DEFAULT_DASHBOARD_LAYOUT)).toHaveLength(12);
+  it('P05-08: defaults include Phase 1–2 plus Health and Investments', () => {
+    expect(DEFAULT_DASHBOARD_LAYOUT.order.length).toBe(14);
+    expect(visibleDashboardCards(DEFAULT_DASHBOARD_LAYOUT)).toHaveLength(14);
+    expect(DEFAULT_DASHBOARD_LAYOUT.order.indexOf('comingUp')).toBeLessThan(DEFAULT_DASHBOARD_LAYOUT.order.indexOf('incomeVsSpending'));
   });
 
   it('merge keeps unknown ids out and appends new cards', () => {

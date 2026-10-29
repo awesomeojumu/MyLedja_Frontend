@@ -1,26 +1,44 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { BackHandler, Platform, Pressable, RefreshControl, ScrollView, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Info } from 'lucide-react-native';
 
-import { Amount, BarChart, Button, Card, DonutChart, LineChart, Placeholder, StatusPill, Text, formatDay, useToast } from '@/design/components';
+import {
+  Amount,
+  BarChart,
+  Button,
+  Card,
+  GradientBand,
+  LineChart,
+  Placeholder,
+  ProgressRing,
+  StatusPill,
+  Text,
+  formatDay,
+  useToast,
+} from '@/design/components';
 import tokens from '@/design/tokens.json';
-import { useTheme } from '@/design/ThemeProvider';
+import { useDesign, useTheme } from '@/design/ThemeProvider';
 import { useSizeClass } from '@/design/size';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { monthLabel, nextMonth, prevMonth } from '@/features/budget/helpers';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useSecurityApi } from '@/features/settings/SecuritySheets';
 import { today } from '@/features/transactions/helpers';
+import { filtersToParams } from '@/features/transactions/filters';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
-import { monthOf } from '@/ledger';
+import { monthOf, monthsEndingAt, monthIncome, monthSpent, periodTotals, prevMonth as ledgerPrev, ledgerBalance } from '@/ledger';
 
 import { CustomizeDashboardSheet } from './CustomizeDashboardSheet';
-import { checklist, dashboardModel, type ComingUpRow } from './helpers';
-import { resolveLayoutForDevice, visibleDashboardCards, withStoredLayoutForDevice, type DashboardLayout, type DashboardCardId } from './layout';
+import { checklist, dashboardModel, endOfMonth, type ComingUpRow } from './helpers';
+import { cardColumnSpan, resolveLayoutForDevice, visibleDashboardCards, withStoredLayoutForDevice, type DashboardLayout, type DashboardCardId } from './layout';
+import { SpendingTrendChart } from './SpendingTrendChart';
+import { WhereItWentChart } from './WhereItWentChart';
 
 const sp = tokens.spacing;
+const c = tokens.color;
 
 function greeting(name: string): string {
   const h = new Date().getHours();
@@ -28,23 +46,133 @@ function greeting(name: string): string {
   return t('dashboard.greeting', { part, name });
 }
 
+function barFill(state: string): string {
+  if (state === 'over') return c.ruby;
+  if (state === 'near') return c.primary;
+  return c['primary-soft'];
+}
+
+/** Web hover lift (DESIGN.md page 5 D23). */
+function LiftPressable({
+  testID,
+  onPress,
+  accessibilityRole,
+  style,
+  children,
+}: {
+  testID?: string;
+  onPress: () => void;
+  accessibilityRole?: 'link' | 'button';
+  style?: StyleProp<ViewStyle>;
+  children: ReactNode;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const web = Platform.OS === 'web';
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole={accessibilityRole}
+      onPress={onPress}
+      onHoverIn={web ? () => setHovered(true) : undefined}
+      onHoverOut={web ? () => setHovered(false) : undefined}
+      style={[
+        style,
+        web
+          ? ({
+              transform: [{ translateY: hovered ? -2 : 0 }],
+              transition: 'transform 120ms ease',
+            } as ViewStyle)
+          : null,
+      ]}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+/** One-shot count-up for the net-worth hero (DESIGN.md page 5 / P05-02). */
+function useCountUp(target: bigint, active: boolean): bigint {
+  const [value, setValue] = useState(0n);
+  useEffect(() => {
+    if (!active) return;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / 600);
+      const eased = 1 - (1 - p) * (1 - p);
+      setValue(BigInt(Math.round(Number(target) * eased)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else setValue(target);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, active]);
+  return active ? value : target;
+}
+
 export function DashboardScreen() {
   const { snapshot, repo } = useWorkspace();
   const { user } = useAuth();
+  const security = useSecurityApi();
   const theme = useTheme();
+  const { reduceMotion } = useDesign();
   const toast = useToast();
   const router = useRouter();
   const size = useSizeClass();
+  const phone = size === 'phone';
   const params = useGlobalSearchParams<{ customize?: string }>();
   const customizeOpen = params.customize === '1';
   const [month, setMonth] = useState(() => monthOf(today()));
   const [checklistHidden, setChecklistHidden] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [twoFactorOn, setTwoFactorOn] = useState(false);
+  const [counted, setCounted] = useState(false);
+  const [titleShrunk, setTitleShrunk] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void security
+      .status()
+      .then((s) => {
+        if (!cancelled) setTwoFactorOn(!!s.twoFactorOn);
+      })
+      .catch(() => {
+        /* offline — leave false */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [security]);
+
+  // DESIGN D22: on Android, Back on the Dashboard leaves the app.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      BackHandler.exitApp();
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   const model = useMemo(() => (snapshot ? dashboardModel(snapshot, month) : null), [snapshot, month]);
-  const items = useMemo(() => (snapshot ? checklist(snapshot, checklistHidden || !!snapshot.settings.checklistHidden) : []), [snapshot, checklistHidden]);
+  const items = useMemo(
+    () => (snapshot ? checklist(snapshot, checklistHidden || !!snapshot.settings.checklistHidden, twoFactorOn) : []),
+    [snapshot, checklistHidden, twoFactorOn],
+  );
   const layout = useMemo(() => resolveLayoutForDevice(snapshot?.settings, size), [snapshot?.settings, size]);
   const cards = useMemo(() => visibleDashboardCards(layout), [layout]);
+  const animateWorth = !!model && !reduceMotion && !counted;
+  const worthAnimated = useCountUp(model?.worthNow ?? 0n, animateWorth);
+  useEffect(() => {
+    if (!animateWorth) return;
+    const id = setTimeout(() => setCounted(true), 700);
+    return () => clearTimeout(id);
+  }, [animateWorth]);
+
+  const monthFrom = `${month}-01`;
+  const monthTo = endOfMonth(month);
+  const todayStr = today();
+  const todayDay = monthOf(todayStr) === month ? Number(todayStr.slice(8, 10)) : null;
 
   const hideChecklist = () => {
     setChecklistHidden(true);
@@ -64,26 +192,52 @@ export function DashboardScreen() {
     setRefreshing(true);
     try {
       await repo.load();
+      try {
+        const s = await security.status();
+        setTwoFactorOn(!!s.twoFactorOn);
+      } catch {
+        /* ignore */
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [repo]);
+  }, [repo, security]);
+
+  const txHref = (extra: { type?: 'income' | 'expense' }) => {
+    const params = filtersToParams({ dateFrom: monthFrom, dateTo: monthTo, ...(extra.type ? { type: extra.type } : {}) });
+    return { pathname: '/transactions' as const, params };
+  };
 
   const renderCard = (id: DashboardCardId) => {
     if (!model) return null;
+    const span = cardColumnSpan(id, size);
+    const wrap = (node: ReactNode) => (
+      <View key={id} style={{ width: phone ? '100%' : `${(span / 12) * 100}%`, paddingHorizontal: phone ? 0 : sp['spacing-xs'] }}>
+        {node}
+      </View>
+    );
+
     switch (id) {
-      case 'checklist':
+      case 'checklist': {
         if (items.length === 0) return null;
-        return (
-          <Card key={id} testID="dashboard-checklist" style={{ gap: sp['spacing-sm'] }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text variant="heading-sm">{t('dashboard.checklistTitle')}</Text>
-              <Text variant="caption" tone="textSecondary">
-                {t('dashboard.checklistProgress', { done: items.filter((i) => i.done).length, total: items.length })}
+        const done = items.filter((i) => i.done).length;
+        return wrap(
+          <Card testID="dashboard-checklist" style={{ gap: sp['spacing-sm'] }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: sp['spacing-sm'] }}>
+              <Text variant="heading-sm" style={{ flex: 1 }}>
+                {t('dashboard.checklistTitle')}
               </Text>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+              <Text variant="caption" tone="textSecondary">
+                {t('dashboard.checklistProgress', { done, total: items.length })}
+              </Text>
               <Button testID="dashboard-checklist-hide" kind="link" label={t('dashboard.checklistHide')} onPress={hideChecklist} />
+            </View>
+            <View
+              testID="dashboard-checklist-bar"
+              accessibilityRole="progressbar"
+              style={{ height: 6, backgroundColor: theme.border, borderRadius: 3, overflow: 'hidden' }}
+            >
+              <View style={{ height: 6, width: `${(done / items.length) * 100}%`, backgroundColor: theme.primaryFill }} />
             </View>
             {items.map((item) => (
               <View key={item.key} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -95,21 +249,30 @@ export function DashboardScreen() {
                 )}
               </View>
             ))}
-          </Card>
+          </Card>,
         );
+      }
       case 'netWorth':
-        return (
-          <Pressable key={id} testID="dashboard-net-worth" accessibilityRole="link" onPress={() => router.push('/accounts')}>
-            <Card style={{ gap: sp['spacing-sm'] }}>
-              <Text variant="caption" tone="textSecondary">
+        return wrap(
+          <LiftPressable testID="dashboard-net-worth" accessibilityRole="link" onPress={() => router.push({ pathname: '/reports', params: { kind: 'netWorth' } })}>
+            <Card style={{ gap: sp['spacing-sm'], overflow: 'hidden', position: 'relative' }}>
+              <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 72, opacity: 0.9 }} pointerEvents="none">
+                <GradientBand />
+              </View>
+              <Text variant="caption" style={{ color: c['on-primary'] }}>
                 {t('accounts.netWorth')}
               </Text>
-              <Amount testID="dashboard-net-worth-amount" minor={model.worthNow} variant="display-md" />
+              <Amount testID="dashboard-net-worth-amount" minor={reduceMotion || counted ? model.worthNow : worthAnimated} variant="display-lg" />
               {model.worthChange !== 0n ? (
                 <Text variant="caption" tone="textSecondary">
                   {model.worthChange >= 0n
                     ? t('dashboard.netWorthUp', { amount: formatNaira(model.worthChange) })
                     : t('dashboard.netWorthDown', { amount: formatNaira(-model.worthChange) })}
+                </Text>
+              ) : null}
+              {model.worthPartial.length > 0 ? (
+                <Text variant="caption" tone="textSecondary" testID="dashboard-net-worth-partial">
+                  {t('dashboard.partial', { currencies: model.worthPartial.join(', ') })}
                 </Text>
               ) : null}
               <LineChart testID="dashboard-net-worth-chart" title={t('dashboard.netWorthTrend')} columns={[t('category.chartMonth'), t('accounts.netWorth')]} rows={model.netWorthLine} />
@@ -136,11 +299,11 @@ export function DashboardScreen() {
                 </View>
               ) : null}
             </Card>
-          </Pressable>
+          </LiftPressable>,
         );
       case 'leftToSpend':
-        return (
-          <Pressable key={id} testID="dashboard-left-to-spend" accessibilityRole="link" onPress={() => router.push('/budget')}>
+        return wrap(
+          <LiftPressable testID="dashboard-left-to-spend" accessibilityRole="link" onPress={() => router.push('/budget')}>
             <Card style={{ gap: sp['spacing-xs'] }}>
               <Text variant="heading-sm">{t('dashboard.leftToSpend')}</Text>
               <Amount minor={model.leftToSpend} variant="heading-lg" />
@@ -165,35 +328,60 @@ export function DashboardScreen() {
                 </>
               ) : null}
             </Card>
-          </Pressable>
+          </LiftPressable>,
         );
       case 'statTiles':
-        return (
-          <ScrollView key={id} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp['spacing-md'] }}>
-            <StatTile testID="dashboard-tile-income" label={t('dashboard.tile.income')} amount={model.income} change={model.incomeChange} onPress={() => router.push('/transactions')} />
-            <StatTile testID="dashboard-tile-spent" label={t('dashboard.tile.spent')} amount={model.spent} change={model.spentChange} onPress={() => router.push('/transactions')} />
+        return wrap(
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp['spacing-md'] }}>
+            <StatTile
+              testID="dashboard-tile-income"
+              label={t('dashboard.tile.income')}
+              basis={t('dashboard.basis.income')}
+              amount={model.income}
+              change={model.incomeChange}
+              onPress={() => router.push(txHref({ type: 'income' }))}
+            />
+            <StatTile
+              testID="dashboard-tile-spent"
+              label={t('dashboard.tile.spent')}
+              basis={t('dashboard.basis.spent')}
+              amount={model.spent}
+              change={model.spentChange}
+              onPress={() => router.push(txHref({ type: 'expense' }))}
+            />
             <StatTile
               testID="dashboard-tile-net-cash"
               label={t('dashboard.tile.netCash')}
+              basis={t('dashboard.basis.netCash')}
               amount={model.netCash}
               change={null}
-              onPress={() => router.push('/transactions')}
+              onPress={() => router.push(txHref({}))}
             />
             <StatTile
               testID="dashboard-tile-budget-left"
               label={t('dashboard.tile.budgetLeft')}
+              basis={t('dashboard.basis.budgetLeft')}
               amount={model.budgetLeft}
               change={null}
               footnote={model.daysLeft != null ? t('dashboard.daysLeft', { days: model.daysLeft }) : undefined}
               onPress={() => router.push('/budget')}
             />
-          </ScrollView>
+          </ScrollView>,
         );
       case 'comingUp':
-        return <ComingUpCard key={id} rows={model.comingUp} onPlan={() => router.push('/plan')} />;
+        return wrap(
+          <ComingUpCard
+            rows={model.comingUp}
+            onPlan={() => router.push('/plan')}
+            onRow={(row) => {
+              // PU-26: bills and income streams open Mark paid / Mark received on Plan.
+              router.push({ pathname: '/plan', params: { occurrence: `${row.recurring.id}:${row.dueDate}` } });
+            }}
+          />,
+        );
       case 'goals':
-        return (
-          <Pressable key={id} testID="dashboard-goals" accessibilityRole="link" onPress={() => router.push('/goals')}>
+        return wrap(
+          <LiftPressable testID="dashboard-goals" accessibilityRole="link" onPress={() => router.push('/goals')}>
             <Card style={{ gap: sp['spacing-sm'] }}>
               <Text variant="heading-sm">{t('dashboard.goalsCard')}</Text>
               {model.goals.length === 0 ? (
@@ -212,11 +400,11 @@ export function DashboardScreen() {
                 ))
               )}
             </Card>
-          </Pressable>
+          </LiftPressable>,
         );
       case 'debts':
-        return (
-          <Pressable key={id} testID="dashboard-debts" accessibilityRole="link" onPress={() => router.push('/debts')}>
+        return wrap(
+          <LiftPressable testID="dashboard-debts" accessibilityRole="link" onPress={() => router.push('/debts')}>
             <Card style={{ gap: sp['spacing-sm'] }}>
               <Text variant="heading-sm">{t('dashboard.debtsCard')}</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-md'] }}>
@@ -234,62 +422,90 @@ export function DashboardScreen() {
                 </View>
               </View>
             </Card>
-          </Pressable>
+          </LiftPressable>,
+        );
+      case 'health':
+        return wrap(<HealthCard month={month} onOpen={() => router.push('/health')} />);
+      case 'investments':
+        if (!model.hasInvestments) return null;
+        return wrap(
+          <LiftPressable testID="dashboard-investments" accessibilityRole="link" onPress={() => router.push('/investments')}>
+            <Card style={{ gap: sp['spacing-xs'] }}>
+              <Text variant="heading-sm">{t('dashboard.investmentsCard')}</Text>
+              <Amount testID="dashboard-investments-value" minor={model.investmentsValue} variant="heading-md" />
+              <Text variant="caption" tone="textSecondary" testID="dashboard-investments-gain">
+                {t('dashboard.investmentsGain', { amount: formatNaira(model.investmentsGain, { signed: true }) })}
+              </Text>
+            </Card>
+          </LiftPressable>,
         );
       case 'incomeVsSpending':
-        return (
-          <BarChart
-            key={id}
+        return wrap(
+          <LiftPressable
             testID="dashboard-income-vs-spending"
-            title={t('dashboard.incomeVsSpending')}
-            columns={[t('category.chartMonth'), t('dashboard.amount')]}
-            rows={model.incomeVsSpent}
-          />
+            accessibilityRole="link"
+            onPress={() => router.push({ pathname: '/reports', params: { kind: 'incomeVsSpending' } })}
+          >
+            <BarChart
+              title={t('dashboard.incomeVsSpending')}
+              columns={[t('category.chartMonth'), t('dashboard.amount')]}
+              rows={model.incomeVsSpent}
+            />
+          </LiftPressable>,
         );
       case 'spendingTrend':
-        return (
-          <BarChart
-            key={id}
-            testID="dashboard-spending-trend"
-            title={t('dashboard.spendingVsLastMonth')}
-            columns={[t('category.chartMonth'), t('dashboard.tile.spent')]}
-            rows={model.spendingTrend}
-          />
+        return wrap(
+          <SpendingTrendChart
+            thisMonth={model.spendingTrendRows}
+            lastMonth={model.spendingTrendCompare}
+            todayDay={todayDay}
+            onPress={() => router.push({ pathname: '/reports', params: { kind: 'spendingByCategory' } })}
+          />,
         );
       case 'budgetProgress':
-        return (
-          <Card key={id} testID="dashboard-budget-progress" style={{ gap: sp['spacing-sm'] }}>
+        return wrap(
+          <Card testID="dashboard-budget-progress" style={{ gap: sp['spacing-sm'] }}>
             <Text variant="heading-sm">{t('dashboard.budgetProgress')}</Text>
-            {model.progress.map(({ category, row, state }) => (
-              <Pressable key={category.id} testID={`dashboard-progress-${category.id}`} onPress={() => router.push(`/budget/category/${category.id}`)}>
-                <View style={{ gap: 2 }}>
-                  <Text>{category.name}</Text>
-                  {state === 'over' ? (
-                    <Text variant="caption" tone="textSecondary">
-                      {t('budget.overBy', { amount: formatNaira(-row.available) })}
-                    </Text>
-                  ) : state === 'near' ? (
-                    <Text variant="caption" tone="textSecondary">
-                      {t('budget.nearLimit')}
-                    </Text>
-                  ) : (
-                    <Text variant="caption" tone="textSecondary">
-                      {t('dashboard.remaining', { amount: formatNaira(row.available) })}
-                    </Text>
-                  )}
-                </View>
-              </Pressable>
-            ))}
+            {model.progress.map(({ category, row, state, plan }) => {
+              const used = plan > 0n ? Math.min(100, Number((row.activity * 100n) / plan)) : row.activity > 0n ? 100 : 0;
+              return (
+                <Pressable key={category.id} testID={`dashboard-progress-${category.id}`} onPress={() => router.push(`/budget/category/${category.id}`)}>
+                  <View style={{ gap: sp['spacing-xs'] }}>
+                    <Text>{category.name}</Text>
+                    <View style={{ height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden' }}>
+                      <View style={{ height: 4, width: `${used}%`, backgroundColor: barFill(state) }} />
+                    </View>
+                    {state === 'over' ? (
+                      <Text variant="caption" style={{ color: theme.error }}>
+                        {t('budget.overBy', { amount: formatNaira(-row.available) })}
+                      </Text>
+                    ) : state === 'near' ? (
+                      <Text variant="caption" tone="textSecondary">
+                        {t('budget.nearLimit')}
+                      </Text>
+                    ) : (
+                      <Text variant="caption" tone="textSecondary">
+                        {t('dashboard.remaining', { amount: formatNaira(row.available) })}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
             <Button kind="link" label={t('dashboard.seeBudget')} onPress={() => router.push('/budget')} />
-          </Card>
+          </Card>,
         );
       case 'whereItWent':
-        return model.where.length > 0 ? (
-          <DonutChart key={id} testID="dashboard-where" title={t('dashboard.whereItWent')} columns={[t('category.group'), t('dashboard.tile.spent')]} rows={model.where} total={model.spent} />
-        ) : null;
+        return model.where.length > 0
+          ? wrap(
+              <LiftPressable testID="dashboard-where" accessibilityRole="link" onPress={() => router.push('/cash-flow')}>
+                <WhereItWentChart rows={model.where} total={model.spent} />
+              </LiftPressable>,
+            )
+          : null;
       case 'recent':
-        return (
-          <Card key={id} testID="dashboard-recent" style={{ gap: sp['spacing-sm'] }}>
+        return wrap(
+          <Card testID="dashboard-recent" style={{ gap: sp['spacing-sm'] }}>
             <Text variant="heading-sm">{t('dashboard.recent')}</Text>
             {model.recent.length === 0 ? (
               <Text tone="textSecondary">{t('tx.emptyTitle')}</Text>
@@ -304,20 +520,78 @@ export function DashboardScreen() {
               ))
             )}
             <Button kind="link" label={t('dashboard.seeTransactions')} onPress={() => router.push('/transactions')} />
-          </Card>
+          </Card>,
         );
       default:
         return null;
     }
   };
 
+  const trioIds = useMemo(() => new Set<DashboardCardId>(['health', 'goals', 'debts']), []);
+
+  const gridCards = !model
+    ? null
+    : (() => {
+        const nodes: ReactNode[] = [];
+        let i = 0;
+        let trioDone = false;
+        while (i < cards.length) {
+          const id = cards[i]!;
+          // DESIGN D21: health / goals / debts as a swipeable (phone) or paired (tablet) row.
+          if (trioIds.has(id) && !trioDone) {
+            const group = cards.filter((cid) => trioIds.has(cid));
+            if (phone) {
+              nodes.push(
+                <ScrollView
+                  key="health-goals-debts"
+                  testID="dashboard-trio-swipe"
+                  horizontal
+                  pagingEnabled={false}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: sp['spacing-md'], paddingHorizontal: sp['spacing-xs'] }}
+                  style={{ width: '100%' }}
+                >
+                  {group.map((gid) => (
+                    <View key={gid} style={{ width: 260 }}>
+                      {renderCard(gid)}
+                    </View>
+                  ))}
+                </ScrollView>,
+              );
+            } else {
+              nodes.push(
+                <View key="health-goals-debts" style={{ flexDirection: 'row', flexWrap: 'wrap', width: '100%' }}>
+                  {group.map((gid) => renderCard(gid))}
+                </View>,
+              );
+            }
+            trioDone = true;
+            while (i < cards.length && trioIds.has(cards[i]!)) i += 1;
+            continue;
+          }
+          if (trioIds.has(id) && trioDone) {
+            i += 1;
+            continue;
+          }
+          nodes.push(renderCard(id));
+          i += 1;
+        }
+        return nodes;
+      })();
+
   return (
-    <AppFrame title={t('dashboard.title')}>
+    <AppFrame title={titleShrunk ? greeting(user?.name ?? '') : t('dashboard.title')}>
       <ScrollView
         contentContainerStyle={{ gap: sp['spacing-lg'] }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          // DESIGN D22: iOS-style large title shrinks into the top bar on scroll.
+          const y = e.nativeEvent.contentOffset.y;
+          setTitleShrunk(y > 48);
+        }}
       >
-        <Text testID="dashboard-greeting" variant="display-md">
+        <Text testID="dashboard-greeting" variant={titleShrunk ? 'heading-sm' : 'display-md'}>
           {greeting(user?.name ?? '')}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
@@ -350,7 +624,7 @@ export function DashboardScreen() {
         {!model ? (
           <Placeholder height={200} />
         ) : (
-          cards.map((id) => renderCard(id))
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: phone ? 0 : -sp['spacing-xs'] }}>{gridCards}</View>
         )}
       </ScrollView>
       <CustomizeDashboardSheet visible={customizeOpen} layout={layout} onClose={closeCustomize} onSave={saveLayout} />
@@ -358,7 +632,7 @@ export function DashboardScreen() {
   );
 }
 
-function ComingUpCard({ rows, onPlan }: { rows: ComingUpRow[]; onPlan: () => void }) {
+function ComingUpCard({ rows, onPlan, onRow }: { rows: ComingUpRow[]; onPlan: () => void; onRow: (row: ComingUpRow) => void }) {
   return (
     <Card testID="dashboard-coming-up" style={{ gap: sp['spacing-sm'] }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -369,7 +643,13 @@ function ComingUpCard({ rows, onPlan }: { rows: ComingUpRow[]; onPlan: () => voi
         <Text tone="textSecondary">{t('dashboard.comingUpEmpty')}</Text>
       ) : (
         rows.slice(0, 8).map((row) => (
-          <View key={`${row.recurring.id}:${row.dueDate}`} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-sm'] }}>
+          <Pressable
+            key={`${row.recurring.id}:${row.dueDate}`}
+            testID={`dashboard-coming-up-row-${row.recurring.id}:${row.dueDate}`}
+            accessibilityRole="button"
+            onPress={() => onRow(row)}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp['spacing-sm'] }}
+          >
             <View style={{ flex: 1, gap: 2 }}>
               <Text>{row.recurring.name}</Text>
               <Text variant="caption" tone="textSecondary">
@@ -378,7 +658,7 @@ function ComingUpCard({ rows, onPlan }: { rows: ComingUpRow[]; onPlan: () => voi
             </View>
             {row.overdue ? <StatusPill kind="problem" label={t('dashboard.overdue')} /> : null}
             <Amount minor={row.amountMinor} signed={row.recurring.kind === 'income'} variant="caption" />
-          </View>
+          </Pressable>
         ))
       )}
     </Card>
@@ -388,6 +668,7 @@ function ComingUpCard({ rows, onPlan }: { rows: ComingUpRow[]; onPlan: () => voi
 function StatTile({
   testID,
   label,
+  basis,
   amount,
   change,
   footnote,
@@ -395,18 +676,26 @@ function StatTile({
 }: {
   testID: string;
   label: string;
+  basis: string;
   amount: bigint;
   change: number | null;
   footnote?: string;
   onPress: () => void;
 }) {
+  const theme = useTheme();
   return (
-    <Pressable testID={testID} onPress={onPress} style={{ minWidth: 140 }}>
+    <Pressable testID={testID} onPress={onPress} style={{ minWidth: 140 }} accessibilityHint={basis}>
       <Card style={{ gap: sp['spacing-xs'] }}>
-        <Text variant="caption" tone="textSecondary">
-          {label}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Text variant="caption" tone="textSecondary">
+            {label}
+          </Text>
+          <Info size={14} color={theme.textSecondary} accessibilityLabel={basis} />
+        </View>
         <Amount minor={amount} variant="heading-sm" signed={label !== t('dashboard.tile.spent')} />
+        <Text variant="micro" tone="textSecondary">
+          {basis}
+        </Text>
         {change !== null ? (
           <Text variant="micro" tone="textSecondary">
             {change >= 0 ? t('dashboard.changeUp', { pct: Math.abs(change).toFixed(0) }) : t('dashboard.changeDown', { pct: Math.abs(change).toFixed(0) })}
@@ -419,5 +708,56 @@ function StatTile({
         ) : null}
       </Card>
     </Pressable>
+  );
+}
+
+function HealthCard({ month, onOpen }: { month: string; onOpen: () => void }) {
+  const { snapshot, repo } = useWorkspace();
+  const summary = useMemo(() => {
+    if (!snapshot) return null;
+    const settings = repo.defaultHealthSettings(snapshot);
+    const complete = monthsEndingAt(ledgerPrev(month), 3);
+    const totals = periodTotals(snapshot.events);
+    let incomeSum = 0n;
+    let spentSum = 0n;
+    for (const m of complete) {
+      incomeSum += monthIncome(snapshot.chart, totals, m);
+      spentSum += monthSpent(snapshot.chart, totals, m);
+    }
+    const savingRatio = incomeSum > 0n ? Number((incomeSum - spentSum) * 100n) / Number(incomeSum) : 0;
+    const saving = Math.max(0, Math.min(100, Math.round(savingRatio <= 0 ? 0 : savingRatio >= 20 ? 100 : (savingRatio / 20) * 100)));
+    const liquid = settings.cashAccountIds.reduce((s, id) => s + ledgerBalance(id, snapshot.events), 0n);
+    const medianSpend = spentSum / BigInt(Math.max(1, complete.length));
+    const runwayMonths = medianSpend > 0n ? Number(liquid) / Number(medianSpend) : 0;
+    const runway = Math.max(0, Math.min(100, Math.round(runwayMonths <= 0 ? 0 : runwayMonths >= settings.emergencyMonths ? 100 : (runwayMonths / settings.emergencyMonths) * 100)));
+    const ready = complete.length >= 2;
+    const score = ready ? Math.round((saving + runway) / 2) : null;
+    return { score, ready, advice: t('health.runwayLine', { months: runwayMonths.toFixed(1), target: String(settings.emergencyMonths) }) };
+  }, [snapshot, repo, month]);
+
+  if (!summary) return null;
+  return (
+    <LiftPressable testID="dashboard-health" accessibilityRole="link" onPress={onOpen}>
+      <Card style={{ gap: sp['spacing-sm'] }}>
+        <Text variant="heading-sm">{t('dashboard.healthCard')}</Text>
+        {summary.ready && summary.score !== null ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'] }}>
+            <ProgressRing value={summary.score / 100} label={t('health.scoreLabel', { score: String(summary.score) })} />
+            <View style={{ flex: 1 }}>
+              <Text variant="heading-md" testID="dashboard-health-score">
+                {String(summary.score)}
+              </Text>
+              <Text variant="caption" tone="textSecondary">
+                {summary.advice}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <Text tone="textSecondary" testID="dashboard-health-not-ready">
+            {t('health.notReady')}
+          </Text>
+        )}
+      </Card>
+    </LiftPressable>
   );
 }

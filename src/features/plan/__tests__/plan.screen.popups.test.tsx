@@ -122,6 +122,29 @@ describe('Plan popups deep links (PU00-5 / TB-04 / PU-25…28 / PU-59)', () => {
     expect(screen.getByTestId('plan-match-sheet')).toBeTruthy();
   });
 
+  it('PU26: stream occurrence (colons in id) opens Mark received', async () => {
+    const { sync, repo } = await seeded();
+    const s = await repo.load();
+    const stream = await repo.addIncomeStream({
+      name: 'Salary',
+      kind: 'regular',
+      expectedMinor: '64000000',
+      accountId: s.accounts[0]!.id,
+      categoryId: s.categories.find((c) => c.kind === 'income')!.id,
+      rule: { every: 'month', on: 1 },
+      countInBudget: true,
+    });
+    setParams({ occurrence: `stream:${stream.id}:2026-10-01` });
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <PlanScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(screen.getByTestId('plan-match-sheet')).toBeTruthy();
+    expect(screen.getAllByText(t('plan.markReceived')).length).toBeGreaterThan(0);
+  });
+
   it('PU26-2: already paid sheet refuses second mark', async () => {
     const { sync, repo } = await seeded();
     const s = await repo.load();

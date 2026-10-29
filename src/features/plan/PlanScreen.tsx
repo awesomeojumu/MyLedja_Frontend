@@ -100,7 +100,12 @@ export function PlanScreen() {
   const formKind = (params.kind as Recurring['kind'] | undefined) ?? 'bill';
   const matchRow = useMemo(() => {
     if (!snapshot || !params.occurrence) return null;
-    const [recurringId, dueDate] = String(params.occurrence).split(':');
+    // Ids may contain colons (income streams use `stream:<id>`), so split on the last ':'.
+    const raw = String(params.occurrence);
+    const cut = raw.lastIndexOf(':');
+    if (cut <= 0) return null;
+    const recurringId = raw.slice(0, cut);
+    const dueDate = raw.slice(cut + 1);
     if (!recurringId || !dueDate) return null;
     const rows = planRowsForMonth(snapshot, monthOf(dueDate), today(), dueSoonDays);
     return rows.find((r) => r.recurring.id === recurringId && r.dueDate === dueDate) ?? null;
