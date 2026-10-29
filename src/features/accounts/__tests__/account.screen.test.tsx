@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { WorkspaceRepository } from '@/data/workspace/repository';
 import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
@@ -66,17 +66,20 @@ describe('Account page', () => {
     expect(router.setParams).toHaveBeenCalledWith({ tx: r.value.id });
   });
 
-  it('P08-05: Update value is offered for property, with a Value tab', async () => {
+  it('P08-05 / PU14-1: Update value is offered for property, with a Value tab and delta', async () => {
     const { sync, repo, id } = await seeded();
     setParams({ id: id('House') });
     await renderWithProviders(wrap(<AccountScreen />), { sync });
     await fireEvent.press(await screen.findByTestId('account-more'));
     await fireEvent.press(screen.getByText(t('account.updateValue')));
+    expect(router.setParams).toHaveBeenCalledWith({ value: id('House') });
+    await act(async () => setParams({ id: id('House'), value: id('House') }));
+    expect(await screen.findByTestId('value-delta')).toBeTruthy();
     await fireEvent.changeText(screen.getByTestId('value-amount'), '35000000');
     await fireEvent.press(screen.getByTestId('value-save'));
     await waitFor(async () => expect(ledgerBalance(id('House'), (await repo.load()).events)).toBe(3_500_000_000n));
-    await fireEvent.press(screen.getByText(t('account.tab.value')));
-    expect(screen.getByTestId('value-list')).toHaveTextContent('+₦5,000,000.00', { exact: false });
+    await act(async () => setParams({ id: id('House'), tab: 'value' }));
+    expect(await screen.findByTestId('value-list')).toHaveTextContent('+₦5,000,000.00', { exact: false });
   });
 
   it('a bank account has no Update value or Value tab', async () => {
@@ -88,12 +91,14 @@ describe('Account page', () => {
     expect(screen.queryByText(t('account.tab.value'))).toBeNull();
   });
 
-  it('P08-06: archiving with money in it asks where to move it first', async () => {
+  it('P08-06 / PU15-1: archiving with money requires a choice; move path works', async () => {
     const { sync, repo, id } = await seeded();
     setParams({ id: id('GTBank') });
     await renderWithProviders(wrap(<AccountScreen />), { sync });
     await fireEvent.press(await screen.findByTestId('account-more'));
     await fireEvent.press(screen.getByText(t('account.archive')));
+    expect(screen.getByTestId('archive-save')).toBeDisabled();
+    await fireEvent.press(screen.getByTestId('archive-mode-move'));
     expect(screen.getByTestId('archive-save')).toBeDisabled();
     await fireEvent.press(screen.getByTestId('archive-move-to'));
     await fireEvent.press(screen.getByText('OPay'));
@@ -101,6 +106,44 @@ describe('Account page', () => {
     await waitFor(async () => expect((await repo.load()).accounts.find((a) => a.name === 'GTBank')?.archived).toBe(true));
     expect(ledgerBalance(id('OPay'), (await repo.load()).events)).toBe(81_230_000n);
     expect(router.push).toHaveBeenCalledWith('/accounts');
+  });
+
+  it('PU15-1: archive with balance keeps the money and marks closed with balance', async () => {
+    const { sync, repo, id } = await seeded();
+    setParams({ id: id('GTBank') });
+    await renderWithProviders(wrap(<AccountScreen />), { sync });
+    await fireEvent.press(await screen.findByTestId('account-more'));
+    await fireEvent.press(screen.getByText(t('account.archive')));
+    await fireEvent.press(screen.getByTestId('archive-mode-keep'));
+    await fireEvent.press(screen.getByTestId('archive-save'));
+    await waitFor(async () => {
+      const a = (await repo.load()).accounts.find((x) => x.name === 'GTBank');
+      expect(a?.archived).toBe(true);
+      expect(a?.closedWithBalance).toBe(true);
+    });
+    expect(ledgerBalance(id('GTBank'), (await repo.load()).events)).toBe(81_230_000n);
+  });
+
+  it('TB03-1: bank shows Transactions and Details only; property shows Value; tab is in the URL', async () => {
+    const { sync, id } = await seeded();
+    setParams({ id: id('GTBank') });
+    await renderWithProviders(wrap(<AccountScreen />), { sync });
+    const tabs = await screen.findByTestId('account-tabs');
+    expect(tabs).toHaveTextContent(t('account.tab.transactions'), { exact: false });
+    expect(tabs).toHaveTextContent(t('account.tab.details'), { exact: false });
+    expect(tabs).not.toHaveTextContent(t('account.tab.value'), { exact: false });
+    await fireEvent.press(screen.getByText(t('account.tab.details')));
+    expect(router.setParams).toHaveBeenCalledWith({ tab: 'details' });
+  });
+
+  it('PU13-3: last 4 digits refuse more than 4 and never ask for a full number', async () => {
+    const { sync } = await seeded();
+    setParams({ account: 'new' });
+    await renderWithProviders(wrap(<AccountsScreen />), { sync });
+    expect(await screen.findByTestId('add-account-sheet')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('type-bank'));
+    await fireEvent.changeText(screen.getByTestId('account-last4'), '12345678');
+    expect(screen.getByTestId('account-last4')).toHaveDisplayValue('1234');
   });
 
   it('P09-06: Details shows the bank, the last 4 digits and the currency', async () => {
@@ -148,11 +191,14 @@ describe('Import file', () => {
     expect(preview).toHaveTextContent('+₦640,000.00', { exact: false });
     expect(screen.getByTestId('import-broken')).toHaveTextContent(t('import.broken', { lines: '4' }));
     await fireEvent.press(screen.getByTestId('import-next'));
-    expect(screen.getByTestId('import-counts')).toHaveTextContent(t('import.countsFull', { fresh: 1, duplicates: 1, rules: 0 }));
+    expect(screen.getByTestId('import-counts')).toHaveTextContent(
+      t('import.countsPhrase', { fresh: 1, duplicates: 1, rules: 0, broken: 1 }),
+    );
     expect(screen.getByTestId('review-tick-2')).not.toBeChecked();
     expect(screen.getByTestId('review-tick-3')).toBeChecked();
     await fireEvent.press(screen.getByTestId('import-post'));
     await waitFor(() => expect(onImported).toHaveBeenCalledWith(expect.any(String), 1));
+    expect(await screen.findByTestId('import-done-close')).toBeTruthy();
     const s = await repo.load();
     expect(ledgerBalance(id('GTBank'), s.events)).toBe(81_230_000n - 1_845_000n + 64_000_000n);
     expect(s.accounts.find((a) => a.name === 'GTBank')?.importMapping).toMatchObject({ date: 0, amount: 2, description: 1 });
