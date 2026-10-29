@@ -34,7 +34,8 @@ export type RoutingApply = {
 
 export type MarkReceivedPayload =
   | { kind: 'match'; eventId: string; amount: bigint; date: string; routing: RoutingApply[] }
-  | { kind: 'create'; amount: bigint; date: string; routing: RoutingApply[] };
+  | { kind: 'create'; amount: bigint; date: string; routing: RoutingApply[] }
+  | { kind: 'undo'; eventId: string; amount: bigint; date: string; routing: RoutingApply[] };
 
 function eventTitle(snapshot: Snapshot, eventId: string): string {
   const e = snapshot.events.find((x) => x.id === eventId);

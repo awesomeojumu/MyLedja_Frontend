@@ -3,6 +3,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type { SetupBody } from '@/api/auth';
 import { formatDay } from '@/design/components/overlays';
 import { budgetForMonth, resolveTemplateLineAmount, rowFor } from '@/features/budget/helpers';
+import { grossSplitParts } from '@/features/income/grossSplit';
 import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import type { RemoteOperation } from '../sync/mapOperation';
 import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
@@ -1685,10 +1686,19 @@ export class WorkspaceRepository {
     const snapshot = await this.load();
     const stream = snapshot.incomeStreams.find((s) => s.id === streamId);
     if (!stream) return { ok: false, error: 'missing_lines' };
-    const { grossSplitParts } = await import('@/features/income/grossSplit');
     const split = grossSplitParts(stream);
-    // Full E24 when recording the take-home (or more) for a gross stream (case 18).
-    if (split && input.amount >= split.takeHome) {
+    const month = monthOf(input.date);
+    // Never run full E24 after same-month partials/links already posted for this stream (case 18 safety).
+    const priorSameMonth = snapshot.events.some(
+      (e) =>
+        e.status === 'posted' &&
+        !e.oneOff &&
+        e.incomeStreamId === streamId &&
+        (e.type === 'income' || e.type === 'salary_gross') &&
+        monthOf(e.date) === month,
+    );
+    // Full E24 when recording the take-home (or more) for a gross stream with no prior receive this month.
+    if (split && input.amount >= split.takeHome && !priorSameMonth) {
       const lines = buildSalaryGross(snapshot.chart, {
         accountId: input.accountId,
         categoryId: stream.categoryId,
@@ -2032,6 +2042,49 @@ export class WorkspaceRepository {
         hideAmount: true,
       };
       const { id: nid, ...data } = notification;
+      await this.put('notifications', id, data, 'notification.create');
+    }
+    // DESIGN D16 — income due: "Has your salary arrived?" → Mark received.
+    for (const stream of snapshot.incomeStreams) {
+      if (stream.kind === 'irregular') continue;
+      if (stream.reminder === 'none') continue;
+      const [y, m] = month.split('-').map(Number) as [number, number];
+      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      const day = Math.min(Math.max(1, stream.rule.on === 31 ? last : stream.rule.on), last);
+      const incomeDue = `${month}-${String(day).padStart(2, '0')}`;
+      const received = snapshot.events.some(
+        (e) =>
+          e.status === 'posted' &&
+          !e.oneOff &&
+          e.incomeStreamId === stream.id &&
+          (e.type === 'income' || e.type === 'salary_gross') &&
+          monthOf(e.date) === month,
+      );
+      if (received) continue;
+      const id = `income:${stream.id}:${incomeDue}`;
+      if (existing.has(id)) continue;
+      const daysBefore =
+        stream.reminder === '1' ? 1 : stream.reminder === '3' ? 3 : stream.reminder === '7' ? 7 : 0;
+      const fireFrom = (() => {
+        const d = new Date(`${incomeDue}T12:00:00Z`);
+        d.setUTCDate(d.getUTCDate() - daysBefore);
+        return d.toISOString().slice(0, 10);
+      })();
+      if (today < fireFrom) continue;
+      const notification: AppNotification = {
+        id,
+        createdAt: new Date().toISOString(),
+        title: t('notifications.incomeArrived', { name: stream.name }),
+        body: t('notifications.incomeArrivedBody', { date: formatDay(incomeDue) }),
+        category: 'income',
+        read: false,
+        action: 'mark_received',
+        recurringId: stream.id,
+        dueDate: incomeDue,
+        amountMinor: stream.expectedMinor,
+        hideAmount: true,
+      };
+      const { id: _nid, ...data } = notification;
       await this.put('notifications', id, data, 'notification.create');
     }
   }

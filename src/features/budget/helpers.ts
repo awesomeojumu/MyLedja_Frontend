@@ -8,7 +8,6 @@ import {
   barState,
   categoryActivity,
   envelopeBudget,
-  monthIncome,
   monthOf,
   monthsEndingAt,
   nextMonth,
@@ -18,6 +17,7 @@ import {
   type BarState,
 } from '@/ledger';
 import type { BudgetMonth, BudgetRow } from '@/ledger/budget';
+import { budgetableIncomeReceived } from '@/features/income/budgetableIncome';
 
 /** Expense categories that appear on the Budget page. */
 export function budgetCategories(snapshot: Snapshot) {
@@ -48,8 +48,6 @@ export function budgetForMonth(snapshot: Snapshot, month: string): BudgetMonth {
   // E19: goal spend posts to the category but is not overspending (TECH-SPEC 6.6 / P06-08).
   const budgetEvents = snapshot.events.filter((e) => !e.goalId);
   const totals = periodTotals(budgetEvents);
-  // Income still uses all events (goal spend is expense-only).
-  const incomeTotals = periodTotals(snapshot.events);
   const months =
     snapshot.settings.budgetStyle === 'envelope' ? [prevMonth(month), month].filter((m, i, a) => i === 0 || a[i - 1] !== m) : [month];
   const run = snapshot.settings.budgetStyle === 'envelope' ? envelopeBudget : trackingBudget;
@@ -58,22 +56,7 @@ export function budgetForMonth(snapshot: Snapshot, month: string): BudgetMonth {
     categories: cats.map((c) => ({ ledgerAccountId: c.id, carryOver: c.carryOver })),
     assigned: (id, m) => assignedOf(snapshot, id, m),
     activity: (id, m) => categoryActivity(totals, m, id),
-    budgetableIncome: (m) => {
-      let income = monthIncome(snapshot.chart, incomeTotals, m, true);
-      // DESIGN §9.4: stream "Count in budget" off — exclude that stream's income credits.
-      for (const stream of snapshot.incomeStreams) {
-        if (stream.countInBudget) continue;
-        for (const e of snapshot.events) {
-          if (e.status !== 'posted' || e.incomeStreamId !== stream.id || e.oneOff) continue;
-          if ((e.type !== 'income' && e.type !== 'salary_gross') || monthOf(e.date) !== m) continue;
-          for (const l of e.lines) {
-            const acc = snapshot.chart.get(l.ledgerAccountId);
-            if (acc?.kind === 'income' && l.amountMinor < 0n) income -= -l.amountMinor;
-          }
-        }
-      }
-      return income;
-    },
+    budgetableIncome: (m) => budgetableIncomeReceived(snapshot, m),
     goalAllocations: (m) =>
       snapshot.allocations
         .filter((a) => a.kind !== 'spend' && monthOf(a.date) === m)

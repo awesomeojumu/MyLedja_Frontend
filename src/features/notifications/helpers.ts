@@ -70,6 +70,7 @@ export function notificationIcon(n: AppNotification): NotificationIcon {
   if (n.category === 'goals') return 'goal';
   if (n.action === 'match') return 'missed';
   if (n.category === 'bills' && n.action === 'mark_paid') return 'due';
+  if (n.category === 'income' && n.action === 'mark_received') return 'due';
   return 'default';
 }
 

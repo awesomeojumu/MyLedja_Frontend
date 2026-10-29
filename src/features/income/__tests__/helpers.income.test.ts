@@ -2,7 +2,7 @@ import type { IncomeStream } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 
 import { grossSplitParts } from '../grossSplit';
-import { streamDueDateInMonth, streamPaymentDots, taxTotalsForYear } from '../helpers';
+import { incomeSteadiness, streamDueDateInMonth, streamPaymentDots, taxTotalsForYear } from '../helpers';
 
 function baseStream(over: Partial<IncomeStream> = {}): IncomeStream {
   return {
@@ -127,5 +127,45 @@ describe('income helpers (P13)', () => {
       pensionAccountId: 'pension',
       nhfAccountId: 'nhf',
     });
+  });
+
+  it('D3: steadiness is % on time (not share received)', () => {
+    const onTime = baseStream({ id: 's1', name: 'Salary' });
+    const late = baseStream({ id: 's2', name: 'Bonus', rule: { every: 'month', on: 10 } });
+    const snapshot = snap(
+      [
+        {
+          id: 'e1',
+          operationId: 'e1',
+          type: 'income',
+          status: 'posted',
+          date: '2026-10-27',
+          incomeStreamId: 's1',
+          lines: [
+            { ledgerAccountId: 'bank', amountMinor: 62000000n, currency: 'NGN' },
+            { ledgerAccountId: 'salary', amountMinor: -62000000n, currency: 'NGN' },
+          ],
+        },
+        {
+          id: 'e2',
+          operationId: 'e2',
+          type: 'income',
+          status: 'posted',
+          date: '2026-10-20',
+          incomeStreamId: 's2',
+          lines: [
+            { ledgerAccountId: 'bank', amountMinor: 62000000n, currency: 'NGN' },
+            { ledgerAccountId: 'salary', amountMinor: -62000000n, currency: 'NGN' },
+          ],
+        },
+      ],
+      [onTime, late],
+    );
+    const rows = [
+      { stream: onTime, expected: 62000000n, received: 62000000n },
+      { stream: late, expected: 62000000n, received: 62000000n },
+    ];
+    // One on time, one late → 50% on-time (not 100% received).
+    expect(incomeSteadiness(rows, snapshot, '2026-10')).toBe(50);
   });
 });

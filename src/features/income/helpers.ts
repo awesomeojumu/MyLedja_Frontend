@@ -22,6 +22,8 @@ export type InvestmentIncomeRow = {
   date: string;
   amount: bigint;
   detail?: string;
+  /** Deep link to holding or debt when known (DESIGN D12). */
+  href?: string;
 };
 
 export type TwelveMonthPoint = {
@@ -50,7 +52,7 @@ function receivedForStreamInMonth(stream: IncomeStream, snapshot: Snapshot, mont
   return received;
 }
 
-function earliestReceiptDate(stream: IncomeStream, snapshot: Snapshot, month: string): string | null {
+export function earliestReceiptDate(stream: IncomeStream, snapshot: Snapshot, month: string): string | null {
   let earliest: string | null = null;
   for (const e of snapshot.events) {
     if (e.status !== 'posted' || !isStreamIncomeEvent(e) || e.incomeStreamId !== stream.id) continue;
@@ -58,6 +60,32 @@ function earliestReceiptDate(stream: IncomeStream, snapshot: Snapshot, month: st
     if (!earliest || e.date < earliest) earliest = e.date;
   }
   return earliest;
+}
+
+/** Latest posted stream income/salary_gross event id this month (for PU-26 undo). */
+export function latestStreamIncomeEventId(stream: IncomeStream, snapshot: Snapshot, month: string): string | null {
+  let latest: { id: string; date: string } | null = null;
+  for (const e of snapshot.events) {
+    if (e.status !== 'posted' || !isStreamIncomeEvent(e) || e.incomeStreamId !== stream.id) continue;
+    if (monthOf(e.date) !== month) continue;
+    if (!latest || e.date > latest.date || (e.date === latest.date && e.id > latest.id)) latest = { id: e.id, date: e.date };
+  }
+  return latest?.id ?? null;
+}
+
+/** DESIGN D9 — human-readable deduction lines for the gross ⓘ. */
+export function deductionHintLines(stream: IncomeStream): string[] {
+  if (stream.recordMode !== 'gross' || !stream.grossMinor) return [];
+  const gross = BigInt(stream.grossMinor);
+  const lines: string[] = [];
+  for (const d of stream.deductions ?? []) {
+    const label = t(`income.deduction.${d.kind}` as 'income.deduction.paye');
+    let amount = 0n;
+    if (d.amountMinor) amount = BigInt(d.amountMinor);
+    else if (d.percent) amount = (gross * BigInt(Math.round(d.percent * 100))) / 10_000n;
+    lines.push(`${label} ${formatNaira(amount)}`);
+  }
+  return lines;
 }
 
 /** Due date for a stream in a calendar month (YYYY-MM-DD), or null when irregular. */
@@ -77,7 +105,7 @@ export function incomeForMonth(snapshot: Snapshot, month: string): { rows: Strea
   });
   const expected = rows.reduce((s, r) => s + r.expected, 0n);
   const received = rows.reduce((s, r) => s + r.received, 0n);
-  const steadiness = incomeSteadiness(rows);
+  const steadiness = incomeSteadiness(rows, snapshot, month);
   return { rows, expected, received, steadiness };
 }
 
@@ -85,12 +113,23 @@ export function groupStreamRows(rows: StreamRow[]): { kind: IncomeStreamKind; ro
   return INCOME_KIND_ORDER.map((kind) => ({ kind, rows: rows.filter((r) => r.stream.kind === kind) })).filter((g) => g.rows.length > 0);
 }
 
-/** Share of regular streams that reached expected this month (P13-01). */
-export function incomeSteadiness(rows: StreamRow[]): number | null {
+/**
+ * DESIGN D3: % of scored regular/varies payments that were on time (not late/missed/partial).
+ * Uses the same last-occurrence dot rules as the stream cards.
+ */
+export function incomeSteadiness(rows: StreamRow[], snapshot: Snapshot, month: string): number | null {
   const regular = rows.filter((r) => r.stream.kind === 'regular' || r.stream.kind === 'variable');
   if (regular.length === 0) return null;
-  const onTrack = regular.filter((r) => r.received >= r.expected).length;
-  return Math.round((onTrack / regular.length) * 100);
+  let onTime = 0;
+  let scored = 0;
+  for (const { stream } of regular) {
+    const status = dotForMonth(stream, snapshot, month);
+    if (status === 'none') continue;
+    scored += 1;
+    if (status === 'onTime') onTime += 1;
+  }
+  if (scored === 0) return null;
+  return Math.round((onTime / scored) * 100);
 }
 
 export function streamPaymentDots(stream: IncomeStream, snapshot: Snapshot, endMonth: string): PaymentDotStatus[] {
@@ -246,12 +285,15 @@ export function investmentIncomeForMonth(snapshot: Snapshot, month: string): Inv
     }
     if (amount <= 0n || !kind) continue;
     const payee = e.payeeId ? snapshot.payees.find((p) => p.id === e.payeeId)?.name : undefined;
+    const holding = snapshot.holdings.find((h) => e.lines.some((l) => l.ledgerAccountId === h.ledgerAccountId));
+    const href = e.debtId ? `/debts/${e.debtId}` : holding ? `/investments/${holding.id}` : undefined;
     rows.push({
       id: e.id,
       label: payee ?? (kind === 'interest' ? t('income.investmentInterest') : t('income.investmentGain')),
       date: e.date,
       amount,
       detail: e.notes,
+      href,
     });
   }
   for (const stream of snapshot.incomeStreams.filter((s) => s.kind === 'passive')) {
