@@ -9,3 +9,13 @@ export function warningHaptic(): void {
     /* unsupported */
   }
 }
+
+/** Light select haptic when tapping a chart bar (DESIGN Page 7). No-op on web. */
+export function selectHaptic(): void {
+  if (Platform.OS === 'web') return;
+  try {
+    Vibration.vibrate(10);
+  } catch {
+    /* unsupported */
+  }
+}

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Line as SvgLine, Path } from 'react-native-svg';
+import { Platform, View, type LayoutChangeEvent } from 'react-native';
+import Svg, { Circle, Line as SvgLine, Path, Rect } from 'react-native-svg';
 
 import { t } from '@/i18n';
 import { formatNaira, PRIVACY_MASK } from '@/money';
@@ -14,7 +14,15 @@ const c = tokens.color;
 const sp = tokens.spacing;
 const r = tokens.radius;
 
-export type Point = { label: string; value: bigint; over?: boolean };
+export type Point = {
+  label: string;
+  value: bigint;
+  /** Planned amount for dual planned-vs-spent bars (Page 7). */
+  planned?: bigint;
+  over?: boolean;
+  /** Optional month key for navigation when a bar is pressed. */
+  month?: string;
+};
 
 /** DESIGN.md 2.7 donut order; gold may replace the last for the one share that matters. */
 export const DONUT_COLOURS = [c.primary, c['primary-deep'], c['primary-soft'], c['primary-bg-subdued-hover']];
@@ -23,7 +31,7 @@ type Frame = {
   /** States the finding ("Spending fell 11% from September"); also the screen-reader label. */
   title: string;
   /** Column headings for "View as table". */
-  columns: [string, string];
+  columns: [string, string] | [string, string, string];
   rows: Point[];
   format?: (v: bigint) => string;
   testID?: string;
@@ -37,24 +45,48 @@ function ChartFrame({ title, columns, rows, format = formatNaira, testID, childr
   const [asTable, setAsTable] = useState(false);
   const [width, setWidth] = useState(0);
   const show = (v: bigint) => (privacy ? PRIVACY_MASK : format(v));
+  const hasPlanned = columns.length > 2;
   return (
     <View testID={testID} style={{ gap: sp['spacing-sm'] }}>
       <Text variant="heading-sm">{title}</Text>
       {asTable ? (
         <View accessibilityRole="list" testID={testID && `${testID}-table`}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: sp['spacing-xs'] }}>
-            <Text variant="caption" tone="textSecondary">{columns[0]}</Text>
-            <Text variant="caption" tone="textSecondary">{columns[1]}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: sp['spacing-xs'], gap: sp['spacing-sm'] }}>
+            <Text variant="caption" tone="textSecondary" style={{ flex: 1 }}>
+              {columns[0]}
+            </Text>
+            {hasPlanned ? (
+              <Text variant="caption" tone="textSecondary" style={{ minWidth: 72, textAlign: 'right' }}>
+                {columns[1]}
+              </Text>
+            ) : null}
+            <Text variant="caption" tone="textSecondary" style={{ minWidth: 72, textAlign: 'right' }}>
+              {hasPlanned ? columns[2] : columns[1]}
+            </Text>
           </View>
           {rows.map((row) => (
             <View
               key={row.label}
               accessible
-              accessibilityLabel={`${row.label}, ${show(row.value)}`}
-              style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: sp['spacing-xs'], borderTopWidth: 1, borderTopColor: theme.border }}
+              accessibilityLabel={
+                hasPlanned
+                  ? `${row.label}, planned ${show(row.planned ?? 0n)}, spent ${show(row.value)}`
+                  : `${row.label}, ${show(row.value)}`
+              }
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                paddingVertical: sp['spacing-xs'],
+                borderTopWidth: 1,
+                borderTopColor: theme.border,
+                gap: sp['spacing-sm'],
+              }}
             >
-              <Text>{row.label}</Text>
-              <Text style={{ fontVariant: ['tabular-nums'] }}>{show(row.value)}</Text>
+              <Text style={{ flex: 1 }}>{row.label}</Text>
+              {hasPlanned ? (
+                <Text style={{ minWidth: 72, textAlign: 'right', fontVariant: ['tabular-nums'] }}>{show(row.planned ?? 0n)}</Text>
+              ) : null}
+              <Text style={{ minWidth: 72, textAlign: 'right', fontVariant: ['tabular-nums'] }}>{show(row.value)}</Text>
             </View>
           ))}
         </View>
@@ -84,23 +116,77 @@ function scale(values: bigint[]): (v: bigint) => number {
 }
 
 /** Up to 12 bars; over-plan bars are ruby; at most one gold bar, and only if the view has no other gold mark. */
-export function BarChart({ highlight, ...props }: Omit<Frame, 'children'> & { highlight?: number }) {
+export function BarChart({
+  highlight,
+  onBarPress,
+  ...props
+}: Omit<Frame, 'children'> & { highlight?: number; onBarPress?: (row: Point, index: number) => void }) {
   const theme = useTheme();
+  const { privacy } = useDesign();
+  const [tip, setTip] = useState<{ index: number; x: number } | null>(null);
   const bars = props.rows.slice(-12);
-  const y = scale(bars.map((b) => b.value));
+  const y = scale(bars.flatMap((b) => [b.value, b.planned ?? 0n]));
+  const show = (v: bigint) => (privacy ? PRIVACY_MASK : (props.format ?? formatNaira)(v));
+
+  const activate = (b: Point, i: number, x: number) => {
+    setTip({ index: i, x });
+    onBarPress?.(b, i);
+  };
+
   return (
     <ChartFrame {...props} rows={bars}>
       {(width) => {
         const gap = 6;
         const barW = Math.max(4, (width - gap * (bars.length - 1)) / Math.max(1, bars.length));
+        const tipRow = tip ? bars[tip.index] : null;
         return (
           <View>
+            {tipRow ? (
+              <View
+                testID="chart-bar-tooltip"
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: Math.min(Math.max(0, (tip?.x ?? 0) - 60), Math.max(0, width - 120)),
+                  top: 0,
+                  zIndex: 2,
+                  backgroundColor: theme.card,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: r['rounded-sm'],
+                  paddingHorizontal: sp['spacing-sm'],
+                  paddingVertical: sp['spacing-xxs'],
+                  maxWidth: 140,
+                }}
+              >
+                <Text variant="caption">
+                  {tipRow.label}
+                  {tipRow.planned !== undefined ? ` · ${show(tipRow.planned)} / ${show(tipRow.value)}` : ` · ${show(tipRow.value)}`}
+                </Text>
+              </View>
+            ) : null}
             <Svg width={width} height={HEIGHT}>
               <SvgLine x1={0} x2={width} y1={HEIGHT - 0.5} y2={HEIGHT - 0.5} stroke={theme.border} strokeWidth={1} />
               {bars.map((b, i) => {
-                const h = Math.max(b.value > 0n ? 2 : 0, y(b.value) * (HEIGHT - 4));
+                const spentH = Math.max(b.value > 0n ? 2 : 0, y(b.value) * (HEIGHT - 4));
+                const plannedH = b.planned !== undefined ? Math.max(b.planned > 0n ? 2 : 0, y(b.planned) * (HEIGHT - 4)) : 0;
                 const fill = b.over ? c.ruby : i === highlight ? c.gold : c['primary-soft'];
-                return <BarShape key={b.label} testID={`chart-bar-${i}`} x={i * (barW + gap)} width={barW} height={h} fill={fill} />;
+                const x = i * (barW + gap);
+                return (
+                  <BarShape
+                    key={b.label}
+                    testID={`chart-bar-${i}`}
+                    x={x}
+                    width={barW}
+                    height={spentH}
+                    plannedHeight={plannedH}
+                    fill={fill}
+                    outline={theme.border}
+                    onActivate={() => activate(b, i, x + barW / 2)}
+                    onHoverIn={Platform.OS === 'web' ? () => setTip({ index: i, x: x + barW / 2 }) : undefined}
+                    onHoverOut={Platform.OS === 'web' ? () => setTip((cur) => (cur?.index === i ? null : cur)) : undefined}
+                  />
+                );
               })}
             </Svg>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -117,12 +203,75 @@ export function BarChart({ highlight, ...props }: Omit<Frame, 'children'> & { hi
   );
 }
 
-function BarShape({ x, width, height, fill, testID }: { x: number; width: number; height: number; fill: string; testID: string }) {
-  const radius = Math.min(r['rounded-xs'], height / 2, width / 2);
+function BarShape({
+  x,
+  width,
+  height,
+  plannedHeight,
+  fill,
+  outline,
+  testID,
+  onActivate,
+  onHoverIn,
+  onHoverOut,
+}: {
+  x: number;
+  width: number;
+  height: number;
+  plannedHeight: number;
+  fill: string;
+  outline: string;
+  testID: string;
+  onActivate?: () => void;
+  onHoverIn?: () => void;
+  onHoverOut?: () => void;
+}) {
+  const radius = Math.min(r['rounded-xs'], Math.max(height, plannedHeight) / 2, width / 2);
   const top = HEIGHT - height;
-  if (height === 0) return null;
-  const d = `M${x},${HEIGHT} V${top + radius} Q${x},${top} ${x + radius},${top} H${x + width - radius} Q${x + width},${top} ${x + width},${top + radius} V${HEIGHT} Z`;
-  return <Path testID={testID} d={d} fill={fill} />;
+  const plannedTop = HEIGHT - plannedHeight;
+  const hit = (
+    <Rect
+      testID={`${testID}-hit`}
+      x={x}
+      y={0}
+      width={width}
+      height={HEIGHT}
+      fill="transparent"
+      onPress={onActivate}
+      {...(onHoverIn
+        ? ({
+            onMouseEnter: onHoverIn,
+            onMouseLeave: onHoverOut,
+          } as object)
+        : {})}
+    />
+  );
+  return (
+    <>
+      {plannedHeight > 0 ? (
+        <Rect
+          testID={`${testID}-planned`}
+          x={x + 1}
+          y={plannedTop}
+          width={Math.max(1, width - 2)}
+          height={plannedHeight}
+          rx={radius}
+          ry={radius}
+          fill="none"
+          stroke={outline}
+          strokeWidth={1.5}
+        />
+      ) : null}
+      {height > 0 ? (
+        <Path
+          testID={testID}
+          d={`M${x},${HEIGHT} V${top + radius} Q${x},${top} ${x + radius},${top} H${x + width - radius} Q${x + width},${top} ${x + width},${top + radius} V${HEIGHT} Z`}
+          fill={fill}
+        />
+      ) : null}
+      {hit}
+    </>
+  );
 }
 
 /** A 2.2px primary line; the latest point is gold, which is that view's gold mark. */
@@ -222,4 +371,3 @@ export function ProgressRing({ value, label, size = 56 }: { value: number; label
     </View>
   );
 }
-

@@ -114,11 +114,13 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         kind: d.kind,
         group: d.groupId,
         key: str(d.starterKey),
+        icon: str(d.icon),
         hidden: d.hidden === true,
         countInBudget: d.budgetable !== false,
         order: num(d.sortOrder) ?? 0,
         budgetType: d.type === 'non_monthly' ? 'nonMonthly' : (d.type ?? 'flexible'),
         carryOver: d.carryOver === true,
+        essential: d.essential === true ? true : undefined,
       });
     case 'category_groups':
       return rec('category_groups', id, { name: d.name, kind: d.kind, order: num(d.sortOrder) ?? 0 });

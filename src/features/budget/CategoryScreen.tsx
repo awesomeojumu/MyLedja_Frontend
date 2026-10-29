@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { createElement, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useGlobalSearchParams, useLocalSearchParams, useRouter } from 'expo-router';
 
@@ -24,6 +24,7 @@ import { t, type TextKey } from '@/i18n';
 import { formatNaira } from '@/money';
 import { monthOf } from '@/ledger';
 
+import { categoryIconByName } from './categoryIcons';
 import {
   assignedOf,
   categoryActivity,
@@ -35,6 +36,7 @@ import {
   sixMonthAverage,
   templateLineLabel,
 } from './helpers';
+import { selectHaptic } from './haptics';
 import { DeleteCategorySheet, EditCategorySheet, type CategoryDraft } from './CategorySheets';
 
 const sp = tokens.spacing;
@@ -60,7 +62,8 @@ export function CategoryScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const category = snapshot?.categories.find((c) => c.id === id);
-  const editOpen = params.category === id || params.category === 'edit';
+  const isNew = params.category === 'new';
+  const editOpen = isNew || params.category === id || params.category === 'edit';
 
   const openEdit = () => router.setParams({ category: id });
   const closeEdit = () => router.setParams({ category: undefined });
@@ -78,6 +81,7 @@ export function CategoryScreen() {
         label: shortMonth(m),
         value: spent,
         planned,
+        month: m,
         over: spent > planned && planned > 0n,
       };
     });
@@ -90,8 +94,9 @@ export function CategoryScreen() {
     );
     const bills = snapshot.recurring.filter((r) => r.categoryId === category.id);
     const templates = categoryTemplateLines(snapshot, category.id);
+    const rules = snapshot.rules.filter((r) => r.actions.some((a) => a.kind === 'setCategory' && a.value === category.id));
     const note = snapshot.assignNotes.get(budgetAssignId(category.id, month)) ?? '';
-    return { row, avg, chartRows, txs, highlight: months.length - 1, bills, templates, note };
+    return { row, avg, chartRows, txs, highlight: months.length - 1, bills, templates, rules, note };
   }, [snapshot, category, month]);
 
   if (!snapshot) {
@@ -102,7 +107,7 @@ export function CategoryScreen() {
     );
   }
 
-  if (!category) {
+  if (!category && !isNew) {
     return (
       <AppFrame title={t('category.title')}>
         <EmptyState title={t('category.missingTitle')} body={t('category.missingBody')} actionLabel={t('budget.title')} onAction={() => router.replace('/budget')} />
@@ -116,6 +121,21 @@ export function CategoryScreen() {
   };
 
   const saveCategory = async (draft: CategoryDraft) => {
+    if (isNew || !category) {
+      await repo.addCategory({
+        name: draft.name,
+        kind: draft.kind,
+        group: draft.group,
+        icon: draft.icon,
+        budgetType: draft.budgetType,
+        essential: draft.essential,
+        hidden: draft.hidden,
+      });
+      toast.show(t('category.saved'));
+      closeEdit();
+      router.replace('/budget');
+      return;
+    }
     const next: Category = {
       ...category,
       name: draft.name,
@@ -132,27 +152,47 @@ export function CategoryScreen() {
   };
 
   return (
-    <AppFrame title={category.name}>
+    <AppFrame title={category?.name ?? t('category.add')}>
       <ScrollView contentContainerStyle={{ gap: sp['spacing-lg'] }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: sp['spacing-md'], flexWrap: 'wrap' }}>
-          <View style={{ gap: sp['spacing-xxs'] }}>
-            <Text variant="caption" tone="textSecondary">
-              {groupLabel(category.group)}
-            </Text>
-            <Text testID="category-type" variant="caption" tone="textSecondary">
-              {t(`category.budgetType.${category.budgetType}`)}
-            </Text>
+        {category ? (
+          <View
+            testID="category-header"
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: sp['spacing-md'], flexWrap: 'wrap' }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'], flexShrink: 1 }}>
+              <View
+                testID="category-icon-tile"
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: tokens.radius['rounded-md'],
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: tokens.color['primary-bg-subdued-hover'],
+                }}
+              >
+                {createElement(categoryIconByName(category.icon), { size: 20, color: theme.primaryFill })}
+              </View>
+              <View style={{ gap: sp['spacing-xxs'] }}>
+                <Text variant="caption" tone="textSecondary">
+                  {groupLabel(category.group)}
+                </Text>
+                <Text testID="category-type" variant="caption" tone="textSecondary">
+                  {t(`category.budgetType.${category.budgetType}`)}
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
+              <Button testID="category-edit" kind="secondary" label={t('category.edit')} onPress={openEdit} />
+              <Button testID="category-back" kind="secondary" label={t('common.back')} onPress={() => router.push('/budget')} />
+            </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: sp['spacing-sm'] }}>
-            <Button testID="category-edit" kind="secondary" label={t('category.edit')} onPress={openEdit} />
-            <Button testID="category-back" kind="secondary" label={t('common.back')} onPress={() => router.push('/budget')} />
-          </View>
-        </View>
+        ) : null}
 
         {error ? <InlineError message={error} /> : null}
 
-        {!model ? (
-          <Placeholder height={80} />
+        {!category || !model ? (
+          category ? <Placeholder height={80} /> : null
         ) : (
           <>
             <View testID="category-stats" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-md'] }}>
@@ -166,9 +206,14 @@ export function CategoryScreen() {
               <BarChart
                 testID="category-chart"
                 title={t('category.chartTitle', { name: category.name })}
-                columns={[t('category.chartMonth'), t('category.chartSpent')]}
+                columns={[t('category.chartMonth'), t('category.chartPlanned'), t('category.chartSpent')]}
                 rows={model.chartRows}
                 highlight={model.highlight}
+                onBarPress={(row) => {
+                  selectHaptic();
+                  if (!row.month) return;
+                  router.push({ pathname: '/transactions', params: { category: category.id, month: row.month } });
+                }}
               />
               <Text variant="caption" tone="textSecondary" style={{ marginTop: sp['spacing-sm'] }}>
                 {t('category.chartPlannedHint', { amount: formatNaira(model.row.assigned) })}
@@ -216,9 +261,24 @@ export function CategoryScreen() {
 
             <Card testID="category-connected" style={{ gap: sp['spacing-sm'] }}>
               <Text variant="heading-sm">{t('category.connected')}</Text>
-              {model.bills.length === 0 && model.templates.length === 0 && !model.note ? (
+              {model.rules.length === 0 && model.bills.length === 0 && model.templates.length === 0 && !model.note ? (
                 <Text tone="textSecondary">{t('category.connectedEmpty')}</Text>
               ) : null}
+              {model.rules.map((rule) => (
+                <Pressable
+                  key={rule.id}
+                  testID={`category-rule-${rule.id}`}
+                  accessibilityRole="button"
+                  onPress={() => router.push({ pathname: '/rules', params: { edit: rule.id } })}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text>
+                    {t('category.connectedRule', {
+                      name: rule.conditions[0]?.value || rule.id.slice(0, 8),
+                    })}
+                  </Text>
+                </Pressable>
+              ))}
               {model.bills.map((bill) => (
                 <Pressable
                   key={bill.id}
@@ -256,17 +316,23 @@ export function CategoryScreen() {
 
       <EditCategorySheet
         visible={editOpen}
-        category={category}
+        category={isNew ? null : category ?? null}
         snapshot={snapshot}
+        isNew={isNew}
         onClose={closeEdit}
         onSave={saveCategory}
-        onDelete={() => {
-          closeEdit();
-          setDeleteOpen(true);
-        }}
+        onCreateGroup={(name, kind) => repo.createCategoryGroup({ name, kind })}
+        onDelete={
+          category
+            ? () => {
+                closeEdit();
+                setDeleteOpen(true);
+              }
+            : undefined
+        }
       />
 
-      {deleteOpen ? (
+      {deleteOpen && category ? (
         <DeleteCategorySheet
           visible
           category={category}
