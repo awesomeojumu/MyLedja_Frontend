@@ -1967,6 +1967,16 @@ export class WorkspaceRepository {
       notes: reason || undefined,
     }, null);
     if (!posted.ok) return posted;
+    const entry: DebtEntry = {
+      id: this.newId(),
+      debtId,
+      date: input.date,
+      eventId: posted.value.id,
+      kind: 'write_off',
+      amountMinor: amount.toString(),
+      note: reason || undefined,
+    };
+    await this.put('debt_entries', entry.id, entry, 'debt.entry');
     const baseVersion = await this.versionOf('debts', debtId);
     await this.put('debts', debtId, { ...debt, status: 'written_off', notes: reason || debt.notes }, 'debt.write_off', undefined, {
       type: 'debt.write_off',

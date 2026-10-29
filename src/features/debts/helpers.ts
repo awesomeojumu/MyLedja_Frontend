@@ -81,9 +81,27 @@ export function debtInitials(name: string): string {
   return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase();
 }
 
-/** Settled / written-off date from the latest debt entry (TB-06). */
+/**
+ * Settled / written-off date (TB-06).
+ * Prefer a write_off entry (its own date), else the latest debt entry, else the
+ * write-off / last collect / repayment event on the debt.
+ */
 export function debtClosedDate(debtId: string, snapshot: Snapshot): string | undefined {
-  const dates = snapshot.debtEntries.filter((e) => e.debtId === debtId).map((e) => e.date);
-  if (dates.length === 0) return undefined;
-  return dates.sort((a, b) => b.localeCompare(a))[0];
+  const entries = snapshot.debtEntries.filter((e) => e.debtId === debtId);
+  const writeOff = entries
+    .filter((e) => e.kind === 'write_off')
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  if (writeOff) return writeOff.date;
+  if (entries.length > 0) {
+    return [...entries].sort((a, b) => b.date.localeCompare(a.date))[0]!.date;
+  }
+  const events = snapshot.events
+    .filter(
+      (e) =>
+        e.debtId === debtId &&
+        e.status === 'posted' &&
+        (e.type === 'write_off' || e.type === 'collect' || e.type === 'loan_repayment'),
+    )
+    .sort((a, b) => b.date.localeCompare(a.date));
+  return events[0]?.date;
 }
