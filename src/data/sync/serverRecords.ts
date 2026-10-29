@@ -1,5 +1,6 @@
 import type {
   AccountKind,
+  DebtInterest,
   Goal,
   IncomeDeduction,
   IncomeDeductionKind,
@@ -259,27 +260,27 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
     }
     case 'debts': {
       const instalments = d.instalments as Doc | null | undefined;
-      const interestDoc = d.interest as Doc | null | undefined;
-      let interest: PersonDebt['interest'];
-      if (interestDoc?.kind === 'fixed') {
-        interest = { kind: 'fixed', amountMinor: String(interestDoc.amount ?? '0') };
-      } else if (interestDoc?.kind === 'percent') {
-        interest = { kind: 'percent_month', percent: (num(interestDoc.rateBasisPoints) ?? 0) / 100 };
-      } else if (interestDoc?.kind === 'none') {
-        interest = { kind: 'none' };
-      }
+      const interest = interestFromServer(d.interest as Doc | undefined);
+      const status: PersonDebt['status'] =
+        d.status === 'open' ? 'open' : d.status === 'written_off' ? 'written_off' : 'settled';
       const data: Omit<PersonDebt, 'id'> = {
         name: String(d.personName),
         direction: d.direction === 'they_owe_me' ? 'owedToMe' : 'iOwe',
         ledgerAccountId: String(d.ledgerAccountId),
         payeeId: str(d.payeeId),
-        status: d.status === 'written_off' ? 'written_off' : d.status === 'open' ? 'open' : 'settled',
+        status,
         nextDueDate: str(d.nextInstalmentDate) ?? str(d.dueDate),
         notes: str(d.notes),
         interest,
+        accountId: str(d.accountId),
+        openedOn: str(d.openedOn),
         scheduleInstallmentCount: num(instalments?.count),
         scheduleAmountMinor: minorOrUndefined(instalments?.amount),
-        scheduleEvery: instalments ? 'month' : undefined,
+        scheduleEvery: instalments
+          ? num(instalments.everyWeeks) != null
+            ? 'week'
+            : 'month'
+          : undefined,
         scheduleFirstDue: str(instalments?.firstDate),
       };
       return rec('debts', id, data);
@@ -479,4 +480,59 @@ export function goalScheduleBody(g: Omit<Goal, 'id'>, baseVersion: number) {
     recurrence: recurrenceToServer(rule),
     startDate: g.scheduleStarts ?? new Date().toISOString().slice(0, 10),
   };
+}
+
+/** Server InterestTerms → local DebtInterest (TECH-SPEC 6.9). */
+export function interestFromServer(interest: Doc | undefined): DebtInterest | undefined {
+  if (!interest || typeof interest.kind !== 'string') return undefined;
+  if (interest.kind === 'none') return { kind: 'none' };
+  if (interest.kind === 'fixed') {
+    const amount = minorOrUndefined(interest.amount);
+    return amount ? { kind: 'fixed', amountMinor: amount } : { kind: 'none' };
+  }
+  if (interest.kind === 'percent') {
+    const bps = num(interest.rateBasisPoints) ?? 0;
+    return { kind: 'percent_month', percent: bps / 100 };
+  }
+  return undefined;
+}
+
+export function interestToServer(interest: DebtInterest | undefined) {
+  if (!interest || interest.kind === 'none') return { kind: 'none' as const };
+  if (interest.kind === 'fixed') return { kind: 'fixed' as const, amount: interest.amountMinor };
+  return { kind: 'percent' as const, rateBasisPoints: Math.round(interest.percent * 100) };
+}
+
+/** Local schedule fields → BE InstalmentSchedule for PUT …/schedule. */
+export function debtInstalmentsFromLocal(d: Omit<PersonDebt, 'id'>) {
+  if (!d.scheduleInstallmentCount || !d.scheduleAmountMinor || !d.scheduleFirstDue || !d.scheduleEvery) return null;
+  const instalments: {
+    count: number;
+    amount: string;
+    firstDate: string;
+    everyMonths: number;
+    everyWeeks?: number;
+  } = {
+    count: d.scheduleInstallmentCount,
+    amount: d.scheduleAmountMinor,
+    firstDate: d.scheduleFirstDue,
+    everyMonths: 1,
+  };
+  if (d.scheduleEvery === 'week') instalments.everyWeeks = 1;
+  return instalments;
+}
+
+export function debtUpdateBody(d: Omit<PersonDebt, 'id'>, baseVersion: number) {
+  return {
+    baseVersion,
+    notes: d.notes ?? null,
+    interest: interestToServer(d.interest),
+    dueDate: d.nextDueDate ?? null,
+  };
+}
+
+export function debtScheduleBody(d: Omit<PersonDebt, 'id'>, baseVersion: number) {
+  const instalments = debtInstalmentsFromLocal(d);
+  if (!instalments) return null;
+  return { baseVersion, instalments };
 }

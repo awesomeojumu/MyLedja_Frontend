@@ -74,10 +74,28 @@ describe('server records into local records (Phase 2 join)', () => {
   });
 
   it('translates debts and goals into the app words', () => {
-    expect(localFromServer('debts', 'd1', { personName: 'Tunde', direction: 'they_owe_me', ledgerAccountId: 'la-r', status: 'written_off' }, 'ws')!.data).toMatchObject({
+    expect(
+      localFromServer(
+        'debts',
+        'd1',
+        {
+          personName: 'Tunde',
+          direction: 'they_owe_me',
+          ledgerAccountId: 'la-r',
+          status: 'written_off',
+          interest: { kind: 'percent', rateBasisPoints: 200 },
+          instalments: { count: 3, amount: '100', firstDate: '2026-11-01', everyMonths: 1, everyWeeks: 1 },
+        },
+        'ws',
+      )!.data,
+    ).toMatchObject({
       name: 'Tunde',
       direction: 'owedToMe',
       status: 'written_off',
+      interest: { kind: 'percent_month', percent: 2 },
+      scheduleEvery: 'week',
+      scheduleInstallmentCount: 3,
+      scheduleFirstDue: '2026-11-01',
     });
     expect(localFromServer('goals', 'g1', { name: 'Car', targetAmount: '500', accountId: 'a', status: 'in_progress' }, 'ws')!.data).toMatchObject({ status: 'active' });
   });

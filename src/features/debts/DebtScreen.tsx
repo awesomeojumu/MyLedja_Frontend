@@ -1,12 +1,14 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Platform, Pressable, ScrollView, Share, View, useWindowDimensions } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, Share, View, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MoreHorizontal } from 'lucide-react-native';
+import Svg, { Line, Polyline } from 'react-native-svg';
 
 import {
   Amount,
   Button,
   Card,
+  Checkbox,
   Confirm,
   formatDay,
   Icon,
@@ -34,6 +36,7 @@ import { DebtScheduleSheet } from './DebtScheduleSheet';
 import { debtInterestTotal, debtRows, findRecentPayment } from './helpers';
 import { DEBT_URL, parseDebtDetailTab, type DebtDetailTab } from './popupUrl';
 import {
+  debtInitials,
   debtOriginalAmount,
   debtProgress,
   debtScheduleRows,
@@ -42,6 +45,7 @@ import {
   reminderMessage,
   timelineKindLabel,
 } from './schedule';
+import type { Snapshot } from '@/data/workspace/repository';
 
 const sp = tokens.spacing;
 
@@ -72,6 +76,8 @@ export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
   const scheduleOpen = debtSchedule === id;
   const [writeOffOpen, setWriteOffOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderOmitAmount, setReminderOmitAmount] = useState(false);
   const [duplicateConfirm, setDuplicateConfirm] = useState<{ accountId: string; principal: bigint; interest: bigint; date: string; overpayment?: 'gift' | 'credit' } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,18 +115,40 @@ export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
   const directionLabel = debt.direction === 'owedToMe' ? t('debts.theyOweLabel') : t('debts.iOweLabel');
   const recordLabel = debt.direction === 'owedToMe' ? t('debts.recordMoneyBack') : t('debts.recordPayment');
 
-  const sendReminder = async () => {
-    const polite = reminderMessage(debt, balance, next);
+  const sendReminder = async (omitAmount: boolean) => {
+    const polite = reminderMessage(debt, balance, next, { omitAmount });
     try {
-      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(polite);
-        toast.show(t('debts.reminderCopied'));
-        return;
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
+        const nav = navigator as Navigator & { share?: (data: { text: string }) => Promise<void> };
+        if (typeof nav.share === 'function') {
+          await nav.share({ text: polite });
+          return;
+        }
+        if (nav.clipboard) {
+          await nav.clipboard.writeText(polite);
+          toast.show(t('debts.reminderCopied'));
+          return;
+        }
+      }
+      // Prefer WhatsApp when installed (P16-06 / DESIGN).
+      const wa = `whatsapp://send?text=${encodeURIComponent(polite)}`;
+      try {
+        if (await Linking.canOpenURL(wa)) {
+          await Linking.openURL(wa);
+          return;
+        }
+      } catch {
+        /* fall through to system share */
       }
       await Share.share({ message: polite });
     } catch {
       toast.show(t('debts.reminderCopied'));
     }
+  };
+
+  const cashAccountLabel = (eventId: string): string | undefined => {
+    if (!snapshot) return undefined;
+    return cashAccountForEvent(eventId, snapshot);
   };
 
   const menuItems: MenuItem[] = [
@@ -179,6 +207,7 @@ export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
           <Card style={{ gap: sp['spacing-xs'] }}>
             <Text variant="caption" tone="textSecondary">
               {formatDay(entry.date)} · {timelineKindLabel(entry.kind)}
+              {cashAccountLabel(entry.eventId) ? ` · (${cashAccountLabel(entry.eventId)})` : ''}
             </Text>
             <Amount minor={BigInt(entry.amountMinor)} variant="caption" />
             {entry.interestMinor ? (
@@ -223,9 +252,16 @@ export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
           );
         })
       )}
+      {debt.interest?.kind === 'percent_month' ? (
+        <Text testID="debt-interest-rate" variant="caption" tone="textSecondary">
+          {t('debts.interestRateMonth', { rate: String(debt.interest.percent) })}
+        </Text>
+      ) : null}
       {interestTotal > 0n ? (
         <Text variant="caption" tone="textSecondary">
-          {debt.direction === 'owedToMe' ? t('debts.interestEarned') : t('debts.interestPaid')}: <Amount minor={interestTotal} variant="caption" />
+          {debt.direction === 'owedToMe'
+            ? t('debts.interestEarnedYou', { amount: formatNaira(interestTotal) })
+            : t('debts.interestCostYou', { amount: formatNaira(interestTotal) })}
         </Text>
       ) : null}
       {payoffDate ? (
@@ -237,39 +273,57 @@ export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
   );
 
   const chartBlock =
-    schedule.length > 0 ? (
+    schedule.length > 0 && original > 0n ? (
       <Card testID="debt-payoff-chart" style={{ gap: sp['spacing-xs'], marginTop: sp['spacing-md'] }}>
         <Text variant="heading-sm">{t('debts.payoffChart')}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 48 }}>
-          {schedule.slice(0, 12).map((inst, i) => {
-            const h = Math.max(8, Math.round(((schedule.length - i) / schedule.length) * 40));
-            return (
-              <View
-                key={inst.dueDate}
-                style={{
-                  flex: 1,
-                  height: h,
-                  backgroundColor: inst.status === 'paid' ? theme.border : theme.primaryFill,
-                  borderRadius: 2,
-                }}
-              />
-            );
-          })}
-        </View>
+        <PayoffLineChart schedule={schedule} original={original} balance={balance} color={theme.primaryFill} muted={theme.border} />
       </Card>
     ) : null;
 
+  const pctPaid = Math.round(progress * 100);
+  const initials = debtInitials(debt.name);
+
   return wrap(
     <>
+      {embedded ? null : (
+        <Button
+          testID="debt-back"
+          kind="link"
+          label={t('debts.back')}
+          onPress={() => router.push('/debts')}
+          style={{ alignSelf: 'flex-start', marginBottom: sp['spacing-sm'] }}
+        />
+      )}
       <Card style={{ marginBottom: sp['spacing-md'], gap: sp['spacing-xs'] }}>
-        <Text tone="textSecondary">{directionLabel}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'] }}>
+          <View
+            testID="debt-monogram"
+            accessibilityLabel={initials}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: theme.primaryFill,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text variant="caption" style={{ color: theme.onPrimaryFill }}>
+              {initials}
+            </Text>
+          </View>
+          <Text tone="textSecondary">{directionLabel}</Text>
+        </View>
         <Text variant="caption" tone="textSecondary">
           <Amount minor={balance} variant="caption" /> {t('debts.leftOf')}{' '}
           <Amount minor={original} variant="caption" />
         </Text>
         <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.border, overflow: 'hidden' }}>
-          <View style={{ height: 8, width: `${Math.round(progress * 100)}%`, backgroundColor: theme.primaryFill }} />
+          <View style={{ height: 8, width: `${pctPaid}%`, backgroundColor: theme.primaryFill }} />
         </View>
+        <Text testID="debt-paid-pct" variant="caption" tone="textSecondary">
+          {t('debts.paidBackPct', { pct: pctPaid })}
+        </Text>
         {next ? (
           <Text variant="caption" tone="textSecondary">
             {t('debts.nextDue', { amount: formatNaira(next.amountMinor), date: formatDay(next.dueDate) })}
@@ -280,8 +334,10 @@ export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
           </Text>
         ) : null}
         {interestTotal > 0n ? (
-          <Text variant="caption" tone="textSecondary">
-            {debt.direction === 'owedToMe' ? t('debts.interestEarned') : t('debts.interestPaid')}: <Amount minor={interestTotal} variant="caption" />
+          <Text testID="debt-interest-prose" variant="caption" tone="textSecondary">
+            {debt.direction === 'owedToMe'
+              ? t('debts.interestEarnedYou', { amount: formatNaira(interestTotal) })
+              : t('debts.interestCostYou', { amount: formatNaira(interestTotal) })}
           </Text>
         ) : null}
       </Card>
@@ -290,7 +346,7 @@ export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'], alignItems: 'center' }}>
           <Button testID="debt-record-payment" label={recordLabel} onPress={() => router.setParams({ [DEBT_URL.payment]: id })} />
           {debt.direction === 'owedToMe' ? (
-            <Button testID="debt-send-reminder" kind="secondary" label={t('debts.sendReminder')} onPress={() => void sendReminder()} />
+            <Button testID="debt-send-reminder" kind="secondary" label={t('debts.sendReminder')} onPress={() => setReminderOpen(true)} />
           ) : null}
           <Menu
             testID="debt-menu"
@@ -349,14 +405,17 @@ export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
           onClose={() => router.setParams({ [DEBT_URL.debtSchedule]: undefined })}
           onSave={async (input) => {
             setError(null);
-            await repo.updatePersonDebt({
-              ...debt,
-              scheduleInstallmentCount: input.count,
-              scheduleAmountMinor: input.amountMinor.toString(),
-              scheduleEvery: input.every,
-              scheduleFirstDue: input.firstDue,
-              nextDueDate: input.firstDue,
-            });
+            await repo.updatePersonDebt(
+              {
+                ...debt,
+                scheduleInstallmentCount: input.count,
+                scheduleAmountMinor: input.amountMinor.toString(),
+                scheduleEvery: input.every,
+                scheduleFirstDue: input.firstDue,
+                nextDueDate: input.firstDue,
+              },
+              'schedule',
+            );
             toast.show(t('debts.scheduleSaved'));
             router.setParams({ [DEBT_URL.debtSchedule]: undefined });
           }}
@@ -367,11 +426,37 @@ export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
           debt={debt}
           onClose={() => setEditOpen(false)}
           onSave={async (input) => {
-            await repo.updatePersonDebt({ ...debt, name: input.name, notes: input.notes || undefined });
+            await repo.updatePersonDebt({ ...debt, name: input.name, notes: input.notes || undefined }, 'edit');
             toast.show(t('common.saved'));
             setEditOpen(false);
           }}
         />
+      ) : null}
+      {reminderOpen ? (
+        <Sheet
+          visible
+          title={t('debts.sendReminder')}
+          onClose={() => setReminderOpen(false)}
+          testID="debt-reminder-sheet"
+          footer={
+            <Button
+              testID="debt-reminder-send"
+              label={t('debts.sendReminder')}
+              onPress={() => {
+                void sendReminder(reminderOmitAmount);
+                setReminderOpen(false);
+              }}
+            />
+          }
+        >
+          <Text tone="textSecondary">{t('debts.reminderCaption')}</Text>
+          <Checkbox
+            testID="debt-reminder-omit-amount"
+            label={t('debts.reminderLeaveAmountOut')}
+            checked={reminderOmitAmount}
+            onChange={setReminderOmitAmount}
+          />
+        </Sheet>
       ) : null}
       {writeOffOpen ? (
         <WriteOffSheet
@@ -399,6 +484,54 @@ export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
       />
     </>,
     debt.name,
+  );
+}
+
+function cashAccountForEvent(eventId: string, snapshot: Snapshot): string | undefined {
+  const event = snapshot.events.find((e) => e.id === eventId);
+  if (!event) return undefined;
+  const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+  const line = event.lines.find((l) => accountIds.has(l.ledgerAccountId));
+  if (!line) return undefined;
+  return snapshot.accounts.find((a) => a.id === line.ledgerAccountId)?.name;
+}
+
+/** Remaining balance (solid) vs expected linear payoff (dashed) — DESIGN Page 16. */
+function PayoffLineChart({
+  schedule,
+  original,
+  balance,
+  color,
+  muted,
+}: {
+  schedule: { amountMinor: bigint; status: string }[];
+  original: bigint;
+  balance: bigint;
+  color: string;
+  muted: string;
+}) {
+  const w = 280;
+  const h = 56;
+  const pad = 4;
+  const n = Math.max(1, schedule.length);
+  const max = Number(original);
+  const remaining: number[] = [Number(balance > original ? original : balance)];
+  let left = remaining[0]!;
+  for (const inst of schedule) {
+    if (inst.status === 'paid') left = Math.max(0, left - Number(inst.amountMinor));
+    remaining.push(left);
+  }
+  // Expected: straight line from original → 0 across instalments.
+  const expected = Array.from({ length: n + 1 }, (_, i) => max * (1 - i / n));
+  const xAt = (i: number) => pad + (i / n) * (w - pad * 2);
+  const yAt = (v: number) => pad + (1 - (max <= 0 ? 0 : v / max)) * (h - pad * 2);
+  const toPoints = (vals: number[]) => vals.map((v, i) => `${xAt(i)},${yAt(v)}`).join(' ');
+  return (
+    <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} testID="debt-payoff-svg">
+      <Polyline points={toPoints(expected)} fill="none" stroke={muted} strokeWidth={2} strokeDasharray="4 4" />
+      <Polyline points={toPoints(remaining)} fill="none" stroke={color} strokeWidth={2} />
+      <Line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke={muted} strokeWidth={1} />
+    </Svg>
   );
 }
 

@@ -8,6 +8,8 @@ import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import { suggestedFirstBudget } from '@/features/setup/suggestedBudget';
 import type { RemoteOperation } from '../sync/mapOperation';
 import {
+  debtScheduleBody,
+  debtUpdateBody,
   goalBody,
   goalScheduleBody,
   goalUpdateBody,
@@ -16,6 +18,7 @@ import {
   scheduleBody,
   scheduleUpdateBody,
 } from '../sync/serverRecords';
+import { debtScheduleRows } from '@/features/debts/schedule';
 import { t, type TextKey } from '@/i18n';
 import {
   buildAdjustment,
@@ -164,7 +167,7 @@ function debtInterestToServer(interest?: PersonDebt['interest']) {
  */
 const LOCAL_ONLY = new Set([
   'debt.entry',
-  'debt.update',
+  // debt.settle / debt.update / debt.schedule sync via RemoteOperation (Page 16)
   'occurrence.paid',
   'occurrence.matched',
   'occurrence.unpaid',
@@ -2119,6 +2122,8 @@ export class WorkspaceRepository {
       notes: input.notes,
       interest: input.interest,
       nextDueDate: input.dueDate,
+      accountId: input.accountId,
+      openedOn: input.date,
     };
     const chart = this.chartFor(snapshot.accounts, snapshot.categories, [...snapshot.debts, debt]);
     const lines =
@@ -2362,31 +2367,34 @@ export class WorkspaceRepository {
     return { ok: true, value: posted.value };
   }
 
-  async updatePersonDebt(debt: PersonDebt): Promise<void> {
+  /**
+   * Save debt fields locally and queue a remote op.
+   * `mode: 'schedule'` → PUT …/schedule (PU-36); otherwise PATCH notes/interest/due.
+   */
+  async updatePersonDebt(debt: PersonDebt, mode: 'edit' | 'schedule' = 'edit'): Promise<void> {
     const { id, ...data } = debt;
     const baseVersion = await this.versionOf('debts', id);
-    const hasSchedule =
-      data.scheduleInstallmentCount != null &&
-      data.scheduleAmountMinor != null &&
-      data.scheduleFirstDue != null &&
-      data.scheduleEvery === 'month';
-    if (hasSchedule) {
-      await this.put('debts', id, data, 'debt.schedule', undefined, {
+    if (mode === 'schedule') {
+      const payload = debtScheduleBody(data, baseVersion);
+      if (!payload) {
+        await this.put('debts', id, data, 'debt.update', baseVersion, null);
+        return;
+      }
+      await this.put('debts', id, data, 'debt.update', baseVersion, {
         type: 'debt.schedule',
         targetId: id,
-        payload: {
-          baseVersion,
-          instalments: {
-            count: data.scheduleInstallmentCount,
-            amount: data.scheduleAmountMinor,
-            firstDate: data.scheduleFirstDue,
-            everyMonths: 1,
-          },
-        },
+        payload,
+        baseVersion,
       });
+      await this.refreshDebtNotifications();
       return;
     }
-    await this.put('debts', id, data, 'debt.update');
+    await this.put('debts', id, data, 'debt.update', baseVersion, {
+      type: 'debt.update',
+      targetId: id,
+      payload: debtUpdateBody(data, baseVersion),
+      baseVersion,
+    });
   }
 
   async markPersonDebtSettled(debtId: string): Promise<Result<void>> {
@@ -2395,12 +2403,13 @@ export class WorkspaceRepository {
     if (!debt || debt.status !== 'open') return { ok: false, error: 'missing_lines' };
     const balance = this.debtBalance(debt, snapshot);
     if (balance > 0n) return { ok: false, error: 'not_positive' };
+    const baseVersion = await this.versionOf('debts', debtId);
     const { id, ...data } = { ...debt, status: 'settled' as const };
-    const baseVersion = await this.versionOf('debts', id);
-    await this.put('debts', id, data, 'debt.settle', undefined, {
+    await this.put('debts', id, data, 'debt.settle', baseVersion, {
       type: 'debt.settle',
       targetId: id,
       payload: { baseVersion },
+      baseVersion,
     });
     return { ok: true, value: undefined };
   }
@@ -2437,48 +2446,39 @@ export class WorkspaceRepository {
       const { id: nid, ...data } = notification;
       await this.put('notifications', id, data, 'notification.create');
     }
-    // DESIGN D16 — income due: "Has your salary arrived?" → Mark received.
-    for (const stream of snapshot.incomeStreams) {
-      if (stream.kind === 'irregular') continue;
-      if (stream.reminder === 'none') continue;
-      const [y, m] = month.split('-').map(Number) as [number, number];
-      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-      const day = Math.min(Math.max(1, stream.rule.on === 31 ? last : stream.rule.on), last);
-      const incomeDue = `${month}-${String(day).padStart(2, '0')}`;
-      const received = snapshot.events.some(
-        (e) =>
-          e.status === 'posted' &&
-          !e.oneOff &&
-          e.incomeStreamId === stream.id &&
-          (e.type === 'income' || e.type === 'salary_gross') &&
-          monthOf(e.date) === month,
-      );
-      if (received) continue;
-      const id = `income:${stream.id}:${incomeDue}`;
-      if (existing.has(id)) continue;
-      const daysBefore =
-        stream.reminder === '1' ? 1 : stream.reminder === '3' ? 3 : stream.reminder === '7' ? 7 : 0;
-      const fireFrom = (() => {
-        const d = new Date(`${incomeDue}T12:00:00Z`);
-        d.setUTCDate(d.getUTCDate() - daysBefore);
-        return d.toISOString().slice(0, 10);
-      })();
-      if (today < fireFrom) continue;
-      const notification: AppNotification = {
-        id,
-        createdAt: new Date().toISOString(),
-        title: t('notifications.incomeArrived', { name: stream.name }),
-        body: t('notifications.incomeArrivedBody', { date: formatDay(incomeDue) }),
-        category: 'income',
-        read: false,
-        action: 'mark_received',
-        recurringId: stream.id,
-        dueDate: incomeDue,
-        amountMinor: stream.expectedMinor,
-        hideAmount: true,
-      };
-      const { id: _nid, ...data } = notification;
-      await this.put('notifications', id, data, 'notification.create');
+    await this.refreshDebtNotifications();
+  }
+
+  /** PU-36-2: debt-due notifications from instalment schedule dates. */
+  async refreshDebtNotifications(): Promise<void> {
+    const snapshot = await this.load();
+    const today = workspaceToday();
+    const existing = new Map(snapshot.notifications.map((n) => [n.id, n]));
+    for (const debt of snapshot.debts) {
+      if (debt.status !== 'open' || debt.direction !== 'owedToMe') continue;
+      const rows = debtScheduleRows(debt, snapshot, today);
+      for (const inst of rows) {
+        if (inst.status === 'paid' || inst.status === 'upcoming') continue;
+        const id = `debt:${debt.id}:${inst.dueDate}`;
+        if (existing.has(id)) continue;
+        const overdue = inst.status === 'overdue';
+        const notification: AppNotification = {
+          id,
+          createdAt: new Date().toISOString(),
+          title: overdue
+            ? t('notifications.debtMissed', { name: debt.name, dueDate: formatDay(inst.dueDate) })
+            : t('notifications.debtDue', { name: debt.name }),
+          category: 'debts',
+          read: false,
+          action: 'record_payment',
+          debtId: debt.id,
+          dueDate: inst.dueDate,
+          amountMinor: inst.amountMinor.toString(),
+          hideAmount: true,
+        };
+        const { id: _nid, ...data } = notification;
+        await this.put('notifications', id, data, 'notification.create');
+      }
     }
   }
 
