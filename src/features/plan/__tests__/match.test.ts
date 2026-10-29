@@ -48,8 +48,10 @@ function stub(): Snapshot {
     budgetTemplates: [],
     rules: [],
     holdings: [],
-    lots: [],
     prices: [],
+    rates: [],
+    reportDashboards: [],
+    savedReports: [],
     waiting: new Set(),
     chart: {} as Snapshot['chart'],
   };

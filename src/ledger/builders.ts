@@ -1,3 +1,4 @@
+import { formatUnits, parseUnits, pickLots, valueOf, type InvestmentMeta, type OpenLot } from './investments';
 import { fail, ok, type LedgerAccount, type LedgerResult, type Line, type MoneyEvent, type SystemAccount } from './types';
 
 /** The workspace's ledger accounts, looked up by id or by system role. */
@@ -27,14 +28,14 @@ export class Chart {
 
 const HOLDS_MONEY = new Set(['asset', 'liability']);
 
-function line(account: LedgerAccount, amountMinor: bigint, currency = account.currency): Line {
-  return { ledgerAccountId: account.id, amountMinor, currency };
+function line(account: LedgerAccount, amountMinor: bigint): Line {
+  return { ledgerAccountId: account.id, amountMinor, currency: account.currency };
 }
 
 function moneyAccount(chart: Chart, id: string): LedgerResult<LedgerAccount> {
   const a = chart.get(id);
   if (!a) return fail('unknown_account');
-  if (!HOLDS_MONEY.has(a.kind)) return fail('wrong_account_kind');
+  if (!HOLDS_MONEY.has(a.kind) || a.holding) return fail('wrong_account_kind');
   return ok(a);
 }
 
@@ -117,7 +118,7 @@ export function buildOpeningBalance(chart: Chart, input: { accountId: string; am
   const equity = systemAccount(chart, 'opening_balances');
   if (!equity.ok) return equity;
   const debit = account.value.kind === 'asset' ? input.amount : -input.amount;
-  return ok([line(account.value, debit), line(equity.value, -debit, account.value.currency)]);
+  return ok([line(account.value, debit), { ...line(equity.value, -debit), currency: account.value.currency }]);
 }
 
 /** E9 (reconcile, to Adjustments) and E10 (value update, to Revaluation). `delta` is the signed change in the ledger balance. */
@@ -130,7 +131,7 @@ export function buildAdjustment(
   if (!account.ok) return account;
   const equity = systemAccount(chart, input.against);
   if (!equity.ok) return equity;
-  return ok([line(account.value, input.delta), line(equity.value, -input.delta, account.value.currency)]);
+  return ok([line(account.value, input.delta), { ...line(equity.value, -input.delta), currency: account.value.currency }]);
 }
 
 /** E11: Dr the account, Cr the original purchase's expense category. */
@@ -220,78 +221,6 @@ export function buildWriteOff(chart: Chart, input: { receivableId: string; amoun
   return ok([line(loss.value, input.amount), line(receivable.value, -input.amount)]);
 }
 
-/** Cost = units × price + fees, half away from zero (TECH-SPEC 6.5 / case 15). */
-export function costOfPurchase(units: string, pricePerUnit: bigint, fees: bigint = 0n): bigint {
-  const [whole, frac = ''] = units.split('.') as [string, string | undefined];
-  const scale = 10n ** BigInt(frac.length);
-  const unitMinor = BigInt(whole + frac);
-  const num = unitMinor * pricePerUnit;
-  const half = scale / 2n;
-  const rounded = num >= 0n ? (num + half) / scale : -((-num + half) / scale);
-  return rounded + fees;
-}
-
-/** E20: Dr holding · Cr cash. Never spending (case 15). */
-export function buildInvestmentBuy(
-  chart: Chart,
-  input: { holdingAccountId: string; cashAccountId: string; units: string; pricePerUnit: bigint; fees?: bigint },
-): LedgerResult<Line[]> {
-  if (input.pricePerUnit <= 0n) return fail('not_positive');
-  const fees = input.fees ?? 0n;
-  if (fees < 0n) return fail('not_positive');
-  const holding = moneyAccount(chart, input.holdingAccountId);
-  if (!holding.ok) return holding;
-  const cash = moneyAccount(chart, input.cashAccountId);
-  if (!cash.ok) return cash;
-  if (holding.value.id === cash.value.id) return fail('transfer_accounts');
-  if (holding.value.currency !== cash.value.currency) return fail('currency_mismatch');
-  const cost = costOfPurchase(input.units, input.pricePerUnit, fees);
-  if (cost <= 0n) return fail('not_positive');
-  return ok([line(holding.value, cost), line(cash.value, -cost)]);
-}
-
-/** E21: Dr cash · Cr holding (cost) · Cr gain or Dr loss (case 17). */
-export function buildInvestmentSell(
-  chart: Chart,
-  input: {
-    holdingAccountId: string;
-    cashAccountId: string;
-    units: string;
-    pricePerUnit: bigint;
-    fees?: bigint;
-    costOfLots: bigint;
-  },
-): LedgerResult<Line[]> {
-  if (input.pricePerUnit <= 0n || input.costOfLots <= 0n) return fail('not_positive');
-  const fees = input.fees ?? 0n;
-  if (fees < 0n) return fail('not_positive');
-  const holding = moneyAccount(chart, input.holdingAccountId);
-  if (!holding.ok) return holding;
-  const cash = moneyAccount(chart, input.cashAccountId);
-  if (!cash.ok) return cash;
-  if (holding.value.id === cash.value.id) return fail('transfer_accounts');
-  if (holding.value.currency !== cash.value.currency) return fail('currency_mismatch');
-  const gross = costOfPurchase(input.units, input.pricePerUnit, 0n);
-  const proceeds = gross > fees ? gross - fees : 0n;
-  const lines: Line[] = [line(cash.value, proceeds), line(holding.value, -input.costOfLots)];
-  const diff = proceeds - input.costOfLots;
-  if (diff > 0n) {
-    const gain = systemAccount(chart, 'investment_gain');
-    if (!gain.ok) return gain;
-    lines.push(line(gain.value, -diff));
-  } else if (diff < 0n) {
-    const loss = systemAccount(chart, 'investment_loss');
-    if (!loss.ok) return loss;
-    lines.push(line(loss.value, -diff));
-  }
-  return ok(lines);
-}
-
-/** Unrealised gain = market − remaining cost (TECH-SPEC 6.8 / case 16). Never income. */
-export function unrealisedGain(units: string, pricePerUnit: bigint, costBasis: bigint): bigint {
-  return costOfPurchase(units, pricePerUnit, 0n) - costBasis;
-}
-
 /** E24: Dr take-home · Dr taxes · Dr pension · Dr NHF · Cr income (gross). Parts must add up to gross. */
 export function buildSalaryGross(
   chart: Chart,
@@ -328,6 +257,129 @@ export function buildSalaryGross(
     line(nhf.value, input.nhf),
     line(income.value, -input.gross),
   ]);
+}
+
+function holdingAccount(chart: Chart, id: string): LedgerResult<LedgerAccount> {
+  const a = chart.get(id);
+  if (!a) return fail('unknown_account');
+  if (!a.holding) return fail('wrong_account_kind');
+  return ok(a);
+}
+
+export type BuiltInvestment = { lines: Line[]; investment: InvestmentMeta; type: 'investment_buy' | 'investment_sell' | 'income' };
+
+/** E20: Dr holding (units × price + fees) · Cr cash. Buying isn't spending (case 15). */
+export function buildBuy(
+  chart: Chart,
+  input: { holdingId: string; accountId: string; units: string; price: bigint; fees?: bigint },
+): LedgerResult<BuiltInvestment> {
+  if (input.price <= 0n || (input.fees ?? 0n) < 0n) return fail('not_positive');
+  const holding = holdingAccount(chart, input.holdingId);
+  if (!holding.ok) return holding;
+  const cash = moneyAccount(chart, input.accountId);
+  if (!cash.ok) return cash;
+  if (cash.value.currency !== holding.value.currency) return fail('currency_mismatch');
+  const units = parseUnitsSafe(input.units);
+  if (units === null || units <= 0n) return fail('not_positive');
+  const fees = input.fees ?? 0n;
+  const cost = valueOf(units, input.price) + fees;
+  return ok({
+    type: 'investment_buy',
+    lines: [line(holding.value, cost), line(cash.value, -cost)],
+    investment: { kind: 'buy', units: input.units, price: input.price.toString(), fees: fees.toString() },
+  });
+}
+
+/**
+ * E21: Dr cash (proceeds after fees) · Cr holding (cost of the lots sold, oldest first unless chosen) ·
+ * Cr Investment gain, or Dr Investment loss. Only the gain counts as income (case 17).
+ */
+export function buildSell(
+  chart: Chart,
+  input: {
+    holdingId: string;
+    accountId: string;
+    units: string;
+    price: bigint;
+    fees?: bigint;
+    open: readonly OpenLot[];
+    lots?: readonly { lotId: string; units: string }[];
+  },
+): LedgerResult<BuiltInvestment & { gain: bigint }> {
+  if (input.price <= 0n || (input.fees ?? 0n) < 0n) return fail('not_positive');
+  const holding = holdingAccount(chart, input.holdingId);
+  if (!holding.ok) return holding;
+  const cash = moneyAccount(chart, input.accountId);
+  if (!cash.ok) return cash;
+  if (cash.value.currency !== holding.value.currency) return fail('currency_mismatch');
+  const units = parseUnitsSafe(input.units);
+  if (units === null || units <= 0n) return fail('not_positive');
+  const held = input.open.reduce((s, l) => s + l.units, 0n);
+  if (units > held) return fail('not_enough_units');
+  const chosen = input.lots?.map((l) => ({ lotId: l.lotId, units: parseUnitsSafe(l.units) ?? -1n }));
+  const picks = pickLots(input.open, units, chosen);
+  if (!picks) return fail('lots_mismatch');
+  const fees = input.fees ?? 0n;
+  const proceeds = valueOf(units, input.price) - fees;
+  if (proceeds <= 0n) return fail('fees_too_big');
+  const cost = picks.reduce((s, p) => s + p.cost, 0n);
+  const gain = proceeds - cost;
+  const lines = [line(cash.value, proceeds), line(holding.value, -cost)];
+  if (gain !== 0n) {
+    const other = systemAccount(chart, gain > 0n ? 'investment_gain' : 'investment_loss');
+    if (!other.ok) return other;
+    lines.push({ ...line(other.value, -gain), currency: holding.value.currency });
+  }
+  return ok({
+    type: 'investment_sell',
+    gain,
+    lines,
+    investment: {
+      kind: 'sell',
+      units: input.units,
+      price: input.price.toString(),
+      fees: fees.toString(),
+      lots: picks.map((p) => ({ lotId: p.lotId, units: formatUnits(p.units), cost: p.cost.toString() })),
+    },
+  });
+}
+
+/** E22: Dr cash, or Dr holding (a new lot) when reinvested · Cr Investment income. */
+export function buildDividend(
+  chart: Chart,
+  input: { holdingId: string; amount: bigint; accountId?: string; reinvestedUnits?: string },
+): LedgerResult<BuiltInvestment> {
+  if (input.amount <= 0n) return fail('not_positive');
+  const holding = holdingAccount(chart, input.holdingId);
+  if (!holding.ok) return holding;
+  const income = systemAccount(chart, 'investment_income');
+  if (!income.ok) return income;
+  if (input.reinvestedUnits) {
+    const units = parseUnitsSafe(input.reinvestedUnits);
+    if (units === null || units <= 0n) return fail('not_positive');
+    return ok({
+      type: 'income',
+      lines: [line(holding.value, input.amount), { ...line(income.value, -input.amount), currency: holding.value.currency }],
+      investment: { kind: 'reinvest', units: input.reinvestedUnits },
+    });
+  }
+  if (!input.accountId) return fail('missing_lines');
+  const cash = moneyAccount(chart, input.accountId);
+  if (!cash.ok) return cash;
+  if (cash.value.currency !== holding.value.currency) return fail('currency_mismatch');
+  return ok({
+    type: 'income',
+    lines: [line(cash.value, input.amount), { ...line(income.value, -input.amount), currency: cash.value.currency }],
+    investment: { kind: 'dividend' },
+  });
+}
+
+function parseUnitsSafe(value: string): bigint | null {
+  try {
+    return parseUnits(value);
+  } catch {
+    return null;
+  }
 }
 
 /** E25: the original's lines with every sign flipped. */

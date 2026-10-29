@@ -25,7 +25,9 @@ import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { t } from '@/i18n';
-import { ledgerBalance, netWorth } from '@/ledger';
+import { holdingsValueByAccount, wealthAt } from '@/features/investments/helpers';
+import { today } from '@/features/transactions/helpers';
+import { ledgerBalance } from '@/ledger';
 
 import {
   AccountAvatar,
@@ -41,10 +43,14 @@ const sp = tokens.spacing;
 
 export type AccountRow = { account: Account; balance: bigint; waiting: boolean };
 
-/** Balances as signed contributions to net worth: what you owe is negative (P08-02). */
+/**
+ * Balances as signed contributions to net worth: what you owe is negative (P08-02). An investment account
+ * also holds its holdings at market value (TECH-SPEC 6.8).
+ */
 export function accountRows(snapshot: Snapshot): AccountRow[] {
+  const held = holdingsValueByAccount(snapshot, today());
   return snapshot.accounts.map((account) => {
-    const balance = ledgerBalance(account.id, snapshot.events);
+    const balance = ledgerBalance(account.id, snapshot.events) + (held.get(account.id) ?? 0n);
     const waiting = snapshot.events.some((e) => snapshot.waiting.has(e.id) && e.lines.some((l) => l.ledgerAccountId === account.id));
     return { account, balance, waiting };
   });
@@ -94,7 +100,7 @@ export function AccountsScreen() {
       );
       return { group, rows: members, total: members.reduce((s, r) => s + r.balance, 0n) };
     }).filter((g) => g.rows.length > 0);
-    return { assets, debts, groups, archived: rows.filter((r) => r.account.archived), worth: netWorth(snapshot.chart, snapshot.events, '9999-12-31').total };
+    return { assets, debts, groups, archived: rows.filter((r) => r.account.archived), worth: wealthAt(snapshot, today()).total };
   }, [snapshot, sort]);
 
   const rowAccount = rowSheet && snapshot ? snapshot.accounts.find((a) => a.id === rowSheet.id) : undefined;

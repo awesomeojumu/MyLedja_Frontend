@@ -1,4 +1,5 @@
 import type { Chart } from './builders';
+import type { Converter } from './rates';
 import type { LedgerAccount, MoneyEvent } from './types';
 
 /** "2026-10-28" → "2026-10". */
@@ -81,14 +82,15 @@ export function categoryActivity(totals: PeriodTotals, month: string, ledgerAcco
 export type NetWorth = { total: bigint; partial: string[] };
 
 /**
- * Assets minus what's owed, in naira. Balances in another currency need that day's
- * rate (TECH-SPEC 6.5); without one they're left out and named in `partial`.
+ * Assets minus what's owed, in the home currency. Balances in another currency need a rate (TECH-SPEC 6.5):
+ * each is converted on its own, then added; without a rate it's left out and named in `partial`.
  */
 export function netWorth(
   chart: Chart,
   events: MoneyEvent[],
   onDate: string,
-  rates: Record<string, { numerator: bigint; denominator: bigint }> = {},
+  convert: Converter = () => null,
+  home = 'NGN',
 ): NetWorth {
   let total = 0n;
   const partial = new Set<string>();
@@ -96,27 +98,18 @@ export function netWorth(
     if (account.kind !== 'asset' && account.kind !== 'liability') continue;
     const balance = ledgerBalance(account.id, events, onDate);
     if (balance === 0n) continue;
-    if (account.currency === 'NGN') {
+    if (account.currency === home) {
       total += balance;
       continue;
     }
-    const rate = rates[account.currency];
-    if (!rate) {
+    const converted = convert(balance, account.currency, onDate);
+    if (converted === null) {
       partial.add(account.currency);
       continue;
     }
-    total += roundHalfEven(balance * rate.numerator, rate.denominator);
+    total += converted;
   }
-  return { total, partial: [...partial] };
-}
-
-function roundHalfEven(numerator: bigint, denominator: bigint): bigint {
-  const q = numerator / denominator;
-  const r = numerator % denominator;
-  const twice = 2n * (r < 0n ? -r : r);
-  const d = denominator < 0n ? -denominator : denominator;
-  if (twice < d || (twice === d && q % 2n === 0n)) return q;
-  return numerator < 0n !== denominator < 0n ? q - 1n : q + 1n;
+  return { total, partial: [...partial].sort() };
 }
 
 export type BarState = 'within' | 'near' | 'over';

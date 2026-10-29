@@ -21,6 +21,7 @@ import { ACCOUNT_KIND_INFO, type Account } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
+import { HoldingsTab } from '@/features/investments/HoldingsTab';
 import { rowsFor, today, type Row } from '@/features/transactions/helpers';
 import { TransactionPanel } from '@/features/transactions/TransactionPanel';
 import { t } from '@/i18n';
@@ -33,10 +34,7 @@ import { useOnline } from '@/lib/useOnline';
 
 import { AccountImportSheet, statementCsv } from './AccountImportSheet';
 import { ArchiveSheet, EditAccountSheet, UpdateValueSheet } from './accountSheets';
-import { DividendSheet, HoldingSheet, TradeSheet } from '@/features/investments/investmentSheets';
-import { portfolioFigures } from '@/features/investments/helpers';
-
-import { groupRegisterByDay, hasHoldingsTab, hasValueTab } from './helpers';
+import { groupRegisterByDay, hasValueTab } from './helpers';
 
 const sp = tokens.spacing;
 
@@ -79,17 +77,12 @@ const revalued = (snapshot: Snapshot, accountId: string) =>
 export function AccountScreen() {
   const { snapshot, repo } = useWorkspace();
   const { engine } = useSync();
-  const params = useGlobalSearchParams<{ id?: string; tx?: string; tab?: string; import?: string }>();
+  const params = useGlobalSearchParams<{ id?: string; tx?: string }>();
   const router = useRouter();
   const theme = useTheme();
   const toast = useToast();
-  const initialTab = (['transactions', 'holdings', 'value', 'details'] as const).includes(params.tab as Tab)
-    ? (params.tab as Tab)
-    : 'transactions';
-  const [tab, setTab] = useState<Tab>(initialTab);
-  const [sheet, setSheet] = useState<'import' | 'edit' | 'value' | 'archive' | 'holding' | 'buy' | 'sell' | 'dividend' | null>(
-    params.import === '1' ? 'import' : null,
-  );
+  const [tab, setTab] = useState<Tab>('transactions');
+  const [sheet, setSheet] = useState<'import' | 'edit' | 'value' | 'archive' | null>(null);
   const [dropped, setDropped] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const { client, user } = useAuth();
@@ -146,11 +139,10 @@ export function AccountScreen() {
   const split = clearedSplit(rows);
   const tabs: { value: Tab; label: string }[] = [
     { value: 'transactions', label: t('account.tab.transactions') },
-    ...(account && hasHoldingsTab(account.type) ? [{ value: 'holdings' as const, label: t('account.tab.holdings') }] : []),
+    ...(account?.type === 'investment' ? [{ value: 'holdings' as const, label: t('account.tab.holdings') }] : []),
     ...(account && hasValueTab(account.type) ? [{ value: 'value' as const, label: t('account.tab.value') }] : []),
     { value: 'details', label: t('account.tab.details') },
   ];
-  const holdingRows = snapshot && account && hasHoldingsTab(account.type) ? portfolioFigures(snapshot, account.id) : [];
   const sign = (v: bigint) => (owes ? -v : v);
 
   const syncNow = async () => {
@@ -253,33 +245,7 @@ export function AccountScreen() {
                 </View>
               )
             ) : tab === 'holdings' ? (
-              <View testID="holdings-tab" style={{ gap: sp['spacing-md'] }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
-                  <Button testID="account-add-holding" label={t('investments.addHolding')} onPress={() => setSheet('holding')} />
-                  <Button testID="account-buy" kind="secondary" label={t('investments.buy')} onPress={() => setSheet('buy')} />
-                  <Button testID="account-sell" kind="secondary" label={t('investments.sell')} onPress={() => setSheet('sell')} />
-                  <Button testID="account-dividend" kind="secondary" label={t('investments.dividend')} onPress={() => setSheet('dividend')} />
-                </View>
-                {holdingRows.length === 0 ? (
-                  <EmptyState
-                    title={t('investments.emptyTitle')}
-                    body={t('investments.emptyBody')}
-                    actionLabel={t('investments.addHolding')}
-                    onAction={() => setSheet('holding')}
-                  />
-                ) : (
-                  holdingRows.map((f) => (
-                    <Pressable key={f.holding.id} testID={`account-holding-${f.holding.id}`} onPress={() => router.push(`/investments/${f.holding.id}`)}>
-                      <Card style={{ gap: sp['spacing-xs'] }}>
-                        <Text variant="heading-sm">{f.holding.name}</Text>
-                        <Text tone="textSecondary">
-                          {f.units} · {formatNaira(f.value)}
-                        </Text>
-                      </Card>
-                    </Pressable>
-                  ))
-                )}
-              </View>
+              <HoldingsTab snapshot={snapshot} account={account} />
             ) : tab === 'value' ? (
               <Card testID="value-list" style={{ gap: sp['spacing-sm'] }}>
                 {revalued(snapshot, account.id).length === 0 ? (
@@ -322,10 +288,6 @@ export function AccountScreen() {
       {account && snapshot && sheet === 'archive' ? (
         <ArchiveSheet account={account} balance={balance} snapshot={snapshot} onClose={() => setSheet(null)} />
       ) : null}
-      {account && sheet === 'holding' ? <HoldingSheet accountId={account.id} onClose={() => setSheet(null)} /> : null}
-      {account && sheet === 'buy' ? <TradeSheet direction="buy" onClose={() => setSheet(null)} /> : null}
-      {account && sheet === 'sell' ? <TradeSheet direction="sell" onClose={() => setSheet(null)} /> : null}
-      {account && sheet === 'dividend' ? <DividendSheet onClose={() => setSheet(null)} /> : null}
       {params.tx ? <TransactionPanel id={params.tx} onClose={() => router.setParams({ tx: undefined })} /> : null}
     </AppFrame>
   );

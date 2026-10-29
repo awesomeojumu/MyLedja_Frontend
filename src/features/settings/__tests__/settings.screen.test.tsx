@@ -162,7 +162,7 @@ describe('Settings (F1.10)', () => {
     expect(screen.getByText(t('sync.signOutWarnBody', { count: waiting }))).toBeTruthy();
   });
 
-  it('P26-08: exchange rate sheet saves a row', async () => {
+  it('P26-08, P26-14: exchange rates are added by date, checked, and can be deleted', async () => {
     const { sync, repo } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -172,10 +172,16 @@ describe('Settings (F1.10)', () => {
     );
     await fireEvent.press(screen.getByTestId('settings-tab-currencies'));
     await fireEvent.press(screen.getByTestId('settings-add-rate'));
+    await fireEvent.changeText(screen.getByTestId('settings-exchange-rate'), '0');
+    await fireEvent.press(screen.getByTestId('settings-exchange-save'));
+    expect(screen.getByTestId('settings-exchange-error')).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId('settings-exchange-date'), '2026-10-20');
     await fireEvent.changeText(screen.getByTestId('settings-exchange-rate'), '1650');
-    await fireEvent.press(screen.getByText(t('settings.popup.exchangeSave')));
+    await fireEvent.press(screen.getByTestId('settings-exchange-save'));
     await waitFor(async () => {
-      expect((await repo.load()).settings.exchangeRates?.length).toBe(1);
+      expect((await repo.load()).rates).toEqual([expect.objectContaining({ currency: 'USD', date: '2026-10-20', rate: '1650' })]);
     });
+    await fireEvent.press(await screen.findByTestId('settings-rate-delete-USD-2026-10-20'));
+    await waitFor(async () => expect((await repo.load()).rates).toEqual([]));
   });
 });

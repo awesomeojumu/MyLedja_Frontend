@@ -1,5 +1,5 @@
 import { InvestmentsScreen } from '@/features/investments/InvestmentsScreen';
 
-export default function InvestmentsRoute() {
+export default function InvestmentsPage() {
   return <InvestmentsScreen />;
 }

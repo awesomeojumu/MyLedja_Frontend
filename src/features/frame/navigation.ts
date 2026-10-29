@@ -21,8 +21,8 @@ export type NavItem = {
     | 'notifications'
     | 'investments'
     | 'reports'
-    | 'health'
-    | 'cashflow';
+    | 'cashFlow'
+    | 'health';
 };
 
 /**
@@ -61,10 +61,10 @@ export const PLAN_PAGES: NavItem[] = [
   { key: 'debts', label: 'nav.debts', href: '/debts', icon: 'debts' },
 ];
 
-/** Wealth section (Phase 5). */
+/** Wealth section in the drawer (DESIGN.md 3.2), from Phase 5. */
 export const WEALTH_PAGES: NavItem[] = [
   { key: 'investments', label: 'nav.investments', href: '/investments', icon: 'investments' },
   { key: 'reports', label: 'nav.reports', href: '/reports', icon: 'reports' },
-  { key: 'cashflow', label: 'nav.cashflow', href: '/cash-flow', icon: 'cashflow' },
+  { key: 'cash-flow', label: 'nav.cashFlow', href: '/cash-flow', icon: 'cashFlow' },
   { key: 'health', label: 'nav.health', href: '/health', icon: 'health' },
 ];
