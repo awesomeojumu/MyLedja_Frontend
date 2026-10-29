@@ -64,6 +64,11 @@ export function isInvestmentAccount(type: AccountKind): boolean {
   return type === 'investment';
 }
 
+/** Property / valuables / untracked investments (TB-03 Value). Holdings cover tracked investment accounts. */
 export function hasValueTab(type: AccountKind): boolean {
-  return type === 'property' || type === 'investment';
+  return type === 'property';
+}
+
+export function hasHoldingsTab(type: AccountKind): boolean {
+  return type === 'investment';
 }

@@ -45,9 +45,9 @@ export function RulesScreen() {
   const toast = useToast();
   const size = useSizeClass();
   const twoCol = size === 'wide' || size === 'desktop';
-  const params = useGlobalSearchParams<{ edit?: string }>();
+  const params = useGlobalSearchParams<{ edit?: string; rule?: string; runRules?: string }>();
   const [query, setQuery] = useState('');
-  const [runOpen, setRunOpen] = useState(false);
+  const [runOpen, setRunOpen] = useState(params.runRules === '1');
   const [editRule, setEditRule] = useState<TransactionRule | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,14 +63,20 @@ export function RulesScreen() {
     setEditRule(created);
   };
 
-  // Open the rule named in the link once it has loaded.
+  // Open the rule named in the link once it has loaded (`?rule=` addendum; `?edit=` legacy).
   const [openedFromLink, setOpenedFromLink] = useState<string | null>(null);
-  if (snapshot && params.edit && params.edit !== openedFromLink) {
-    const found = snapshot.rules.find((r) => r.id === params.edit);
+  const linkId = params.rule && params.rule !== 'new' ? params.rule : params.edit;
+  if (snapshot && linkId && linkId !== openedFromLink) {
+    const found = snapshot.rules.find((r) => r.id === linkId);
     if (found) {
-      setOpenedFromLink(params.edit);
+      setOpenedFromLink(linkId);
       setEditRule(found);
     }
+  }
+  const [runLinked, setRunLinked] = useState(false);
+  if (params.runRules === '1' && !runLinked) {
+    setRunLinked(true);
+    setRunOpen(true);
   }
 
   const grouped = useMemo(() => {

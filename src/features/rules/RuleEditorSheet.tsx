@@ -11,9 +11,24 @@ import { t } from '@/i18n';
 
 const sp = tokens.spacing;
 
-const CONDITION_FIELDS: RuleConditionField[] = ['payee', 'description', 'amount', 'account', 'category', 'notes', 'date'];
-const CONDITION_OPS: RuleConditionOp[] = ['contains', 'equals', 'lessThan', 'greaterThan', 'before', 'after'];
-const ACTION_KINDS: RuleActionKind[] = ['setCategory', 'renamePayee', 'addNote'];
+const CONDITION_FIELDS: RuleConditionField[] = ['payee', 'description', 'amount', 'account', 'category', 'notes', 'date', 'money'];
+const CONDITION_OPS: RuleConditionOp[] = [
+  'contains',
+  'equals',
+  'notEquals',
+  'startsWith',
+  'isOneOf',
+  'lessThan',
+  'greaterThan',
+  'between',
+  'before',
+  'after',
+  'dayOfMonth',
+  'isIn',
+  'isOut',
+  'isEmpty',
+];
+const ACTION_KINDS: RuleActionKind[] = ['setCategory', 'renamePayee', 'addNote', 'addTag', 'split', 'linkSchedule', 'moneyBack'];
 
 export function RuleEditorSheet({
   rule,

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, Confirm, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
+import { Button, Confirm, DatePicker, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import type { Category, ExchangeRateEntry } from '@/data/workspace/model';
 import { t, type TextKey } from '@/i18n';
@@ -102,19 +102,24 @@ export function ChangeRoleSheet({
   );
 }
 
-/** #56 Exchange rate */
+/** #56 Exchange rate (PU-56) */
 export function ExchangeRateSheet({
   visible,
   onClose,
   onSave,
+  initialCurrency,
+  initialDate,
 }: {
   visible: boolean;
   onClose: () => void;
   onSave: (entry: Omit<ExchangeRateEntry, 'id'>) => void | Promise<void>;
+  initialCurrency?: string;
+  initialDate?: string;
 }) {
   const toast = useToast();
-  const [currency, setCurrency] = useState('USD');
-  const [date, setDate] = useState('');
+  const today = new Intl.DateTimeFormat('en-CA').format(new Date());
+  const [currency, setCurrency] = useState(initialCurrency ?? 'USD');
+  const [date, setDate] = useState(initialDate ?? today);
   const [rate, setRate] = useState('');
 
   // Start empty each time the sheet opens.
@@ -122,8 +127,8 @@ export function ExchangeRateSheet({
   if (visible !== wasVisible) {
     setWasVisible(visible);
     if (visible) {
-      setCurrency('USD');
-      setDate('');
+      setCurrency(initialCurrency ?? 'USD');
+      setDate(initialDate ?? today);
       setRate('');
     }
   }
@@ -136,27 +141,41 @@ export function ExchangeRateSheet({
       testID="settings-exchange-sheet"
       footer={
         <Button
-          label={t('panel.save')}
-          disabled={!rate.trim()}
+          testID="settings-exchange-save"
+          label={t('settings.popup.exchangeSave')}
+          disabled={!rate.trim() || !currency.trim()}
           onPress={() => {
             void Promise.resolve(
               onSave({
-                currency: currency.trim() || 'USD',
-                date: date.trim() || new Intl.DateTimeFormat('en-CA').format(new Date()),
+                currency: currency.trim().toUpperCase(),
+                date: date.trim() || today,
                 rate: rate.trim(),
                 source: 'manual',
               }),
             ).then(() => {
-              toast.show(t('common.saved'));
+              toast.show(t('settings.popup.exchangeSaved'));
               onClose();
             });
           }}
         />
       }
     >
-      <TextInput testID="settings-exchange-currency" label={t('settings.popup.exchangeCurrency')} value={currency} onChangeText={setCurrency} />
-      <TextInput testID="settings-exchange-date" label={t('settings.popup.exchangeDate')} value={date} onChangeText={setDate} placeholder="2026-10-28" />
-      <TextInput testID="settings-exchange-rate" label={t('settings.popup.exchangeRate')} value={rate} onChangeText={setRate} keyboardType="decimal-pad" />
+      <Select
+        testID="settings-exchange-currency"
+        label={t('settings.popup.exchangeCurrency')}
+        value={currency}
+        onChange={setCurrency}
+        options={['USD', 'GBP', 'EUR', 'CAD', 'GHS'].map((c) => ({ value: c, label: c }))}
+      />
+      <DatePicker testID="settings-exchange-date" label={t('settings.popup.exchangeDate')} value={date} onChange={setDate} />
+      <TextInput
+        testID="settings-exchange-rate"
+        label={t('settings.popup.exchangeRatePer', { currency })}
+        value={rate}
+        onChangeText={setRate}
+        keyboardType="decimal-pad"
+        placeholder="1550.00"
+      />
     </Sheet>
   );
 }

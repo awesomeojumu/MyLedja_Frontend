@@ -86,13 +86,35 @@ export type Payee = {
 /** Transaction sorting rules (DESIGN page 25, TECH-SPEC rules collection). */
 export type RuleStage = 'first' | 'normal' | 'last';
 
-export type RuleConditionField = 'payee' | 'description' | 'amount' | 'account' | 'category' | 'notes' | 'date';
+export type RuleConditionField =
+  | 'payee'
+  | 'description'
+  | 'amount'
+  | 'account'
+  | 'category'
+  | 'notes'
+  | 'date'
+  | 'money';
 
-export type RuleConditionOp = 'contains' | 'equals' | 'lessThan' | 'greaterThan' | 'before' | 'after';
+export type RuleConditionOp =
+  | 'contains'
+  | 'equals'
+  | 'notEquals'
+  | 'startsWith'
+  | 'isOneOf'
+  | 'lessThan'
+  | 'greaterThan'
+  | 'between'
+  | 'before'
+  | 'after'
+  | 'dayOfMonth'
+  | 'isIn'
+  | 'isOut'
+  | 'isEmpty';
 
 export type RuleCondition = { field: RuleConditionField; op: RuleConditionOp; value: string };
 
-export type RuleActionKind = 'setCategory' | 'renamePayee' | 'addNote';
+export type RuleActionKind = 'setCategory' | 'renamePayee' | 'addNote' | 'addTag' | 'split' | 'linkSchedule' | 'moneyBack';
 
 export type RuleAction = { kind: RuleActionKind; value: string };
 
@@ -136,6 +158,81 @@ export type ExchangeRateEntry = {
   source: 'manual' | 'download';
 };
 
+/** Phase 5 investments (TECH-SPEC 6.8 / PU-37…40). */
+export const HOLDING_TYPES = ['stock', 'fund', 'pension', 'crypto', 'fixedDeposit', 'other'] as const;
+export type HoldingType = (typeof HOLDING_TYPES)[number];
+
+export type Holding = {
+  id: string;
+  name: string;
+  symbol?: string;
+  type: HoldingType;
+  /** Parent investment account (Held in). */
+  accountId: string;
+  currency: string;
+  /** Ledger asset for this holding's cost basis. */
+  ledgerAccountId: string;
+};
+
+export type HoldingLot = {
+  id: string;
+  holdingId: string;
+  date: string;
+  units: string;
+  /** Units already sold from this lot. */
+  soldUnits: string;
+  /** Total cost of the original lot in minor units. */
+  costMinor: string;
+  pricePerUnitMinor: string;
+  feesMinor: string;
+  buyEventId?: string;
+};
+
+export type HoldingPrice = {
+  id: string;
+  holdingId: string;
+  date: string;
+  priceMinor: string;
+};
+
+/** Reports dashboards (PU-41…43 / TB-10). */
+export type ReportCardKind =
+  | 'spendingByCategory'
+  | 'incomeVsSpending'
+  | 'netWorth'
+  | 'cashFlow'
+  | 'budgetProgress'
+  | 'custom';
+
+export type ReportCard = {
+  id: string;
+  kind: ReportCardKind;
+  title: string;
+  hidden?: boolean;
+};
+
+export type ReportDashboard = {
+  id: string;
+  name: string;
+  cards: ReportCard[];
+  order: number;
+};
+
+export type SavedReport = {
+  id: string;
+  name: string;
+  kind: ReportCardKind;
+  dashboardId?: string;
+};
+
+/** Health settings (PU-44 / TECH-SPEC 6.10). */
+export type HealthSettings = {
+  cashAccountIds: string[];
+  emergencyMonths: 3 | 6 | 12;
+  countInvestmentsInRunway: boolean;
+  essentialCategoryIds: string[];
+};
+
 /** Which budget category types appear in the budget UI (Settings › Budget). */
 export type BudgetTypesShown = {
   fixed: boolean;
@@ -167,10 +264,6 @@ export type WorkspaceSettings = {
   budgetStyle: BudgetStyle;
   currency: string;
   weekStart: 'monday' | 'sunday' | 'saturday';
-  /** Workspace display name (TB-11 Workspace). */
-  workspaceName?: string;
-  /** Default Africa/Lagos (TB-11 Workspace). */
-  timeZone?: string;
   checklistHidden?: boolean;
   dashboardLayout?: DashboardLayout;
   notificationPrefs?: NotificationPrefs;
@@ -180,8 +273,9 @@ export type WorkspaceSettings = {
   exchangeRates?: ExchangeRateEntry[];
   downloadDailyRates?: boolean;
   deviceSync?: DeviceSyncPrefs;
-  /** PU-28 — Due soon window in days (3 · 7 · 14 · 30). */
-  dueSoonDays?: 3 | 7 | 14 | 30;
+  health?: HealthSettings;
+  reportDashboards?: ReportDashboard[];
+  savedReports?: SavedReport[];
 };
 
 /** Settings › Notifications (P26-05). */
@@ -242,21 +336,14 @@ export const budgetAssignId = (categoryId: string, month: string) => `${category
 export type Goal = {
   id: string;
   name: string;
-  icon?: string;
-  notes?: string;
   targetMinor: string;
   targetDate?: string;
   accountId: string;
   categoryId?: string;
   status: 'active' | 'paused' | 'completed';
-  completedAt?: string;
-  /** Optional monthly schedule (P14-04 / PU-33). */
+  /** Optional monthly schedule (P14-04). */
   scheduleAmountMinor?: string;
   scheduleDayOfMonth?: number;
-  scheduleEvery?: 'week' | 'month';
-  scheduleStarts?: string;
-  /** When true, allocate on the day without asking (PU-33). */
-  scheduleAutoAllocate?: boolean;
 };
 
 /** Earmark into a goal (TECH-SPEC E18); amounts are kobo strings. */
@@ -292,8 +379,6 @@ export type Recurring = {
   amountMinor: string;
   approximate?: boolean;
   accountId: string;
-  /** Transfer destination (PU-25). */
-  toAccountId?: string;
   categoryId?: string;
   payeeId?: string;
   rule: RecurrenceRule;
@@ -302,17 +387,11 @@ export type Recurring = {
   autoCreate?: boolean;
   /** DESIGN #25 — stop after this many occurrences (optional; endDate also ends the series). */
   endAfterCount?: number;
-  /**
-   * Days before due: 0 = on the day, 1, 3, or 7.
-   * Omit / undefined = Off (PU-25 Remind me).
-   */
+  /** Days before due: 0 = on the day, 1, 3, or 7. */
   reminderDays?: number;
   /** DESIGN #25 — hide amount on lock screen (default on). */
   hideAmountOnLock?: boolean;
-  /** Soft-deleted / cancelled schedule. */
   cancelled?: boolean;
-  /** TB-04 / PU-25 — paused: shown as Paused, creates no reminders. */
-  paused?: boolean;
 };
 
 export type RecurringOccurrence = {
@@ -361,8 +440,6 @@ export type IncomeStream = {
   categoryId: string;
   rule: RecurrenceRule;
   countInBudget: boolean;
-  /** Source or employer (PU-29). */
-  source?: string;
   /** For tax-class report (P13-08). */
   taxClass?: string;
   amountKind?: IncomeAmountKind;
@@ -378,11 +455,6 @@ export type IncomeStream = {
 export type DebtDirection = 'owedToMe' | 'iOwe';
 
 /** Person debt (DESIGN.md page 15); bank loans use account type loan instead. */
-export type DebtInterest =
-  | { kind: 'none' }
-  | { kind: 'fixed'; amountMinor: string }
-  | { kind: 'percent_month'; percent: number };
-
 export type PersonDebt = {
   id: string;
   name: string;
@@ -390,12 +462,9 @@ export type PersonDebt = {
   /** Ledger account id for R (asset) or P (liability). */
   ledgerAccountId: string;
   payeeId?: string;
-  status: 'open' | 'settled' | 'written_off';
+  status: 'open' | 'settled';
   nextDueDate?: string;
   notes?: string;
-  interest?: DebtInterest;
-  /** Credit kept after an overpayment (TECH-SPEC 6.9). */
-  creditMinor?: string;
   /** Instalment plan (DESIGN popup #36). */
   scheduleInstallmentCount?: number;
   scheduleAmountMinor?: string;

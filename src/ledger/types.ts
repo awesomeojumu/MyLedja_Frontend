@@ -44,7 +44,9 @@ export type EventType =
   | 'loan_proceeds'
   | 'loan_repayment'
   | 'write_off'
-  | 'salary_gross';
+  | 'salary_gross'
+  | 'investment_buy'
+  | 'investment_sell';
 
 export type EventStatus = 'pending' | 'posted' | 'reversed';
 

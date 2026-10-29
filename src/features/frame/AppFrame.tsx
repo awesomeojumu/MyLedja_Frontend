@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Image, Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeftRight, Bell, CalendarClock, CircleDollarSign, Eye, EyeOff, HandCoins, LayoutDashboard, Menu, PieChart, Plus, Settings, Target, Users, Wallet, Zap } from 'lucide-react-native';
+import { Activity, ArrowLeftRight, Bell, CalendarClock, CircleDollarSign, Eye, EyeOff, HandCoins, HeartPulse, LayoutDashboard, LineChart, Menu, PieChart, Plus, Settings, Target, TrendingUp, Users, Wallet, Zap } from 'lucide-react-native';
 import { Banner, Button, StatusPill, Text } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
@@ -16,7 +16,7 @@ import { CommandBar, CommandSearchButton } from '@/features/command/CommandBar';
 import { NotificationsBell } from '@/features/notifications/NotificationsBell';
 import { SyncIssuesBanner } from '@/features/sync/SyncIssues';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
-import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, PHONE_BOTTOM_PAGES, type NavItem } from './navigation';
+import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, WEALTH_PAGES, PHONE_BOTTOM_PAGES, type NavItem } from './navigation';
 
 const c = tokens.color;
 const sp = tokens.spacing;
@@ -33,6 +33,10 @@ const ICONS = {
   income: CircleDollarSign,
   debts: HandCoins,
   notifications: Bell,
+  investments: TrendingUp,
+  reports: LineChart,
+  health: HeartPulse,
+  cashflow: Activity,
 };
 const onSidebarMuted = `${c['on-primary']}B3`;
 const onSidebarSection = `${c['on-primary']}99`;
@@ -231,6 +235,41 @@ function SidebarList({ compact, onNavigate }: { compact: boolean; onNavigate?: (
         </Text>
       )}
       {PLAN_PAGES.map((item) => {
+        const active = isActive(pathname, item);
+        const Icon = ICONS[item.icon];
+        return (
+          <Pressable
+            key={item.key}
+            testID={`nav-${item.key}`}
+            accessibilityRole="link"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={t(item.label)}
+            onPress={() => {
+              router.push(item.href);
+              onNavigate?.();
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: compact ? 'center' : 'flex-start',
+              gap: sp['spacing-md'],
+              minHeight: 44,
+              paddingHorizontal: sp['spacing-md'],
+              borderRadius: tokens.radius['rounded-pill'],
+              backgroundColor: active ? c['primary-deep'] : undefined,
+            }}
+          >
+            <Icon size={18} color={active ? c['on-primary'] : onSidebarMuted} />
+            {compact ? null : <Text style={{ color: active ? c['on-primary'] : onSidebarMuted }}>{t(item.label)}</Text>}
+          </Pressable>
+        );
+      })}
+      {compact ? null : (
+        <Text variant="micro" style={{ color: onSidebarSection, marginTop: sp['spacing-md'], textTransform: 'uppercase' }}>
+          {t('nav.wealth')}
+        </Text>
+      )}
+      {WEALTH_PAGES.map((item) => {
         const active = isActive(pathname, item);
         const Icon = ICONS[item.icon];
         return (

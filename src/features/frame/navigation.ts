@@ -6,7 +6,23 @@ export type NavItem = {
   label: TextKey;
   phoneLabel?: TextKey;
   href: Href;
-  icon: 'dashboard' | 'accounts' | 'transactions' | 'budget' | 'payees' | 'rules' | 'settings' | 'goals' | 'plan' | 'income' | 'debts' | 'notifications';
+  icon:
+    | 'dashboard'
+    | 'accounts'
+    | 'transactions'
+    | 'budget'
+    | 'payees'
+    | 'rules'
+    | 'settings'
+    | 'goals'
+    | 'plan'
+    | 'income'
+    | 'debts'
+    | 'notifications'
+    | 'investments'
+    | 'reports'
+    | 'health'
+    | 'cashflow';
 };
 
 /**
@@ -43,4 +59,12 @@ export const PLAN_PAGES: NavItem[] = [
   { key: 'income', label: 'nav.income', href: '/income', icon: 'income' },
   { key: 'goals', label: 'nav.goals', href: '/goals', icon: 'goals' },
   { key: 'debts', label: 'nav.debts', href: '/debts', icon: 'debts' },
+];
+
+/** Wealth section (Phase 5). */
+export const WEALTH_PAGES: NavItem[] = [
+  { key: 'investments', label: 'nav.investments', href: '/investments', icon: 'investments' },
+  { key: 'reports', label: 'nav.reports', href: '/reports', icon: 'reports' },
+  { key: 'cashflow', label: 'nav.cashflow', href: '/cash-flow', icon: 'cashflow' },
+  { key: 'health', label: 'nav.health', href: '/health', icon: 'health' },
 ];
