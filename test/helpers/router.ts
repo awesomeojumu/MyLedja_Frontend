@@ -21,6 +21,12 @@ export function setPathname(p: string) {
   currentPath = p;
 }
 export const useRouter = () => router;
+export const useNavigation = () => ({
+  addListener: (_event: string, _cb: unknown) => () => {},
+  dispatch: jest.fn(),
+  goBack: jest.fn(),
+  canGoBack: () => false,
+});
 export const usePathname = () => currentPath;
 export const useGlobalSearchParams = () =>
   useSyncExternalStore(

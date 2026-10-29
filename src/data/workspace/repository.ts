@@ -4,6 +4,7 @@ import type { SetupBody } from '@/api/auth';
 import { formatDay } from '@/design/components/overlays';
 import { budgetForMonth, resolveTemplateLineAmount, rowFor } from '@/features/budget/helpers';
 import { ruleChangeFor } from '@/features/rules/ruleEngine';
+import { suggestedFirstBudget } from '@/features/setup/suggestedBudget';
 import type { RemoteOperation } from '../sync/mapOperation';
 import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
 import { t, type TextKey } from '@/i18n';
@@ -253,6 +254,7 @@ export class WorkspaceRepository {
       budgetStyle: raw?.budgetStyle ?? 'tracking',
       currency: raw?.currency ?? 'NGN',
       weekStart: raw?.weekStart ?? 'monday',
+      skippedSteps: raw?.skippedSteps,
       checklistHidden: raw?.checklistHidden,
       dashboardLayout: raw?.dashboardLayout,
       notificationPrefs: {
@@ -417,12 +419,26 @@ export class WorkspaceRepository {
     await this.put(
       'settings',
       'workspace',
-      { budgetStyle: body.budgetStyle, currency: body.currency, weekStart: body.weekStart },
+      {
+        budgetStyle: body.budgetStyle,
+        currency: body.currency,
+        weekStart: body.weekStart,
+        skippedSteps: [...new Set(body.skippedSteps)].sort((a, b) => a - b),
+      },
       'settings.update',
     );
     for (const a of body.accounts) {
       const type = (a.type in ACCOUNT_KIND_INFO ? a.type : 'other') as AccountKind;
       await this.addAccount({ name: a.name, type, openingBalance: BigInt(a.openingBalance), openingDate: a.openingDate });
+    }
+    // DESIGN step 5: optional monthly take-home fills a suggested first budget.
+    if (body.monthlyTakeHome != null && !body.skippedSteps.includes(5)) {
+      const snap = await this.load();
+      const month = monthOf(new Date().toISOString().slice(0, 10));
+      const lines = suggestedFirstBudget(BigInt(body.monthlyTakeHome), snap.categories);
+      for (const line of lines) {
+        await this.setAssigned(line.categoryId, month, line.amountMinor);
+      }
     }
   }
 

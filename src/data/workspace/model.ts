@@ -279,6 +279,8 @@ export type WorkspaceSettings = {
   workspaceName?: string;
   /** Default Africa/Lagos (TB-11 Workspace). */
   timeZone?: string;
+  /** Welcome steps left for Dashboard Get started (P04-02). */
+  skippedSteps?: number[];
   checklistHidden?: boolean;
   /** Larger screens (tablet+); phone layout is `dashboardLayoutPhone` (PU-06). */
   dashboardLayout?: DashboardLayout;

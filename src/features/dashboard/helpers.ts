@@ -41,13 +41,23 @@ export function pctChange(current: bigint, previous: bigint): number | null {
   return Number(((current - previous) * 10000n) / (previous < 0n ? -previous : previous)) / 100;
 }
 
-export type ChecklistItem = { key: string; done: boolean; labelKey: TextKey; href: string };
+export type ChecklistItem = { key: string; done: boolean; labelKey: TextKey; href: string; fromSkip?: boolean };
+
+/** Welcome step → Dashboard Get started key (P04-02). */
+const SKIP_TO_CHECK: Record<number, string> = {
+  3: 'account',
+  4: 'plan',
+  5: 'plan',
+};
 
 export function checklist(snapshot: Snapshot, hidden: boolean) {
   if (hidden) return [];
   const hasTx = snapshot.events.some((e) => e.type !== 'opening_balance' && e.type !== 'reversal');
-  const hasPlan = snapshot.assigns.size > 0;
-  const items: ChecklistItem[] = [
+  const hasPlan = [...snapshot.assigns.values()].some((a) => a > 0n);
+  const skipKeys = new Set(
+    (snapshot.settings.skippedSteps ?? []).map((s) => SKIP_TO_CHECK[s]).filter((k): k is string => !!k),
+  );
+  const base: ChecklistItem[] = [
     { key: 'account', done: snapshot.accounts.some((a) => !a.archived), labelKey: 'dashboard.check.account', href: '/accounts' },
     { key: 'tx', done: hasTx, labelKey: 'dashboard.check.transactions', href: '/transactions' },
     { key: 'plan', done: hasPlan, labelKey: 'dashboard.check.plan', href: '/budget' },
@@ -55,7 +65,9 @@ export function checklist(snapshot: Snapshot, hidden: boolean) {
     { key: 'goal', done: snapshot.goals.some((g) => g.status === 'active'), labelKey: 'dashboard.check.goal', href: '/goals' },
     { key: 'twofa', done: false, labelKey: 'dashboard.check.twoFactor', href: '/settings/security' },
   ];
-  return items;
+  const items = base.map((item) => ({ ...item, fromSkip: skipKeys.has(item.key) && !item.done }));
+  // Skipped Welcome pickups float to the top until done.
+  return items.sort((a, b) => Number(b.fromSkip) - Number(a.fromSkip) || Number(a.done) - Number(b.done));
 }
 
 export function assetDebtTotals(snapshot: Snapshot, onDate: string) {

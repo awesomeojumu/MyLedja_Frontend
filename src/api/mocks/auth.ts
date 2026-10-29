@@ -100,6 +100,15 @@ export function createAuthMock() {
         return noContent;
       case 'GET /v1/public-config':
         return ok({ env: 'development', google: { enabled: false, clientId: null }, services: { bankConnections: false, files: false, ai: false } });
+      case 'GET /v1/institutions':
+        return ok({
+          institutions: [
+            { id: 'gtbank', name: 'GTBank', kind: 'bank', logoUrl: null, aliases: ['GTCO', 'Guaranty Trust Bank'] },
+            { id: 'opay', name: 'OPay', kind: 'wallet', logoUrl: null, aliases: ['Paycom'] },
+            { id: 'palmpay', name: 'PalmPay', kind: 'wallet', logoUrl: null, aliases: [] },
+          ],
+          version: 'mock',
+        });
       default: {
         const fromSecurity = security(req);
         if (fromSecurity) return fromSecurity;

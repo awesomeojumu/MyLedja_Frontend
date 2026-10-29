@@ -13,6 +13,7 @@ export type SessionResponse = Schemas['SessionResponse'];
 /** Sign-in answers a session, or a two-factor challenge when two-factor is on. */
 export type SignInResponse = Schemas['SignInResponse'];
 export type CodeSent = Schemas['CodeSent'];
+export type InstitutionList = Schemas['InstitutionList'];
 
 export type SignInBody = Body<'signIn'>;
 export type SignUpBody = Body<'signUp'>;
@@ -40,6 +41,9 @@ export function authApi(client: ApiClient) {
     me: () => client.request<User>('GET', '/v1/me'),
     finishSetup: (workspaceId: string, body: SetupBody) =>
       client.request<User>('POST', `/v1/workspaces/${workspaceId}/setup`, body),
+    /** Welcome step 3 logos (TECH-SPEC institutions; public + cacheable). */
+    listInstitutions: () =>
+      client.request<InstitutionList>('GET', '/v1/institutions', undefined, { auth: false }),
   };
 }
 
