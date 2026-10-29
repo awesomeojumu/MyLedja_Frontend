@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Button, InlineError, Placeholder, SegmentedControl, Text, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
@@ -14,36 +15,52 @@ import { GoalCardView } from './GoalCard';
 import { GoalPanel } from './GoalPanel';
 import { AddGoalSheet, AllocateSheet, GoalScheduleSheet, SpendFromGoalSheet } from './goalSheets';
 import { activeGoals, completedGoals, goalCards, gridColumns } from './helpers';
+import { GOAL_URL, goalsTabParam, parseGoalsTab, type GoalsListTab } from './popupUrl';
 
 const sp = tokens.spacing;
-
-type ListTab = 'active' | 'completed';
 
 export function GoalsScreen() {
   const { snapshot, repo } = useWorkspace();
   const size = useSizeClass();
   const cols = gridColumns(size);
   const todayStr = today();
-
-  const [listTab, setListTab] = useState<ListTab>('active');
-  const [addOpen, setAddOpen] = useState(false);
-  const [editGoal, setEditGoal] = useState<Goal | null>(null);
-  const [selected, setSelected] = useState<Goal | null>(null);
-  const [allocateGoal, setAllocateGoal] = useState<Goal | null>(null);
-  const [scheduleGoal, setScheduleGoal] = useState<Goal | null>(null);
-  const [spendGoal, setSpendGoal] = useState<Goal | null>(null);
-  const [starterName, setStarterName] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
+  const params = useLocalSearchParams<{ tab?: string; goal?: string; allocate?: string; goalSchedule?: string }>();
+  const router = useRouter();
   const toast = useToast();
 
+  const listTab = parseGoalsTab(typeof params.tab === 'string' ? params.tab : undefined);
+  const [editGoal, setEditGoal] = useState<Goal | null>(null);
+  const [starterName, setStarterName] = useState<string | null>(null);
+  const [spendGoal, setSpendGoal] = useState<Goal | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   const cards = useMemo(() => (snapshot ? goalCards(snapshot, todayStr) : []), [snapshot, todayStr]);
-  const visible = listTab === 'completed' ? completedGoals(cards) : activeGoals(cards);
-  const selectedCard = selected && snapshot ? cards.find((c) => c.goal.id === selected.id) : null;
+  const visible = listTab === 'done' ? completedGoals(cards) : activeGoals(cards);
+
+  const goalParam = typeof params.goal === 'string' ? params.goal : undefined;
+  const allocateParam = typeof params.allocate === 'string' ? params.allocate : undefined;
+  const scheduleParam = typeof params.goalSchedule === 'string' ? params.goalSchedule : undefined;
+
+  const addOpen = goalParam === 'new' || editGoal !== null;
+  const selected = goalParam && goalParam !== 'new' && snapshot ? snapshot.goals.find((g) => g.id === goalParam) ?? null : null;
+  const selectedCard = selected ? cards.find((c) => c.goal.id === selected.id) ?? null : null;
+  const allocateGoal = allocateParam && snapshot ? snapshot.goals.find((g) => g.id === allocateParam) ?? null : null;
+  const scheduleGoal = scheduleParam && snapshot ? snapshot.goals.find((g) => g.id === scheduleParam) ?? null : null;
+
+  const setTab = (tab: GoalsListTab) => {
+    router.setParams({ [GOAL_URL.tab]: goalsTabParam(tab) });
+  };
 
   const openAdd = (name?: string) => {
     setStarterName(name ?? null);
-    setAddOpen(true);
+    setEditGoal(null);
+    router.setParams({ [GOAL_URL.goal]: 'new' });
+  };
+
+  const clearParams = (...keys: string[]) => {
+    const next: Record<string, undefined> = {};
+    for (const k of keys) next[k] = undefined;
+    router.setParams(next);
   };
 
   return (
@@ -53,10 +70,10 @@ export function GoalsScreen() {
           testID="goals-toggle"
           label={t('goals.viewToggle')}
           value={listTab}
-          onChange={setListTab}
+          onChange={setTab}
           options={[
             { value: 'active', label: t('goals.inProgress') },
-            { value: 'completed', label: t('goals.completed') },
+            { value: 'done', label: t('goals.completed') },
           ]}
         />
         <Button testID="goals-add" label={t('goals.add')} onPress={() => openAdd()} />
@@ -66,15 +83,19 @@ export function GoalsScreen() {
         <Placeholder height={120} />
       ) : visible.length === 0 ? (
         <View style={{ gap: sp['spacing-md'], alignItems: 'center', padding: sp['spacing-xl'] }}>
-          <Text variant="heading-sm">{t('goals.emptyTitle')}</Text>
-          <Text tone="textSecondary" style={{ textAlign: 'center' }}>
-            {t('goals.emptyBody')}
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], justifyContent: 'center' }}>
-            <Button testID="goals-starter-emergency" kind="secondary" label={t('goals.starterEmergency')} onPress={() => openAdd(t('goals.starterEmergency'))} />
-            <Button testID="goals-starter-rent" kind="secondary" label={t('goals.starterRent')} onPress={() => openAdd(t('goals.starterRent'))} />
-            <Button testID="goals-starter-school" kind="secondary" label={t('goals.starterSchool')} onPress={() => openAdd(t('goals.starterSchool'))} />
-          </View>
+          <Text variant="heading-sm">{listTab === 'done' ? t('goals.emptyCompleted') : t('goals.emptyTitle')}</Text>
+          {listTab === 'active' ? (
+            <>
+              <Text tone="textSecondary" style={{ textAlign: 'center' }}>
+                {t('goals.emptyBody')}
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], justifyContent: 'center' }}>
+                <Button testID="goals-starter-emergency" kind="secondary" label={t('goals.starterEmergency')} onPress={() => openAdd(t('goals.starterEmergency'))} />
+                <Button testID="goals-starter-rent" kind="secondary" label={t('goals.starterRent')} onPress={() => openAdd(t('goals.starterRent'))} />
+                <Button testID="goals-starter-school" kind="secondary" label={t('goals.starterSchool')} onPress={() => openAdd(t('goals.starterSchool'))} />
+              </View>
+            </>
+          ) : null}
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-md'] }}>
@@ -83,8 +104,8 @@ export function GoalsScreen() {
               <GoalCardView
                 card={card}
                 today={todayStr}
-                onOpen={() => setSelected(card.goal)}
-                onAllocate={() => setAllocateGoal(card.goal)}
+                onOpen={() => router.setParams({ [GOAL_URL.goal]: card.goal.id })}
+                onAllocate={() => router.setParams({ [GOAL_URL.allocate]: card.goal.id })}
               />
             </View>
           ))}
@@ -97,9 +118,9 @@ export function GoalsScreen() {
           existing={editGoal ?? undefined}
           initialName={starterName ?? undefined}
           onClose={() => {
-            setAddOpen(false);
             setEditGoal(null);
             setStarterName(null);
+            clearParams(GOAL_URL.goal);
           }}
           onSave={async (input) => {
             setError(null);
@@ -111,9 +132,12 @@ export function GoalsScreen() {
                 accountId: input.accountId,
                 targetDate: input.targetDate,
                 categoryId: input.categoryId,
+                icon: input.icon,
+                notes: input.notes,
               });
-              setAddOpen(false);
+              toast.show(t('common.saved'));
               setEditGoal(null);
+              clearParams(GOAL_URL.goal);
               return;
             }
             const r = await repo.addGoal({ ...input, name: starterName ?? input.name });
@@ -121,8 +145,9 @@ export function GoalsScreen() {
               setError(ledgerMessage(r.error));
               return;
             }
-            setAddOpen(false);
+            toast.show(t('goals.goalAdded'));
             setStarterName(null);
+            clearParams(GOAL_URL.goal);
           }}
         />
       ) : null}
@@ -131,7 +156,7 @@ export function GoalsScreen() {
         <AllocateSheet
           goal={allocateGoal}
           snapshot={snapshot}
-          onClose={() => setAllocateGoal(null)}
+          onClose={() => clearParams(GOAL_URL.allocate)}
           onSave={async (amount, date, fromAccountId) => {
             setError(null);
             const r = await repo.allocateToGoal(allocateGoal.id, { amount, date, fromAccountId });
@@ -140,7 +165,7 @@ export function GoalsScreen() {
               return;
             }
             if (r.value.completed) toast.show(t('goals.reached'));
-            setAllocateGoal(null);
+            clearParams(GOAL_URL.allocate);
           }}
         />
       ) : null}
@@ -151,27 +176,22 @@ export function GoalsScreen() {
           snapshot={snapshot}
           repo={repo}
           today={todayStr}
-          onClose={() => setSelected(null)}
+          onClose={() => clearParams(GOAL_URL.goal)}
           onEdit={() => {
             setEditGoal(selectedCard.goal);
-            setSelected(null);
-            setAddOpen(true);
+            router.setParams({ [GOAL_URL.goal]: 'new' });
           }}
-          onSchedule={() => {
-            setScheduleGoal(selectedCard.goal);
-          }}
+          onSchedule={() => router.setParams({ [GOAL_URL.goalSchedule]: selectedCard.goal.id })}
           onSpend={() => {
             setSpendGoal(selectedCard.goal);
-            setSelected(null);
+            clearParams(GOAL_URL.goal);
           }}
-          onAllocate={() => {
-            setAllocateGoal(selectedCard.goal);
-          }}
+          onAllocate={() => router.setParams({ [GOAL_URL.allocate]: selectedCard.goal.id })}
         />
       ) : null}
 
-      {scheduleGoal ? (
-        <GoalScheduleSheet goal={scheduleGoal} repo={repo} onClose={() => setScheduleGoal(null)} />
+      {scheduleGoal && snapshot ? (
+        <GoalScheduleSheet goal={scheduleGoal} snapshot={snapshot} repo={repo} onClose={() => clearParams(GOAL_URL.goalSchedule)} />
       ) : null}
 
       {spendGoal && snapshot ? (

@@ -267,8 +267,12 @@ export class WorkspaceRepository {
       reconciles: reconciles.map((r) => ({ ...(r.data as Omit<Reconcile, 'id'>), id: r.id })).sort((a, b) => b.statementDate.localeCompare(a.statementDate)),
       assigns,
       assignNotes,
-      goals: goalRows.map((r) => ({ ...(r.data as Omit<Goal, 'id'>), id: r.id })),
-      allocations: allocationRows.map((r) => ({ ...(r.data as Omit<GoalAllocation, 'id'>), id: r.id })),
+      goals: goalRows
+        .map((r) => ({ ...(r.data as Omit<Goal, 'id'> & { deleted?: boolean }), id: r.id }))
+        .filter((g) => !g.deleted),
+      allocations: allocationRows
+        .map((r) => ({ ...(r.data as Omit<GoalAllocation, 'id'> & { deleted?: boolean }), id: r.id }))
+        .filter((a) => !a.deleted),
       recurring: recurringRows.map((r) => ({ ...(r.data as Omit<Recurring, 'id'>), id: r.id })),
       occurrences: occurrenceRows.map((r) => ({ ...(r.data as Omit<RecurringOccurrence, 'id'>), id: r.id })),
       incomeStreams: streamRows.map((r) => ({ ...(r.data as Omit<IncomeStream, 'id'>), id: r.id })),
@@ -1401,14 +1405,27 @@ export class WorkspaceRepository {
       }, 0n);
   }
 
-  async addGoal(input: { name: string; targetMinor: bigint; accountId: string; targetDate?: string; categoryId?: string }): Promise<Result<Goal>> {
+  async addGoal(input: {
+    name: string;
+    targetMinor: bigint;
+    accountId: string;
+    targetDate?: string;
+    categoryId?: string;
+    icon?: string;
+    notes?: string;
+    /** Opening earmark already sitting in the goal account (PU-31). */
+    alreadySavedMinor?: bigint;
+  }): Promise<Result<Goal>> {
     if (!input.accountId.trim()) return { ok: false, error: 'missing_lines' };
     if (input.targetMinor <= 0n) return { ok: false, error: 'not_positive' };
     const snapshot = await this.load();
     if (!snapshot.accounts.some((a) => a.id === input.accountId && !a.archived)) return { ok: false, error: 'missing_lines' };
+    if (input.alreadySavedMinor !== undefined && input.alreadySavedMinor < 0n) return { ok: false, error: 'not_positive' };
     const goal: Goal = {
       id: this.newId(),
       name: input.name.trim(),
+      icon: input.icon,
+      notes: input.notes,
       targetMinor: input.targetMinor.toString(),
       accountId: input.accountId,
       targetDate: input.targetDate,
@@ -1417,6 +1434,10 @@ export class WorkspaceRepository {
     };
     const { id, ...data } = goal;
     await this.put('goals', id, data, 'goal.create', undefined, { type: 'goal.create', payload: goalBody(id, data) });
+    if (input.alreadySavedMinor && input.alreadySavedMinor > 0n) {
+      const allocated = await this.allocateToGoal(id, { amount: input.alreadySavedMinor, date: workspaceToday() });
+      if (!allocated.ok) return allocated;
+    }
     return { ok: true, value: goal };
   }
 
@@ -1424,6 +1445,25 @@ export class WorkspaceRepository {
     const { id, ...data } = goal;
     const baseVersion = await this.versionOf('goals', id);
     await this.put('goals', id, data, 'goal.update', undefined, { type: 'goal.update', targetId: id, payload: goalUpdateBody(data, baseVersion) });
+  }
+
+  /**
+   * Delete a goal without moving money (PU-30-1). Allocations are cleared as metadata; balances stay in the account.
+   */
+  async deleteGoal(goalId: string): Promise<Result<void>> {
+    const snapshot = await this.load();
+    const goal = snapshot.goals.find((g) => g.id === goalId);
+    if (!goal) return { ok: false, error: 'missing_lines' };
+    for (const a of snapshot.allocations.filter((x) => x.goalId === goalId)) {
+      await this.put('allocations', a.id, { ...a, deleted: true }, 'goal.allocation.clear', undefined, null);
+    }
+    const baseVersion = await this.versionOf('goals', goalId);
+    await this.put('goals', goalId, { ...goal, deleted: true }, 'goal.delete', undefined, {
+      type: 'goal.delete',
+      targetId: goalId,
+      payload: { baseVersion },
+    });
+    return { ok: true, value: undefined };
   }
 
   /** E18: earmark money for a goal; transfer when the source account differs. */
@@ -1613,21 +1653,43 @@ export class WorkspaceRepository {
     amount: bigint;
     date: string;
     payeeName?: string;
+    bankNames?: string[];
+    notes?: string;
+    interest?: PersonDebt['interest'];
+    dueDate?: string;
   }): Promise<Result<PersonDebt>> {
     const snapshot = await this.load();
     const id = this.newId();
     const ledgerAccountId = `${this.workspaceId}:debt:${id}`;
     let payeeId: string | undefined;
-    if (input.payeeName?.trim()) {
-      payeeId = await this.payeeFor(snapshot.payees, input.payeeName.trim());
+    const person = input.name.trim() || input.payeeName?.trim() || t('debts.unnamed');
+    const payeeSeed = input.payeeName?.trim() || person;
+    if (payeeSeed) {
+      payeeId = await this.payeeFor(snapshot.payees, payeeSeed);
+      const aliases = new Set(
+        (input.bankNames ?? []).map((a) => a.trim().toUpperCase()).filter(Boolean),
+      );
+      // Keep the person's display name as an alias when the payee was seeded from a bank string.
+      if (person && person.toLowerCase() !== payeeSeed.toLowerCase()) aliases.add(person);
+      if (aliases.size && payeeId) {
+        const fresh = await this.load();
+        const payee = fresh.payees.find((p) => p.id === payeeId);
+        if (payee) {
+          const merged = new Set([...(payee.aliases ?? []), ...aliases]);
+          await this.updatePayee({ ...payee, aliases: [...merged] });
+        }
+      }
     }
     const debt: PersonDebt = {
       id,
-      name: input.name.trim() || input.payeeName?.trim() || t('debts.unnamed'),
+      name: person,
       direction: input.direction,
       ledgerAccountId,
       payeeId,
       status: 'open',
+      notes: input.notes,
+      interest: input.interest,
+      nextDueDate: input.dueDate,
     };
     const chart = this.chartFor(snapshot.accounts, snapshot.categories, [...snapshot.debts, debt]);
     const lines =
@@ -1643,9 +1705,20 @@ export class WorkspaceRepository {
       payeeId,
     }, null);
     if (!posted.ok) return posted;
-    await this.put('debts', id, { name: debt.name, direction: debt.direction, ledgerAccountId, payeeId, status: 'open' }, 'debt.open', undefined, {
+    const { id: _debtId, ...debtData } = debt;
+    await this.put('debts', id, debtData, 'debt.open', undefined, {
       type: input.direction === 'owedToMe' ? 'debt.lend' : 'debt.borrow',
-      payload: { id, personName: debt.name, ...(payeeId ? { payeeId } : {}), amount: input.amount.toString(), accountId: input.accountId, date: input.date },
+      payload: {
+        id,
+        personName: debt.name,
+        ...(payeeId ? { payeeId } : {}),
+        amount: input.amount.toString(),
+        accountId: input.accountId,
+        date: input.date,
+        interest: input.interest ?? { kind: 'none' },
+        dueDate: input.dueDate ?? null,
+        notes: input.notes ?? null,
+      },
       transactionIds: [posted.value.id],
     });
     const entry: DebtEntry = {
@@ -1710,18 +1783,30 @@ export class WorkspaceRepository {
 
   async recordDebtPayment(
     debtId: string,
-    input: { accountId: string; amount: bigint; date: string; interest?: bigint },
+    input: {
+      accountId: string;
+      amount: bigint;
+      date: string;
+      interest?: bigint;
+      /** TECH-SPEC 6.9: extra beyond outstanding as gift (income/expense) or credit on the debt. */
+      overpayment?: 'gift' | 'credit';
+    },
   ): Promise<Result<TxEvent>> {
     const snapshot = await this.load();
     const debt = snapshot.debts.find((d) => d.id === debtId);
     if (!debt || debt.status !== 'open') return { ok: false, error: 'missing_lines' };
     const balance = this.debtBalance(debt, snapshot, input.date);
-    const principal = input.amount > balance ? balance : input.amount;
-    if (principal <= 0n && (input.interest ?? 0n) <= 0n) return { ok: false, error: 'not_positive' };
+    const interest = input.interest ?? 0n;
+    const requestedPrincipal = input.amount;
+    const principal = requestedPrincipal > balance ? balance : requestedPrincipal;
+    const extra = requestedPrincipal > balance ? requestedPrincipal - balance : 0n;
+    if (principal <= 0n && interest <= 0n && extra <= 0n) return { ok: false, error: 'not_positive' };
+    if (extra > 0n && !input.overpayment) return { ok: false, error: 'not_positive' };
+
     const lines =
       debt.direction === 'owedToMe'
-        ? buildCollect(snapshot.chart, { receivableId: debt.ledgerAccountId, accountId: input.accountId, principal, interest: input.interest })
-        : buildLoanRepayment(snapshot.chart, { payableId: debt.ledgerAccountId, accountId: input.accountId, principal, interest: input.interest });
+        ? buildCollect(snapshot.chart, { receivableId: debt.ledgerAccountId, accountId: input.accountId, principal, interest })
+        : buildLoanRepayment(snapshot.chart, { payableId: debt.ledgerAccountId, accountId: input.accountId, principal, interest });
     if (!lines.ok) return lines;
     const posted = await this.postEvent(snapshot.chart, snapshot.events, {
       type: debt.direction === 'owedToMe' ? 'collect' : 'loan_repayment',
@@ -1730,6 +1815,32 @@ export class WorkspaceRepository {
       debtId,
     }, null);
     if (!posted.ok) return posted;
+
+    if (extra > 0n && input.overpayment === 'gift') {
+      const incomeCat = snapshot.categories.find((c) => c.kind === 'income' && !c.deleted);
+      const expenseCat = snapshot.categories.find((c) => c.kind === 'expense' && !c.deleted);
+      if (debt.direction === 'owedToMe' && incomeCat) {
+        await this.addTransaction({
+          kind: 'income',
+          accountId: input.accountId,
+          categoryId: incomeCat.id,
+          amount: extra,
+          date: input.date,
+          payeeName: debt.name,
+          notes: t('debts.overpayGiftNote'),
+        });
+      } else if (debt.direction === 'iOwe' && expenseCat) {
+        await this.addTransaction({
+          kind: 'expense',
+          accountId: input.accountId,
+          parts: [{ categoryId: expenseCat.id, amount: extra }],
+          date: input.date,
+          payeeName: debt.name,
+          notes: t('debts.overpayGiftNote'),
+        });
+      }
+    }
+
     const entry: DebtEntry = {
       id: this.newId(),
       debtId,
@@ -1737,7 +1848,7 @@ export class WorkspaceRepository {
       eventId: posted.value.id,
       kind: 'payment',
       amountMinor: principal.toString(),
-      interestMinor: input.interest ? input.interest.toString() : undefined,
+      interestMinor: interest > 0n ? interest.toString() : undefined,
     };
     await this.put('debt_entries', entry.id, { debtId: entry.debtId, date: entry.date, eventId: entry.eventId, kind: entry.kind, amountMinor: entry.amountMinor, interestMinor: entry.interestMinor }, 'debt.entry', undefined, {
       type: 'debt.payment',
@@ -1745,14 +1856,35 @@ export class WorkspaceRepository {
       payload: {
         date: input.date,
         accountId: input.accountId,
-        amount: (principal + (input.interest ?? 0n)).toString(),
-        split: { principal: principal.toString(), interest: (input.interest ?? 0n).toString() },
+        amount: (principal + interest).toString(),
+        split: { principal: principal.toString(), interest: interest.toString() },
+        overpayment: input.overpayment ?? null,
       },
       transactionIds: [posted.value.id],
     });
     const after = await this.load();
     const left = this.debtBalance(debt, after, input.date);
-    if (left <= 0n) await this.put('debts', debtId, { name: debt.name, direction: debt.direction, ledgerAccountId: debt.ledgerAccountId, payeeId: debt.payeeId, status: 'settled' }, 'debt.settle');
+    const creditExtra = extra > 0n && input.overpayment === 'credit' ? extra : 0n;
+    const creditMinor = (BigInt(debt.creditMinor ?? '0') + creditExtra).toString();
+    if (left <= 0n) {
+      await this.put(
+        'debts',
+        debtId,
+        {
+          name: debt.name,
+          direction: debt.direction,
+          ledgerAccountId: debt.ledgerAccountId,
+          payeeId: debt.payeeId,
+          status: 'settled',
+          interest: debt.interest,
+          notes: debt.notes,
+          creditMinor: creditExtra > 0n ? creditMinor : debt.creditMinor,
+        },
+        'debt.settle',
+      );
+    } else if (creditExtra > 0n) {
+      await this.updatePersonDebt({ ...debt, creditMinor });
+    }
     return { ok: true, value: posted.value };
   }
 
@@ -1774,7 +1906,7 @@ export class WorkspaceRepository {
     }, null);
     if (!posted.ok) return posted;
     const baseVersion = await this.versionOf('debts', debtId);
-    await this.put('debts', debtId, { ...debt, status: 'settled' }, 'debt.write_off', undefined, {
+    await this.put('debts', debtId, { ...debt, status: 'written_off' }, 'debt.write_off', undefined, {
       type: 'debt.write_off',
       targetId: debtId,
       payload: { date: input.date, baseVersion },
