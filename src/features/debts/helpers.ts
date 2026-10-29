@@ -72,3 +72,18 @@ export function findRecentPayment(debtId: string, snapshot: Snapshot, amount: bi
   const recent = snapshot.debtEntries.find((e) => e.debtId === debtId && e.kind === 'payment' && e.date === date && BigInt(e.amountMinor) === amount);
   return recent ? recent.date : null;
 }
+
+/** DESIGN row monogram: "(TO) Tunde O." */
+export function debtInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase();
+}
+
+/** Settled / written-off date from the latest debt entry (TB-06). */
+export function debtClosedDate(debtId: string, snapshot: Snapshot): string | undefined {
+  const dates = snapshot.debtEntries.filter((e) => e.debtId === debtId).map((e) => e.date);
+  if (dates.length === 0) return undefined;
+  return dates.sort((a, b) => b.localeCompare(a))[0];
+}

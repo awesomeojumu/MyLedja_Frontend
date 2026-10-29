@@ -3611,7 +3611,7 @@ export interface components {
             /** Format: uuid */
             operationId: string;
             /** @enum {string} */
-            type: "transaction.create" | "transaction.correct" | "transaction.reverse" | "transaction.update" | "account.create" | "account.update" | "category.create" | "category.update" | "payee.create" | "payee.update" | "tag.create" | "budget.assign" | "schedule.create" | "schedule.update" | "goal.create" | "goal.update" | "goal.allocate" | "goal.spend" | "debt.lend" | "debt.borrow" | "debt.payment" | "debt.write_off" | "income.stream.create" | "income.stream.update" | "rule.upsert" | "rule.delete";
+            type: "transaction.create" | "transaction.correct" | "transaction.reverse" | "transaction.update" | "account.create" | "account.update" | "category.create" | "category.update" | "payee.create" | "payee.update" | "tag.create" | "budget.assign" | "schedule.create" | "schedule.update" | "goal.create" | "goal.update" | "goal.allocate" | "goal.spend" | "debt.lend" | "debt.borrow" | "debt.payment" | "debt.write_off" | "debt.schedule" | "debt.settle" | "income.stream.create" | "income.stream.update" | "rule.upsert" | "rule.delete";
             /** @description The record a correct, reverse or update acts on; for budget.assign, the category. Month goes in the payload. */
             targetId?: string | null;
             /** @description The body of the matching route: transaction.create takes createTransaction's body, and so on. */
@@ -8968,6 +8968,8 @@ export interface operations {
                     baseVersion: number;
                     /** @description YYYY-MM-DD in the workspace time zone. */
                     date: string;
+                    /** @description Why the debt is written off (TECH-SPEC 6.9 / E17). */
+                    reason: string;
                 };
             };
         };

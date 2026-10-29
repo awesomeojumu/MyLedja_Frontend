@@ -41,6 +41,12 @@
         {
           "faceIDPermission": "MyLedja uses Face ID to unlock the app when app lock is on."
         }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "MyLedja uses your contacts so you can pick who you lent to or borrowed from."
+        }
       ]
     ]
   }

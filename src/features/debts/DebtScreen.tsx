@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, Share, View, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MoreHorizontal } from 'lucide-react-native';
@@ -52,8 +52,12 @@ function statusPillFor(status: 'paid' | 'due' | 'overdue' | 'upcoming') {
   return { kind: 'pending' as const, label: t('debts.statusScheduled') };
 }
 
-export function DebtScreen() {
-  const { id, tab: tabParam, payment, debtSchedule } = useLocalSearchParams<{ id: string; tab?: string; payment?: string; debtSchedule?: string }>();
+export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
+  const params = useLocalSearchParams<{ id: string; tab?: string; payment?: string; debtSchedule?: string }>();
+  const id = embeddedId ?? (typeof params.id === 'string' ? params.id : undefined);
+  const tabParam = params.tab;
+  const payment = params.payment;
+  const debtSchedule = params.debtSchedule;
   const router = useRouter();
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
@@ -61,6 +65,7 @@ export function DebtScreen() {
   const { width } = useWindowDimensions();
   const wide = width >= 900;
   const onDate = today();
+  const embedded = Boolean(embeddedId);
 
   const tab = parseDebtDetailTab(typeof tabParam === 'string' ? tabParam : undefined);
   const payOpen = payment === id;
@@ -87,12 +92,17 @@ export function DebtScreen() {
   const next = row && snapshot ? nextInstallment(row.debt, snapshot, onDate) : null;
   const payoffDate = row && snapshot ? payoffByDate(row.debt, snapshot) : null;
 
-  if (!row) {
-    return (
-      <AppFrame title={t('debts.detailTitle')}>
-        <Placeholder height={120} />
-      </AppFrame>
+  const wrap = (body: ReactNode, title?: string) =>
+    embedded ? (
+      <View testID="debt-embedded" style={{ flex: 1 }}>
+        {body}
+      </View>
+    ) : (
+      <AppFrame title={title ?? t('debts.detailTitle')}>{body}</AppFrame>
     );
+
+  if (!row) {
+    return wrap(<Placeholder height={120} />);
   }
 
   const { debt, balance } = row;
@@ -249,8 +259,8 @@ export function DebtScreen() {
       </Card>
     ) : null;
 
-  return (
-    <AppFrame title={debt.name}>
+  return wrap(
+    <>
       <Card style={{ marginBottom: sp['spacing-md'], gap: sp['spacing-xs'] }}>
         <Text tone="textSecondary">{directionLabel}</Text>
         <Text variant="caption" tone="textSecondary">
@@ -387,7 +397,8 @@ export function DebtScreen() {
         }}
         onCancel={() => setDuplicateConfirm(null)}
       />
-    </AppFrame>
+    </>,
+    debt.name,
   );
 }
 

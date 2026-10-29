@@ -140,13 +140,19 @@ export type TransactionInput =
   | { kind: 'income'; accountId: string; categoryId: string; amount: bigint; date: string; payeeName?: string; notes?: string }
   | { kind: 'transfer'; fromId: string; toId: string; amount: bigint; date: string; notes?: string; toAmount?: bigint };
 
+/** FE DebtInterest → BE InterestTerms for lend/borrow sync payloads. */
+function debtInterestToServer(interest?: PersonDebt['interest']) {
+  if (!interest || interest.kind === 'none') return { kind: 'none' as const };
+  if (interest.kind === 'fixed') return { kind: 'fixed' as const, amount: interest.amountMinor };
+  return { kind: 'percent' as const, rateBasisPoints: Math.round(interest.percent * 100) };
+}
+
 /**
  * Writes the server derives from another operation, or keeps per device for now: they're saved locally and never
  * sent. Debt history and settling follow the debt's own operations; occurrences follow the matched transaction.
  */
 const LOCAL_ONLY = new Set([
   'debt.entry',
-  'debt.settle',
   'debt.update',
   'occurrence.paid',
   'occurrence.matched',
@@ -1763,7 +1769,7 @@ export class WorkspaceRepository {
         amount: input.amount.toString(),
         accountId: input.accountId,
         date: input.date,
-        interest: input.interest ?? { kind: 'none' },
+        interest: debtInterestToServer(input.interest),
         dueDate: input.dueDate ?? null,
         notes: input.notes ?? null,
       },
@@ -1915,6 +1921,7 @@ export class WorkspaceRepository {
     const creditExtra = extra > 0n && input.overpayment === 'credit' ? extra : 0n;
     const creditMinor = (BigInt(debt.creditMinor ?? '0') + creditExtra).toString();
     if (left <= 0n) {
+      const baseVersion = await this.versionOf('debts', debtId);
       await this.put(
         'debts',
         debtId,
@@ -1929,6 +1936,12 @@ export class WorkspaceRepository {
           creditMinor: creditExtra > 0n ? creditMinor : debt.creditMinor,
         },
         'debt.settle',
+        undefined,
+        {
+          type: 'debt.settle',
+          targetId: debtId,
+          payload: { baseVersion },
+        },
       );
     } else if (creditExtra > 0n) {
       await this.updatePersonDebt({ ...debt, creditMinor });
@@ -1945,19 +1958,20 @@ export class WorkspaceRepository {
     if (amount <= 0n) return { ok: false, error: 'not_positive' };
     const lines = buildWriteOff(snapshot.chart, { receivableId: debt.ledgerAccountId, amount });
     if (!lines.ok) return lines;
+    const reason = input.reason.trim();
     const posted = await this.postEvent(snapshot.chart, snapshot.events, {
       type: 'write_off',
       date: input.date,
       lines: lines.value,
       debtId,
-      notes: input.reason.trim() || undefined,
+      notes: reason || undefined,
     }, null);
     if (!posted.ok) return posted;
     const baseVersion = await this.versionOf('debts', debtId);
-    await this.put('debts', debtId, { ...debt, status: 'written_off' }, 'debt.write_off', undefined, {
+    await this.put('debts', debtId, { ...debt, status: 'written_off', notes: reason || debt.notes }, 'debt.write_off', undefined, {
       type: 'debt.write_off',
       targetId: debtId,
-      payload: { date: input.date, baseVersion },
+      payload: { date: input.date, baseVersion, reason },
       transactionIds: [posted.value.id],
     });
     return { ok: true, value: posted.value };
@@ -1965,6 +1979,28 @@ export class WorkspaceRepository {
 
   async updatePersonDebt(debt: PersonDebt): Promise<void> {
     const { id, ...data } = debt;
+    const baseVersion = await this.versionOf('debts', id);
+    const hasSchedule =
+      data.scheduleInstallmentCount != null &&
+      data.scheduleAmountMinor != null &&
+      data.scheduleFirstDue != null &&
+      data.scheduleEvery === 'month';
+    if (hasSchedule) {
+      await this.put('debts', id, data, 'debt.schedule', undefined, {
+        type: 'debt.schedule',
+        targetId: id,
+        payload: {
+          baseVersion,
+          instalments: {
+            count: data.scheduleInstallmentCount,
+            amount: data.scheduleAmountMinor,
+            firstDate: data.scheduleFirstDue,
+            everyMonths: 1,
+          },
+        },
+      });
+      return;
+    }
     await this.put('debts', id, data, 'debt.update');
   }
 
@@ -1974,7 +2010,13 @@ export class WorkspaceRepository {
     if (!debt || debt.status !== 'open') return { ok: false, error: 'missing_lines' };
     const balance = this.debtBalance(debt, snapshot);
     if (balance > 0n) return { ok: false, error: 'not_positive' };
-    await this.updatePersonDebt({ ...debt, status: 'settled' });
+    const { id, ...data } = { ...debt, status: 'settled' as const };
+    const baseVersion = await this.versionOf('debts', id);
+    await this.put('debts', id, data, 'debt.settle', undefined, {
+      type: 'debt.settle',
+      targetId: id,
+      payload: { baseVersion },
+    });
     return { ok: true, value: undefined };
   }
 
