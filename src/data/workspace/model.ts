@@ -195,6 +195,8 @@ export type WorkspaceSettings = {
   hapticsEnabled?: boolean;
   /** Tags managed under Categories and tags. */
   tags?: WorkspaceTag[];
+  /** PU-28 — Due soon window in days (3 · 7 · 14 · 30). */
+  dueSoonDays?: 3 | 7 | 14 | 30;
 };
 
 /** Settings › Notifications (P26-05). */
@@ -298,6 +300,8 @@ export type Recurring = {
   amountMinor: string;
   approximate?: boolean;
   accountId: string;
+  /** Transfer destination (PU-25). */
+  toAccountId?: string;
   categoryId?: string;
   payeeId?: string;
   rule: RecurrenceRule;
@@ -306,11 +310,17 @@ export type Recurring = {
   autoCreate?: boolean;
   /** DESIGN #25 — stop after this many occurrences (optional; endDate also ends the series). */
   endAfterCount?: number;
-  /** Days before due: 0 = on the day, 1, 3, or 7. */
+  /**
+   * Days before due: 0 = on the day, 1, 3, or 7.
+   * Omit / undefined = Off (PU-25 Remind me).
+   */
   reminderDays?: number;
   /** DESIGN #25 — hide amount on lock screen (default on). */
   hideAmountOnLock?: boolean;
+  /** Soft-deleted / cancelled schedule. */
   cancelled?: boolean;
+  /** TB-04 / PU-25 — paused: shown as Paused, creates no reminders. */
+  paused?: boolean;
 };
 
 export type RecurringOccurrence = {
@@ -359,6 +369,8 @@ export type IncomeStream = {
   categoryId: string;
   rule: RecurrenceRule;
   countInBudget: boolean;
+  /** Source or employer (PU-29). */
+  source?: string;
   /** For tax-class report (P13-08). */
   taxClass?: string;
   amountKind?: IncomeAmountKind;

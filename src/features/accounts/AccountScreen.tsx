@@ -74,13 +74,6 @@ const revalued = (snapshot: Snapshot, accountId: string) =>
       e.lines.some((l) => l.ledgerAccountId.endsWith(':revaluation')),
   );
 
-function parseTab(raw: string | undefined, allowValue: boolean): Tab {
-  if (raw === 'value' && allowValue) return 'value';
-  if (raw === 'details') return 'details';
-  if (raw && TAB_KEYS.includes(raw as Tab)) return raw as Tab;
-  return 'transactions';
-}
-
 export function AccountScreen() {
   const { snapshot, repo } = useWorkspace();
   const { engine } = useSync();
