@@ -1,8 +1,10 @@
 import { Platform, Share } from 'react-native';
 
 import { formatDay } from '@/design/components';
+import type { ReportFilters, ReportResultWire, ReportTableWire, ReportUnit } from '@/api/reports';
 import type {
   RangePreset,
+  ReportChart,
   ReportCardModel,
   ReportDashboardModel,
   ReportKind,
@@ -11,7 +13,7 @@ import type {
 import type { Snapshot } from '@/data/workspace/repository';
 import { monthLabel } from '@/features/budget/helpers';
 import { catalogue, t, type TextKey } from '@/i18n';
-import { formatNaira, toInputText } from '@/money';
+import { formatNaira, fromWire, toInputText } from '@/money';
 
 import { firstEventDate, rangeFor, runReport, type ReportResult } from './runner';
 
@@ -24,6 +26,76 @@ export function percentText(bp: bigint | null): string {
 }
 
 const formatMoney = (minor: bigint) => formatNaira(minor);
+
+export type ViewRow = { key: string; label: string; values: bigint[]; total: bigint };
+
+export type ViewTable = {
+  columns: { key: string; label: string }[];
+  rows: ViewRow[];
+  columnTotals: bigint[];
+  total: bigint;
+};
+
+/** A server run result (the Report page, POST reports/run) with its amounts as bigint for the charts. */
+export type ViewReportResult = Omit<ReportResultWire, 'table' | 'previous' | 'finding'> & {
+  table: ViewTable;
+  previous: ViewTable | null;
+  finding: {
+    key: string;
+    amount: bigint | null;
+    changeBasisPoints: bigint | null;
+    previousFrom: string | null;
+  } | null;
+};
+
+/**
+ * What the chart, table, CSV and finding text need from a result, whether it ran on the device (Reports
+ * dashboards) or on the server (the Report page).
+ */
+export type ShownResult = {
+  unit: ReportUnit;
+  chart: ReportChart;
+  table: ViewTable;
+  previous: ViewTable | null;
+  finding: { key: string; amount: bigint | null; changeBasisPoints: bigint | null; previousFrom: string | null } | null;
+  error?: 'formula' | null;
+  note?: string | null;
+};
+
+function parseTable(table: ReportTableWire): ViewTable {
+  return {
+    columns: table.columns,
+    rows: table.rows.map((r) => ({
+      key: r.key,
+      label: r.label,
+      values: r.values.map((v) => fromWire(v)),
+      total: fromWire(r.total),
+    })),
+    columnTotals: table.columnTotals.map((v) => fromWire(v)),
+    total: fromWire(table.total),
+  };
+}
+
+export function viewResult(wire: ReportResultWire): ViewReportResult {
+  return {
+    ...wire,
+    table: parseTable(wire.table),
+    previous: wire.previous ? parseTable(wire.previous) : null,
+    finding: wire.finding
+      ? {
+          key: wire.finding.key,
+          amount: wire.finding.amount === null ? null : fromWire(wire.finding.amount),
+          changeBasisPoints: wire.finding.changeBasisPoints === null ? null : fromWire(wire.finding.changeBasisPoints),
+          previousFrom: wire.finding.previousFrom,
+        }
+      : null,
+  };
+}
+
+/** "What this shows" text for a report kind. */
+export function aboutKey(kind: ReportKind): TextKey {
+  return `reports.about.${kind}` as TextKey;
+}
 
 /** The Add report gallery's groups (DESIGN.md page 19). Custom also lists saved builder reports. */
 export const GALLERY: { group: 'spending' | 'planning' | 'wealth' | 'custom'; kinds: ReportKind[] }[] = [
@@ -113,7 +185,7 @@ export function columnLabel(key: string): string {
 }
 
 /** One value, as the report's unit reads. */
-export function valueText(value: bigint, unit: ReportResult['unit']): string {
+export function valueText(value: bigint, unit: ReportUnit): string {
   switch (unit) {
     case 'money':
       return formatMoney(value);
@@ -127,7 +199,7 @@ export function valueText(value: bigint, unit: ReportResult['unit']): string {
 }
 
 /** The chart's title states what it found (DESIGN.md 2.7). */
-export function findingText(result: ReportResult, fallback: string): string {
+export function findingText(result: ShownResult, fallback: string): string {
   const f = result.finding;
   if (!f) return fallback;
   const key = `reports.finding.${f.key}`;
@@ -147,7 +219,7 @@ const cell = (v: string) => {
 };
 
 /** The table as CSV: every number the chart shows, with totals (P20-02). */
-export function reportCsv(result: ReportResult): string {
+export function reportCsv(result: ShownResult): string {
   const plain = (v: bigint) => (result.unit === 'money' ? toInputText(v) : String(v));
   // One column is the total itself; more are shown each, then the total.
   const multi = result.table.columns.length > 1;
@@ -172,11 +244,16 @@ export async function shareCsv(csv: string, name: string): Promise<void> {
 }
 
 /** The Transactions link for a row (P20-03). */
-export function drillHref(d: ReportResult['drill'][string]): string {
+export function drillHref(d: ReportResult['drill'][string] | (ReportFilters & { from: string; to: string })): string {
   const q = new URLSearchParams({ from: d.from, to: d.to });
-  if (d.accountId) q.set('account', d.accountId);
-  if (d.categoryId) q.set('category', d.categoryId);
-  if (d.payeeId) q.set('payee', d.payeeId);
+  // Device runs name one id; server runs (ReportFilters) give lists.
+  const one = (single: string | undefined, list: readonly string[] | undefined) => single ?? list?.[0];
+  const account = one('accountId' in d ? d.accountId : undefined, 'accountIds' in d ? d.accountIds : undefined);
+  const category = one('categoryId' in d ? d.categoryId : undefined, 'categoryIds' in d ? d.categoryIds : undefined);
+  const payee = one('payeeId' in d ? d.payeeId : undefined, 'payeeIds' in d ? d.payeeIds : undefined);
+  if (account) q.set('account', account);
+  if (category) q.set('category', category);
+  if (payee) q.set('payee', payee);
   return `/transactions?${q.toString()}`;
 }
 

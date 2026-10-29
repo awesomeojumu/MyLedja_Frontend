@@ -2429,7 +2429,7 @@
   "reports.kind.formula": "Formula",
   "reports.kind.note": "Note",
   "reports.kind.custom": "Custom report",
-  "reports.back": "Back to Reports",
+  "reports.back": "← Reports",
   "reports.exportCsv": "Export CSV",
   "reports.editInBuilder": "Edit in builder",
   "reports.duplicate": "Duplicate",
@@ -2561,5 +2561,14 @@
   "reports.shareAsImage": "Share as image",
   "reports.col.exchange_rate_change": "Exchange-rate change",
   "reports.print": "Print",
-  "reports.shareUnavailable": "Sharing is not available on this device"
+  "reports.shareUnavailable": "Sharing is not available on this device",
+  "reports.about.spendingByCategory": "Everything you spent in the dates you chose, by category. Refunds take spending back down.",
+  "reports.about.incomeVsSpending": "Money in from income and money out on spending each month. Transfers between your accounts and money moved to goals don't count.",
+  "reports.about.netWorth": "What you own minus what you owe at the end of each month. Investments count at their latest price. Adjustments, write-offs and unrealised gains each have their own column.",
+  "reports.about.cashFlow": "Where money came from and where it went, from each transaction's type, not just its sign.",
+  "reports.about.budgetProgress": "What you planned for each month against what you spent.",
+  "reports.loadFailed": "Could not load this report. Check you are online.",
+  "reports.retry": "Try again",
+  "reports.filtersCount": "Filters ({count})",
+  "reports.openFilters": "More filters"
 }

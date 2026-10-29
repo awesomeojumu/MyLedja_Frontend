@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { Share } from 'react-native';
 
+import type { ReportResultWire, ReportTableWire } from '@/api/reports';
 import { WorkspaceRepository } from '@/data/workspace/repository';
 import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
@@ -9,7 +10,7 @@ import { memorySync, renderWithProviders } from '../../../../test/helpers/render
 import { resetParams, router, setParams } from '../../../../test/helpers/router';
 import { reportCsv } from '../helpers';
 import { ReportBuilderScreen } from '../ReportBuilderScreen';
-import { ReportScreen } from '../ReportScreen';
+import { ReportScreen, type ReportRunner } from '../ReportScreen';
 import { ReportsScreen } from '../ReportsScreen';
 import { runReport } from '../runner';
 
@@ -47,6 +48,61 @@ async function seeded() {
   await repo.addTransaction({ kind: 'income', accountId: id('GTBank'), categoryId: s.categories.find((c) => c.kind === 'income')!.id, amount: 200_000_000n, date: '2026-10-05' });
   return { sync, repo, id };
 }
+
+/** A stand-in for POST reports/run: the app's engine on this device's data, answered as the server would. */
+const serverOn =
+  (repo: WorkspaceRepository): ReportRunner =>
+  async (_ws, body) => {
+    const r = runReport(
+      await repo.load(),
+      {
+        kind: body.kind,
+        from: body.from,
+        to: body.to,
+        interval: body.interval ?? 'month',
+        compare: body.compare,
+        filters: body.filters,
+        spec: body.spec ?? null,
+        formula: body.formula ?? null,
+      },
+      '2026-10-28',
+    );
+    const wire = (x: typeof r.table): ReportTableWire => ({
+      columns: x.columns,
+      rows: x.rows.map((row) => ({ key: row.key, label: row.label, values: row.values.map(String), total: String(row.total) })),
+      columnTotals: x.columnTotals.map(String),
+      total: String(x.total),
+    });
+    const drill: ReportResultWire['drill'] = {};
+    for (const [key, d] of Object.entries(r.drill)) {
+      drill[key] = {
+        from: d.from,
+        to: d.to,
+        ...(d.accountId ? { accountIds: [d.accountId] } : {}),
+        ...(d.categoryId ? { categoryIds: [d.categoryId] } : {}),
+        ...(d.payeeId ? { payeeIds: [d.payeeId] } : {}),
+      };
+    }
+    return {
+      kind: r.kind,
+      from: r.range.from,
+      to: r.range.to,
+      interval: body.interval ?? 'month',
+      chart: r.chart,
+      unit: r.unit,
+      table: wire(r.table),
+      previous: r.previous ? wire(r.previous) : null,
+      finding: r.finding && {
+        key: r.finding.key,
+        amount: r.finding.amount === null ? null : String(r.finding.amount),
+        changeBasisPoints: r.finding.changeBasisPoints === null ? null : String(r.finding.changeBasisPoints),
+        previousFrom: r.finding.previousFrom,
+      },
+      drill,
+      partial: r.partial,
+      note: null,
+    };
+  };
 
 const page = (sync: ReturnType<typeof memorySync>, node: React.ReactElement) =>
   renderWithProviders(<WorkspaceProvider workspaceId="ws-personal">{node}</WorkspaceProvider>, { sync });
@@ -146,9 +202,9 @@ describe('Reports page (F5.2)', () => {
 
 describe('Report page (F5.2)', () => {
   it('P20-01, P20-03: the table has every number with totals, and a row opens its transactions', async () => {
-    const { sync, id } = await seeded();
-    setParams({ id: 'default-2' });
-    await page(sync, <ReportScreen />);
+    const { sync, repo, id } = await seeded();
+    setParams({ id: 'default-2', from: '2026-10-01', to: '2026-10-31' });
+    await page(sync, <ReportScreen runner={serverOn(repo)} />);
     expect(await screen.findByTestId('report-table-total')).toHaveTextContent('₦43,450.00');
     await fireEvent.press(screen.getByTestId(`report-table-row-${id('Market')}`));
     expect(router.push).toHaveBeenCalledWith(`/transactions?from=2026-10-01&to=2026-10-31&category=${id('Market')}`);
@@ -156,17 +212,17 @@ describe('Report page (F5.2)', () => {
 
   it('P20-02: Export CSV shares the table', async () => {
     const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction', activityType: undefined });
-    const { sync } = await seeded();
-    setParams({ id: 'default-2' });
-    await page(sync, <ReportScreen />);
+    const { sync, repo } = await seeded();
+    setParams({ id: 'default-2', from: '2026-10-01', to: '2026-10-31' });
+    await page(sync, <ReportScreen runner={serverOn(repo)} />);
     await fireEvent.press(await screen.findByTestId('report-export'));
     expect(share).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('Total,43450') }));
   });
 
   it('on a phone the controls are in a Filters sheet', async () => {
-    const { sync } = await seeded();
-    setParams({ id: 'default-2' });
-    await page(sync, <ReportScreen />);
+    const { sync, repo } = await seeded();
+    setParams({ id: 'default-2', from: '2026-10-01', to: '2026-10-31' });
+    await page(sync, <ReportScreen runner={serverOn(repo)} />);
     await fireEvent.press(await screen.findByTestId('report-filters'));
     expect(screen.getByTestId('report-filters-sheet')).toBeTruthy();
   });

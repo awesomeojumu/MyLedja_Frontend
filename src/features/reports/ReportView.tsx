@@ -4,19 +4,19 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { BarChart, DonutChart, LineChart, Text, type Point } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useDesign, useTheme } from '@/design/ThemeProvider';
-import type { ReportChart } from '@/data/workspace/model';
-import type { Row } from '@/ledger/reports';
 import { t } from '@/i18n';
 import { PRIVACY_MASK } from '@/money';
 
-import { columnLabel, findingText, rowLabel, valueText } from './helpers';
-import type { ReportResult } from './runner';
+import type { ReportChart } from '@/api/reports';
+import { columnLabel, findingText, rowLabel, valueText, type ShownResult, type ViewRow } from './helpers';
 
 const sp = tokens.spacing;
+/** DESIGN.md Page 20: chart about 420 tall. Shared BarChart SVG is shorter; pad the plane. */
+const CHART_MIN = 420;
 
 /**
- * One report's chart: the table's headline column drawn as bars, a line, a donut or a figure. The chart and
- * the table read the same rows, so they can't disagree (B5.2).
+ * One report's chart: the table's headline column drawn as bars, a line, a donut or a figure.
+ * Chart and table read the same rows (B5.2).
  */
 export function ReportChartView({
   result,
@@ -27,10 +27,9 @@ export function ReportChartView({
   onRowPress,
   testID,
 }: {
-  result: ReportResult;
+  result: ShownResult;
   title: string;
   chart?: ReportChart | null;
-  /** The dashboard's one gold mark (P19-05). */
   highlight: boolean;
   text?: string | null;
   onRowPress?: (key: string) => void;
@@ -42,7 +41,6 @@ export function ReportChartView({
   const format = (v: bigint) => (privacy && result.unit === 'money' ? PRIVACY_MASK : valueText(v, result.unit));
   const rows: (Point & { key: string })[] = result.table.rows.map((r) => ({ key: r.key, label: rowLabel(r), value: r.total }));
   const columns: [string, string] = [t('reports.col.name'), t('reports.col.total')];
-  void onRowPress;
 
   if (result.error === 'formula') {
     return (
@@ -51,68 +49,90 @@ export function ReportChartView({
       </Text>
     );
   }
-  switch (kind) {
-    case 'note':
-      return (
-        <Text testID={testID && `${testID}-note`}>{text || t('reports.noteEmpty')}</Text>
-      );
-    case 'number':
-      return (
-        <View testID={testID} accessible accessibilityLabel={`${heading}, ${format(result.table.total)}`} style={{ gap: sp['spacing-xs'] }}>
-          <Text variant="display-md" testID={testID && `${testID}-number`} style={{ fontVariant: ['tabular-nums'] }}>
-            {format(result.table.total)}
-          </Text>
-          {result.finding ? (
-            <Text variant="caption" tone="textSecondary">
-              {heading}
+
+  const body = (() => {
+    switch (kind) {
+      case 'note':
+        return <Text testID={testID && `${testID}-note`}>{text || result.note || t('reports.noteEmpty')}</Text>;
+      case 'number':
+        return (
+          <View testID={testID} accessible accessibilityLabel={`${heading}, ${format(result.table.total)}`} style={{ gap: sp['spacing-xs'] }}>
+            <Text variant="display-md" testID={testID && `${testID}-number`} style={{ fontVariant: ['tabular-nums'] }}>
+              {format(result.table.total)}
             </Text>
-          ) : null}
-        </View>
-      );
-    case 'donut':
-      return (
-        <DonutChart
-          testID={testID}
-          title={heading}
-          columns={columns}
-          rows={[...rows].sort((a, b) => (b.value > a.value ? 1 : b.value < a.value ? -1 : 0))}
-          total={result.table.total}
-          goldLast={false}
-          format={format}
-        />
-      );
-    case 'line':
-    case 'area':
-      return (
-        <LineChart
-          testID={testID}
-          title={heading}
-          columns={columns}
-          rows={rows}
-          goldLatest={highlight}
-          format={format}
-        />
-      );
-    case 'table':
-      return <ReportTable result={result} onRowPress={onRowPress} testID={testID && `${testID}-only-table`} />;
-    default:
-      return (
-        <BarChart
-          testID={testID}
-          title={heading}
-          columns={columns}
-          rows={rows}
-          highlight={highlight ? rows.length - 1 : undefined}
-          format={format}
-        />
-      );
-  }
+            {result.finding ? (
+              <Text variant="caption" tone="textSecondary">
+                {heading}
+              </Text>
+            ) : null}
+          </View>
+        );
+      case 'donut':
+        return (
+          <DonutChart
+            testID={testID}
+            title={heading}
+            columns={columns}
+            rows={[...rows].sort((a, b) => (b.value > a.value ? 1 : b.value < a.value ? -1 : 0))}
+            total={result.table.total}
+            goldLast={false}
+            format={format}
+          />
+        );
+      case 'line':
+      case 'area':
+        return (
+          <LineChart
+            testID={testID}
+            title={heading}
+            columns={columns}
+            rows={rows}
+            goldLatest={highlight}
+            format={format}
+          />
+        );
+      case 'table':
+        return <ReportTable result={result} onRowPress={onRowPress} testID={testID && `${testID}-only-table`} />;
+      default:
+        return (
+          <View style={{ gap: sp['spacing-sm'] }}>
+            <BarChart
+              testID={testID}
+              title={heading}
+              columns={columns}
+              rows={rows}
+              highlight={highlight ? rows.length - 1 : undefined}
+              format={format}
+            />
+            {/* Interim bar click-through until shared BarChart gains onBarPress (shared-request-page-20). */}
+            {onRowPress ? (
+              <View testID={testID && `${testID}-bars`} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'] }}>
+                {rows.map((r) => (
+                  <Pressable
+                    key={r.key}
+                    testID={testID && `${testID}-bar-${r.key}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={r.label}
+                    onPress={() => onRowPress(r.key)}
+                    style={{ minHeight: 44, justifyContent: 'center' }}
+                  >
+                    <Text tone="link">{r.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        );
+    }
+  })();
+
+  return <View style={{ minHeight: kind === 'table' || kind === 'note' || kind === 'number' ? undefined : CHART_MIN }}>{body}</View>;
 }
 
 type Sort = { column: number; down: boolean } | null;
 
 /** Every number in the chart, sortable, with totals (P20-02). Scrolls sideways in its own box on phones. */
-export function ReportTable({ result, onRowPress, testID }: { result: ReportResult; onRowPress?: (key: string) => void; testID?: string }) {
+export function ReportTable({ result, onRowPress, testID }: { result: ShownResult; onRowPress?: (key: string) => void; testID?: string }) {
   const theme = useTheme();
   const { privacy } = useDesign();
   const [sort, setSort] = useState<Sort>(null);
@@ -121,7 +141,7 @@ export function ReportTable({ result, onRowPress, testID }: { result: ReportResu
   const tableRows = result.table.rows;
   const rows = useMemo(() => {
     if (!sort) return tableRows;
-    const pick = (r: Row) => (sort.column < 0 ? r.total : (r.values[sort.column] ?? 0n));
+    const pick = (r: ViewRow) => (sort.column < 0 ? r.total : (r.values[sort.column] ?? 0n));
     return [...tableRows].sort((a, b) => {
       const d = pick(a) - pick(b);
       const n = d > 0n ? 1 : d < 0n ? -1 : 0;
