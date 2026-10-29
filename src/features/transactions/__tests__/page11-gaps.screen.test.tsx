@@ -137,4 +137,38 @@ describe('Page 11 FE gaps', () => {
     expect(marks.props.children).toContain('📎');
     expect(marks.props.accessibilityLabel).toContain(t('tx.mark.receipt'));
   });
+
+  it('swipe row exposes categorize and delete actions', async () => {
+    const { sync, id } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <AddTransactionProvider>
+          <TransactionsScreen />
+        </AddTransactionProvider>
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(await screen.findByTestId(`tx-swipe-${id}`)).toBeTruthy();
+    expect(screen.getByTestId(`tx-swipe-${id}-categorize`)).toBeTruthy();
+    expect(screen.getByTestId(`tx-swipe-${id}-delete`)).toBeTruthy();
+  });
+
+  it('stamps createdBy and deviceId on new events for history', async () => {
+    const { repo, accountId, marketId } = await seeded();
+    repo.setActor({ userId: 'user-ada' });
+    const r = await repo.addTransaction({
+      kind: 'expense',
+      accountId,
+      parts: [{ categoryId: marketId, amount: 1_000_00n }],
+      date: '2026-10-13',
+      payeeName: 'Bolt',
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.createdBy).toBe('user-ada');
+    expect(r.value.deviceId).toBe('test');
+    const loaded = (await repo.load()).events.find((e) => e.id === r.value.id);
+    expect(loaded?.createdBy).toBe('user-ada');
+    expect(loaded?.deviceId).toBe('test');
+  });
 });

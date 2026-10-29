@@ -12,7 +12,7 @@ import { HttpSyncTransport, SwitchingSyncTransport } from './HttpSyncTransport';
 import { LocalStore } from './LocalStore';
 import { SyncEngine, type SyncStatus } from './SyncEngine';
 
-type SyncContext = { store: LocalStore; engine: SyncEngine; status: SyncStatus };
+type SyncContext = { store: LocalStore; engine: SyncEngine; status: SyncStatus; deviceId: string };
 
 const Context = createContext<SyncContext | null>(null);
 
@@ -113,7 +113,7 @@ export function SyncProvider({ children, value }: { children: ReactNode; value?:
     engine.setTransport(transport);
   }, [auth.source, auth.status, auth.user, auth.client, deviceId, engine, store, transport, value]);
 
-  return <Context.Provider value={{ store, engine, status }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ store, engine, status, deviceId }}>{children}</Context.Provider>;
 }
 
 export function useSync(): SyncContext {

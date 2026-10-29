@@ -69,6 +69,7 @@ import {
   saveView,
   subscribeSavedViews,
 } from './savedViews';
+import { SwipeRow } from './SwipeRow';
 import { parseTags, withTags } from './tags';
 import { purchaseCost, refundedSoFar } from '@/ledger';
 
@@ -128,6 +129,10 @@ export function TransactionsScreen() {
   const lastClickedId = useRef<string | null>(null);
   const filteredRowsRef = useRef<Row[]>([]);
   const focusIndexRef = useRef(0);
+  const openBulk = useCallback((field: BulkField) => {
+    setBulkField(field);
+    setBulkOpen(true);
+  }, []);
   const router = useRouter();
   const params = useGlobalSearchParams<{
     tx?: string;
@@ -242,7 +247,11 @@ export function TransactionsScreen() {
       } else if (e.key.toLowerCase() === 'c') {
         e.preventDefault();
         const row = rows[focusIndexRef.current];
-        if (row) openPanel(row.event.id);
+        if (row) {
+          setSelectMode(true);
+          setSelected(new Set([row.event.id]));
+          openBulk('category');
+        }
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         const row = rows[focusIndexRef.current];
@@ -251,7 +260,7 @@ export function TransactionsScreen() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [openPanel, remove, router]);
+  }, [openPanel, openBulk, remove, router]);
 
   const days = useMemo(() => {
     const groups = new Map<string, Row[]>();
@@ -406,11 +415,6 @@ export function TransactionsScreen() {
     if (skipped > 0) toast.show(t('tx.bulk.skippedReconciled', { count: skipped }));
     setSelected(new Set());
     setSelectMode(false);
-  };
-
-  const openBulk = (field: BulkField) => {
-    setBulkField(field);
-    setBulkOpen(true);
   };
 
   return (
@@ -575,100 +579,104 @@ export function TransactionsScreen() {
                   const flatIndex = filteredRows.findIndex((r) => r.event.id === row.event.id);
                   const focused = flatIndex === safeFocusIndex;
                   const marks = rowIndicators(row.event, row.waiting);
+                  const categorizeRow = () => {
+                    setSelectMode(true);
+                    setSelected(new Set([row.event.id]));
+                    openBulk('category');
+                  };
                   return (
-                    <View
+                    <SwipeRow
                       key={row.event.id}
-                      testID={`tx-${row.event.id}`}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: sp['spacing-md'],
-                        padding: sp['spacing-md'],
-                        borderTopWidth: i === 0 ? 0 : 1,
-                        borderTopColor: theme.border,
-                        backgroundColor: focused ? theme.tagFill : undefined,
-                      }}
+                      testID={`tx-swipe-${row.event.id}`}
+                      enabled={!selectMode}
+                      onDelete={() => void remove(row)}
+                      onCategorize={categorizeRow}
                     >
-                      {selectMode ? (
-                        <Checkbox testID={`select-${row.event.id}`} checked={selected.has(row.event.id)} onChange={() => toggleSelect(row.event.id)} label="" />
-                      ) : null}
-                      <Pressable
-                        testID={`open-${row.event.id}`}
-                        accessibilityRole="button"
-                        accessibilityActions={[
-                          { name: 'delete', label: t('tx.delete') },
-                          { name: 'categorize', label: t('tx.float.categorize') },
-                        ]}
-                        onAccessibilityAction={(e) => {
-                          if (e.nativeEvent.actionName === 'delete') void remove(row);
-                          if (e.nativeEvent.actionName === 'categorize') {
-                            setSelectMode(true);
-                            setSelected(new Set([row.event.id]));
-                            openBulk('category');
-                          }
+                      <View
+                        testID={`tx-${row.event.id}`}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: sp['spacing-md'],
+                          padding: sp['spacing-md'],
+                          borderTopWidth: i === 0 ? 0 : 1,
+                          borderTopColor: theme.border,
+                          backgroundColor: focused ? theme.tagFill : theme.card,
                         }}
-                        onLongPress={() => {
-                          setSelectMode(true);
-                          toggleSelect(row.event.id);
-                          lastClickedId.current = row.event.id;
-                        }}
-                        onPress={(e) => {
-                          const native = e.nativeEvent as { shiftKey?: boolean };
-                          onRowPress(row.event.id, !!native.shiftKey);
-                        }}
-                        accessibilityLabel={t('tx.rowLabel', {
-                          title: row.title,
-                          category: row.category,
-                          amount: formatNaira(row.amount, { signed: row.event.type !== 'transfer' }),
-                        })}
-                        style={{ flex: 1, gap: sp['spacing-xxs'] }}
                       >
-                        <Text>{row.title}</Text>
-                        <Text variant="caption" tone="textSecondary">
-                          {[row.category, row.account].filter(Boolean).join(' · ')}
-                        </Text>
-                        {row.event.notes ? (
-                          <Text variant="caption" tone="textSecondary">
-                            {row.event.notes}
-                          </Text>
+                        {selectMode ? (
+                          <Checkbox testID={`select-${row.event.id}`} checked={selected.has(row.event.id)} onChange={() => toggleSelect(row.event.id)} label="" />
                         ) : null}
-                        {marks.length > 0 ? (
-                          <Text
-                            variant="micro"
-                            tone="textSecondary"
-                            testID={`tx-marks-${row.event.id}`}
-                            accessibilityLabel={marks.map((m) => t(`tx.mark.${m}` as 'tx.mark.split')).join(', ')}
-                          >
-                            {marks.map(markGlyph).join('')}
-                          </Text>
-                        ) : null}
-                      </Pressable>
-                      {row.waiting ? <StatusPill label={t('tx.waiting')} kind="pending" /> : null}
-                      <Amount minor={row.amount} signed={row.event.type !== 'transfer'} />
-                      {!selectMode ? (
-                        <Menu
-                          testID={`tx-menu-${row.event.id}`}
-                          trigger={(open) => (
-                            <Pressable accessibilityRole="button" accessibilityLabel={t('tx.actions')} onPress={open} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-                              <MoreHorizontal size={18} color={theme.textSecondary} />
-                            </Pressable>
-                          )}
-                          items={[
-                            { key: 'open', label: t('panel.title'), onPress: () => openPanel(row.event.id) },
-                            {
-                              key: 'categorize',
-                              label: t('tx.float.categorize'),
-                              onPress: () => {
-                                setSelectMode(true);
-                                setSelected(new Set([row.event.id]));
-                                openBulk('category');
-                              },
-                            },
-                            { key: 'delete', label: t('tx.delete'), onPress: () => void remove(row) },
+                        <Pressable
+                          testID={`open-${row.event.id}`}
+                          accessibilityRole="button"
+                          accessibilityActions={[
+                            { name: 'delete', label: t('tx.delete') },
+                            { name: 'categorize', label: t('tx.float.categorize') },
                           ]}
-                        />
-                      ) : null}
-                    </View>
+                          onAccessibilityAction={(e) => {
+                            if (e.nativeEvent.actionName === 'delete') void remove(row);
+                            if (e.nativeEvent.actionName === 'categorize') categorizeRow();
+                          }}
+                          onLongPress={() => {
+                            setSelectMode(true);
+                            toggleSelect(row.event.id);
+                            lastClickedId.current = row.event.id;
+                          }}
+                          onPress={(e) => {
+                            const native = e.nativeEvent as { shiftKey?: boolean };
+                            onRowPress(row.event.id, !!native.shiftKey);
+                          }}
+                          accessibilityLabel={t('tx.rowLabel', {
+                            title: row.title,
+                            category: row.category,
+                            amount: formatNaira(row.amount, { signed: row.event.type !== 'transfer' }),
+                          })}
+                          style={{ flex: 1, gap: sp['spacing-xxs'] }}
+                        >
+                          <Text>{row.title}</Text>
+                          <Text variant="caption" tone="textSecondary">
+                            {[row.category, row.account].filter(Boolean).join(' · ')}
+                          </Text>
+                          {row.event.notes ? (
+                            <Text variant="caption" tone="textSecondary">
+                              {row.event.notes}
+                            </Text>
+                          ) : null}
+                          {marks.length > 0 ? (
+                            <Text
+                              variant="micro"
+                              tone="textSecondary"
+                              testID={`tx-marks-${row.event.id}`}
+                              accessibilityLabel={marks.map((m) => t(`tx.mark.${m}` as 'tx.mark.split')).join(', ')}
+                            >
+                              {marks.map(markGlyph).join('')}
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                        {row.waiting ? <StatusPill label={t('tx.waiting')} kind="pending" /> : null}
+                        <Amount minor={row.amount} signed={row.event.type !== 'transfer'} />
+                        {!selectMode ? (
+                          <Menu
+                            testID={`tx-menu-${row.event.id}`}
+                            trigger={(open) => (
+                              <Pressable accessibilityRole="button" accessibilityLabel={t('tx.actions')} onPress={open} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                                <MoreHorizontal size={18} color={theme.textSecondary} />
+                              </Pressable>
+                            )}
+                            items={[
+                              { key: 'open', label: t('panel.title'), onPress: () => openPanel(row.event.id) },
+                              {
+                                key: 'categorize',
+                                label: t('tx.float.categorize'),
+                                onPress: categorizeRow,
+                              },
+                              { key: 'delete', label: t('tx.delete'), onPress: () => void remove(row) },
+                            ]}
+                          />
+                        ) : null}
+                      </View>
+                    </SwipeRow>
                   );
                 })}
               </Card>

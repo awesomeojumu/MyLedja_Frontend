@@ -184,9 +184,12 @@ type CategoryDeleteUndo = {
   planMoves: { month: string; amount: bigint; note: string }[];
 };
 
+export type WorkspaceActor = { userId?: string | null };
+
 /** Reads and writes the workspace through the local store; every write is queued for sync. */
 export class WorkspaceRepository {
   private readonly categoryDeleteUndos = new Map<string, CategoryDeleteUndo>();
+  private actor: WorkspaceActor = {};
 
   constructor(
     private readonly store: LocalStore,
@@ -194,6 +197,18 @@ export class WorkspaceRepository {
     readonly workspaceId: string,
     private readonly newId: () => string = uuidv7,
   ) {}
+
+  /** Stamp History who/device on new money events (DESIGN page 11). */
+  setActor(actor: WorkspaceActor): void {
+    this.actor = actor;
+  }
+
+  private provenance(): Pick<EventMeta, 'createdBy' | 'deviceId'> {
+    return {
+      createdBy: this.actor.userId ?? undefined,
+      deviceId: this.engine.deviceId,
+    };
+  }
 
   /** Sentinel for envelope "Left to plan" when covering overspending (PU-10). */
   static readonly LEFT_TO_PLAN = '__left_to_plan__';
@@ -597,6 +612,7 @@ export class WorkspaceRepository {
       payeeId: original.payeeId,
       notes: input.notes?.trim() || original.notes,
       correctionOf: id,
+      ...this.provenance(),
     };
     const existing = new Map(snapshot.events.map((e) => [e.id, e]));
     const checked = checkEvent(snapshot.chart, replacement, existing);
@@ -2404,10 +2420,15 @@ export class WorkspaceRepository {
     remote?: null,
   ): Promise<Result<TxEvent>> {
     const id = this.newId();
-    const event: TxEvent = { ...input, id, operationId: id, status: 'posted' };
+    const stamped: typeof input = {
+      ...input,
+      createdBy: input.createdBy ?? this.actor.userId ?? undefined,
+      deviceId: input.deviceId ?? this.engine.deviceId,
+    };
+    const event: TxEvent = { ...stamped, id, operationId: id, status: 'posted' };
     const checked = checkEvent(chart, event, new Map(events.map((e) => [e.id, e])));
     if (!checked.ok) return checked;
-    await this.put('events', id, { ...toStored(input), operationId: id }, `event.${input.type}`, undefined, remote);
+    await this.put('events', id, { ...toStored(stamped), operationId: id }, `event.${input.type}`, undefined, remote);
     return { ok: true, value: event };
   }
 }

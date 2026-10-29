@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { useAuth } from '@/features/auth/AuthProvider';
+
 import { useSync } from '../sync/SyncProvider';
 import { WorkspaceRepository, type Snapshot } from './repository';
 
@@ -9,8 +11,13 @@ const Context = createContext<WorkspaceContext | null>(null);
 
 export function WorkspaceProvider({ workspaceId, children }: { workspaceId: string; children: ReactNode }) {
   const { store, engine } = useSync();
+  const { user } = useAuth();
   const repo = useMemo(() => new WorkspaceRepository(store, engine, workspaceId), [store, engine, workspaceId]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+
+  useEffect(() => {
+    repo.setActor({ userId: user?.id ?? null });
+  }, [repo, user?.id]);
 
   useEffect(() => {
     let alive = true;

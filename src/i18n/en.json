@@ -1588,6 +1588,8 @@
   "panel.newRule": "New rule from this",
   "panel.alwaysUseCategory": "Always use this category",
   "panel.historyOnDevice": "on this device",
+  "panel.historyDevice": "device {device}",
+  "panel.historyWhoDevice": "{who} · device {device}",
   "panel.refundTitle": "Refund",
   "panel.refundOriginal": "Original purchase",
   "panel.refundLeft": "{amount} left to refund",

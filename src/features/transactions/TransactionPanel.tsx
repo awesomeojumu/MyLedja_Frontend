@@ -48,9 +48,14 @@ function amountOf(snapshot: Snapshot, e: TxEvent): bigint {
   return moneyLine(snapshot, e).reduce((s, l) => s + l.amountMinor, 0n);
 }
 
-function historyWho(event: TxEvent): string | null {
-  const meta = event as TxEvent & { createdBy?: string; deviceId?: string };
-  return meta.createdBy ?? meta.deviceId ?? null;
+/** DESIGN D27 — who + device when provenance is on the event. */
+export function historyWho(event: TxEvent): string | null {
+  const who = event.createdBy?.trim();
+  const device = event.deviceId?.trim();
+  if (!who && !device) return null;
+  if (who && device) return t('panel.historyWhoDevice', { who, device: device.slice(0, 8) });
+  if (who) return who;
+  return t('panel.historyDevice', { device: device!.slice(0, 8) });
 }
 
 export function TransactionPanel({ id, onClose }: { id: string; onClose: () => void }) {
