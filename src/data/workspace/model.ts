@@ -30,6 +30,10 @@ export type Account = {
   last4?: string;
   countInBudget: boolean;
   archived: boolean;
+  /** Archived while still holding a balance; still counts in net worth (PU-15). */
+  closedWithBalance?: boolean;
+  /** ISO date the account was opened / created (TB-03 Details). */
+  openedAt?: string;
   order: number;
   /** The last CSV column mapping used for this account (P09-05). */
   importMapping?: ImportMapping;

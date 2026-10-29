@@ -369,6 +369,7 @@ export class WorkspaceRepository {
     type: AccountKind;
     institution?: string;
     last4?: string;
+    currency?: string;
     countInBudget?: boolean;
     openingBalance: bigint;
     openingDate: string;
@@ -378,11 +379,12 @@ export class WorkspaceRepository {
       id: this.newId(),
       name: input.name,
       type: input.type,
-      currency: 'NGN',
+      currency: input.currency ?? 'NGN',
       institution: input.institution,
       last4: input.last4?.slice(-4),
       countInBudget: input.countInBudget ?? ACCOUNT_KIND_INFO[input.type].countInBudget,
       archived: false,
+      openedAt: input.openingDate,
       order: snapshot.accounts.length,
     };
     const { id, ...data } = account;
@@ -573,8 +575,8 @@ export class WorkspaceRepository {
     await this.engine.save({ ...rec, data }, 'event.notes', { collection: 'events', id, data }, rec.version);
   }
 
-  /** E10: a new value for property or an untracked investment; the change goes to Revaluation, never income (P08-05). */
-  async updateValue(accountId: string, value: bigint, date: string): Promise<Result<TxEvent | null>> {
+  /** E10: a new value for property or an untracked investment; the change goes to Revaluation, never income (P08-05 / PU-14). */
+  async updateValue(accountId: string, value: bigint, date: string, notes?: string): Promise<Result<TxEvent | null>> {
     const snapshot = await this.load();
     const account = snapshot.chart.get(accountId);
     if (!account) return { ok: false, error: 'missing_lines' };
@@ -583,28 +585,64 @@ export class WorkspaceRepository {
     if (target === current) return { ok: true, value: null };
     const lines = buildAdjustment(snapshot.chart, { accountId, delta: target - current, against: 'revaluation' });
     if (!lines.ok) return lines;
-    return this.postEvent(snapshot.chart, snapshot.events, { type: 'balance_adjustment', date, lines: lines.value });
+    return this.postEvent(snapshot.chart, snapshot.events, {
+      type: 'balance_adjustment',
+      date,
+      lines: lines.value,
+      notes: notes?.trim() || undefined,
+    });
   }
 
-  /** P08-06: a balance moves to another account first, then the account is archived. */
-  async archiveAccount(accountId: string, date: string, moveToId?: string): Promise<Result> {
+  /**
+   * PU-15 / P08-06: archive an account.
+   * - Zero balance: archive.
+   * - `moveToId` set: transfer the balance first, then archive.
+   * - `moveToId === null`: archive with its balance (still counts in net worth).
+   * - Balance and `moveToId` omitted: refused — the person must choose.
+   */
+  async archiveAccount(accountId: string, date: string, moveToId?: string | null): Promise<Result> {
     const snapshot = await this.load();
     const account = snapshot.accounts.find((a) => a.id === accountId);
     if (!account) return { ok: false, error: 'missing_lines' };
     const balance = ledgerBalance(accountId, snapshot.events);
     if (balance !== 0n) {
-      if (!moveToId) return { ok: false, error: 'missing_lines' };
-      const amount = balance > 0n ? balance : -balance;
-      const lines =
-        balance > 0n
-          ? buildTransfer(snapshot.chart, { fromId: accountId, toId: moveToId, amount })
-          : buildTransfer(snapshot.chart, { fromId: moveToId, toId: accountId, amount });
-      if (!lines.ok) return lines;
-      const posted = await this.postEvent(snapshot.chart, snapshot.events, { type: 'transfer', date, lines: lines.value });
-      if (!posted.ok) return posted;
+      if (moveToId === undefined) return { ok: false, error: 'missing_lines' };
+      if (moveToId !== null) {
+        const amount = balance > 0n ? balance : -balance;
+        const lines =
+          balance > 0n
+            ? buildTransfer(snapshot.chart, { fromId: accountId, toId: moveToId, amount })
+            : buildTransfer(snapshot.chart, { fromId: moveToId, toId: accountId, amount });
+        if (!lines.ok) return lines;
+        const posted = await this.postEvent(snapshot.chart, snapshot.events, { type: 'transfer', date, lines: lines.value });
+        if (!posted.ok) return posted;
+        await this.updateAccount({ ...account, archived: true, closedWithBalance: false });
+        return { ok: true, value: undefined };
+      }
+      await this.updateAccount({ ...account, archived: true, closedWithBalance: true });
+      return { ok: true, value: undefined };
     }
-    await this.updateAccount({ ...account, archived: true });
+    await this.updateAccount({ ...account, archived: true, closedWithBalance: false });
     return { ok: true, value: undefined };
+  }
+
+  /** Undo of archive (PU-15 toast Undo). */
+  async restoreAccount(accountId: string): Promise<Result> {
+    const snapshot = await this.load();
+    const account = snapshot.accounts.find((a) => a.id === accountId);
+    if (!account) return { ok: false, error: 'missing_lines' };
+    await this.updateAccount({ ...account, archived: false, closedWithBalance: false });
+    return { ok: true, value: undefined };
+  }
+
+  /** Details tab: forget the remembered CSV column mapping (TB-03). */
+  async clearImportMapping(accountId: string): Promise<void> {
+    const snapshot = await this.load();
+    const account = snapshot.accounts.find((a) => a.id === accountId);
+    if (!account?.importMapping) return;
+    const next: Account = { ...account };
+    delete next.importMapping;
+    await this.updateAccount(next);
   }
 
   async reorderAccounts(ids: string[]): Promise<void> {
