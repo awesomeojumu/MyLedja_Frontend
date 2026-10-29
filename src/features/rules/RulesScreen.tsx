@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { useGlobalSearchParams } from 'expo-router';
+import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { MoreHorizontal } from 'lucide-react-native';
 
 import {
@@ -43,6 +43,7 @@ function matchesRule(rule: TransactionRule, query: string, snapshot: Parameters<
 export function RulesScreen() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
+  const router = useRouter();
   const size = useSizeClass();
   const twoCol = size === 'wide' || size === 'desktop';
   const params = useGlobalSearchParams<{ edit?: string; rule?: string; runRules?: string }>();
@@ -50,6 +51,8 @@ export function RulesScreen() {
   const [runOpen, setRunOpen] = useState(params.runRules === '1');
   const [editRule, setEditRule] = useState<TransactionRule | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openedFromLink, setOpenedFromLink] = useState<string | null>(null);
+  const [runLinked, setRunLinked] = useState(false);
 
   const rules = useMemo(() => {
     if (!snapshot) return null;
@@ -61,10 +64,17 @@ export function RulesScreen() {
     const draft = newBlankRule(snapshot.rules.length);
     const created = await repo.createRule(draft);
     setEditRule(created);
+    router.setParams({ rule: created.id, edit: undefined });
   };
 
-  // Open the rule named in the link once it has loaded (`?rule=` addendum; `?edit=` legacy).
-  const [openedFromLink, setOpenedFromLink] = useState<string | null>(null);
+  // `?rule=new` → blank editor (PU-48).
+  if (snapshot && params.rule === 'new' && openedFromLink !== 'new') {
+    setOpenedFromLink('new');
+    queueMicrotask(() => {
+      void openNew();
+    });
+  }
+
   const linkId = params.rule && params.rule !== 'new' ? params.rule : params.edit;
   if (snapshot && linkId && linkId !== openedFromLink) {
     const found = snapshot.rules.find((r) => r.id === linkId);
@@ -73,7 +83,6 @@ export function RulesScreen() {
       setEditRule(found);
     }
   }
-  const [runLinked, setRunLinked] = useState(false);
   if (params.runRules === '1' && !runLinked) {
     setRunLinked(true);
     setRunOpen(true);
@@ -84,6 +93,10 @@ export function RulesScreen() {
     const stages = showRuleStages(rules.length) ? RULE_STAGES : (['normal'] as const);
     return stages.map((stage) => ({ stage, items: rules.filter((r) => r.stage === stage) }));
   }, [rules]);
+
+  const showRan = (changed: number, undoId?: string) => {
+    toast.show(t('rules.ran', { count: changed }), undoId ? () => void repo.undoRuleRun(undoId).then(() => toast.show(t('common.undo'))) : undefined);
+  };
 
   return (
     <AppFrame title={t('rules.title')}>
@@ -104,9 +117,7 @@ export function RulesScreen() {
           grouped.map(({ stage, items }) =>
             items.length === 0 ? null : (
               <View key={stage} style={{ gap: sp['spacing-md'] }}>
-                {showRuleStages(rules?.length ?? 0) ? (
-                  <Text variant="heading-sm">{stageTitle(stage)}</Text>
-                ) : null}
+                {showRuleStages(rules?.length ?? 0) ? <Text variant="heading-sm">{stageTitle(stage)}</Text> : null}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-md'] }}>
                   {items.map((rule) => (
                     <RuleCard
@@ -151,7 +162,7 @@ export function RulesScreen() {
               setError(ledgerMessage(r.error));
               return;
             }
-            toast.show(t('rules.ran', { count: r.value.changed }));
+            showRan(r.value.changed, r.value.undoId);
             setEditRule(null);
           }}
         />
@@ -169,7 +180,7 @@ export function RulesScreen() {
               setError(ledgerMessage(r.error));
               return;
             }
-            toast.show(t('rules.ran', { count: r.value.changed }));
+            showRan(r.value.changed, r.value.undoId);
             setRunOpen(false);
           }}
         />
@@ -213,7 +224,7 @@ function RuleCard({
         <Text tone="textSecondary">{t('rules.whenPrefix')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 4 }}>
           {rule.conditions.map((c, i) => (
-            <PillTag key={i} label={`${t(`rules.field.${c.field}`)} ${c.value}`} />
+            <PillTag key={i} label={`${t(`rules.field.${c.field}`)} ${c.value}`} soft />
           ))}
         </View>
         <Text tone="textSecondary">{t('rules.thenPrefix')}</Text>
@@ -221,6 +232,7 @@ function RuleCard({
           {rule.actions.map((a, i) => (
             <PillTag
               key={i}
+              soft
               label={
                 a.kind === 'setCategory'
                   ? snapshot.categories.find((c) => c.id === a.value)?.name ?? a.value

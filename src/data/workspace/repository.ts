@@ -3,7 +3,14 @@ import { v7 as uuidv7 } from 'uuid';
 import type { SetupBody } from '@/api/auth';
 import { formatDay } from '@/design/components/overlays';
 import { budgetForMonth, resolveTemplateLineAmount, rowFor } from '@/features/budget/helpers';
-import { ruleChangeFor } from '@/features/rules/ruleEngine';
+import {
+  countReconciledSkipped,
+  parseSplitValue,
+  previewMatches,
+  ruleChangeFor,
+  splitTotalsOk,
+} from '@/features/rules/ruleEngine';
+import { parseTags, withTags } from '@/features/transactions/tags';
 import type { RemoteOperation } from '../sync/mapOperation';
 import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
 import { t, type TextKey } from '@/i18n';
@@ -183,6 +190,12 @@ type CategoryDeleteUndo = {
   replacementEventIds: string[];
   planMoves: { month: string; amount: bigint; note: string }[];
 };
+
+/** Local undo batch for a Rules run (PU48-3 / P25-03). Not synced. */
+type RuleRunUndoStep =
+  | { kind: 'correction'; originalId: string; replacementId: string; date: string }
+  | { kind: 'payee'; eventId: string; previousPayeeId?: string }
+  | { kind: 'notes'; eventId: string; previousNotes?: string };
 
 /** Reads and writes the workspace through the local store; every write is queued for sync. */
 export class WorkspaceRepository {
@@ -1189,54 +1202,197 @@ export class WorkspaceRepository {
     await this.saveRule({ ...other, order: rule.order });
   }
 
-  async runRule(ruleId: string, range: { from?: string; to?: string }): Promise<Result<{ changed: number }>> {
+  async runRule(
+    ruleId: string,
+    range: { from?: string; to?: string },
+  ): Promise<Result<{ changed: number; skipped: number; undoId?: string }>> {
     const snapshot = await this.load();
     const rule = snapshot.rules.find((r) => r.id === ruleId);
     if (!rule || !rule.enabled) return { ok: false, error: 'missing_lines' };
-    const { previewMatches } = await import('@/features/rules/ruleEngine');
-    const matches = previewMatches(snapshot, rule, range.from, range.to);
+    const skipped = countReconciledSkipped(snapshot, rule, range.from, range.to);
+    const matches = previewMatches(snapshot, rule, range.from, range.to, { onlyChanging: true });
+    const steps: RuleRunUndoStep[] = [];
     let changed = 0;
     for (const ctx of matches) {
       const applied = await this.applyRuleActions(ctx.eventId, rule.actions);
-      if (applied.ok) changed += 1;
+      if (!applied.ok) return applied;
+      if (applied.value.steps.length) {
+        steps.push(...applied.value.steps);
+        changed += 1;
+      }
     }
+    let undoId: string | undefined;
     if (changed > 0) {
       await this.saveRule({ ...rule, matchedCount: rule.matchedCount + changed, lastUsedAt: workspaceToday() });
+      undoId = this.newId();
+      await this.put('rule_runs', undoId, { steps, ruleId, changed }, 'rule.run', undefined, null);
     }
-    return { ok: true, value: { changed } };
+    return { ok: true, value: { changed, skipped, undoId } };
   }
 
-  async runRules(ruleIds: string[], range: { from?: string; to?: string }): Promise<Result<{ changed: number }>> {
+  async runRules(
+    ruleIds: string[],
+    range: { from?: string; to?: string },
+  ): Promise<Result<{ changed: number; skipped: number; undoId?: string }>> {
     let total = 0;
+    let skipped = 0;
+    const steps: RuleRunUndoStep[] = [];
     for (const id of ruleIds) {
       const r = await this.runRule(id, range);
       if (!r.ok) return r;
       total += r.value.changed;
+      skipped += r.value.skipped;
+      if (r.value.undoId) {
+        const rec = await this.store.read('rule_runs', r.value.undoId);
+        if (rec) steps.push(...((rec.data as { steps: RuleRunUndoStep[] }).steps ?? []));
+      }
     }
-    return { ok: true, value: { changed: total } };
+    let undoId: string | undefined;
+    if (steps.length) {
+      undoId = this.newId();
+      await this.put('rule_runs', undoId, { steps, ruleIds, changed: total }, 'rule.run', undefined, null);
+    }
+    return { ok: true, value: { changed: total, skipped, undoId } };
   }
 
-  private async applyRuleActions(eventId: string, actions: RuleAction[]): Promise<Result> {
-    const snapshot = await this.load();
-    const event = snapshot.events.find((e) => e.id === eventId);
-    if (!event) return { ok: false, error: 'missing_lines' };
-    for (const action of actions) {
-      if (action.kind === 'setCategory' && (event.type === 'expense' || event.type === 'income')) {
-        const r = await this.bulkSetCategory([eventId], action.value);
-        if (!r.ok) return r;
+  /** PU48-3 / PU-49: restore every transaction a rule run changed. */
+  async undoRuleRun(undoId: string): Promise<Result> {
+    const rec = await this.store.read('rule_runs', undoId);
+    if (!rec) return { ok: false, error: 'missing_lines' };
+    const data = rec.data as { steps: RuleRunUndoStep[]; undone?: boolean };
+    if (data.undone) return { ok: true, value: undefined };
+    for (const step of [...data.steps].reverse()) {
+      if (step.kind === 'correction') {
+        const removed = await this.deleteTransaction(step.replacementId, step.date);
+        if (!removed.ok) return removed;
+        const snapshot = await this.load();
+        const original = snapshot.events.find((e) => e.id === step.originalId);
+        if (!original) return { ok: false, error: 'missing_lines' };
+        const restored = await this.restore(original);
+        if (!restored.ok) return restored;
+      } else if (step.kind === 'payee') {
+        if (step.previousPayeeId) {
+          const moved = await this.setEventPayee(step.eventId, step.previousPayeeId);
+          if (!moved.ok) return moved;
+        }
+      } else if (step.kind === 'notes') {
+        await this.updateNotes(step.eventId, step.previousNotes ?? '');
       }
+    }
+    await this.put('rule_runs', undoId, { ...data, undone: true }, 'rule.run.undo', undefined, null);
+    return { ok: true, value: undefined };
+  }
+
+  private async applyRuleActions(
+    eventId: string,
+    actions: RuleAction[],
+  ): Promise<Result<{ steps: RuleRunUndoStep[] }>> {
+    const steps: RuleRunUndoStep[] = [];
+    let currentId = eventId;
+    for (const action of actions) {
+      const snapshot = await this.load();
+      const event = snapshot.events.find((e) => e.id === currentId);
+      if (!event || event.status !== 'posted') return { ok: false, error: 'missing_lines' };
+      if (event.reconciledBy) return { ok: true, value: { steps } };
+
+      if (action.kind === 'setCategory' && (event.type === 'expense' || event.type === 'income') && action.value) {
+        const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+        const currentCat = event.lines.find((l) => !accountIds.has(l.ledgerAccountId))?.ledgerAccountId;
+        if (currentCat === action.value) continue;
+        const money = event.lines.find((l) => accountIds.has(l.ledgerAccountId));
+        if (!money) continue;
+        const amount = event.lines
+          .filter((l) => !accountIds.has(l.ledgerAccountId))
+          .reduce((s, l) => s + (l.amountMinor < 0n ? -l.amountMinor : l.amountMinor), 0n);
+        const input: TransactionInput =
+          event.type === 'expense'
+            ? { kind: 'expense', accountId: money.ledgerAccountId, parts: [{ categoryId: action.value, amount }], date: event.date, notes: event.notes }
+            : { kind: 'income', accountId: money.ledgerAccountId, categoryId: action.value, amount, date: event.date, notes: event.notes };
+        const corrected = await this.correctTransaction(currentId, input);
+        if (!corrected.ok) return corrected;
+        steps.push({ kind: 'correction', originalId: currentId, replacementId: corrected.value.id, date: event.date });
+        currentId = corrected.value.id;
+        continue;
+      }
+
+      if (action.kind === 'split' && event.type === 'expense') {
+        const split = parseSplitValue(action.value);
+        const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+        const money = event.lines.find((l) => accountIds.has(l.ledgerAccountId));
+        const amount = event.lines
+          .filter((l) => !accountIds.has(l.ledgerAccountId))
+          .reduce((s, l) => s + (l.amountMinor < 0n ? -l.amountMinor : l.amountMinor), 0n);
+        if (!split || !money || !splitTotalsOk(split, amount)) continue;
+        const parts =
+          split.mode === 'pct'
+            ? split.parts.map((p, i, all) => {
+                if (i === all.length - 1) {
+                  const used = all.slice(0, -1).reduce((s, x) => s + (amount * BigInt(Math.round(x.value))) / 100n, 0n);
+                  return { categoryId: p.categoryId, amount: amount - used };
+                }
+                return { categoryId: p.categoryId, amount: (amount * BigInt(Math.round(p.value))) / 100n };
+              })
+            : split.parts.map((p) => ({ categoryId: p.categoryId, amount: BigInt(Math.round(p.value * 100)) }));
+        const corrected = await this.correctTransaction(currentId, {
+          kind: 'expense',
+          accountId: money.ledgerAccountId,
+          parts,
+          date: event.date,
+          notes: event.notes,
+        });
+        if (!corrected.ok) return corrected;
+        steps.push({ kind: 'correction', originalId: currentId, replacementId: corrected.value.id, date: event.date });
+        currentId = corrected.value.id;
+        continue;
+      }
+
       if (action.kind === 'renamePayee' && action.value.trim()) {
         const payeeId = await this.payeeFor(snapshot.payees, action.value.trim());
-        const moved = await this.setEventPayee(eventId, payeeId);
+        if (event.payeeId === payeeId) continue;
+        steps.push({ kind: 'payee', eventId: currentId, previousPayeeId: event.payeeId });
+        const moved = await this.setEventPayee(currentId, payeeId);
         if (!moved.ok) return moved;
+        continue;
       }
+
       if (action.kind === 'addNote' && action.value.trim()) {
         const note = action.value.trim();
         const merged = event.notes ? `${event.notes}; ${note}` : note;
-        await this.updateNotes(eventId, merged);
+        if (merged === event.notes) continue;
+        steps.push({ kind: 'notes', eventId: currentId, previousNotes: event.notes });
+        await this.updateNotes(currentId, merged);
+        continue;
+      }
+
+      if (action.kind === 'addTag' && action.value.trim()) {
+        const add = action.value.split(',').map((t) => t.trim()).filter(Boolean);
+        const existing = parseTags(event.notes);
+        const next = [...existing];
+        for (const tag of add) if (!next.map((x) => x.toLowerCase()).includes(tag.toLowerCase())) next.push(tag);
+        if (next.length === existing.length) continue;
+        steps.push({ kind: 'notes', eventId: currentId, previousNotes: event.notes });
+        await this.updateNotes(currentId, withTags(event.notes, next) ?? '');
+        continue;
+      }
+
+      if (action.kind === 'linkSchedule' && action.value.trim()) {
+        const marker = `schedule:${action.value.trim()}`;
+        if ((event.notes ?? '').includes(marker)) continue;
+        const next = event.notes ? `${event.notes}\n${marker}` : marker;
+        steps.push({ kind: 'notes', eventId: currentId, previousNotes: event.notes });
+        await this.updateNotes(currentId, next);
+        continue;
+      }
+
+      if (action.kind === 'moneyBack' && action.value.trim()) {
+        const marker = `money-back:${action.value.trim()}`;
+        if ((event.notes ?? '').includes(marker)) continue;
+        const next = event.notes ? `${event.notes}\n${marker}` : marker;
+        steps.push({ kind: 'notes', eventId: currentId, previousNotes: event.notes });
+        await this.updateNotes(currentId, next);
       }
     }
-    return { ok: true, value: undefined };
+    return { ok: true, value: { steps } };
   }
 
   /**

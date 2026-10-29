@@ -11,6 +11,8 @@ import { t } from '@/i18n';
 import { purchaseCost, refundedSoFar } from '@/ledger';
 import { formatNaira } from '@/money';
 
+import { ruleFromTransaction } from '@/features/rules/helpers';
+
 import { ledgerMessage, today } from './helpers';
 import { duplicateInput } from './duplicate';
 import { connectedLines } from './panelConnected';
@@ -222,6 +224,25 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         {error ? <InlineError testID="panel-error" message={error} /> : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
           <Button kind="secondary" testID="panel-duplicate" label={t('panel.duplicate')} onPress={() => void duplicate()} />
+          {event.status === 'posted' && (event.type === 'expense' || event.type === 'income') ? (
+            <Button
+              kind="secondary"
+              testID="panel-new-rule"
+              label={t('panel.newRuleFromThis')}
+              onPress={() => {
+                void (async () => {
+                  const draft = ruleFromTransaction({
+                    payeeName: payee,
+                    description: event.notes,
+                    categoryId: others[0]?.ledgerAccountId,
+                  });
+                  const rule = await repo.createRule({ ...draft, order: snapshot.rules.length });
+                  onClose();
+                  router.push(`/rules?rule=${rule.id}`);
+                })();
+              }}
+            />
+          ) : null}
           {event.status === 'posted' && !event.reconciledBy ? (
             <Button kind="secondary" testID="panel-delete" label={t('tx.delete')} onPress={() => void remove()} />
           ) : null}

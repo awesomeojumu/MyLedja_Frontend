@@ -1,14 +1,17 @@
 import { View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { Button, Footer, Sheet, Text, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
+import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { ruleFromMoneyBack } from '@/features/rules/helpers';
 import { t } from '@/i18n';
 
 import { moneyBackPromptCopy, type MoneyBackChoice, type MoneyBackSuggestion } from './moneyBack';
 
 const sp = tokens.spacing;
 
-/** PU-58 Money back? — never auto-decides; Always-do-this hidden until Phase 4 rules. */
+/** PU-58 Money back? — Always-do-this creates a money-back rule (PU-48). */
 export function MoneyBackPrompt({
   suggestion,
   onChoice,
@@ -19,6 +22,8 @@ export function MoneyBackPrompt({
   onClose: () => void;
 }) {
   const toast = useToast();
+  const router = useRouter();
+  const { repo, snapshot } = useWorkspace();
   const copy = moneyBackPromptCopy(suggestion);
   const incoming = suggestion.direction === 'incoming';
   return (
@@ -51,6 +56,22 @@ export function MoneyBackPrompt({
         <Text tone="textSecondary" variant="caption">
           {t('debts.moneyBack.hint')}
         </Text>
+        <Button
+          kind="link"
+          testID="money-back-always"
+          label={t('debts.moneyBack.alwaysDoThis')}
+          onPress={() => {
+            void (async () => {
+              if (!snapshot) return;
+              const draft = ruleFromMoneyBack({ payeeName: suggestion.personName, debtId: suggestion.debtId });
+              const rule = await repo.createRule({ ...draft, order: snapshot.rules.length });
+              onChoice('money_back');
+              toast.show(t('debts.moneyBack.alwaysToast'));
+              onClose();
+              router.push(`/rules?rule=${rule.id}`);
+            })();
+          }}
+        />
       </View>
     </Sheet>
   );

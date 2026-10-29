@@ -28,7 +28,18 @@ function actionLabel(a: RuleAction, snapshot: Snapshot): string {
     return t('rules.action.setCategory', { name });
   }
   if (a.kind === 'renamePayee') return t('rules.action.renamePayee', { name: a.value });
-  return t('rules.action.addNote', { note: a.value });
+  if (a.kind === 'addNote') return t('rules.action.addNote', { note: a.value });
+  if (a.kind === 'addTag') return t('rules.actionKind.addTag') + ` ${a.value}`;
+  if (a.kind === 'split') return t('rules.actionKind.split');
+  if (a.kind === 'linkSchedule') {
+    const name = snapshot.recurring.find((r) => r.id === a.value)?.name ?? a.value;
+    return `${t('rules.actionKind.linkSchedule')} ${name}`;
+  }
+  if (a.kind === 'moneyBack') {
+    const name = snapshot.debts.find((d) => d.id === a.value)?.name ?? a.value;
+    return `${t('rules.actionKind.moneyBack')} ${name}`;
+  }
+  return a.value;
 }
 
 export const RULE_STAGES: TransactionRule['stage'][] = ['first', 'normal', 'last'];
@@ -59,6 +70,39 @@ export function ruleFromPayee(payeeName: string, categoryId?: string): Omit<Tran
     matchMode: 'all',
     conditions: [{ field: 'payee', op: 'contains', value: payeeName }],
     actions: categoryId ? [{ kind: 'setCategory', value: categoryId }] : [{ kind: 'setCategory', value: '' }],
+  };
+}
+
+/** PU-18 → PU-48: seed a rule from a posted transaction. */
+export function ruleFromTransaction(input: {
+  payeeName?: string;
+  description?: string;
+  categoryId?: string;
+}): Omit<TransactionRule, 'id' | 'matchedCount' | 'order'> {
+  const conditions: TransactionRule['conditions'] = [];
+  if (input.payeeName?.trim()) conditions.push({ field: 'payee', op: 'contains', value: input.payeeName.trim() });
+  else if (input.description?.trim()) conditions.push({ field: 'description', op: 'contains', value: input.description.trim() });
+  else conditions.push({ field: 'payee', op: 'contains', value: '' });
+  return {
+    enabled: true,
+    stage: 'normal',
+    matchMode: 'all',
+    conditions,
+    actions: input.categoryId ? [{ kind: 'setCategory', value: input.categoryId }] : [{ kind: 'setCategory', value: '' }],
+  };
+}
+
+/** PU-58 → PU-48: always treat matching money as money-back from this person/debt. */
+export function ruleFromMoneyBack(input: {
+  payeeName: string;
+  debtId: string;
+}): Omit<TransactionRule, 'id' | 'matchedCount' | 'order'> {
+  return {
+    enabled: true,
+    stage: 'normal',
+    matchMode: 'all',
+    conditions: [{ field: 'payee', op: 'contains', value: input.payeeName }],
+    actions: [{ kind: 'moneyBack', value: input.debtId }],
   };
 }
 
