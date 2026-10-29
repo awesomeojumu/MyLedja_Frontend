@@ -8,6 +8,7 @@ import tokens from '@/design/tokens.json';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { AuthFrame } from './AuthFrame';
+import { AuthStepPanel } from './AuthStepPanel';
 import { useAuth } from './AuthProvider';
 import { GoogleSignInButton } from './GoogleSignInButton';
 import { loadGoogleSignIn, peekGoogleLinkPending, runGoogleSignIn, takeGoogleLinkPending } from './googleSignIn';
@@ -131,6 +132,7 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
     setBusy(true);
     setError(null);
     try {
+      // Google link token is owned by Page 02 shared googleSignIn helpers (peek/take).
       const link = peekGoogleLinkPending();
       const googleLinkToken =
         link && link.email.toLowerCase() === email.trim().toLowerCase() ? link.linkToken : undefined;
@@ -149,6 +151,8 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
         setError(t('signIn.wait'));
       } else if (e instanceof ApiError && e.status === 401) {
         setError(t('signIn.wrong'));
+      } else if (e instanceof ApiError && e.status === 403 && e.body.code === 'email_not_verified') {
+        setError(t('signIn.emailNotVerified'));
       } else {
         setError(t('errors.network'));
       }
@@ -162,113 +166,138 @@ export function SignInScreen({ now = () => Date.now() }: { now?: () => number })
     setBusy(true);
     setError(null);
     try {
-      const res = await runGoogleSignIn(api);
+      const res = await runGoogleSignIn(api, {
+        staySignedIn: signedInStay,
+        trustedDeviceToken: await trustedDeviceToken(email),
+      });
       if (res.ok) await finishSession(res.session, Platform.OS === 'web' && stay);
-      else if (res.reason === 'link_password') setError(t('signIn.googleLinkPassword'));
+      else if (res.reason === 'link_password') {
+        if (res.email) setEmail(res.email);
+        setError(t('signIn.googleLinkPassword'));
+      } else if (res.reason === 'cancelled') {
+        /* person closed the Google sheet — no error */
+      } else if (res.reason === 'unavailable') {
+        setError(res.message ?? t('signIn.googleUnavailable'));
+      } else if (res.reason === 'network') {
+        setError(res.message ?? t('errors.network'));
+      }
     } finally {
       setBusy(false);
     }
   };
 
   const disabled = !online || busy || secondsLeft > 0;
-
-  if (challenge) {
-    return (
-      <AuthFrame>
-        <Text variant="display-md" accessibilityRole="header">
-          {useBackup ? t('signIn.backupTitle') : t('signIn.twoFactorTitle')}
-        </Text>
-        <Text tone="textSecondary">{useBackup ? t('signIn.backupBody') : t('signIn.twoFactorBody')}</Text>
-        {useBackup ? (
-          <TextInput testID="backup-code" label={t('signIn.backupLabel')} value={backupCode} onChangeText={setBackupCode} autoCapitalize="none" onSubmitEditing={() => void verify()} />
-        ) : (
-          <CodeInput
-            testID="two-factor-code"
-            value={code}
-            onChange={(next) => {
-              setCode(next);
-              if (next.length === 6) void verify(next);
-            }}
-          />
-        )}
-        <Checkbox testID="trust-device" label={t('signIn.trust')} checked={trust} onChange={setTrust} />
-        {error ? <InlineError testID="sign-in-error" message={error} /> : null}
-        <Button
-          testID="verify"
-          kind="gradient"
-          label={t('signIn.verify')}
-          onPress={() => void verify()}
-          disabled={disabled || (useBackup ? backupCode.trim().length < 8 : code.length !== 6)}
-          fullWidth
-        />
-        <Button kind="link" label={useBackup ? t('signIn.useCode') : t('signIn.useBackup')} onPress={() => setUseBackup((v) => !v)} />
-        <Button kind="link" label={t('signIn.back')} onPress={() => setChallenge(null)} />
-      </AuthFrame>
-    );
-  }
+  const step = challenge ? (useBackup ? 'backup' : 'two-factor') : 'sign-in';
 
   return (
     <AuthFrame>
-      <Text variant="display-md" accessibilityRole="header">
-        {t('signIn.title')}
-      </Text>
-      <TextInput
-        testID="email"
-        label={t('auth.email')}
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        autoComplete="email"
-        textContentType="username"
-        keyboardType="email-address"
-        error={emailError}
-        autoFocus
-      />
-      <View style={{ gap: tokens.spacing['spacing-xs'] }}>
-        <TextInput
-          testID="password"
-          label={t('auth.password')}
-          value={password}
-          onChangeText={setPassword}
-          secure
-          autoComplete="current-password"
-          textContentType="password"
-          onSubmitEditing={submit}
-        />
-        <View style={{ alignItems: 'flex-end' }}>
-          <Button kind="link" label={t('signIn.forgot')} onPress={() => router.push('/recover')} />
-        </View>
-      </View>
-      {Platform.OS === 'web' ? (
-        <Checkbox testID="stay" label={t('signIn.stay')} checked={stay} onChange={setStay} caption={t('signIn.stayCaption')} />
-      ) : null}
-      {error ? <InlineError testID="sign-in-error" message={error} /> : null}
-      {secondsLeft > 0 ? (
-        <Text variant="caption" tone="textSecondary" accessibilityLiveRegion="polite">
-          {t('signIn.waitCountdown', { seconds: secondsLeft })}
-        </Text>
-      ) : null}
-      <Button testID="sign-in" kind="gradient" label={t('signIn.submit')} onPress={submit} disabled={disabled} fullWidth />
-      {showGoogle || passkeysAvailable() ? <Divider label={t('auth.or')} /> : null}
-      {passkeysAvailable() ? (
-        <>
-          <Button testID="passkey" kind="secondary" label={t('signIn.passkey')} onPress={passkey} disabled={disabled} fullWidth />
-          {passkeyFailed ? (
+      <AuthStepPanel step={step}>
+        {challenge ? (
+          <>
+            <Text variant="display-md" accessibilityRole="header">
+              {useBackup ? t('signIn.backupTitle') : t('signIn.twoFactorTitle')}
+            </Text>
+            <Text tone="textSecondary">{useBackup ? t('signIn.backupBody') : t('signIn.twoFactorBody')}</Text>
+            {useBackup ? (
+              <TextInput
+                testID="backup-code"
+                label={t('signIn.backupLabel')}
+                value={backupCode}
+                onChangeText={setBackupCode}
+                autoCapitalize="none"
+                onSubmitEditing={() => void verify()}
+              />
+            ) : (
+              <CodeInput
+                testID="two-factor-code"
+                value={code}
+                onChange={(next) => {
+                  setCode(next);
+                  if (next.length === 6) void verify(next);
+                }}
+              />
+            )}
+            <Checkbox testID="trust-device" label={t('signIn.trust')} checked={trust} onChange={setTrust} />
+            {error ? <InlineError testID="sign-in-error" message={error} /> : null}
+            <Button
+              testID="verify"
+              kind="gradient"
+              label={t('signIn.verify')}
+              onPress={() => void verify()}
+              disabled={disabled || (useBackup ? backupCode.trim().length < 8 : code.length !== 6)}
+              fullWidth
+            />
+            <Button kind="link" label={useBackup ? t('signIn.useCode') : t('signIn.useBackup')} onPress={() => setUseBackup((v) => !v)} />
+            <Button kind="link" label={t('signIn.back')} onPress={() => setChallenge(null)} />
+          </>
+        ) : (
+          <>
+            <Text variant="display-md" accessibilityRole="header">
+              {t('signIn.title')}
+            </Text>
+            <TextInput
+              testID="email"
+              label={t('auth.email')}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoComplete="email"
+              textContentType="username"
+              keyboardType="email-address"
+              error={emailError}
+              autoFocus
+            />
             <View style={{ gap: tokens.spacing['spacing-xs'] }}>
-              <InlineError message={t('signIn.passkeyFailed')} />
-              <View style={{ flexDirection: 'row', gap: tokens.spacing['spacing-sm'] }}>
-                <Button kind="link" label={t('signIn.tryAgain')} onPress={passkey} />
-                <Button kind="link" label={t('signIn.usePassword')} onPress={() => setPasskeyFailed(false)} />
+              <TextInput
+                testID="password"
+                label={t('auth.password')}
+                value={password}
+                onChangeText={setPassword}
+                secure
+                autoComplete="current-password"
+                textContentType="password"
+                onSubmitEditing={submit}
+              />
+              <View style={{ alignItems: 'flex-end' }}>
+                <Button kind="link" label={t('signIn.forgot')} onPress={() => router.push('/recover')} />
               </View>
             </View>
-          ) : null}
-        </>
-      ) : null}
-      {showGoogle ? <GoogleSignInButton onPress={google} disabled={disabled} /> : null}
-      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: tokens.spacing['spacing-xs'] }}>
-        <Text tone="textSecondary">{t('signIn.newPrompt')}</Text>
-        <Button kind="link" label={t('signIn.createOne')} onPress={() => router.push('/sign-up')} />
-      </View>
+            {Platform.OS === 'web' ? (
+              <Checkbox testID="stay" label={t('signIn.stay')} checked={stay} onChange={setStay} caption={t('signIn.stayCaption')} />
+            ) : null}
+            {error ? <InlineError testID="sign-in-error" message={error} /> : null}
+            {error === t('signIn.emailNotVerified') ? (
+              <Button kind="link" label={t('signIn.finishSignUp')} onPress={() => router.push('/sign-up')} />
+            ) : null}
+            {secondsLeft > 0 ? (
+              <Text variant="caption" tone="textSecondary" accessibilityLiveRegion="polite">
+                {t('signIn.waitCountdown', { seconds: secondsLeft })}
+              </Text>
+            ) : null}
+            <Button testID="sign-in" kind="gradient" label={t('signIn.submit')} onPress={submit} disabled={disabled} fullWidth />
+            {showGoogle || passkeysAvailable() ? <Divider label={t('auth.or')} /> : null}
+            {passkeysAvailable() ? (
+              <>
+                <Button testID="passkey" kind="secondary" label={t('signIn.passkey')} onPress={passkey} disabled={disabled} fullWidth />
+                {passkeyFailed ? (
+                  <View style={{ gap: tokens.spacing['spacing-xs'] }}>
+                    <InlineError message={t('signIn.passkeyFailed')} />
+                    <View style={{ flexDirection: 'row', gap: tokens.spacing['spacing-sm'] }}>
+                      <Button kind="link" label={t('signIn.tryAgain')} onPress={passkey} />
+                      <Button kind="link" label={t('signIn.usePassword')} onPress={() => setPasskeyFailed(false)} />
+                    </View>
+                  </View>
+                ) : null}
+              </>
+            ) : null}
+            {showGoogle ? <GoogleSignInButton onPress={google} disabled={disabled} /> : null}
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: tokens.spacing['spacing-xs'] }}>
+              <Text tone="textSecondary">{t('signIn.newPrompt')}</Text>
+              <Button kind="link" label={t('signIn.createOne')} onPress={() => router.push('/sign-up')} />
+            </View>
+          </>
+        )}
+      </AuthStepPanel>
     </AuthFrame>
   );
 }

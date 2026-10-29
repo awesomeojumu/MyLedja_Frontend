@@ -19,12 +19,31 @@ jest.mock('../googleSignIn', () => {
   };
 });
 
+jest.mock('../googleSignIn', () => {
+  const actual = jest.requireActual('../googleSignIn');
+  return {
+    ...actual,
+    loadGoogleSignIn: jest.fn(actual.loadGoogleSignIn),
+    runGoogleSignIn: jest.fn(actual.runGoogleSignIn),
+  };
+});
+
+const mockPasskeysAvailable = jest.fn(() => false);
+const mockPasskeyAssertion = jest.fn(async (_options?: Record<string, unknown>) => ({}));
+jest.mock('../passkey', () => ({
+  passkeysAvailable: () => mockPasskeysAvailable(),
+  passkeyAssertion: (options: Record<string, unknown>) => mockPasskeyAssertion(options),
+  passkeyRegistration: jest.fn(),
+}));
+
 let mockOnline = true;
 jest.mock('@/lib/useOnline', () => ({ useOnline: () => mockOnline }));
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockOnline = true;
+  mockPasskeysAvailable.mockReturnValue(false);
+  mockPasskeyAssertion.mockResolvedValue({});
   (loadGoogleSignIn as jest.Mock).mockImplementation(async () => ({ enabled: false, clientId: null }));
 });
 
@@ -96,6 +115,77 @@ describe('P01 Sign in', () => {
   it('P01-04 phones never show the box', async () => {
     await renderWithProviders(<SignInScreen />);
     expect(screen.queryByText(t('signIn.stay'))).toBeNull();
+  });
+
+  it('P01-04 ticking Stay signed in keeps the box on for web', async () => {
+    const original = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { value: 'web', configurable: true });
+    await renderWithProviders(<SignInScreen />);
+    await fireEvent.press(screen.getByTestId('stay'));
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    Object.defineProperty(Platform, 'OS', { value: original, configurable: true });
+  });
+
+  it('P01-06 asks for a 6-digit code and finishes with paste', async () => {
+    const mock = createAuthMock();
+    mock.users.get(DEMO.email)!.twoFactor = true;
+    await renderWithProviders(<SignInScreen />, { transport: mock.transport });
+    await signIn(DEMO.email, DEMO.password);
+    expect(await screen.findByText(t('signIn.twoFactorTitle'))).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId('two-factor-code-0'), '123456');
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/'));
+  });
+
+  it('P01-06 backup code path works', async () => {
+    const mock = createAuthMock();
+    mock.users.get(DEMO.email)!.twoFactor = true;
+    await renderWithProviders(<SignInScreen />, { transport: mock.transport });
+    await signIn(DEMO.email, DEMO.password);
+    await fireEvent.press(screen.getByRole('link', { name: t('signIn.useBackup') }));
+    await fireEvent.changeText(screen.getByTestId('backup-code'), 'abcd-efgh');
+    await fireEvent.press(screen.getByTestId('verify'));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/'));
+  });
+
+  it('shows email_not_verified with a next step to Sign up', async () => {
+    const mock = createAuthMock();
+    mock.users.get(DEMO.email)!.emailVerified = false;
+    await renderWithProviders(<SignInScreen />, { transport: mock.transport });
+    await signIn(DEMO.email, DEMO.password);
+    expect(await screen.findByText(t('signIn.emailNotVerified'))).toBeTruthy();
+    await fireEvent.press(screen.getByRole('link', { name: t('signIn.finishSignUp') }));
+    expect(router.push).toHaveBeenCalledWith('/sign-up');
+  });
+
+  it('P01-03 link_password prefills email via shared Google helpers', async () => {
+    (loadGoogleSignIn as jest.Mock).mockResolvedValue({
+      enabled: true,
+      clientId: 'test.apps.googleusercontent.com',
+    });
+    (runGoogleSignIn as jest.Mock).mockImplementation(async () => {
+      const actual = jest.requireActual('../googleSignIn') as typeof import('../googleSignIn');
+      actual.setGoogleLinkPending(DEMO.email, 'link-token-demo');
+      return { ok: false, reason: 'link_password', email: DEMO.email, linkToken: 'link-token-demo' };
+    });
+    await renderWithProviders(<SignInScreen />);
+    expect(await screen.findByTestId('google-sign-in')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('google-sign-in'));
+    expect(await screen.findByText(t('signIn.googleLinkPassword'))).toBeTruthy();
+    expect(screen.getByDisplayValue(DEMO.email)).toBeTruthy();
+  });
+});
+
+describe('P01-07 passkey fail', () => {
+  it('offers Try again and Use password when the passkey fails', async () => {
+    mockPasskeysAvailable.mockReturnValue(true);
+    mockPasskeyAssertion.mockRejectedValue(new Error('cancelled'));
+    await renderWithProviders(<SignInScreen />);
+    await fireEvent.press(screen.getByTestId('passkey'));
+    expect(await screen.findByText(t('signIn.passkeyFailed'))).toBeTruthy();
+    expect(screen.getByRole('link', { name: t('signIn.tryAgain') })).toBeTruthy();
+    expect(screen.getByRole('link', { name: t('signIn.usePassword') })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('link', { name: t('signIn.usePassword') }));
+    expect(screen.queryByText(t('signIn.passkeyFailed'))).toBeNull();
   });
 });
 

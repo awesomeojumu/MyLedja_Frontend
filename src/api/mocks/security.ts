@@ -20,6 +20,31 @@ export function createSecurityMock() {
       case 'POST /v1/auth/recheck/google':
         rechecked = true;
         return ok(status());
+      case 'POST /v1/auth/two-factor': {
+        const body = req.body as { code?: string; backupCode?: string; challengeToken?: string } | null;
+        if (!body?.challengeToken) return { status: 401, body: { code: 'challenge_ended', message: 'This sign-in has timed out. Sign in again.' } };
+        if (body.backupCode === 'used-once') return { status: 401, body: { code: 'code_wrong', message: "That backup code isn't right, or it was already used." } };
+        if (body.code && body.code !== '123456') return { status: 401, body: { code: 'code_wrong', message: "That code isn't right. Check your authenticator app and try again." } };
+        if (body.backupCode && body.backupCode !== 'abcd-efgh') return { status: 401, body: { code: 'code_wrong', message: "That backup code isn't right, or it was already used." } };
+        return ok({
+          accessToken: 'access-2fa',
+          accessTokenExpiresIn: 900,
+          refreshToken: 'refresh-2fa',
+          trustedDeviceToken: 'trusted-demo',
+          user: {
+            id: 'user-ada',
+            name: 'Ada',
+            email: 'ada@example.test',
+            setupComplete: true,
+            workspaceId: 'ws-personal',
+            workspaceName: 'Personal',
+          },
+        });
+      }
+      case 'POST /v1/auth/passkey/options':
+        return ok({ challengeToken: 'passkey-challenge', options: { challenge: 'abc', rpId: 'localhost' } });
+      case 'POST /v1/auth/passkey':
+        return { status: 401, body: { code: 'passkey_failed', message: "That passkey didn't work. Try again or use your password." } };
       case 'POST /v1/me/two-factor/setup':
         return ok({ secret: 'JBSWY3DPEHPK3PXP', otpauthUrl: 'otpauth://totp/MyLedja:ada@example.test?secret=JBSWY3DPEHPK3PXP&issuer=MyLedja', qrSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#fff"/></svg>' });
       case 'POST /v1/me/two-factor/confirm':

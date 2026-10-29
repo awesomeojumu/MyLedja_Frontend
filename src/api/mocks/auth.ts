@@ -7,7 +7,7 @@ import { createSecurityMock } from './security';
 /** Demo person from build plan 2.7. Works only with the mock adapter. */
 export const DEMO = { name: 'Ada', email: 'ada@example.test', password: 'demo-password-1', code: '123456' };
 
-type MockUser = User & { password: string };
+type MockUser = User & { password: string; twoFactor?: boolean; emailVerified?: boolean };
 
 export function createAuthMock() {
   const users = new Map<string, MockUser>();
@@ -55,6 +55,12 @@ export function createAuthMock() {
           return error(401, 'credentials_wrong', en['signIn.wrong']);
         }
         failures.delete(b.email!);
+        if (u.emailVerified === false) {
+          return error(403, 'email_not_verified', en['signIn.emailNotVerified']);
+        }
+        if (u.twoFactor) {
+          return ok({ twoFactorRequired: true, challengeToken: `challenge-${u.id}` });
+        }
         return session(u, stay);
       }
       case 'POST /v1/auth/sign-up':
