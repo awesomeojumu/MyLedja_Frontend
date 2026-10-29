@@ -167,6 +167,10 @@ export type WorkspaceSettings = {
   budgetStyle: BudgetStyle;
   currency: string;
   weekStart: 'monday' | 'sunday' | 'saturday';
+  /** Workspace display name (TB-11 Workspace). */
+  workspaceName?: string;
+  /** Default Africa/Lagos (TB-11 Workspace). */
+  timeZone?: string;
   checklistHidden?: boolean;
   dashboardLayout?: DashboardLayout;
   notificationPrefs?: NotificationPrefs;

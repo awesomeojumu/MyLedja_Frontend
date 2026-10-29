@@ -53,6 +53,7 @@ import {
   type Goal,
   type GoalAllocation,
   type AppNotification,
+  type NotificationCategory,
   type PersonDebt,
   type DebtEntry,
   type Recurring,
@@ -805,18 +806,27 @@ export class WorkspaceRepository {
   }
 
   async saveBudgetTemplate(name: string, lines: BudgetTemplate['lines']): Promise<BudgetTemplate> {
-    const id = this.newId();
+    const snapshot = await this.load();
+    const existing = snapshot.budgetTemplates.find((t) => t.name === name.trim());
+    const id = existing?.id ?? this.newId();
     const template: BudgetTemplate = { id, name: name.trim(), lines };
     const { id: _id, ...data } = template;
-    await this.put('budget_templates', id, data, 'budget.template.save');
+    const version = existing ? await this.versionOf('budget_templates', id) : undefined;
+    await this.put('budget_templates', id, data, 'budget.template.save', version);
     return template;
   }
 
-  async applyBudgetTemplate(templateId: string, month: string): Promise<void> {
+  /**
+   * Apply a template's fills for the month (PU-09).
+   * Categories the person already planned are kept unless `replace` is true.
+   */
+  async applyBudgetTemplate(templateId: string, month: string, opts?: { replace?: boolean }): Promise<void> {
     const snapshot = await this.load();
     const template = snapshot.budgetTemplates.find((t) => t.id === templateId);
     if (!template) return;
     for (const line of template.lines) {
+      const existing = this.assigned(line.categoryId, month, snapshot);
+      if (!opts?.replace && existing > 0n) continue;
       const amount = resolveTemplateLineAmount(snapshot, month, line);
       if (amount > 0n) await this.setAssigned(line.categoryId, month, amount);
     }
@@ -1561,10 +1571,13 @@ export class WorkspaceRepository {
     await this.put('notifications', id, { ...(rec.data as object), read: true }, 'notification.read', rec.version);
   }
 
-  async markAllNotificationsRead(): Promise<void> {
+  /** Mark unread notifications read. When `category` is set (TB-12), only that chip's kinds are marked. */
+  async markAllNotificationsRead(category?: NotificationCategory | 'all'): Promise<void> {
     const rows = await this.store.list('notifications');
     for (const r of rows) {
-      if ((r.data as AppNotification).read) continue;
+      const n = r.data as AppNotification;
+      if (n.read) continue;
+      if (category && category !== 'all' && n.category !== category) continue;
       await this.put('notifications', r.id, { ...(r.data as object), read: true }, 'notification.read', r.version);
     }
   }

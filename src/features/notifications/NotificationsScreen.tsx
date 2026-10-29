@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { Settings } from 'lucide-react-native';
@@ -12,7 +12,7 @@ import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { debtRows } from '@/features/debts/helpers';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { addDays, ledgerMessage, today } from '@/features/transactions/helpers';
-import { t } from '@/i18n';
+import { t, type TextKey } from '@/i18n';
 
 import {
   filterNotifications,
@@ -27,18 +27,33 @@ import { RecordDebtPaymentSheet } from './RecordDebtPaymentSheet';
 const sp = tokens.spacing;
 const FILTERS: (NotificationCategory | 'all')[] = ['all', 'bills', 'budget', 'goals', 'debts', 'income', 'security'];
 
+function filterFromParam(raw: string | string[] | undefined): NotificationCategory | 'all' {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return FILTERS.includes(v as NotificationCategory | 'all') ? (v as NotificationCategory | 'all') : 'all';
+}
+
+function emptyCopy(filter: NotificationCategory | 'all'): { title: TextKey; body: TextKey } {
+  if (filter === 'all') return { title: 'notifications.emptyTitle', body: 'notifications.emptyBody' };
+  return { title: `notifications.empty.${filter}` as TextKey, body: 'notifications.emptyBodyFiltered' };
+}
+
 export function NotificationsScreen() {
   const { snapshot, repo } = useWorkspace();
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const toast = useToast();
   const theme = useTheme();
   const phone = useSizeClass() === 'phone';
-  const [filter, setFilter] = useState<NotificationCategory | 'all'>('all');
+  const filter = filterFromParam(params.tab);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [matchTarget, setMatchTarget] = useState<AppNotification | null>(null);
   const [debtPayTarget, setDebtPayTarget] = useState<{ notificationId: string; debtId: string; max: bigint } | null>(null);
   const day = today();
+
+  const setFilter = (next: NotificationCategory | 'all') => {
+    router.setParams({ tab: next === 'all' ? undefined : next });
+  };
 
   const reload = useCallback(async () => {
     await repo.refreshBillNotifications();
@@ -64,6 +79,7 @@ export function NotificationsScreen() {
   }, [snapshot, filter, day]);
 
   const groups = items ? groupNotifications(items, day) : null;
+  const empty = emptyCopy(filter);
 
   const debtBalance = (debtId: string) => {
     if (!snapshot) return 0n;
@@ -73,7 +89,12 @@ export function NotificationsScreen() {
   return (
     <AppFrame title={t('notifications.title')}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'], alignItems: 'center', justifyContent: 'space-between' }}>
-        <Button testID="notifications-mark-all" kind="secondary" label={t('notifications.markAllRead')} onPress={() => void repo.markAllNotificationsRead()} />
+        <Button
+          testID="notifications-mark-all"
+          kind="secondary"
+          label={t('notifications.markAllRead')}
+          onPress={() => void repo.markAllNotificationsRead(filter)}
+        />
         <Pressable
           testID="notifications-settings"
           accessibilityRole="button"
@@ -86,14 +107,26 @@ export function NotificationsScreen() {
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp['spacing-xs'], marginBottom: sp['spacing-md'] }}>
         {FILTERS.map((f) => (
-          <Button key={f} testID={`notifications-filter-${f}`} kind={filter === f ? 'primary-pill' : 'secondary'} size="sm" label={t(`notifications.filter.${f}`)} onPress={() => setFilter(f)} />
+          <Button
+            key={f}
+            testID={`notifications-filter-${f}`}
+            kind={filter === f ? 'primary-pill' : 'secondary'}
+            size="sm"
+            label={t(`notifications.filter.${f}`)}
+            onPress={() => setFilter(f)}
+          />
         ))}
       </ScrollView>
       {error ? <InlineError message={error} /> : null}
       {!groups ? (
         <Placeholder height={120} />
       ) : items!.length === 0 ? (
-        <EmptyState title={t('notifications.emptyTitle')} body={t('notifications.emptyBody')} actionLabel={t('notifications.markAllRead')} onAction={() => void repo.markAllNotificationsRead()} />
+        <EmptyState
+          title={t(empty.title)}
+          body={t(empty.body)}
+          actionLabel={t('notifications.markAllRead')}
+          onAction={() => void repo.markAllNotificationsRead(filter)}
+        />
       ) : (
         <ScrollView
           refreshControl={phone ? <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} /> : undefined}

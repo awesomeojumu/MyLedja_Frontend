@@ -38,6 +38,7 @@ import {
   WorkspaceTabDeep,
 } from './SettingsTabs';
 import { DeleteCategorySheet, EditCategorySheet } from './SettingsSheets';
+import { ChangeEmailSheet, useRecheck } from './SecuritySheets';
 
 const sp = tokens.spacing;
 
@@ -56,40 +57,49 @@ export type SettingsTab =
   | 'advanced'
   | 'help';
 
-const TABS: { id: SettingsTab; label: TextKey }[] = [
+/** Phase when the tab ships (TB11-1). Currencies/Advanced wait for Phase 5 / later. */
+const TAB_PHASE: Record<SettingsTab, number> = {
+  general: 1,
+  budget: 1,
+  categories: 1,
+  importExport: 1,
+  help: 1,
+  notifications: 2,
+  security: 3,
+  devices: 3,
+  workspace: 3,
+  ai: 4,
+  banks: 4,
+  currencies: 5,
+  advanced: 99,
+};
+
+const SHIPPED_PHASE = 4;
+
+const ALL_TABS: { id: SettingsTab; label: TextKey }[] = [
   { id: 'general', label: 'settings.tab.general' },
-  { id: 'ai', label: 'settings.tab.ai' },
   { id: 'budget', label: 'settings.tab.budget' },
   { id: 'categories', label: 'settings.tab.categories' },
-  { id: 'currencies', label: 'settings.tab.currencies' },
-  { id: 'banks', label: 'settings.tab.banks' },
-  { id: 'importExport', label: 'settings.tab.importExport' },
-  { id: 'workspace', label: 'settings.tab.workspace' },
-  { id: 'security', label: 'settings.tab.security' },
   { id: 'notifications', label: 'settings.tab.notifications' },
+  { id: 'security', label: 'settings.tab.security' },
+  { id: 'importExport', label: 'settings.tab.importExport' },
   { id: 'devices', label: 'settings.tab.devices' },
+  { id: 'workspace', label: 'settings.tab.workspace' },
+  { id: 'ai', label: 'settings.tab.ai' },
+  { id: 'banks', label: 'settings.tab.banks' },
+  { id: 'currencies', label: 'settings.tab.currencies' },
   { id: 'advanced', label: 'settings.tab.advanced' },
   { id: 'help', label: 'settings.tab.help' },
 ];
+const TABS = ALL_TABS.filter((tab) => TAB_PHASE[tab.id] <= SHIPPED_PHASE);
 
 function tabFromParam(raw: string | string[] | undefined): SettingsTab | null {
   const v = Array.isArray(raw) ? raw[0] : raw;
-  const ids: SettingsTab[] = [
-    'general',
-    'ai',
-    'budget',
-    'categories',
-    'currencies',
-    'banks',
-    'importExport',
-    'workspace',
-    'security',
-    'notifications',
-    'devices',
-    'advanced',
-    'help',
-  ];
-  return ids.includes(v as SettingsTab) ? (v as SettingsTab) : null;
+  if (!v) return null;
+  // Addendum aliases: ?tab=sync → devices, ?tab=data → importExport
+  const aliases: Record<string, SettingsTab> = { sync: 'devices', data: 'importExport' };
+  const id = (aliases[v] ?? v) as SettingsTab;
+  return TABS.some((t) => t.id === id) ? id : null;
 }
 
 export function SettingsScreen() {
@@ -148,7 +158,10 @@ export function SettingsScreen() {
                 testID={`settings-tab-${item.id}`}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: tab === item.id }}
-                onPress={() => setLocalTab(item.id)}
+                onPress={() => {
+                  setLocalTab(item.id);
+                  router.setParams({ tab: item.id });
+                }}
                 style={{
                   padding: sp['spacing-md'],
                   borderRadius: tokens.radius['rounded-md'],
@@ -187,7 +200,9 @@ function GeneralTab() {
   const { store } = useSync();
   const toast = useToast();
   const router = useRouter();
+  const recheck = useRecheck();
   const [name, setName] = useState(user?.name ?? '');
+  const [emailOpen, setEmailOpen] = useState(false);
   const [signOutWarn, setSignOutWarn] = useState<{ count: number } | null>(null);
 
   const savePrefs = async () => {
@@ -217,6 +232,10 @@ function GeneralTab() {
   return (
     <ScrollView contentContainerStyle={{ gap: sp['spacing-md'] }}>
       <TextInput testID="settings-name" label={t('settings.general.name')} value={name} onChangeText={setName} />
+      <Card style={{ gap: sp['spacing-sm'] }} testID="settings-email-card">
+        <Text tone="textSecondary">{user?.email ?? ''}</Text>
+        <Button testID="settings-change-email" kind="secondary" label={t('settings.general.changeEmail')} onPress={() => setEmailOpen(true)} />
+      </Card>
       <Select
         testID="settings-language"
         label={t('settings.general.language')}
@@ -269,6 +288,8 @@ function GeneralTab() {
         onCancel={() => setSignOutWarn(null)}
         onConfirm={() => void doSignOut()}
       />
+      <ChangeEmailSheet visible={emailOpen} onClose={() => setEmailOpen(false)} guard={recheck.guard} />
+      {recheck.sheet}
     </ScrollView>
   );
 }
@@ -364,11 +385,11 @@ function NotificationsTab() {
       {prefs.bills ? (
         <View style={{ gap: sp['spacing-sm'], paddingLeft: sp['spacing-sm'] }}>
           <Text variant="heading-sm">{t('settings.notifications.billReminders')}</Text>
-          {[1, 3, 7].map((day) => (
+          {[0, 1, 3, 7].map((day) => (
             <Checkbox
               key={day}
               testID={`settings-notify-bill-day-${day}`}
-              label={reminderLabel(day)}
+              label={day === 0 ? t('settings.notifications.remindOnDay') : reminderLabel(day)}
               checked={prefs.billReminderDays.includes(day)}
               onChange={(checked) => toggleReminderDay(day, checked)}
             />
@@ -376,6 +397,12 @@ function NotificationsTab() {
         </View>
       ) : null}
       <Switch testID="settings-notify-budget" label={t('settings.notifications.budget')} value={prefs.budget} onChange={(budget) => void save({ ...prefs, budget })} />
+      <Switch
+        testID="settings-notify-budget-over"
+        label={t('settings.notifications.budgetOver')}
+        value={prefs.budget}
+        onChange={(budget) => void save({ ...prefs, budget })}
+      />
       <Switch testID="settings-notify-goals" label={t('settings.notifications.goals')} value={prefs.goals} onChange={(goals) => void save({ ...prefs, goals })} />
       <Switch testID="settings-notify-debts" label={t('settings.notifications.debts')} value={prefs.debts} onChange={(debts) => void save({ ...prefs, debts })} />
       <Switch testID="settings-notify-income" label={t('settings.notifications.income')} value={prefs.income} onChange={(income) => void save({ ...prefs, income })} />

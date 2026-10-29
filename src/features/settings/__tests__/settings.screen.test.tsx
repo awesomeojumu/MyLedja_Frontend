@@ -5,6 +5,7 @@ import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
+import { resetParams } from '../../../../test/helpers/router';
 import { exportTransactionsCsv } from '../export';
 import { SettingsScreen } from '../SettingsScreen';
 
@@ -35,6 +36,7 @@ async function seeded() {
 beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(new Date('2026-10-28T12:00:00Z'));
+  resetParams();
 });
 
 afterEach(() => {
@@ -162,20 +164,17 @@ describe('Settings (F1.10)', () => {
     expect(screen.getByText(t('sync.signOutWarnBody', { count: waiting }))).toBeTruthy();
   });
 
-  it('P26-08: exchange rate sheet saves a row', async () => {
-    const { sync, repo } = await seeded();
+  it('TB11-1: Currencies (Phase 5) and Advanced are hidden until their phase ships', async () => {
+    const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
         <SettingsScreen />
       </WorkspaceProvider>,
       { sync },
     );
-    await fireEvent.press(screen.getByTestId('settings-tab-currencies'));
-    await fireEvent.press(screen.getByTestId('settings-add-rate'));
-    await fireEvent.changeText(screen.getByTestId('settings-exchange-rate'), '1650');
-    await fireEvent.press(screen.getByText(t('panel.save')));
-    await waitFor(async () => {
-      expect((await repo.load()).settings.exchangeRates?.length).toBe(1);
-    });
+    expect(screen.queryByTestId('settings-tab-currencies')).toBeNull();
+    expect(screen.queryByTestId('settings-tab-advanced')).toBeNull();
+    expect(screen.getByTestId('settings-tab-security')).toBeTruthy();
+    expect(screen.getByTestId('settings-tab-devices')).toBeTruthy();
   });
 });
