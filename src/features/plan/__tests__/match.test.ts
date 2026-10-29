@@ -47,6 +47,9 @@ function stub(): Snapshot {
     notifications: [],
     budgetTemplates: [],
     rules: [],
+    holdings: [],
+    lots: [],
+    prices: [],
     waiting: new Set(),
     chart: {} as Snapshot['chart'],
   };

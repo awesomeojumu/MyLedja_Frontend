@@ -12,6 +12,8 @@ import {
   buildCollect,
   buildExpense,
   buildIncome,
+  buildInvestmentBuy,
+  buildInvestmentSell,
   buildLend,
   buildLoanProceeds,
   buildLoanRepayment,
@@ -22,6 +24,7 @@ import {
   buildWriteOff,
   Chart,
   checkEvent,
+  costOfPurchase,
   ledgerBalance,
   reconcileDelta,
   shownBalance,
@@ -66,6 +69,15 @@ import {
   type StoredEvent,
   type TransactionRule,
   type WorkspaceSettings,
+  type Holding,
+  type HoldingLot,
+  type HoldingPrice,
+  type HoldingType,
+  type HealthSettings,
+  type ReportDashboard,
+  type ReportCard,
+  type SavedReport,
+  type ReportCardKind,
   budgetAssignId,
 } from './model';
 
@@ -93,6 +105,9 @@ export type Snapshot = {
   notifications: AppNotification[];
   budgetTemplates: BudgetTemplate[];
   rules: TransactionRule[];
+  holdings: Holding[];
+  lots: HoldingLot[];
+  prices: HoldingPrice[];
   /** Events made on this device that haven't synced yet. */
   waiting: Set<string>;
   chart: Chart;
@@ -143,6 +158,12 @@ const LOCAL_ONLY = new Set([
   'notification.create',
   'notification.read',
   'notification.snooze',
+  'holding.create',
+  'holding.update',
+  'holding.delete',
+  'lot.create',
+  'lot.update',
+  'price.upsert',
 ]);
 
 const todayInLagos = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(new Date());
@@ -164,7 +185,7 @@ export class WorkspaceRepository {
   ) {}
 
   async load(): Promise<Snapshot> {
-    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows, ruleRows] =
+    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows, ruleRows, holdingRows, lotRows, priceRows] =
       await Promise.all([
       this.store.list('accounts'),
       this.store.list('categories'),
@@ -184,6 +205,9 @@ export class WorkspaceRepository {
       this.store.list('notifications'),
       this.store.list('budget_templates'),
       this.store.list('rules'),
+      this.store.list('holdings'),
+      this.store.list('lots'),
+      this.store.list('prices'),
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
     const accountList = accounts.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id })).sort((a, b) => a.order - b.order);
@@ -228,7 +252,14 @@ export class WorkspaceRepository {
       exchangeRates: raw?.exchangeRates,
       downloadDailyRates: raw?.downloadDailyRates,
       deviceSync: raw?.deviceSync,
+      health: raw?.health,
+      reportDashboards: raw?.reportDashboards,
+      savedReports: raw?.savedReports,
     };
+    const holdings = holdingRows.map((r) => ({ ...(r.data as Omit<Holding, 'id'>), id: r.id }));
+    const lots = lotRows.map((r) => ({ ...(r.data as Omit<HoldingLot, 'id'>), id: r.id }));
+    const prices = priceRows.map((r) => ({ ...(r.data as Omit<HoldingPrice, 'id'>), id: r.id }));
+    const debts = debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id }));
     const assigns = new Map<string, bigint>();
     const assignNotes = new Map<string, string>();
     for (const r of assignRows) {
@@ -253,7 +284,7 @@ export class WorkspaceRepository {
       recurring: recurringRows.map((r) => ({ ...(r.data as Omit<Recurring, 'id'>), id: r.id })),
       occurrences: occurrenceRows.map((r) => ({ ...(r.data as Omit<RecurringOccurrence, 'id'>), id: r.id })),
       incomeStreams: streamRows.map((r) => ({ ...(r.data as Omit<IncomeStream, 'id'>), id: r.id })),
-      debts: debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id })),
+      debts,
       debtEntries: debtEntryRows.map((r) => ({ ...(r.data as Omit<DebtEntry, 'id'>), id: r.id })),
       notifications: notificationRows
         .map((r) => ({ ...(r.data as Omit<AppNotification, 'id'>), id: r.id }))
@@ -277,12 +308,15 @@ export class WorkspaceRepository {
         })
         .filter((r): r is TransactionRule => r !== null)
         .sort((a, b) => (a.stage === b.stage ? a.order - b.order : stageOrder(a.stage) - stageOrder(b.stage))),
+      holdings,
+      lots,
+      prices,
       waiting,
-      chart: this.chartFor(accountList, categoryList, debtRows.map((r) => ({ ...(r.data as Omit<PersonDebt, 'id'>), id: r.id }))),
+      chart: this.chartFor(accountList, categoryList, debts, holdings),
     };
   }
 
-  chartFor(accounts: Account[], categories: Category[], debts: PersonDebt[] = []): Chart {
+  chartFor(accounts: Account[], categories: Category[], debts: PersonDebt[] = [], holdings: Holding[] = []): Chart {
     const ledger: LedgerAccount[] = [
       ...accounts.map((a) => ({ id: a.id, kind: ACCOUNT_KIND_INFO[a.type].ledger, name: a.name, currency: a.currency })),
       ...categories.map((c) => ({ id: c.id, kind: c.kind, name: c.name, currency: 'NGN', categoryId: c.id, countInBudget: c.countInBudget })),
@@ -291,6 +325,12 @@ export class WorkspaceRepository {
         kind: d.direction === 'owedToMe' ? ('asset' as const) : ('liability' as const),
         name: d.name,
         currency: 'NGN',
+      })),
+      ...holdings.map((h) => ({
+        id: h.ledgerAccountId,
+        kind: 'asset' as const,
+        name: h.name,
+        currency: h.currency,
       })),
       ...systemAccounts(this.workspaceId),
     ];
@@ -1660,6 +1700,275 @@ export class WorkspaceRepository {
     const id = this.newId();
     await this.put('payees', id, { name, defaultCategoryId: categoryId }, 'payee.create');
     return id;
+  }
+
+  /** PU-37: add a holding; creates its ledger asset and moves no money. */
+  async createHolding(input: {
+    name: string;
+    symbol?: string;
+    type: HoldingType;
+    accountId: string;
+    currency?: string;
+    currentPriceMinor?: bigint;
+  }): Promise<Result<Holding>> {
+    const snapshot = await this.load();
+    const parent = snapshot.accounts.find((a) => a.id === input.accountId && a.type === 'investment' && !a.archived);
+    if (!parent) return { ok: false, error: 'wrong_account_kind' };
+    const name = input.name.trim();
+    if (!name) return { ok: false, error: 'missing_lines' };
+    const id = this.newId();
+    const ledgerAccountId = this.newId();
+    const holding: Holding = {
+      id,
+      name,
+      symbol: input.symbol?.trim().toUpperCase() || undefined,
+      type: input.type,
+      accountId: parent.id,
+      currency: input.currency ?? parent.currency,
+      ledgerAccountId,
+    };
+    const { id: _id, ...data } = holding;
+    await this.put('holdings', id, data, 'holding.create');
+    if (input.currentPriceMinor !== undefined && input.currentPriceMinor > 0n) {
+      const priceId = this.newId();
+      await this.put(
+        'prices',
+        priceId,
+        { holdingId: id, date: todayInLagos(), priceMinor: input.currentPriceMinor.toString() } satisfies Omit<HoldingPrice, 'id'>,
+        'price.upsert',
+      );
+    }
+    return { ok: true, value: holding };
+  }
+
+  async updateHolding(holding: Holding): Promise<void> {
+    const { id, ...data } = holding;
+    await this.put('holdings', id, data, 'holding.update');
+  }
+
+  /** PU-38 buy (E20): cash → holding at cost; records a lot. */
+  async buyHolding(input: {
+    holdingId: string;
+    units: string;
+    pricePerUnit: bigint;
+    fees?: bigint;
+    cashAccountId: string;
+    date: string;
+  }): Promise<Result<TxEvent>> {
+    const snapshot = await this.load();
+    const holding = snapshot.holdings.find((h) => h.id === input.holdingId);
+    if (!holding) return { ok: false, error: 'unknown_account' };
+    const fees = input.fees ?? 0n;
+    const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
+    const lines = buildInvestmentBuy(chart, {
+      holdingAccountId: holding.ledgerAccountId,
+      cashAccountId: input.cashAccountId,
+      units: input.units,
+      pricePerUnit: input.pricePerUnit,
+      fees,
+    });
+    if (!lines.ok) return lines;
+    const posted = await this.postEvent(chart, snapshot.events, {
+      type: 'investment_buy',
+      date: input.date,
+      lines: lines.value,
+    });
+    if (!posted.ok) return posted;
+    const cost = costOfPurchase(input.units, input.pricePerUnit, fees);
+    const lotId = this.newId();
+    await this.put(
+      'lots',
+      lotId,
+      {
+        holdingId: holding.id,
+        date: input.date,
+        units: input.units,
+        soldUnits: '0',
+        costMinor: cost.toString(),
+        pricePerUnitMinor: input.pricePerUnit.toString(),
+        feesMinor: fees.toString(),
+        buyEventId: posted.value.id,
+      } satisfies Omit<HoldingLot, 'id'>,
+      'lot.create',
+    );
+    return posted;
+  }
+
+  /** PU-38 sell (E21): FIFO by default. */
+  async sellHolding(input: {
+    holdingId: string;
+    units: string;
+    pricePerUnit: bigint;
+    fees?: bigint;
+    cashAccountId: string;
+    date: string;
+    costOfLots?: bigint;
+  }): Promise<Result<TxEvent>> {
+    const snapshot = await this.load();
+    const holding = snapshot.holdings.find((h) => h.id === input.holdingId);
+    if (!holding) return { ok: false, error: 'unknown_account' };
+    const want = Number(input.units);
+    const open = snapshot.lots
+      .filter((l) => l.holdingId === holding.id)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+    let left = want;
+    let cost = 0n;
+    const consumes: { lot: HoldingLot; take: number }[] = [];
+    for (const lot of open) {
+      const available = Number(lot.units) - Number(lot.soldUnits || '0');
+      if (available <= 0) continue;
+      const take = Math.min(available, left);
+      const lotUnits = Number(lot.units);
+      const portion = lotUnits > 0 ? (BigInt(lot.costMinor) * BigInt(Math.round(take * 1e6))) / BigInt(Math.round(lotUnits * 1e6)) : 0n;
+      cost += portion;
+      consumes.push({ lot, take });
+      left -= take;
+      if (left <= 1e-9) break;
+    }
+    if (left > 1e-9) return { ok: false, error: 'not_positive' };
+    const costOfLots = input.costOfLots ?? cost;
+    const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
+    const lines = buildInvestmentSell(chart, {
+      holdingAccountId: holding.ledgerAccountId,
+      cashAccountId: input.cashAccountId,
+      units: input.units,
+      pricePerUnit: input.pricePerUnit,
+      fees: input.fees ?? 0n,
+      costOfLots,
+    });
+    if (!lines.ok) return lines;
+    const posted = await this.postEvent(chart, snapshot.events, {
+      type: 'investment_sell',
+      date: input.date,
+      lines: lines.value,
+    });
+    if (!posted.ok) return posted;
+    for (const { lot, take } of consumes) {
+      const sold = (Number(lot.soldUnits || '0') + take).toString();
+      const { id, ...data } = lot;
+      await this.put('lots', id, { ...data, soldUnits: sold }, 'lot.update');
+    }
+    return posted;
+  }
+
+  /** PU-39 dividend: income to cash; optional reinvest lot (E22). */
+  async recordDividend(input: {
+    holdingId: string;
+    amount: bigint;
+    date: string;
+    cashAccountId: string;
+    reinvested?: boolean;
+    units?: string;
+    pricePerUnit?: bigint;
+  }): Promise<Result<TxEvent>> {
+    const snapshot = await this.load();
+    const holding = snapshot.holdings.find((h) => h.id === input.holdingId);
+    if (!holding) return { ok: false, error: 'unknown_account' };
+    const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
+    const sys = chart.system('investment_income');
+    if (!sys) return { ok: false, error: 'unknown_account' };
+    if (input.reinvested && input.units && input.pricePerUnit !== undefined) {
+      // Reinvested: Dr H · Cr investment income; new lot (TECH-SPEC E22).
+      const cost = costOfPurchase(input.units, input.pricePerUnit, 0n);
+      if (cost <= 0n) return { ok: false, error: 'not_positive' };
+      const posted = await this.postEvent(chart, snapshot.events, {
+        type: 'income',
+        date: input.date,
+        lines: [
+          { ledgerAccountId: holding.ledgerAccountId, amountMinor: cost, currency: holding.currency },
+          { ledgerAccountId: sys.id, amountMinor: -cost, currency: holding.currency },
+        ],
+      });
+      if (!posted.ok) return posted;
+      await this.put(
+        'lots',
+        this.newId(),
+        {
+          holdingId: holding.id,
+          date: input.date,
+          units: input.units,
+          soldUnits: '0',
+          costMinor: cost.toString(),
+          pricePerUnitMinor: input.pricePerUnit.toString(),
+          feesMinor: '0',
+          buyEventId: posted.value.id,
+        } satisfies Omit<HoldingLot, 'id'>,
+        'lot.create',
+      );
+      return posted;
+    }
+    const cash = chart.get(input.cashAccountId);
+    if (!cash) return { ok: false, error: 'unknown_account' };
+    if (input.amount <= 0n) return { ok: false, error: 'not_positive' };
+    return this.postEvent(chart, snapshot.events, {
+      type: 'income',
+      date: input.date,
+      lines: [
+        { ledgerAccountId: cash.id, amountMinor: input.amount, currency: cash.currency },
+        { ledgerAccountId: sys.id, amountMinor: -input.amount, currency: cash.currency },
+      ],
+    });
+  }
+
+  /** PU-40: save filled prices; empty rows keep the old price. */
+  async savePrices(rows: { holdingId: string; priceMinor: bigint }[], date: string): Promise<void> {
+    for (const row of rows) {
+      if (row.priceMinor <= 0n) continue;
+      await this.put(
+        'prices',
+        this.newId(),
+        { holdingId: row.holdingId, date, priceMinor: row.priceMinor.toString() } satisfies Omit<HoldingPrice, 'id'>,
+        'price.upsert',
+      );
+    }
+  }
+
+  defaultHealthSettings(snapshot: Snapshot): HealthSettings {
+    const cashTypes = new Set(['bank', 'savings', 'cash', 'wallet']);
+    return (
+      snapshot.settings.health ?? {
+        cashAccountIds: snapshot.accounts.filter((a) => !a.archived && cashTypes.has(a.type)).map((a) => a.id),
+        emergencyMonths: 6,
+        countInvestmentsInRunway: false,
+        essentialCategoryIds: snapshot.categories.filter((c) => c.kind === 'expense' && c.budgetType === 'fixed').map((c) => c.id),
+      }
+    );
+  }
+
+  async saveHealthSettings(health: HealthSettings): Promise<void> {
+    const snapshot = await this.load();
+    await this.put('settings', 'workspace', { ...snapshot.settings, health }, 'settings.update');
+  }
+
+  async ensureReportDashboards(): Promise<ReportDashboard[]> {
+    const snapshot = await this.load();
+    if (snapshot.settings.reportDashboards?.length) return snapshot.settings.reportDashboards;
+    const overview: ReportDashboard = {
+      id: this.newId(),
+      name: 'Overview',
+      order: 0,
+      cards: [
+        { id: this.newId(), kind: 'spendingByCategory', title: 'Spending by category' },
+        { id: this.newId(), kind: 'incomeVsSpending', title: 'Income vs spending' },
+        { id: this.newId(), kind: 'netWorth', title: 'Net worth' },
+        { id: this.newId(), kind: 'cashFlow', title: 'Cash flow' },
+      ],
+    };
+    await this.put('settings', 'workspace', { ...snapshot.settings, reportDashboards: [overview] }, 'settings.update');
+    return [overview];
+  }
+
+  async saveReportDashboards(dashboards: ReportDashboard[]): Promise<void> {
+    const snapshot = await this.load();
+    await this.put('settings', 'workspace', { ...snapshot.settings, reportDashboards: dashboards }, 'settings.update');
+  }
+
+  async saveSavedReport(report: Omit<SavedReport, 'id'> & { id?: string }): Promise<SavedReport> {
+    const snapshot = await this.load();
+    const saved: SavedReport = { ...report, id: report.id ?? this.newId() };
+    const list = [...(snapshot.settings.savedReports ?? []).filter((r) => r.id !== saved.id), saved];
+    await this.put('settings', 'workspace', { ...snapshot.settings, savedReports: list }, 'settings.update');
+    return saved;
   }
 
   /** `remote: null` when another write of the same action tells the server (a debt, a goal), so it posts once. */

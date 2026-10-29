@@ -86,13 +86,35 @@ export type Payee = {
 /** Transaction sorting rules (DESIGN page 25, TECH-SPEC rules collection). */
 export type RuleStage = 'first' | 'normal' | 'last';
 
-export type RuleConditionField = 'payee' | 'description' | 'amount' | 'account' | 'category' | 'notes' | 'date';
+export type RuleConditionField =
+  | 'payee'
+  | 'description'
+  | 'amount'
+  | 'account'
+  | 'category'
+  | 'notes'
+  | 'date'
+  | 'money';
 
-export type RuleConditionOp = 'contains' | 'equals' | 'lessThan' | 'greaterThan' | 'before' | 'after';
+export type RuleConditionOp =
+  | 'contains'
+  | 'equals'
+  | 'notEquals'
+  | 'startsWith'
+  | 'isOneOf'
+  | 'lessThan'
+  | 'greaterThan'
+  | 'between'
+  | 'before'
+  | 'after'
+  | 'dayOfMonth'
+  | 'isIn'
+  | 'isOut'
+  | 'isEmpty';
 
 export type RuleCondition = { field: RuleConditionField; op: RuleConditionOp; value: string };
 
-export type RuleActionKind = 'setCategory' | 'renamePayee' | 'addNote';
+export type RuleActionKind = 'setCategory' | 'renamePayee' | 'addNote' | 'addTag' | 'split' | 'linkSchedule' | 'moneyBack';
 
 export type RuleAction = { kind: RuleActionKind; value: string };
 
@@ -136,6 +158,81 @@ export type ExchangeRateEntry = {
   source: 'manual' | 'download';
 };
 
+/** Phase 5 investments (TECH-SPEC 6.8 / PU-37…40). */
+export const HOLDING_TYPES = ['stock', 'fund', 'pension', 'crypto', 'fixedDeposit', 'other'] as const;
+export type HoldingType = (typeof HOLDING_TYPES)[number];
+
+export type Holding = {
+  id: string;
+  name: string;
+  symbol?: string;
+  type: HoldingType;
+  /** Parent investment account (Held in). */
+  accountId: string;
+  currency: string;
+  /** Ledger asset for this holding's cost basis. */
+  ledgerAccountId: string;
+};
+
+export type HoldingLot = {
+  id: string;
+  holdingId: string;
+  date: string;
+  units: string;
+  /** Units already sold from this lot. */
+  soldUnits: string;
+  /** Total cost of the original lot in minor units. */
+  costMinor: string;
+  pricePerUnitMinor: string;
+  feesMinor: string;
+  buyEventId?: string;
+};
+
+export type HoldingPrice = {
+  id: string;
+  holdingId: string;
+  date: string;
+  priceMinor: string;
+};
+
+/** Reports dashboards (PU-41…43 / TB-10). */
+export type ReportCardKind =
+  | 'spendingByCategory'
+  | 'incomeVsSpending'
+  | 'netWorth'
+  | 'cashFlow'
+  | 'budgetProgress'
+  | 'custom';
+
+export type ReportCard = {
+  id: string;
+  kind: ReportCardKind;
+  title: string;
+  hidden?: boolean;
+};
+
+export type ReportDashboard = {
+  id: string;
+  name: string;
+  cards: ReportCard[];
+  order: number;
+};
+
+export type SavedReport = {
+  id: string;
+  name: string;
+  kind: ReportCardKind;
+  dashboardId?: string;
+};
+
+/** Health settings (PU-44 / TECH-SPEC 6.10). */
+export type HealthSettings = {
+  cashAccountIds: string[];
+  emergencyMonths: 3 | 6 | 12;
+  countInvestmentsInRunway: boolean;
+  essentialCategoryIds: string[];
+};
+
 /** Which budget category types appear in the budget UI (Settings › Budget). */
 export type BudgetTypesShown = {
   fixed: boolean;
@@ -176,6 +273,9 @@ export type WorkspaceSettings = {
   exchangeRates?: ExchangeRateEntry[];
   downloadDailyRates?: boolean;
   deviceSync?: DeviceSyncPrefs;
+  health?: HealthSettings;
+  reportDashboards?: ReportDashboard[];
+  savedReports?: SavedReport[];
 };
 
 /** Settings › Notifications (P26-05). */

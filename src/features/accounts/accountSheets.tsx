@@ -15,6 +15,7 @@ import {
   Footer,
   InlineError,
   PillTag,
+  SegmentedControl,
   Select,
   Sheet,
   Switch,
@@ -172,30 +173,64 @@ export function AddAccountSheet({ onClose }: { onClose: () => void }) {
 }
 
 /** Popup #16 Connect bank: choose the MyLedja account, then Mono's secure screen; new transactions go to review. */
+/** PU-16 Connect bank — four steps: choose → sign in → match → history. */
 export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
-  const { snapshot } = useWorkspace();
+  const { snapshot, repo } = useWorkspace();
   const { client, user } = useAuth();
   const toast = useToast();
   const api = useMemo(() => aiApi(client), [client]);
   const accounts = (snapshot?.accounts ?? []).filter((a) => !a.archived && ['bank', 'savings', 'wallet', 'card'].includes(a.type));
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
-  const [historyDays, setHistoryDays] = useState<30 | 90 | 180 | 365>(90);
+  const [createNew, setCreateNew] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [historyMonths, setHistoryMonths] = useState<'1' | '3' | '6' | '12'>('3');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const historyDays = ({ '1': 30, '3': 90, '6': 180, '12': 365 } as const)[historyMonths];
 
-  const connect = async () => {
-    if (!user || !accountId) return;
+  const cancel = () => onClose();
+
+  const runMono = async () => {
+    if (!user) return;
     setBusy(true);
     setError(null);
+    setStep(2);
     try {
       const code = await openMonoConnect();
-      if (!code) return;
-      const link = await api.linkBank(user.workspaceId, { accountId, code, historyDays });
-      toast.show(t('accounts.connect.linked', { bank: link.institution }));
+      if (!code) {
+        setStep(1);
+        return;
+      }
+      let linkAccountId = accountId;
+      if (createNew) {
+        const name = newName.trim() || t('accounts.connect.newAccountName');
+        const created = await repo.addAccount({
+          name,
+          type: 'bank',
+          openingBalance: 0n,
+          openingDate: today(),
+        });
+        if (!created.ok) {
+          setError(ledgerMessage(created.error));
+          setStep(3);
+          return;
+        }
+        linkAccountId = created.value.id;
+      }
+      if (!linkAccountId) {
+        setError(t('accounts.connect.chooseAccount'));
+        setStep(3);
+        return;
+      }
+      setStep(4);
+      const link = await api.linkBank(user.workspaceId, { accountId: linkAccountId, code, historyDays });
+      toast.show(t('accounts.connect.linkedImporting', { bank: link.institution }));
       await api.syncBank(user.workspaceId, link.id).catch(() => null);
       onClose();
     } catch (e) {
       setError(e instanceof ApiError ? e.body.message : t('accounts.connect.failed'));
+      setStep(3);
     } finally {
       setBusy(false);
     }
@@ -206,32 +241,77 @@ export function ConnectBankSheet({ onClose }: { onClose: () => void }) {
       visible
       testID="connect-bank-sheet"
       title={t('accounts.connect.title')}
-      onClose={onClose}
+      onClose={cancel}
       footer={
         <Footer>
-          <Button label={t('accounts.connect.continue')} onPress={() => void connect()} disabled={busy || !accountId} />
+          <Button kind="secondary" label={t('common.cancel')} onPress={cancel} />
+          {step === 1 ? (
+            <Button testID="connect-bank-continue" label={t('accounts.connect.continue')} onPress={() => setStep(3)} />
+          ) : step === 3 ? (
+            <Button
+              testID="connect-bank-match-continue"
+              label={t('accounts.connect.continue')}
+              disabled={!createNew && !accountId}
+              onPress={() => void runMono()}
+            />
+          ) : step === 4 ? (
+            <Button testID="connect-bank-finish" label={t('accounts.connect.connect')} disabled={busy} onPress={() => void runMono()} />
+          ) : (
+            <Button kind="secondary" label={t('accounts.connect.waiting')} onPress={cancel} disabled={busy} />
+          )}
         </Footer>
       }
     >
       <View style={{ gap: sp['spacing-md'] }}>
-        <Text tone="textSecondary">{t('accounts.connect.body')}</Text>
-        <Select
-          testID="connect-bank-account"
-          label={t('accounts.connect.account')}
-          options={accounts.map((a) => ({ value: a.id, label: a.name }))}
-          value={accountId}
-          onChange={setAccountId}
-        />
-        <Select
-          testID="connect-bank-history"
-          label={t('accounts.connect.history')}
-          options={([30, 90, 180, 365] as const).map((d) => ({ value: String(d), label: t('accounts.connect.historyDays', { days: String(d) }) }))}
-          value={String(historyDays)}
-          onChange={(v) => setHistoryDays(Number(v) as 30 | 90 | 180 | 365)}
-        />
-        <Text variant="caption" tone="textSecondary">
-          {t('accounts.connect.review')}
-        </Text>
+        {step === 1 ? (
+          <>
+            <Text tone="textSecondary">{t('accounts.connect.monoBody')}</Text>
+            <Text variant="caption" tone="textSecondary">
+              {t('accounts.connect.monoPrivacy')}
+            </Text>
+          </>
+        ) : null}
+        {step === 2 ? <Text testID="connect-bank-waiting">{t('accounts.connect.waiting')}</Text> : null}
+        {step === 3 ? (
+          <>
+            <Text tone="textSecondary">{t('accounts.connect.matchBody')}</Text>
+            <Select
+              testID="connect-bank-account"
+              label={t('accounts.connect.linkTo')}
+              options={[
+                ...accounts.map((a) => ({ value: a.id, label: a.name })),
+                { value: '__new', label: t('accounts.connect.createNew') },
+              ]}
+              value={createNew ? '__new' : accountId}
+              onChange={(v) => {
+                if (v === '__new') {
+                  setCreateNew(true);
+                  setAccountId('');
+                } else {
+                  setCreateNew(false);
+                  setAccountId(v);
+                }
+              }}
+            />
+            {createNew ? (
+              <TextInput testID="connect-bank-new-name" label={t('accounts.name')} value={newName} onChangeText={setNewName} />
+            ) : null}
+          </>
+        ) : null}
+        {step >= 3 ? (
+          <SegmentedControl
+            testID="connect-bank-history"
+            label={t('accounts.connect.history')}
+            value={historyMonths}
+            onChange={setHistoryMonths}
+            options={[
+              { value: '1', label: t('accounts.connect.months1') },
+              { value: '3', label: t('accounts.connect.months3') },
+              { value: '6', label: t('accounts.connect.months6') },
+              { value: '12', label: t('accounts.connect.months12') },
+            ]}
+          />
+        ) : null}
         {error ? <InlineError message={error} /> : null}
       </View>
     </Sheet>

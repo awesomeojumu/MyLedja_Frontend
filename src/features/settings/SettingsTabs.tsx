@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { v7 as uuidv7 } from 'uuid';
 
 import {
@@ -164,7 +164,8 @@ export function BudgetTabDeep() {
 export function CurrenciesTabDeep() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
-  const [rateOpen, setRateOpen] = useState(false);
+  const params = useGlobalSearchParams<{ rate?: string }>();
+  const [rateOpen, setRateOpen] = useState(params.rate === '1');
   const rates = snapshot?.settings.exchangeRates ?? [];
   const downloadDaily = snapshot?.settings.downloadDailyRates ?? false;
   const accountCurrencies = useMemo(() => {
@@ -235,6 +236,7 @@ export function BanksTab() {
   const [links, setLinks] = useState<BankLink[] | null>(null);
   const [available, setAvailable] = useState(false);
   const [connect, setConnect] = useState(false);
+  const [disconnectId, setDisconnectId] = useState<string | null>(null);
   const workspaceId = user?.workspaceId;
   const accountName = (id: string) => snapshot?.accounts.find((a) => a.id === id)?.name ?? '';
 
@@ -303,13 +305,7 @@ export function BanksTab() {
             <Button
               kind="secondary"
               label={t('settings.banks.disconnect')}
-              onPress={() =>
-                run(async () => {
-                  await api.disconnectBank(workspaceId!, l.id);
-                  toast.show(t('settings.banks.disconnected'));
-                  load();
-                })
-              }
+              onPress={() => setDisconnectId(l.id)}
             />
           </View>
         </Card>
@@ -325,6 +321,23 @@ export function BanksTab() {
             setConnect(false);
             load();
           }}
+        />
+      ) : null}
+      {disconnectId ? (
+        <Confirm
+          visible
+          title={t('settings.banks.disconnectTitle')}
+          body={t('settings.banks.disconnectBody')}
+          confirmLabel={t('settings.banks.disconnect')}
+          onCancel={() => setDisconnectId(null)}
+          onConfirm={() =>
+            run(async () => {
+              await api.disconnectBank(workspaceId!, disconnectId);
+              toast.show(t('settings.banks.disconnected'));
+              setDisconnectId(null);
+              load();
+            })
+          }
         />
       ) : null}
     </ScrollView>

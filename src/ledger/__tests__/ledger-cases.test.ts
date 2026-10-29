@@ -5,6 +5,8 @@ import {
   buildCollect,
   buildExpense,
   buildIncome,
+  buildInvestmentBuy,
+  buildInvestmentSell,
   buildLend,
   buildLoanProceeds,
   buildLoanRepayment,
@@ -13,6 +15,7 @@ import {
   buildSalaryGross,
   buildTransfer,
   buildWriteOff,
+  costOfPurchase,
   categoryActivity,
   Chart,
   envelopeBudget,
@@ -48,10 +51,14 @@ type LedgerCase = {
   title: string;
   steps: CaseStep[];
   budget?: { style: string; months: string[]; assigned: Record<string, Record<string, string>> };
+  holdingsMark?: { account: string; units: string; pricePerUnit: string }[];
+  rates?: Record<string, { perUnit: string; unitMinor: string }>;
   expect: {
     balances?: Record<string, string>;
     months?: Record<string, { income: string; spent: string; spentByCategory: Record<string, string> }>;
     netWorth?: string;
+    unrealised?: string;
+    partialWithoutRate?: string[];
     eventCount?: number;
     statuses?: Record<string, string>;
     budget?: Record<
@@ -64,7 +71,7 @@ type LedgerCase = {
 const WS = 'ws';
 const file = cases as unknown as {
   currency: string;
-  accounts: { key: string; kind: string; accountType?: string; personDebt?: string }[];
+  accounts: { key: string; kind: string; accountType?: string; personDebt?: string; currency?: string }[];
   categories: { key: string; kind: string; budgetable?: boolean; system?: string }[];
   cases: LedgerCase[];
 };
@@ -84,7 +91,7 @@ function makeChart(): { chart: Chart; resolve: (token: string) => string } {
       id: a.key,
       kind: a.kind as LedgerKind,
       name: a.key,
-      currency: file.currency,
+      currency: a.currency ?? file.currency,
     });
   }
   for (const c of file.categories) {
@@ -210,6 +217,23 @@ function linesFor(
         nhfAccountId: input.nhfAccountId as string,
         nhf: big(input.nhf),
       });
+    case 'investment_buy':
+      return buildInvestmentBuy(chart, {
+        holdingAccountId: input.holdingAccountId as string,
+        cashAccountId: input.cashAccountId as string,
+        units: input.units as string,
+        pricePerUnit: big(input.pricePerUnit),
+        fees: input.fees !== undefined ? big(input.fees) : 0n,
+      });
+    case 'investment_sell':
+      return buildInvestmentSell(chart, {
+        holdingAccountId: input.holdingAccountId as string,
+        cashAccountId: input.cashAccountId as string,
+        units: input.units as string,
+        pricePerUnit: big(input.pricePerUnit),
+        fees: input.fees !== undefined ? big(input.fees) : 0n,
+        costOfLots: big(input.costOfLots),
+      });
     default:
       throw new Error(`Unknown post type ${type}`);
   }
@@ -323,7 +347,23 @@ describe('ledger-cases.json (TECH-SPEC 6.14)', () => {
         spentByCategory,
       }).toEqual(want);
     }
-    if (e.netWorth !== undefined) expect(netWorth(chart, all, '2026-12-31').total.toString()).toBe(e.netWorth);
+    let unrealised = 0n;
+    for (const mark of c.holdingsMark ?? []) {
+      const account = chart.get(resolve(`@${mark.account}`))!;
+      const cost = shownBalance(account, ledgerBalance(account.id, all));
+      unrealised += costOfPurchase(mark.units, BigInt(mark.pricePerUnit), 0n) - cost;
+    }
+    if (e.unrealised !== undefined) expect(unrealised.toString()).toBe(e.unrealised);
+    if (e.partialWithoutRate) {
+      expect(netWorth(chart, all, '2026-12-31').partial).toEqual(e.partialWithoutRate);
+    }
+    if (e.netWorth !== undefined) {
+      const rates: Record<string, { numerator: bigint; denominator: bigint }> = {};
+      for (const [ccy, rate] of Object.entries(c.rates ?? {})) {
+        rates[ccy] = { numerator: BigInt(rate.perUnit), denominator: BigInt(rate.unitMinor) };
+      }
+      expect((netWorth(chart, all, '2026-12-31', rates).total + unrealised).toString()).toBe(e.netWorth);
+    }
     if (e.eventCount !== undefined) expect(all).toHaveLength(e.eventCount);
     for (const [ref, status] of Object.entries(e.statuses ?? {})) {
       expect(journal.get(events.get(ref)!)!.status).toBe(status);

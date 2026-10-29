@@ -173,7 +173,7 @@ describe('Settings (F1.10)', () => {
     await fireEvent.press(screen.getByTestId('settings-tab-currencies'));
     await fireEvent.press(screen.getByTestId('settings-add-rate'));
     await fireEvent.changeText(screen.getByTestId('settings-exchange-rate'), '1650');
-    await fireEvent.press(screen.getByText(t('panel.save')));
+    await fireEvent.press(screen.getByText(t('settings.popup.exchangeSave')));
     await waitFor(async () => {
       expect((await repo.load()).settings.exchangeRates?.length).toBe(1);
     });

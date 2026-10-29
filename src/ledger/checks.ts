@@ -36,8 +36,13 @@ export function checkEvent(
   for (const l of event.lines) {
     const account = chart.get(l.ledgerAccountId);
     if (!account) return fail('unknown_account');
-    // fx-clearing is equity and may hold lines in more than one currency (E7).
-    if (account.currency !== l.currency && account.system !== 'fx_clearing') return fail('currency_mismatch');
+    // Equity and FX clearing hold multi-currency counterparts (E7, E8 FX opening).
+    const multi =
+      account.system === 'fx_clearing' ||
+      account.system === 'opening_balances' ||
+      account.system === 'adjustments' ||
+      account.system === 'revaluation';
+    if (account.currency !== l.currency && !multi) return fail('currency_mismatch');
     accounts.push(account);
     sums.set(l.currency, (sums.get(l.currency) ?? 0n) + l.amountMinor);
   }
