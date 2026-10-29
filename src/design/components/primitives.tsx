@@ -1,5 +1,6 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { Pressable, View, type ViewProps } from 'react-native';
+import { t } from '@/i18n';
 import tokens from '../tokens.json';
 import { useDesign, useTheme } from '../ThemeProvider';
 import { useSizeClass } from '../size';
@@ -103,7 +104,12 @@ export function Placeholder({ width = '100%', height = 16, testID }: { width?: n
 
 export type StatusKind = 'pending' | 'due-soon' | 'done' | 'problem';
 
-export function StatusPill({ label, kind }: { label: string; kind: StatusKind }) {
+/** PU00-4: the pill a newly saved offline item shows until the outbox sends it. */
+export function WaitingToSyncPill({ testID }: { testID?: string } = {}) {
+  return <StatusPill testID={testID} label={t('tx.waiting')} kind="pending" />;
+}
+
+export function StatusPill({ label, kind, testID }: { label: string; kind: StatusKind; testID?: string }) {
   const theme = useTheme();
   const c = tokens.color;
   const fill =
@@ -111,6 +117,7 @@ export function StatusPill({ label, kind }: { label: string; kind: StatusKind })
   const color = kind === 'done' ? c['on-primary'] : kind === 'due-soon' ? c['primary-deep'] : kind === 'problem' ? c.ink : c['ink-secondary'];
   return (
     <View
+      testID={testID}
       accessibilityLabel={label}
       style={{
         flexDirection: 'row',
@@ -231,11 +238,13 @@ type FooterChild = ReactElement<{ kind?: string }>;
 
 /**
  * A band's buttons. Accepts at most one filled main button (DESIGN.md 2.3, E-08).
+ * Only `Button` with primary-pill/gradient counts — outline destructive confirms are not filled mains.
  */
 export function Footer({ children }: { children: FooterChild | FooterChild[] }) {
   const phone = useSizeClass() === 'phone';
   const items = Children.toArray(children).filter(isValidElement) as FooterChild[];
   const primaries = items.filter((c) => {
+    if (c.type !== Button) return false;
     const kind = c.props.kind ?? 'primary-pill';
     return kind === 'primary-pill' || kind === 'gradient';
   });

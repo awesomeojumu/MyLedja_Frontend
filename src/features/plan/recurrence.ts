@@ -1,7 +1,7 @@
 import type { RecurrenceRule, Recurring, RecurringOccurrence } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { t } from '@/i18n';
-import { monthOf, nextMonth } from '@/ledger';
+import { monthOf, nextMonth, prevMonth } from '@/ledger';
 
 /** Last calendar day of a month (handles 31st → last day). */
 export function lastDayOfMonth(year: number, monthIndex: number): number {
@@ -85,12 +85,34 @@ export function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** First N occurrence dates for a schedule (PU25-2 "After N times"). */
+export function occurrenceDates(rule: RecurrenceRule, startDate: string, count: number, endDate?: string): string[] {
+  const out: string[] = [];
+  let month = monthOf(startDate);
+  for (let i = 0; i < 360 && out.length < count; i++) {
+    for (const d of dueDatesInMonth(rule, month, startDate, endDate)) {
+      out.push(d);
+      if (out.length >= count) return out;
+    }
+    month = nextMonth(month);
+  }
+  return out;
+}
+
+/** Whether a due date is still within endAfterCount (PU25-2). */
+export function withinEndAfterCount(recurring: Recurring, dueDate: string): boolean {
+  if (!recurring.endAfterCount) return true;
+  const dates = occurrenceDates(recurring.rule, recurring.startDate, recurring.endAfterCount, recurring.endDate);
+  return dates.includes(dueDate);
+}
+
 export function billsForMonth(snapshot: Snapshot, month: string, today: string, dueSoonDays = 7): BillRow[] {
   const dueSoonEnd = addDays(today, dueSoonDays);
   const rows: BillRow[] = [];
   for (const recurring of snapshot.recurring) {
     if (recurring.cancelled || recurring.kind === 'income') continue;
     for (const dueDate of dueDatesInMonth(recurring.rule, month, recurring.startDate, recurring.endDate)) {
+      if (!withinEndAfterCount(recurring, dueDate)) continue;
       const occId = `${recurring.id}:${dueDate}`;
       const occurrence = snapshot.occurrences.find((o) => o.id === occId);
       let group: BillRow['group'] = 'later';
@@ -178,44 +200,92 @@ export function rowsByDate(rows: BillRow[]): Map<string, BillRow[]> {
 export type FindRecurringSuggestion = {
   id: string;
   name: string;
+  payeeId?: string;
   averageMinor: bigint;
   count: number;
   confidence: 'strong' | 'likely';
+  /** e.g. "Monthly, around the 27th" */
+  howOften: string;
+  lastDate: string;
+  dayOfMonth: number;
 };
 
-/** DESIGN popup #27 — heuristic from expense history. */
-export function findRecurringSuggestions(snapshot: Snapshot, month: string): FindRecurringSuggestion[] {
-  const keyCounts = new Map<string, { name: string; amounts: bigint[]; payeeId?: string }>();
+function alreadyScheduled(snapshot: Snapshot, name: string, payeeId?: string): boolean {
+  return snapshot.recurring.some(
+    (r) =>
+      !r.cancelled &&
+      (r.kind === 'bill' || r.kind === 'subscription') &&
+      ((payeeId && r.payeeId === payeeId) || r.name.trim().toLowerCase() === name.trim().toLowerCase()),
+  );
+}
+
+function medianDay(dates: string[]): number {
+  const days = dates.map((d) => Number(d.slice(8, 10))).sort((a, b) => a - b);
+  return days[Math.floor(days.length / 2)] ?? 1;
+}
+
+function monthsCovered(dates: string[]): number {
+  return new Set(dates.map((d) => d.slice(0, 7))).size;
+}
+
+/** DESIGN popup #27 — repeats in the last 12 months; already-scheduled excluded. */
+export function findRecurringSuggestions(snapshot: Snapshot, asOfMonth: string): FindRecurringSuggestion[] {
+  let startMonth = asOfMonth;
+  for (let i = 0; i < 11; i++) startMonth = prevMonth(startMonth);
+  const windowStart = `${startMonth}-01`;
+  const windowEnd = `${asOfMonth}-31`;
+
+  type Bucket = { name: string; payeeId?: string; dates: string[]; amounts: bigint[] };
+  const buckets = new Map<string, Bucket>();
+  const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+
   for (const e of snapshot.events) {
-    if (e.status !== 'posted' || e.type !== 'expense' || !e.date.startsWith(month)) continue;
-    const payee = e.payeeId ? snapshot.payees.find((p) => p.id === e.payeeId)?.name : e.notes;
-    const name = payee ?? 'Repeating expense';
-    const amount = e.lines.reduce((s, l) => (l.amountMinor < 0n ? s - l.amountMinor : s), 0n);
+    if (e.status !== 'posted' || e.type !== 'expense') continue;
+    if (e.date < windowStart || e.date > windowEnd) continue;
+    if (e.recurringId) continue;
+    const payee = e.payeeId ? snapshot.payees.find((p) => p.id === e.payeeId) : undefined;
+    const name = (payee?.name ?? e.notes ?? '').trim();
+    if (!name) continue;
+    const amount = e.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => (l.amountMinor < 0n ? s - l.amountMinor : s), 0n);
     if (amount <= 0n) continue;
-    const key = `${name}:${amount}`;
-    const cur = keyCounts.get(key) ?? { name, amounts: [] };
+    const key = payee?.id ? `payee:${payee.id}` : `name:${name.toLowerCase()}`;
+    const cur = buckets.get(key) ?? { name, payeeId: payee?.id, dates: [], amounts: [] };
+    cur.dates.push(e.date);
     cur.amounts.push(amount);
-    keyCounts.set(key, cur);
+    buckets.set(key, cur);
   }
+
   const out: FindRecurringSuggestion[] = [];
-  for (const [key, data] of keyCounts) {
-    if (data.amounts.length < 2) continue;
+  for (const [key, data] of buckets) {
+    if (alreadyScheduled(snapshot, data.name, data.payeeId)) continue;
+    const months = monthsCovered(data.dates);
+    if (months < 2 || data.amounts.length < 2) continue;
     const avg = data.amounts.reduce((a, b) => a + b, 0n) / BigInt(data.amounts.length);
+    const day = medianDay(data.dates);
+    const lastDate = [...data.dates].sort().at(-1)!;
+    const confidence: 'strong' | 'likely' = months >= 3 ? 'strong' : 'likely';
     out.push({
       id: key,
       name: data.name,
+      payeeId: data.payeeId,
       averageMinor: avg,
       count: data.amounts.length,
-      confidence: data.amounts.length >= 3 ? 'strong' : 'likely',
+      confidence,
+      howOften: t('plan.findHowOftenMonthly', { day: String(day) }),
+      lastDate,
+      dayOfMonth: day,
     });
   }
-  return out.sort((a, b) => b.count - a.count);
+  return out.sort((a, b) => {
+    if (a.confidence !== b.confidence) return a.confidence === 'strong' ? -1 : 1;
+    return b.count - a.count;
+  });
 }
 
 export type ScheduleRow = {
   recurring: Recurring;
   nextDate: string | null;
-  status: 'missed' | 'due' | 'upcoming' | 'scheduled' | 'cancelled';
+  status: 'missed' | 'due' | 'upcoming' | 'scheduled' | 'paused' | 'cancelled';
 };
 
 function ruleLabel(rule: RecurrenceRule): string {
@@ -239,7 +309,7 @@ function nextDueOnOrAfter(recurring: Recurring, from: string, horizonMonths = 14
   return null;
 }
 
-/** DESIGN page 12 tab "All schedules". */
+/** DESIGN page 12 tab "All schedules" (TB-04). */
 export function allScheduleRows(snapshot: Snapshot, today: string, search = '', includeCancelled = false): ScheduleRow[] {
   const q = search.trim().toLowerCase();
   const rows: ScheduleRow[] = [];
@@ -255,6 +325,10 @@ export function allScheduleRows(snapshot: Snapshot, today: string, search = '', 
       rows.push({ recurring, nextDate: null, status: 'cancelled' });
       continue;
     }
+    if (recurring.paused) {
+      rows.push({ recurring, nextDate: nextDueOnOrAfter(recurring, today), status: 'paused' });
+      continue;
+    }
     const nextDate = nextDueOnOrAfter(recurring, today);
     let status: ScheduleRow['status'] = 'scheduled';
     if (nextDate) {
@@ -265,11 +339,28 @@ export function allScheduleRows(snapshot: Snapshot, today: string, search = '', 
     }
     rows.push({ recurring, nextDate, status });
   }
-  const order: Record<ScheduleRow['status'], number> = { missed: 0, due: 1, upcoming: 2, scheduled: 3, cancelled: 4 };
+  const order: Record<ScheduleRow['status'], number> = { missed: 0, due: 1, upcoming: 2, scheduled: 3, paused: 4, cancelled: 5 };
   return rows.sort((a, b) => {
     const sa = order[a.status] - order[b.status];
     if (sa !== 0) return sa;
     return (a.nextDate ?? '').localeCompare(b.nextDate ?? '');
+  });
+}
+
+/** True when a schedule should fire reminders (not paused / cancelled). */
+export function scheduleCreatesReminders(recurring: Recurring): boolean {
+  return !recurring.cancelled && !recurring.paused && recurring.reminderDays !== undefined;
+}
+
+/** Full weekday title for PU-59 day list ("Monday, 2 November 2026"). */
+export function dayListTitle(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
   });
 }
 

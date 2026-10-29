@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Share, View, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { AlertTriangle, Check, Circle, MoreHorizontal } from 'lucide-react-native';
+import { MoreHorizontal } from 'lucide-react-native';
 
 import {
   Amount,
@@ -15,6 +15,7 @@ import {
   Placeholder,
   SegmentedControl,
   Sheet,
+  StatusPill,
   Text,
   TextInput,
   useToast,
@@ -31,6 +32,7 @@ import { formatNaira } from '@/money';
 import { DebtEditSheet, DebtsPaymentSheet } from './DebtsPaymentSheet';
 import { DebtScheduleSheet } from './DebtScheduleSheet';
 import { debtInterestTotal, debtRows, findRecentPayment } from './helpers';
+import { DEBT_URL, parseDebtDetailTab, type DebtDetailTab } from './popupUrl';
 import {
   debtOriginalAmount,
   debtProgress,
@@ -42,10 +44,16 @@ import {
 } from './schedule';
 
 const sp = tokens.spacing;
-type DetailTab = 'timeline' | 'schedule';
+
+function statusPillFor(status: 'paid' | 'due' | 'overdue' | 'upcoming') {
+  if (status === 'paid') return { kind: 'done' as const, label: t('debts.statusPaid') };
+  if (status === 'overdue') return { kind: 'problem' as const, label: t('debts.statusOverdue') };
+  if (status === 'due') return { kind: 'due-soon' as const, label: t('debts.statusDueSoon') };
+  return { kind: 'pending' as const, label: t('debts.statusScheduled') };
+}
 
 export function DebtScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab: tabParam, payment, debtSchedule } = useLocalSearchParams<{ id: string; tab?: string; payment?: string; debtSchedule?: string }>();
   const router = useRouter();
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
@@ -54,12 +62,12 @@ export function DebtScreen() {
   const wide = width >= 900;
   const onDate = today();
 
-  const [tab, setTab] = useState<DetailTab>('timeline');
-  const [payOpen, setPayOpen] = useState(false);
+  const tab = parseDebtDetailTab(typeof tabParam === 'string' ? tabParam : undefined);
+  const payOpen = payment === id;
+  const scheduleOpen = debtSchedule === id;
   const [writeOffOpen, setWriteOffOpen] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [duplicateConfirm, setDuplicateConfirm] = useState<{ accountId: string; principal: bigint; interest: bigint } | null>(null);
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{ accountId: string; principal: bigint; interest: bigint; date: string; overpayment?: 'gift' | 'credit' } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const row = useMemo(() => {
@@ -107,7 +115,7 @@ export function DebtScreen() {
 
   const menuItems: MenuItem[] = [
     { key: 'edit', label: t('debts.menuEdit'), onPress: () => setEditOpen(true) },
-    { key: 'schedule', label: t('debts.menuSchedule'), onPress: () => setScheduleOpen(true) },
+    { key: 'schedule', label: t('debts.menuSchedule'), onPress: () => router.setParams({ [DEBT_URL.debtSchedule]: id }) },
   ];
   if (debt.status === 'open') {
     menuItems.push({ key: 'settle', label: t('debts.menuSettled'), onPress: () => void markSettled() });
@@ -123,17 +131,30 @@ export function DebtScreen() {
     else toast.show(t('debts.markedSettled'));
   }
 
-  async function savePayment(input: { accountId: string; principal: bigint; interest: bigint; force?: boolean }) {
+  async function savePayment(input: { accountId: string; principal: bigint; interest: bigint; date: string; force?: boolean; overpayment?: 'gift' | 'credit' }) {
     setError(null);
-    const dup = findRecentPayment(debt.id, snapshot!, input.principal, onDate);
+    const dup = findRecentPayment(debt.id, snapshot!, input.principal, input.date);
     if (dup && !input.force) {
       setDuplicateConfirm(input);
       return;
     }
-    const r = await repo.recordDebtPayment(debt.id, { accountId: input.accountId, amount: input.principal, date: onDate, interest: input.interest });
+    const r = await repo.recordDebtPayment(debt.id, {
+      accountId: input.accountId,
+      amount: input.principal,
+      date: input.date,
+      interest: input.interest,
+      overpayment: input.overpayment,
+    });
     if (!r.ok) setError(ledgerMessage(r.error));
-    else setPayOpen(false);
+    else {
+      toast.show(t('debts.paymentRecorded'));
+      router.setParams({ [DEBT_URL.payment]: undefined });
+    }
   }
+
+  const changeTab = (next: DebtDetailTab) => {
+    router.setParams({ [DEBT_URL.tab]: next });
+  };
 
   const timelineBlock = (
     <View style={{ flex: 1, gap: sp['spacing-sm'] }}>
@@ -172,24 +193,25 @@ export function DebtScreen() {
     <View style={{ flex: 1, gap: sp['spacing-sm'] }}>
       <Text variant="heading-sm">{t('debts.scheduleTab')}</Text>
       {schedule.length === 0 ? (
-        <Text tone="textSecondary">{t('debts.scheduleEmpty')}</Text>
+        <View style={{ gap: sp['spacing-sm'] }}>
+          <Text tone="textSecondary">{t('debts.scheduleEmpty')}</Text>
+          <Button testID="debt-add-schedule" kind="secondary" label={t('debts.addSchedule')} onPress={() => router.setParams({ [DEBT_URL.debtSchedule]: id })} />
+        </View>
       ) : (
-        schedule.map((inst) => (
-          <View key={inst.dueDate} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Icon
-                icon={inst.status === 'paid' ? Check : inst.status === 'overdue' ? AlertTriangle : Circle}
-                size="row"
-                color={inst.status === 'overdue' ? theme.error : theme.textSecondary}
-              />
-              <Text variant="caption" tone="textSecondary">
-                {formatDay(inst.dueDate)}
-                {inst.status === 'overdue' ? ` (${t('debts.overdue')})` : inst.status === 'due' ? ` (${t('debts.dueNow')})` : ''}
-              </Text>
+        schedule.map((inst) => {
+          const pill = statusPillFor(inst.status);
+          return (
+            <View key={inst.dueDate} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: sp['spacing-sm'] }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'], flex: 1 }}>
+                <Text variant="caption" tone="textSecondary">
+                  {formatDay(inst.dueDate)}
+                </Text>
+                <StatusPill kind={pill.kind} label={pill.label} />
+              </View>
+              <Amount minor={inst.amountMinor} variant="caption" />
             </View>
-            <Amount minor={inst.amountMinor} variant="caption" />
-          </View>
-        ))
+          );
+        })
       )}
       {interestTotal > 0n ? (
         <Text variant="caption" tone="textSecondary">
@@ -256,7 +278,7 @@ export function DebtScreen() {
       {error ? <InlineError message={error} /> : null}
       {debt.status === 'open' ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'], marginBottom: sp['spacing-md'], alignItems: 'center' }}>
-          <Button testID="debt-record-payment" label={recordLabel} onPress={() => setPayOpen(true)} />
+          <Button testID="debt-record-payment" label={recordLabel} onPress={() => router.setParams({ [DEBT_URL.payment]: id })} />
           {debt.direction === 'owedToMe' ? (
             <Button testID="debt-send-reminder" kind="secondary" label={t('debts.sendReminder')} onPress={() => void sendReminder()} />
           ) : null}
@@ -292,7 +314,7 @@ export function DebtScreen() {
               { value: 'schedule', label: t('debts.scheduleTab') },
             ]}
             value={tab}
-            onChange={setTab}
+            onChange={changeTab}
           />
           <ScrollView contentContainerStyle={{ paddingTop: sp['spacing-md'], gap: sp['spacing-md'] }}>
             {tab === 'timeline' ? timelineBlock : scheduleBlock}
@@ -301,11 +323,20 @@ export function DebtScreen() {
         </>
       )}
       {wide ? chartBlock : null}
-      {payOpen && snapshot ? <DebtsPaymentSheet max={balance} snapshot={snapshot} onClose={() => setPayOpen(false)} onSave={savePayment} /> : null}
+      {payOpen && snapshot ? (
+        <DebtsPaymentSheet
+          debt={debt}
+          max={balance}
+          snapshot={snapshot}
+          onClose={() => router.setParams({ [DEBT_URL.payment]: undefined })}
+          onSave={savePayment}
+        />
+      ) : null}
       {scheduleOpen ? (
         <DebtScheduleSheet
           debt={debt}
-          onClose={() => setScheduleOpen(false)}
+          totalMinor={original > 0n ? original : balance}
+          onClose={() => router.setParams({ [DEBT_URL.debtSchedule]: undefined })}
           onSave={async (input) => {
             setError(null);
             await repo.updatePersonDebt({
@@ -317,7 +348,7 @@ export function DebtScreen() {
               nextDueDate: input.firstDue,
             });
             toast.show(t('debts.scheduleSaved'));
-            setScheduleOpen(false);
+            router.setParams({ [DEBT_URL.debtSchedule]: undefined });
           }}
         />
       ) : null}
@@ -347,7 +378,7 @@ export function DebtScreen() {
       <Confirm
         visible={duplicateConfirm !== null}
         title={t('debts.duplicateTitle')}
-        body={t('debts.duplicateBody', { date: onDate })}
+        body={t('debts.duplicateBody', { date: duplicateConfirm?.date ?? onDate })}
         confirmLabel={t('debts.duplicateConfirm')}
         onConfirm={() => {
           if (!duplicateConfirm) return;

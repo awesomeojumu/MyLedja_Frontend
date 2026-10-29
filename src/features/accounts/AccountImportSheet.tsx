@@ -24,7 +24,7 @@ const sp = tokens.spacing;
 const NONE = 'none';
 const FORMATS: DateFormat[] = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
 
-type Step = 'upload' | 'map' | 'review';
+type Step = 'upload' | 'map' | 'review' | 'done';
 
 type Picked = { kind: 'csv'; text: string } | { kind: 'statement'; fileName: string; base64: string };
 
@@ -83,6 +83,7 @@ export function AccountImportSheet({
   const [moneyBackChoice, setMoneyBackChoice] = useState<Map<number, 'money_back' | 'income'>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [doneCount, setDoneCount] = useState(0);
 
   const load = (text: string) => {
     const parsed = parseCsv(text);
@@ -237,11 +238,19 @@ export function AccountImportSheet({
       count += 1;
     }
     setBusy(false);
+    setDoneCount(count);
     onImported(importId || 'money-back', count);
-    onClose();
+    setStep('done');
   };
 
-  const stepLabel = step === 'upload' ? t('import.step.upload') : step === 'map' ? t('import.step.map') : t('import.step.review');
+  const stepLabel =
+    step === 'upload'
+      ? t('import.step.upload')
+      : step === 'map'
+        ? t('import.step.map')
+        : step === 'review'
+          ? t('import.step.review')
+          : t('import.step.done');
 
   const footer =
     step === 'upload' ? (
@@ -252,6 +261,10 @@ export function AccountImportSheet({
       <Footer>
         <Button kind="secondary" label={t('common.back')} onPress={() => setStep('upload')} />
         <Button testID="import-next" label={t('import.toReview')} disabled={!read || read.rows.length === 0} onPress={() => setStep('review')} />
+      </Footer>
+    ) : step === 'done' ? (
+      <Footer>
+        <Button testID="import-done" label={t('common.close')} onPress={onClose} />
       </Footer>
     ) : (
       <Footer>
@@ -348,6 +361,12 @@ export function AccountImportSheet({
               <InlineError testID="import-broken" message={t('import.broken', { lines: read.broken.map((b) => b.line).join(', ') })} />
             ) : null}
           </>
+        ) : null}
+
+        {step === 'done' ? (
+          <View testID="import-done-state">
+            <EmptyState title={t('import.done', { count: doneCount })} body={t('import.doneBody')} actionLabel={t('common.close')} onAction={onClose} />
+          </View>
         ) : null}
 
         {step === 'review' ? (

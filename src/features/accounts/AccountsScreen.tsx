@@ -1,5 +1,5 @@
 import { bankConnectAvailable } from '@/features/banking/monoConnect';
-import { useRouter } from 'expo-router';
+import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { ChevronDown, ChevronUp, MoreHorizontal } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -67,8 +67,10 @@ export function AccountsScreen() {
   const { snapshot } = useWorkspace();
   const theme = useTheme();
   const toast = useToast();
+  const router = useRouter();
+  const params = useGlobalSearchParams<{ connect?: string }>();
   const [adding, setAdding] = useState(false);
-  const [connectOpen, setConnectOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(params.connect === '1');
   const [showArchived, setShowArchived] = useState(false);
   const [reordering, setReordering] = useState(false);
   const [sort, setSort] = useState<AccountSort>('custom');
@@ -152,7 +154,7 @@ export function AccountsScreen() {
                       <Pressable
                         accessibilityRole="link"
                         testID="see-portfolio"
-                        onPress={() => toast.show(t('accounts.portfolioLater'))}
+                        onPress={() => router.push('/investments')}
                       >
                         <Text tone="link">{t('accounts.seePortfolio')}</Text>
                       </Pressable>

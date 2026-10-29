@@ -5,9 +5,14 @@ import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
+import { resetParams, setParams } from '../../../../test/helpers/router';
 import { IncomeScreen } from '../IncomeScreen';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
+
+beforeEach(() => {
+  resetParams();
+});
 
 async function seeded() {
   const sync = memorySync();
@@ -52,15 +57,17 @@ describe('Income page (F2.2)', () => {
 
   it('P13-08: opens deep add stream form with routing section', async () => {
     const { sync } = await seeded();
+    setParams({ stream: 'new' });
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
         <IncomeScreen />
       </WorkspaceProvider>,
       { sync },
     );
-    await fireEvent.press(screen.getByTestId('income-add'));
     expect(screen.getByTestId('income-add-sheet')).toBeTruthy();
-    expect(screen.getByText(t('income.sectionRouting'))).toBeTruthy();
+    await fireEvent.press(screen.getByText(new RegExp(t('income.sectionRouting'))));
+    await fireEvent.press(screen.getByText(new RegExp(t('income.sectionRecord'))));
+    expect(screen.getByTestId('income-routing')).toBeTruthy();
     expect(screen.getByTestId('income-record-mode')).toBeTruthy();
   });
 

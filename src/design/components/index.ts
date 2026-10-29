@@ -1,6 +1,9 @@
 export { Text, typeStyle } from './Text';
 export { Amount } from './Amount';
 export { AmountInput } from './AmountInput';
+export { NameInput } from './NameInput';
+export { NotesInput } from './NotesInput';
+export { PercentInput } from './PercentInput';
 export { Button } from './Button';
 export { TextInput } from './TextInput';
 export { CodeInput } from './CodeInput';
@@ -18,9 +21,22 @@ export {
   PillTag,
   Placeholder,
   StatusPill,
+  WaitingToSyncPill,
   useReduceMotion,
 } from './primitives';
-export { LogomarkLoader, SegmentedControl, Switch, Tabs, type Option } from './controls';
+export { LogomarkLoader, SegmentedControl, Switch, Tabs, moveTabIndex, type Option } from './controls';
 export { DatePicker, formatDay, Menu, Panel, Popover, Select, type MenuItem } from './overlays';
+export {
+  amountDigitCount,
+  amountFieldError,
+  dateFieldError,
+  notesFieldError,
+  percentFieldError,
+  pickerFieldError,
+  textFieldError,
+  todayIso,
+  yesterdayIso,
+} from './fieldKinds';
 export { GradientBand, GradientMesh } from './GradientMesh';
 export { BarChart, LineChart, DonutChart, ProgressRing, DONUT_COLOURS, type Point } from './charts';
+
