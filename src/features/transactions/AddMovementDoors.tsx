@@ -180,8 +180,38 @@ function SpendGoalSheet({ snapshot, onClose }: { snapshot: Snapshot; onClose: ()
 function InvestmentDoorSheet({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   return (
-    <Sheet visible testID="add-door-investment" title={t('add.door.investmentTitle')} onClose={onClose} footer={<Button label={t('add.door.openAccounts')} onPress={() => { onClose(); router.push('/accounts'); }} />}>
+    <Sheet
+      visible
+      testID="add-door-investment"
+      title={t('add.door.investmentTitle')}
+      onClose={onClose}
+      footer={
+        <Button
+          label={t('add.door.openInvestments')}
+          onPress={() => {
+            onClose();
+            router.push('/investments');
+          }}
+        />
+      }
+    >
       <Text tone="textSecondary">{t('add.door.investmentBody')}</Text>
+      <Button
+        kind="secondary"
+        label={t('investments.buy')}
+        onPress={() => {
+          onClose();
+          router.push('/investments?trade=buy');
+        }}
+      />
+      <Button
+        kind="secondary"
+        label={t('investments.dividend')}
+        onPress={() => {
+          onClose();
+          router.push('/investments?dividend=1');
+        }}
+      />
     </Sheet>
   );
 }

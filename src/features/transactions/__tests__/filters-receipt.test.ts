@@ -48,6 +48,9 @@ describe('tx filters hasReceipt', () => {
       debts: [],
       debtEntries: [],
       notifications: [],
+      holdings: [],
+      lots: [],
+      prices: [],
       waiting: new Set(),
       chart: {} as Snapshot['chart'],
     } satisfies Snapshot;

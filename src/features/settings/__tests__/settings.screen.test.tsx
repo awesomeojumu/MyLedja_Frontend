@@ -62,9 +62,10 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
     expect(screen.getByTestId('settings-tab-categories')).toBeTruthy();
     expect(screen.getByTestId('settings-tab-importExport')).toBeTruthy();
     expect(screen.getByTestId('settings-tab-help')).toBeTruthy();
-    expect(screen.queryByTestId('settings-tab-currencies')).toBeNull();
+    expect(screen.getByTestId('settings-tab-currencies')).toBeTruthy();
     expect(screen.queryByTestId('settings-tab-advanced')).toBeNull();
-    expect(settingsTabShipped('currencies', SHIPPED_PHASE)).toBe(false);
+    expect(settingsTabShipped('currencies', SHIPPED_PHASE)).toBe(true);
+    expect(settingsTabShipped('advanced', SHIPPED_PHASE)).toBe(false);
     expect(settingsTabShipped('general', SHIPPED_PHASE)).toBe(true);
   });
 
@@ -253,7 +254,7 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
     expect(await screen.findByText(t('sync.signOutWarnTitle'))).toBeTruthy();
     expect(screen.getByText(t('sync.signOutWarnBody', { count: waiting }))).toBeTruthy();
   });
-  it('TB11-1: Currencies (Phase 5) and Advanced are hidden until their phase ships', async () => {
+  it('TB11-1: Advanced stays hidden; Currencies ships in Phase 5', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -261,9 +262,26 @@ describe('Settings Phase 1 (PU-63 / TB-11)', () => {
       </WorkspaceProvider>,
       { sync },
     );
-    expect(screen.queryByTestId('settings-tab-currencies')).toBeNull();
     expect(screen.queryByTestId('settings-tab-advanced')).toBeNull();
+    expect(screen.getByTestId('settings-tab-currencies')).toBeTruthy();
     expect(screen.getByTestId('settings-tab-security')).toBeTruthy();
     expect(screen.getByTestId('settings-tab-devices')).toBeTruthy();
+  });
+
+  it('PU-56: exchange rate sheet saves a rate on Currencies', async () => {
+    const { sync, repo } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('settings-tab-currencies'));
+    await fireEvent.press(screen.getByTestId('settings-add-rate'));
+    await fireEvent.changeText(screen.getByTestId('settings-exchange-rate'), '1650');
+    await fireEvent.press(screen.getByText(t('settings.popup.exchangeSave')));
+    await waitFor(async () => {
+      expect((await repo.load()).settings.exchangeRates?.length).toBe(1);
+    });
   });
 });

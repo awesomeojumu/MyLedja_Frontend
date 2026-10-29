@@ -34,11 +34,14 @@ import { useOnline } from '@/lib/useOnline';
 
 import { AccountImportSheet, statementCsv } from './AccountImportSheet';
 import { ArchiveSheet, EditAccountSheet, UpdateValueSheet } from './accountSheets';
-import { groupRegisterByDay, hasValueTab } from './helpers';
+import { DividendSheet, HoldingSheet, TradeSheet } from '@/features/investments/investmentSheets';
+import { portfolioFigures } from '@/features/investments/helpers';
+
+import { groupRegisterByDay, hasHoldingsTab, hasValueTab } from './helpers';
 
 const sp = tokens.spacing;
 
-type Tab = 'transactions' | 'value' | 'details';
+type Tab = 'transactions' | 'holdings' | 'value' | 'details';
 export type RegisterRow = Row & { line: bigint; running: bigint };
 
 /** Rows that touch the account, newest first, with the balance after each (P09-01 / TB03-2). */
@@ -89,6 +92,7 @@ export function AccountScreen() {
   const router = useRouter();
   const theme = useTheme();
   const toast = useToast();
+  const [sheet, setSheet] = useState<'holding' | 'buy' | 'sell' | 'dividend' | null>(null);
   const [dropped, setDropped] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -108,7 +112,7 @@ export function AccountScreen() {
   // `?account=` is PU-13; Add transaction also uses `account` as a prefill when `?add=` is set.
   const editOpen = !!account && params.account === account.id && !params.add;
   const valueOpen = !!account && params.value === account.id;
-  const importOpen = (!!account && params.import === account.id) || dropped !== null;
+  const importOpen = (!!account && (params.import === account.id || params.import === '1')) || dropped !== null;
 
   const openEdit = () => account && router.setParams({ account: account.id });
   const openValue = () => account && router.setParams({ value: account.id });
@@ -127,11 +131,11 @@ export function AccountScreen() {
   const owes = account ? ACCOUNT_KIND_INFO[account.type].ledger === 'liability' : false;
   const tabOptions = useMemo((): readonly Tab[] => {
     const keys: Tab[] = ['transactions'];
+    if (account && hasHoldingsTab(account.type)) keys.push('holdings');
     if (account && hasValueTab(account.type)) keys.push('value');
     keys.push('details');
     return keys;
   }, [account]);
-  // Prefer foundation useTabParam (URL + remembered last tab) over accounts' one-shot parseTab.
   const { value: tab, setValue: setTab } = useTabParam<Tab>({
     pageKey: `account:${params.id ?? 'none'}`,
     personId: user?.id,
@@ -140,8 +144,9 @@ export function AccountScreen() {
   });
   const tabs: { value: Tab; label: string }[] = tabOptions.map((value) => ({
     value,
-    label: t(`account.tab.${value}` as 'account.tab.transactions' | 'account.tab.value' | 'account.tab.details'),
+    label: t(`account.tab.${value}` as 'account.tab.transactions' | 'account.tab.holdings' | 'account.tab.value' | 'account.tab.details'),
   }));
+  const holdingRows = snapshot && account && hasHoldingsTab(account.type) ? portfolioFigures(snapshot, account.id) : [];
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined' || !account) return;
@@ -285,6 +290,34 @@ export function AccountScreen() {
                   ))}
                 </View>
               )
+            ) : tab === 'holdings' ? (
+              <View testID="holdings-tab" style={{ gap: sp['spacing-md'] }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
+                  <Button testID="account-add-holding" label={t('investments.addHolding')} onPress={() => setSheet('holding')} />
+                  <Button testID="account-buy" kind="secondary" label={t('investments.buy')} onPress={() => setSheet('buy')} />
+                  <Button testID="account-sell" kind="secondary" label={t('investments.sell')} onPress={() => setSheet('sell')} />
+                  <Button testID="account-dividend" kind="secondary" label={t('investments.dividend')} onPress={() => setSheet('dividend')} />
+                </View>
+                {holdingRows.length === 0 ? (
+                  <EmptyState
+                    title={t('investments.emptyTitle')}
+                    body={t('investments.emptyBody')}
+                    actionLabel={t('investments.addHolding')}
+                    onAction={() => setSheet('holding')}
+                  />
+                ) : (
+                  holdingRows.map((f) => (
+                    <Pressable key={f.holding.id} testID={`account-holding-${f.holding.id}`} onPress={() => router.push(`/investments/${f.holding.id}`)}>
+                      <Card style={{ gap: sp['spacing-xs'] }}>
+                        <Text variant="heading-sm">{f.holding.name}</Text>
+                        <Text tone="textSecondary">
+                          {f.units} · {formatNaira(f.value)}
+                        </Text>
+                      </Card>
+                    </Pressable>
+                  ))
+                )}
+              </View>
             ) : tab === 'value' ? (
               <Card testID="value-list" style={{ gap: sp['spacing-sm'] }}>
                 {revalued(snapshot, account.id).length === 0 ? (
@@ -335,6 +368,10 @@ export function AccountScreen() {
       {account && snapshot && archiveOpen ? (
         <ArchiveSheet account={account} balance={balance} snapshot={snapshot} onClose={() => setArchiveOpen(false)} />
       ) : null}
+      {account && sheet === 'holding' ? <HoldingSheet accountId={account.id} onClose={() => setSheet(null)} /> : null}
+      {account && sheet === 'buy' ? <TradeSheet direction="buy" onClose={() => setSheet(null)} /> : null}
+      {account && sheet === 'sell' ? <TradeSheet direction="sell" onClose={() => setSheet(null)} /> : null}
+      {account && sheet === 'dividend' ? <DividendSheet onClose={() => setSheet(null)} /> : null}
       {params.tx ? <TransactionPanel id={params.tx} onClose={() => router.setParams({ tx: undefined })} /> : null}
     </AppFrame>
   );

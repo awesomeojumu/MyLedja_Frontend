@@ -62,8 +62,8 @@ export function AccountsScreen() {
   const theme = useTheme();
   const toast = useToast();
   const router = useRouter();
-  const params = useGlobalSearchParams<{ account?: string; value?: string }>();
-  const [connectOpen, setConnectOpen] = useState(false);
+  const params = useGlobalSearchParams<{ account?: string; value?: string; connect?: string }>();
+  const [connectOpen, setConnectOpen] = useState(params.connect === '1');
   const [showArchived, setShowArchived] = useState(false);
   const [reordering, setReordering] = useState(false);
   const [sort, setSort] = useState<AccountSort>('custom');
@@ -158,7 +158,7 @@ export function AccountsScreen() {
                       <Pressable
                         accessibilityRole="link"
                         testID="see-portfolio"
-                        onPress={() => toast.show(t('accounts.portfolioLater'))}
+                        onPress={() => router.push('/investments')}
                       >
                         <Text tone="link">{t('accounts.seePortfolio')}</Text>
                       </Pressable>

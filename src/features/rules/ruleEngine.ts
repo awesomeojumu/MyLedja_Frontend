@@ -75,9 +75,20 @@ export function conditionMatches(ctx: RuleEventContext, condition: RuleCondition
   switch (condition.op) {
     case 'contains':
       return raw.toLowerCase().includes(needle.toLowerCase());
+    case 'startsWith':
+      return raw.toLowerCase().startsWith(needle.toLowerCase());
     case 'equals':
       if (condition.field === 'account' || condition.field === 'category') return raw === needle;
       return raw.toLowerCase() === needle.toLowerCase();
+    case 'notEquals':
+      if (condition.field === 'account' || condition.field === 'category') return raw !== needle;
+      return raw.toLowerCase() !== needle.toLowerCase();
+    case 'isOneOf':
+      return needle
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+        .includes(raw.toLowerCase());
     case 'lessThan': {
       const limit = parseAmount(needle);
       return limit !== null && ctx.amountMinor < limit;
@@ -86,10 +97,24 @@ export function conditionMatches(ctx: RuleEventContext, condition: RuleCondition
       const limit = parseAmount(needle);
       return limit !== null && ctx.amountMinor > limit;
     }
+    case 'between': {
+      const parts = needle.split(/[|,]/).map((s) => parseAmount(s.trim()));
+      const a = parts[0];
+      const b = parts[1];
+      return a != null && b != null && ctx.amountMinor >= a && ctx.amountMinor <= b;
+    }
     case 'before':
       return ctx.date < needle;
     case 'after':
       return ctx.date > needle;
+    case 'dayOfMonth':
+      return ctx.date.slice(8, 10) === needle.padStart(2, '0');
+    case 'isIn':
+      return condition.field === 'money' ? ctx.amountMinor > 0n || ctx.type === 'income' : false;
+    case 'isOut':
+      return condition.field === 'money' ? ctx.type === 'expense' || ctx.amountMinor < 0n : false;
+    case 'isEmpty':
+      return condition.field === 'category' ? !ctx.categoryId : !raw.trim();
     default:
       return false;
   }

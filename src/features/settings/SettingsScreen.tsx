@@ -66,7 +66,7 @@ const TAB_PHASE: Record<SettingsTab, number> = {
   advanced: 99,
 };
 
-const SHIPPED_PHASE = 4;
+const SHIPPED_PHASE = 5;
 
 const ALL_TABS: { id: SettingsTab; label: TextKey }[] = [
   { id: 'general', label: 'settings.tab.general' },
