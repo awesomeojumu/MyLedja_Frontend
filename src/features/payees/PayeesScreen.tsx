@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Image, Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
   Amount,
   Button,
   Card,
+  Checkbox,
   EmptyState,
   InlineError,
   Placeholder,
@@ -64,6 +65,16 @@ export function PayeesScreen() {
   const [sort, setSort] = useState<PayeeSort>('name');
   const [sortOpen, setSortOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const rows = useMemo(() => {
     if (!snapshot) return null;
@@ -99,7 +110,9 @@ export function PayeesScreen() {
   };
 
   const openMerge = (list?: Payee[]) => {
-    const payees = list ?? snapshot?.payees ?? [];
+    const payees =
+      list ??
+      (snapshot?.payees ?? []).filter((p) => selectedIds.has(p.id));
     if (payees.length < 2) return;
     router.setParams({ merge: payees.map((p) => p.id).join(',') });
   };
@@ -166,7 +179,7 @@ export function PayeesScreen() {
               kind="secondary"
               label={t('payees.merge')}
               onPress={() => openMerge()}
-              disabled={!snapshot || snapshot.payees.length < 2}
+              disabled={selectedIds.size < 2}
             />
             <Button testID="payees-sort" kind="secondary" label={t('payees.sort')} onPress={() => setSortOpen(true)} />
           </View>
@@ -177,7 +190,8 @@ export function PayeesScreen() {
             <EmptyState title={t('payees.emptyTitle')} body={t('payees.emptyBody')} actionLabel={t('nav.transactions')} onAction={() => router.push('/transactions')} />
           ) : sidePanel ? (
             <View style={{ gap: sp['spacing-xs'] }}>
-              <View style={{ flexDirection: 'row', paddingVertical: sp['spacing-xs'], borderBottomWidth: 1, borderColor: theme.border }}>
+              <View style={{ flexDirection: 'row', paddingVertical: sp['spacing-xs'], borderBottomWidth: 1, borderColor: theme.border, alignItems: 'center' }}>
+                <View style={{ width: 44 }} />
                 <Text variant="caption" tone="textSecondary" style={{ flex: 2 }}>
                   {t('payees.colName')}
                 </Text>
@@ -198,49 +212,46 @@ export function PayeesScreen() {
                 </Text>
               </View>
               {rows.map((row) => (
-                <PayeeTableRow key={row.payee.id} row={row} active={selected?.id === row.payee.id} onPress={() => openPayee(row.payee)} />
+                <PayeeTableRow
+                  key={row.payee.id}
+                  row={row}
+                  active={selected?.id === row.payee.id}
+                  checked={selectedIds.has(row.payee.id)}
+                  onToggle={() => toggleSelect(row.payee.id)}
+                  onPress={() => openPayee(row.payee)}
+                />
               ))}
             </View>
           ) : (
             rows.map((row) => (
-              <Pressable
+              <View
                 key={row.payee.id}
-                testID={`payee-row-${row.payee.id}`}
-                accessibilityRole="button"
-                accessibilityLabel={t('payees.rowLabel', { name: row.payee.name, count: row.txCount })}
-                onPress={() => openPayee(row.payee)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'] }}
               >
-                <Card style={{ flexDirection: 'row', gap: sp['spacing-md'], alignItems: 'center' }}>
-                  <View
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: tokens.radius['rounded-md'],
-                      backgroundColor: theme.tagFill,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <Text variant="caption" style={{ color: theme.tagText }}>
-                      {payeeMonogram(row.payee.name)}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
-                    <Text variant="heading-sm">{row.payee.name}</Text>
-                    <Text tone="textSecondary" variant="caption">
-                      {row.defaultCategoryName ? t('payees.defaultCategory', { name: row.defaultCategoryName }) : t('payees.noUsualCategory')}
-                    </Text>
-                    <Text variant="caption" tone="textSecondary">
-                      {t('payees.txCount', { count: row.txCount })}
-                    </Text>
-                    <Text variant="caption" tone="textSecondary">
-                      {row.lastUsed ? t('payees.lastUsed', { date: formatDay(row.lastUsed) }) : t('payees.neverUsed')}
-                    </Text>
-                  </View>
-                  <Amount minor={row.spentThisYear} variant="caption" />
-                </Card>
-              </Pressable>
+                <Checkbox
+                  testID={`payee-select-${row.payee.id}`}
+                  checked={selectedIds.has(row.payee.id)}
+                  onChange={() => toggleSelect(row.payee.id)}
+                  label=""
+                />
+                <Pressable
+                  testID={`payee-row-${row.payee.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('payees.rowLabel', { name: row.payee.name, count: row.txCount })}
+                  onPress={() => openPayee(row.payee)}
+                  style={{ flex: 1 }}
+                >
+                  <Card style={{ flexDirection: 'row', gap: sp['spacing-md'], alignItems: 'center' }}>
+                    <PayeeLogo name={row.payee.name} uri={row.payee.logoUri} size={40} />
+                    <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
+                      <Text variant="heading-sm">{row.payee.name}</Text>
+                      <Text variant="caption" tone="textSecondary">
+                        {row.lastUsed ? t('payees.lastUsed', { date: formatDay(row.lastUsed) }) : t('payees.neverUsed')}
+                      </Text>
+                    </View>
+                  </Card>
+                </Pressable>
+              </View>
             ))
           )}
         </ScrollView>
@@ -263,6 +274,7 @@ export function PayeesScreen() {
               categoryId: keep.categoryId,
             });
             if (r.ok) {
+              setSelectedIds(new Set());
               toast.show(t('payees.merged'), () => {
                 void repo.undoMergePayees(r.value.mergeId).then(() => toast.show(t('common.undo')));
               });
@@ -292,21 +304,47 @@ export function PayeesScreen() {
   );
 }
 
+function PayeeLogo({ name, uri, size }: { name: string; uri?: string; size: number }) {
+  const theme = useTheme();
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: tokens.radius['rounded-md'],
+        backgroundColor: theme.tagFill,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+      }}
+    >
+      {uri && !uri.startsWith('mono://') ? (
+        <Image source={{ uri }} style={{ width: size, height: size }} accessibilityIgnoresInvertColors />
+      ) : (
+        <Text variant="caption" style={{ color: theme.tagText }}>
+          {payeeMonogram(name)}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 function PayeeTableRow({
   row,
   active,
+  checked,
+  onToggle,
   onPress,
 }: {
   row: ReturnType<typeof payeeRows>[number];
   active: boolean;
+  checked: boolean;
+  onToggle: () => void;
   onPress: () => void;
 }) {
   const theme = useTheme();
   return (
-    <Pressable
-      testID={`payee-row-${row.payee.id}`}
-      accessibilityRole="button"
-      onPress={onPress}
+    <View
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -315,38 +353,35 @@ function PayeeTableRow({
         borderRadius: tokens.radius['rounded-md'],
       }}
     >
-      <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing['spacing-sm'] }}>
-        <View
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: tokens.radius['rounded-md'],
-            backgroundColor: theme.tagFill,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text variant="caption" style={{ color: theme.tagText }}>
-            {payeeMonogram(row.payee.name)}
-          </Text>
+      <View style={{ width: 44 }}>
+        <Checkbox testID={`payee-select-${row.payee.id}`} checked={checked} onChange={onToggle} label="" />
+      </View>
+      <Pressable
+        testID={`payee-row-${row.payee.id}`}
+        accessibilityRole="button"
+        onPress={onPress}
+        style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
+      >
+        <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', gap: tokens.spacing['spacing-sm'] }}>
+          <PayeeLogo name={row.payee.name} uri={row.payee.logoUri} size={32} />
+          <Text>{row.payee.name}</Text>
         </View>
-        <Text>{row.payee.name}</Text>
-      </View>
-      <Text tone="textSecondary" variant="caption" style={{ flex: 1.2 }}>
-        {row.defaultCategoryName || t('payees.noUsualCategory')}
-      </Text>
-      <Text variant="caption" style={{ width: 72 }}>
-        {row.txCount}
-      </Text>
-      <View style={{ width: 96 }}>
-        <Amount minor={row.spentThisYear} variant="caption" />
-      </View>
-      <Text variant="caption" tone="textSecondary" style={{ width: 88 }}>
-        {row.lastUsed ? formatDay(row.lastUsed) : t('payees.neverUsed')}
-      </Text>
-      <Text variant="caption" style={{ width: 48 }}>
-        {row.rulesCount}
-      </Text>
-    </Pressable>
+        <Text tone="textSecondary" variant="caption" style={{ flex: 1.2 }}>
+          {row.defaultCategoryName || t('payees.noUsualCategory')}
+        </Text>
+        <Text variant="caption" style={{ width: 72 }}>
+          {row.txCount}
+        </Text>
+        <View style={{ width: 96 }}>
+          <Amount minor={row.spentThisYear} variant="caption" />
+        </View>
+        <Text variant="caption" tone="textSecondary" style={{ width: 88 }}>
+          {row.lastUsed ? formatDay(row.lastUsed) : t('payees.neverUsed')}
+        </Text>
+        <Text variant="caption" style={{ width: 48 }}>
+          {row.rulesCount}
+        </Text>
+      </Pressable>
+    </View>
   );
 }

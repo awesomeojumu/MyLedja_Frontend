@@ -648,6 +648,7 @@
   "payees.colLast": "Last used",
   "payees.colRules": "Rules",
   "payees.changeLogo": "Change logo",
+  "payees.takePhoto": "Take a photo",
   "payees.recentTx": "Transactions",
   "payees.rulesUsing": "Rules using this payee",
   "payees.createRule": "Create rule",

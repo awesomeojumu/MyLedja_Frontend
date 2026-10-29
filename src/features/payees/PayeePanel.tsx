@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Image, Pressable, View } from 'react-native';
+import { Image, Platform, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import {
@@ -11,6 +11,7 @@ import {
   Menu,
   Panel,
   PillTag,
+  Popover,
   Select,
   Text,
   TextInput,
@@ -25,7 +26,7 @@ import { ruleSentence, payeeMonogram } from '@/features/rules/helpers';
 import { t } from '@/i18n';
 
 import { aliasOwner, debtForPayee, payeeTransactions } from './helpers';
-import { pickImageUri } from './pickMedia';
+import { pickImageUri, readDroppedImage } from './pickMedia';
 
 const sp = tokens.spacing;
 
@@ -58,6 +59,8 @@ export function PayeePanel({
   const [newAlias, setNewAlias] = useState('');
   const [aliasError, setAliasError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [logoMenuOpen, setLogoMenuOpen] = useState(false);
+  const native = Platform.OS === 'ios' || Platform.OS === 'android';
 
   const categories = snapshot.categories.filter((c) => c.kind === 'expense' && !c.hidden);
   const options = [{ value: '', label: t('payees.noUsualCategory') }, ...categories.map((c) => ({ value: c.id, label: c.name }))];
@@ -110,17 +113,39 @@ export function PayeePanel({
     await persist({ aliases: next });
   };
 
-  const changeLogo = async () => {
-    const uri = await pickImageUri();
-    if (!uri) return;
+  const applyLogo = async (uri: string) => {
     setLogoUri(uri);
     await persist({ logoUri: uri });
+  };
+
+  const changeLogo = async (camera = false) => {
+    setLogoMenuOpen(false);
+    const uri = await pickImageUri({ camera });
+    if (!uri) return;
+    await applyLogo(uri);
   };
 
   const removeLogo = async () => {
     setLogoUri('');
     await persist({ logoUri: '' });
   };
+
+  const onLogoDrop = (e: { preventDefault?: () => void; dataTransfer?: { files?: FileList } }) => {
+    e.preventDefault?.();
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    void readDroppedImage(file).then((picked) => {
+      if (picked?.uri) void applyLogo(picked.uri);
+    });
+  };
+
+  const logoWebProps =
+    Platform.OS === 'web'
+      ? ({
+          onDragOver: (e: { preventDefault?: () => void }) => e.preventDefault?.(),
+          onDrop: onLogoDrop,
+        } as object)
+      : {};
 
   const body = (
     <>
@@ -129,7 +154,8 @@ export function PayeePanel({
           testID="payee-logo"
           accessibilityRole="button"
           accessibilityLabel={t('payees.changeLogo')}
-          onPress={() => void changeLogo()}
+          onPress={() => (native ? setLogoMenuOpen(true) : void changeLogo())}
+          {...logoWebProps}
           style={{
             width: 64,
             height: 64,
@@ -149,7 +175,12 @@ export function PayeePanel({
           )}
         </Pressable>
         <View style={{ gap: sp['spacing-xs'] }}>
-          <Button testID="payee-logo-pick" kind="link" label={t('payees.changeLogo')} onPress={() => void changeLogo()} />
+          <Button
+            testID="payee-logo-pick"
+            kind="link"
+            label={t('payees.changeLogo')}
+            onPress={() => (native ? setLogoMenuOpen(true) : void changeLogo())}
+          />
           {logoUri ? <Button testID="payee-logo-remove" kind="link" label={t('payees.removeLogo')} onPress={() => void removeLogo()} /> : null}
         </View>
         <View style={{ flex: 1 }} />
@@ -270,6 +301,11 @@ export function PayeePanel({
         </View>
       ) : null}
       <Button testID="payee-create-rule" kind="secondary" label={t('payees.createRule')} onPress={onCreateRule} />
+
+      <Popover visible={logoMenuOpen} onClose={() => setLogoMenuOpen(false)} testID="payee-logo-menu">
+        <Button testID="payee-logo-library" kind="link" label={t('payees.changeLogo')} onPress={() => void changeLogo(false)} />
+        <Button testID="payee-logo-camera" kind="link" label={t('payees.takePhoto')} onPress={() => void changeLogo(true)} />
+      </Popover>
 
       <Confirm
         visible={confirmDelete}

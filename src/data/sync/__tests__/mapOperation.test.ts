@@ -24,6 +24,43 @@ function op(partial: Partial<Operation> & Pick<Operation, 'type' | 'payload'>): 
 }
 
 describe('mapOperation', () => {
+  it('includes aliases on payee.create and payee.update', () => {
+    expect(
+      toBackendOperation(
+        op({
+          type: 'payee.create',
+          payload: {
+            collection: 'payees',
+            id: 'p1',
+            data: { name: 'Shoprite', aliases: ['POS SHOPRITE'], defaultCategoryId: null },
+          },
+        }),
+        [bank],
+      ),
+    ).toMatchObject({
+      type: 'payee.create',
+      payload: { id: 'p1', name: 'Shoprite', aliases: ['POS SHOPRITE'] },
+    });
+    expect(
+      toBackendOperation(
+        op({
+          type: 'payee.update',
+          baseVersion: 2,
+          payload: {
+            collection: 'payees',
+            id: 'p1',
+            data: { name: 'Shoprite', aliases: ['POS'], defaultCategoryId: 'c1' },
+          },
+        }),
+        [bank],
+      ),
+    ).toMatchObject({
+      type: 'payee.update',
+      targetId: 'p1',
+      payload: { baseVersion: 2, name: 'Shoprite', aliases: ['POS'], defaultCategoryId: 'c1' },
+    });
+  });
+
   it('maps a local expense event to transaction.create', () => {
     const mapped = toBackendOperation(
       op({
