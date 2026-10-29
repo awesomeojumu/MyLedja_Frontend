@@ -3,6 +3,10 @@ import { t } from '@/i18n';
 import type { EventType } from '@/ledger';
 
 import type { Row } from './helpers';
+import { parseReceipt } from './receiptMeta';
+import { parseTags } from './tags';
+
+export type TxStatusFilter = 'posted' | 'pending' | 'waiting';
 
 export type TxFilters = {
   dateFrom?: string;
@@ -10,11 +14,14 @@ export type TxFilters = {
   accountId?: string;
   categoryId?: string;
   payeeId?: string;
+  tag?: string;
   type?: EventType;
+  status?: TxStatusFilter;
   amountMin?: bigint;
   amountMax?: bigint;
   uncategorized?: boolean;
   hasReceipt?: boolean;
+  edited?: boolean;
 };
 
 export function emptyFilters(): TxFilters {
@@ -28,6 +35,17 @@ export function applyFilters(row: Row, filters: TxFilters, snapshot: Snapshot): 
   if (filters.type && event.type !== filters.type) return false;
   if (filters.payeeId && event.payeeId !== filters.payeeId) return false;
 
+  if (filters.tag) {
+    const tags = parseTags(event.notes);
+    if (!tags.map((x) => x.toLowerCase()).includes(filters.tag.toLowerCase())) return false;
+  }
+
+  if (filters.status === 'waiting' && !row.waiting) return false;
+  if (filters.status === 'posted' && (row.waiting || event.status !== 'posted')) return false;
+  if (filters.status === 'pending' && event.status === 'posted' && !row.waiting) return false;
+
+  if (filters.edited && !event.correctionOf) return false;
+
   const accountIds = new Set(snapshot.accounts.map((a) => a.id));
   const moneyAccount = event.lines.find((l) => accountIds.has(l.ledgerAccountId))?.ledgerAccountId;
   if (filters.accountId && moneyAccount !== filters.accountId) return false;
@@ -36,10 +54,7 @@ export function applyFilters(row: Row, filters: TxFilters, snapshot: Snapshot): 
   if (filters.categoryId && categoryLine?.ledgerAccountId !== filters.categoryId) return false;
   if (filters.uncategorized && categoryLine && snapshot.categories.some((c) => c.id === categoryLine.ledgerAccountId)) return false;
 
-  if (filters.hasReceipt) {
-    const n = event.notes ?? '';
-    if (!n.startsWith('receipt:') && !n.startsWith('http')) return false;
-  }
+  if (filters.hasReceipt && !parseReceipt(event.notes) && !(event.notes ?? '').startsWith('http')) return false;
 
   const magnitude = row.amount < 0n ? -row.amount : row.amount;
   if (filters.amountMin !== undefined && magnitude < filters.amountMin) return false;
@@ -48,7 +63,10 @@ export function applyFilters(row: Row, filters: TxFilters, snapshot: Snapshot): 
   return true;
 }
 
-export type FilterChip = { key: keyof TxFilters | 'uncategorized' | 'hasReceipt'; label: string };
+export type FilterChip = {
+  key: keyof TxFilters | 'uncategorized' | 'hasReceipt' | 'edited' | 'tag' | 'status';
+  label: string;
+};
 
 export function filterChips(filters: TxFilters, snapshot: Snapshot): FilterChip[] {
   const chips: FilterChip[] = [];
@@ -67,8 +85,14 @@ export function filterChips(filters: TxFilters, snapshot: Snapshot): FilterChip[
   if (filters.payeeId) {
     chips.push({ key: 'payeeId', label: snapshot.payees.find((p) => p.id === filters.payeeId)?.name ?? '' });
   }
+  if (filters.tag) {
+    chips.push({ key: 'tag', label: filters.tag });
+  }
   if (filters.type) {
-    chips.push({ key: 'type', label: t(`add.kind.${filters.type}` as 'add.kind.expense') });
+    chips.push({ key: 'type', label: t(`panel.type.${filters.type}` as 'panel.type.expense') });
+  }
+  if (filters.status) {
+    chips.push({ key: 'status', label: t(`tx.filter.status.${filters.status}` as 'tx.filter.status.posted') });
   }
   if (filters.amountMin !== undefined || filters.amountMax !== undefined) {
     chips.push({ key: 'amountMin', label: t('tx.filter.amount') });
@@ -78,6 +102,9 @@ export function filterChips(filters: TxFilters, snapshot: Snapshot): FilterChip[
   }
   if (filters.hasReceipt) {
     chips.push({ key: 'hasReceipt', label: t('tx.filter.hasReceipt') });
+  }
+  if (filters.edited) {
+    chips.push({ key: 'edited', label: t('tx.filter.edited') });
   }
   return chips;
 }
@@ -94,6 +121,12 @@ export function removeChip(filters: TxFilters, key: FilterChip['key']): TxFilter
     delete next.uncategorized;
   } else if (key === 'hasReceipt') {
     delete next.hasReceipt;
+  } else if (key === 'edited') {
+    delete next.edited;
+  } else if (key === 'tag') {
+    delete next.tag;
+  } else if (key === 'status') {
+    delete next.status;
   } else {
     delete next[key];
   }
@@ -106,14 +139,17 @@ export function countActive(filters: TxFilters): number {
   if (filters.accountId) n++;
   if (filters.categoryId) n++;
   if (filters.payeeId) n++;
+  if (filters.tag) n++;
   if (filters.type) n++;
+  if (filters.status) n++;
   if (filters.amountMin !== undefined || filters.amountMax !== undefined) n++;
   if (filters.uncategorized) n++;
   if (filters.hasReceipt) n++;
+  if (filters.edited) n++;
   return n;
 }
 
-export type DatePreset = 'thisMonth' | 'lastMonth' | 'last30';
+export type DatePreset = 'thisMonth' | 'lastMonth' | 'last30' | 'last3Months' | 'thisYear' | 'lastYear';
 
 export function applyDatePreset(preset: DatePreset, today: string): Pick<TxFilters, 'dateFrom' | 'dateTo'> {
   const [y, m] = today.split('-').map(Number) as [number, number];
@@ -128,6 +164,17 @@ export function applyDatePreset(preset: DatePreset, today: string): Pick<TxFilte
     const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     return { dateFrom: `${ym}-01`, dateTo: `${ym}-${String(last).padStart(2, '0')}` };
   }
+  if (preset === 'last3Months') {
+    const d = new Date(y, m - 3, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return { dateFrom: `${ym}-01`, dateTo: today };
+  }
+  if (preset === 'thisYear') {
+    return { dateFrom: `${y}-01-01`, dateTo: today };
+  }
+  if (preset === 'lastYear') {
+    return { dateFrom: `${y - 1}-01-01`, dateTo: `${y - 1}-12-31` };
+  }
   const from = addDays(today, -30);
   return { dateFrom: from, dateTo: today };
 }
@@ -136,4 +183,61 @@ function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+/** URL params for PU-19 / TB-13 (filters live in the address). */
+export function filtersToParams(filters: TxFilters): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (filters.dateFrom) out.from = filters.dateFrom;
+  if (filters.dateTo) out.to = filters.dateTo;
+  if (filters.accountId) out.account = filters.accountId;
+  if (filters.categoryId) out.category = filters.categoryId;
+  if (filters.payeeId) out.payee = filters.payeeId;
+  if (filters.tag) out.tag = filters.tag;
+  if (filters.type) out.type = filters.type;
+  if (filters.status) out.status = filters.status;
+  if (filters.amountMin !== undefined) out.min = filters.amountMin.toString();
+  if (filters.amountMax !== undefined) out.max = filters.amountMax.toString();
+  if (filters.uncategorized) out.uncategorized = '1';
+  if (filters.hasReceipt) out.hasReceipt = '1';
+  if (filters.edited) out.edited = '1';
+  return out;
+}
+
+export function filtersFromParams(params: Record<string, string | undefined>): TxFilters {
+  const filters: TxFilters = {};
+  if (params.from) filters.dateFrom = params.from;
+  if (params.to) filters.dateTo = params.to;
+  if (params.account) filters.accountId = params.account;
+  if (params.category) filters.categoryId = params.category;
+  if (params.payee) filters.payeeId = params.payee;
+  if (params.tag) filters.tag = params.tag;
+  if (params.type) filters.type = params.type as EventType;
+  if (params.status === 'posted' || params.status === 'pending' || params.status === 'waiting') filters.status = params.status;
+  if (params.min && /^\d+$/.test(params.min)) filters.amountMin = BigInt(params.min);
+  if (params.max && /^\d+$/.test(params.max)) filters.amountMax = BigInt(params.max);
+  if (params.uncategorized === '1') filters.uncategorized = true;
+  if (params.hasReceipt === '1') filters.hasReceipt = true;
+  if (params.edited === '1') filters.edited = true;
+  return filters;
+}
+
+export const FILTER_PARAM_KEYS = [
+  'from',
+  'to',
+  'account',
+  'category',
+  'payee',
+  'tag',
+  'type',
+  'status',
+  'min',
+  'max',
+  'uncategorized',
+  'hasReceipt',
+  'edited',
+] as const;
+
+export function clearFilterParams(): Record<string, undefined> {
+  return Object.fromEntries(FILTER_PARAM_KEYS.map((k) => [k, undefined])) as Record<string, undefined>;
 }

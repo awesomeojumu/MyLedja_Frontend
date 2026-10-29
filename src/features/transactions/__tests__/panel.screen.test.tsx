@@ -55,7 +55,7 @@ describe('Transaction panel', () => {
   it('opens from its row and has its own address', async () => {
     const { id } = await withGroceries();
     await fireEvent.press(screen.getByTestId(`open-${id}`));
-    expect(router.setParams).toHaveBeenCalledWith({ tx: id });
+    expect(router.setParams).toHaveBeenCalledWith({ tx: id, txn: id });
     expect(await screen.findByTestId('tx-panel')).toBeTruthy();
     expect(screen.getByTestId('panel-amount')).toHaveTextContent('−₦18,450.00');
   });
@@ -71,8 +71,8 @@ describe('Transaction panel', () => {
     expect(monthSpent(s.chart, periodTotals(s.events), '2026-10')).toBe(1_854_000n);
     const edited = s.events.find((e) => e.correctionOf === id)!;
     // Saving a correction should keep the panel open on the new event.
-    expect(router.setParams).toHaveBeenCalledWith({ tx: edited.id });
-    await act(async () => router.setParams({ tx: edited.id }));
+    expect(router.setParams).toHaveBeenCalledWith({ tx: edited.id, txn: edited.id });
+    await act(async () => router.setParams({ tx: edited.id, txn: edited.id }));
     const history = await screen.findByTestId('panel-history');
     expect(within(history).getByText('−₦18,450.00')).toBeTruthy();
     expect(within(history).getByText('−₦18,540.00')).toBeTruthy();

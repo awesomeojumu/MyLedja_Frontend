@@ -123,7 +123,7 @@ function stageOrder(stage: RuleStage): number {
 export type TransactionInput =
   | { kind: 'expense'; accountId: string; parts: ExpensePart[]; date: string; payeeName?: string; notes?: string }
   | { kind: 'income'; accountId: string; categoryId: string; amount: bigint; date: string; payeeName?: string; notes?: string }
-  | { kind: 'transfer'; fromId: string; toId: string; amount: bigint; date: string; notes?: string };
+  | { kind: 'transfer'; fromId: string; toId: string; amount: bigint; date: string; notes?: string; toAmount?: bigint };
 
 /**
  * Writes the server derives from another operation, or keeps per device for now: they're saved locally and never
@@ -1081,12 +1081,16 @@ export class WorkspaceRepository {
   }
 
   /** Bulk categorize uses corrections (TECH-SPEC 8). */
-  async bulkSetCategory(eventIds: string[], categoryId: string): Promise<Result> {
+  async bulkSetCategory(eventIds: string[], categoryId: string): Promise<Result<{ skippedReconciled: number }>> {
+    let skippedReconciled = 0;
     for (const id of eventIds) {
       const snapshot = await this.load();
       const event = snapshot.events.find((e) => e.id === id);
       if (!event || event.status !== 'posted' || (event.type !== 'expense' && event.type !== 'income')) continue;
-      if (event.reconciledBy) return { ok: false, error: 'reconciled' };
+      if (event.reconciledBy) {
+        skippedReconciled += 1;
+        continue;
+      }
       const accountIds = new Set(snapshot.accounts.map((a) => a.id));
       const money = event.lines.find((l) => accountIds.has(l.ledgerAccountId));
       if (!money) continue;
@@ -1113,7 +1117,7 @@ export class WorkspaceRepository {
       const corrected = await this.correctTransaction(id, input);
       if (!corrected.ok) return corrected;
     }
-    return { ok: true, value: undefined };
+    return { ok: true, value: { skippedReconciled } };
   }
 
   async bulkDelete(eventIds: string[], date: string): Promise<Result> {
@@ -1124,12 +1128,20 @@ export class WorkspaceRepository {
     return { ok: true, value: undefined };
   }
 
-  async bulkSetPayee(eventIds: string[], payeeId: string): Promise<Result> {
+  async bulkSetPayee(eventIds: string[], payeeId: string): Promise<Result<{ skippedReconciled: number }>> {
+    let skippedReconciled = 0;
     for (const id of eventIds) {
+      const snapshot = await this.load();
+      const event = snapshot.events.find((e) => e.id === id);
+      if (!event || event.status !== 'posted') continue;
+      if (event.reconciledBy) {
+        skippedReconciled += 1;
+        continue;
+      }
       const moved = await this.setEventPayee(id, payeeId);
       if (!moved.ok) return moved;
     }
-    return { ok: true, value: undefined };
+    return { ok: true, value: { skippedReconciled } };
   }
 
   savedForGoal(goalId: string, snapshot: Snapshot): bigint {
@@ -1647,7 +1659,12 @@ export class WorkspaceRepository {
     const r =
       input.kind === 'income'
         ? buildIncome(chart, { accountId: input.accountId, categoryId: input.categoryId, amount: input.amount })
-        : buildTransfer(chart, { fromId: input.fromId, toId: input.toId, amount: input.amount });
+        : buildTransfer(chart, {
+            fromId: input.fromId,
+            toId: input.toId,
+            amount: input.amount,
+            toAmount: input.toAmount,
+          });
     return r.ok ? { ok: true, value: { lines: r.value } } : r;
   }
 
