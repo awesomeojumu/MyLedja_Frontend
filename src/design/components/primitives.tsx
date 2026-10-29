@@ -143,13 +143,18 @@ export function PillTag({
   selected,
   onPress,
   testID,
+  soft,
 }: {
   label: string;
   selected?: boolean;
   onPress?: () => void;
   testID?: string;
+  /** DESIGN pill-tag-soft — subdued fill for rule chips. */
+  soft?: boolean;
 }) {
   const theme = useTheme();
+  const fill = selected ? theme.tagFill : soft ? theme.page : theme.card;
+  const border = selected ? theme.tagFill : theme.border;
   return (
     <Pressable
       testID={testID}
@@ -164,9 +169,9 @@ export function PillTag({
         justifyContent: 'center',
         paddingHorizontal: s['spacing-md'],
         borderRadius: r['rounded-pill'],
-        backgroundColor: selected ? theme.tagFill : theme.card,
+        backgroundColor: fill,
         borderWidth: 1,
-        borderColor: selected ? theme.tagFill : theme.border,
+        borderColor: border,
       }}
     >
       <Text variant="caption" style={{ color: selected ? theme.tagText : theme.textSecondary }}>

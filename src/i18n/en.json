@@ -2695,5 +2695,21 @@
   "health.shareCash": "Cash counted: {amount}",
   "health.cashAccounts": "Accounts that count as cash",
   "health.target": "Emergency target",
-  "health.targetMonths": "{n} months"
+  "health.targetMonths": "{n} months",
+  "rules.saveRule": "Save rule",
+  "rules.needCondition": "Add at least one condition",
+  "rules.needAction": "Add at least one action",
+  "rules.needActionValue": "Fill in each action",
+  "rules.splitInvalid": "Split needs at least two rows",
+  "rules.splitMustTotal": "Split must total 100% or the full amount",
+  "rules.splitMode": "Split by",
+  "rules.splitPct": "Percent",
+  "rules.splitAmt": "Amount",
+  "rules.splitAddRow": "Add split row",
+  "rules.stageLabel": "Stage",
+  "rules.beforeAfter": "{before} → {after}",
+  "rules.runSkipped": "{count} reconciled skipped",
+  "panel.newRuleFromThis": "New rule from this",
+  "debts.moneyBack.alwaysDoThis": "Always do this",
+  "debts.moneyBack.alwaysToast": "Rule saved. Recorded as money back"
 }

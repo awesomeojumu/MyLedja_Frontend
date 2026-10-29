@@ -22,13 +22,14 @@ import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import type { Snapshot, TransactionInput, TxEvent } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
-import { ruleFromPayee } from '@/features/rules/helpers';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { pickImageUri } from '@/features/payees/pickMedia';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { purchaseCost, refundedSoFar } from '@/ledger';
 import { formatNaira } from '@/money';
+
+import { ruleFromTransaction } from '@/features/rules/helpers';
 
 import { ledgerMessage, today } from './helpers';
 import { duplicateInput } from './duplicate';
@@ -153,14 +154,6 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         setUnlockBusy(false);
       }
     })();
-  };
-
-  const createRule = async () => {
-    if (!payee) return;
-    const draft = ruleFromPayee(payee.name, categoryId);
-    const rule = await repo.createRule({ ...draft, order: snapshot.rules.length });
-    onClose();
-    router.push(`/rules?edit=${rule.id}`);
   };
 
   const alwaysUseCategory = async () => {
@@ -328,7 +321,25 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         {error ? <InlineError testID="panel-error" message={error} /> : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
           <Button kind="secondary" testID="panel-duplicate" label={t('panel.duplicate')} onPress={() => void duplicate()} />
-          {payee ? <Button kind="secondary" testID="panel-new-rule" label={t('panel.newRule')} onPress={() => void createRule()} /> : null}
+          {event.status === 'posted' && (event.type === 'expense' || event.type === 'income') ? (
+            <Button
+              kind="secondary"
+              testID="panel-new-rule"
+              label={t('panel.newRuleFromThis')}
+              onPress={() => {
+                void (async () => {
+                  const draft = ruleFromTransaction({
+                    payeeName: payee?.name,
+                    description: event.notes,
+                    categoryId: others[0]?.ledgerAccountId,
+                  });
+                  const rule = await repo.createRule({ ...draft, order: snapshot.rules.length });
+                  onClose();
+                  router.push(`/rules?rule=${rule.id}`);
+                })();
+              }}
+            />
+          ) : null}
           {event.status === 'posted' && !event.reconciledBy ? (
             <Button kind="secondary" testID="panel-delete" label={t('tx.delete')} onPress={() => void remove()} />
           ) : null}
