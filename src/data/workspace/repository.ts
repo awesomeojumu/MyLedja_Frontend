@@ -904,6 +904,43 @@ export class WorkspaceRepository {
     return { ok: true, value: reconcile };
   }
 
+  /**
+   * Apply a finished reconcile returned by the server (P10 online path). Locks ticked rows and
+   * saves history locally; the adjustment event itself arrives via sync pull.
+   */
+  async applyServerReconcile(input: {
+    id: string;
+    accountId: string;
+    statementDate: string;
+    statementBalance: string;
+    cleared: string;
+    tickedIds: string[];
+    adjustmentId: string | null;
+    finishedAt: string | null;
+    finishedBy: string | null;
+    adjustmentMinor: string;
+  }): Promise<Reconcile> {
+    for (const id of input.tickedIds) {
+      await this.setEventMeta(id, { cleared: true, reconciledBy: input.id });
+    }
+    if (input.adjustmentId) {
+      await this.setEventMeta(input.adjustmentId, { cleared: true, reconciledBy: input.id });
+    }
+    const reconcile: Reconcile = {
+      id: input.id,
+      accountId: input.accountId,
+      statementDate: input.statementDate,
+      statementBalance: input.statementBalance,
+      calculatedBalance: input.cleared,
+      adjustment: input.adjustmentMinor,
+      finishedAt: input.finishedAt ?? new Date().toISOString(),
+      finishedBy: input.finishedBy ?? undefined,
+    };
+    const { id, ...data } = reconcile;
+    await this.put('reconciles', id, data, 'reconcile.finish');
+    return reconcile;
+  }
+
   assigned(categoryId: string, month: string, snapshot: Snapshot): bigint {
     return snapshot.assigns.get(budgetAssignId(categoryId, month)) ?? 0n;
   }

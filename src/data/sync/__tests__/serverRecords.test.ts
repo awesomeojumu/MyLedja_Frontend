@@ -25,6 +25,48 @@ describe('server records into local records (Phase 2 join)', () => {
     ]);
   });
 
+  it('maps reconcile locks and finished reconciliations from the server', () => {
+    const locked = localFromServer(
+      'transactions',
+      't2',
+      {
+        id: 't2',
+        type: 'expense',
+        date: '2026-10-15',
+        lines: [],
+        links: {},
+        reconciled: true,
+        reconciliationId: 'rec-1',
+        clearedAccountIds: ['acc-bank'],
+        version: 1,
+      },
+      'ws',
+    );
+    expect(locked!.data).toMatchObject({ reconciledBy: 'rec-1', cleared: true });
+    const history = localFromServer(
+      'reconciliations',
+      'rec-1',
+      {
+        id: 'rec-1',
+        accountId: 'acc-bank',
+        status: 'finished',
+        statementDate: '2026-10-31',
+        statementBalance: '81230000',
+        cleared: '81230000',
+        finishedAt: '2026-10-31T12:00:00.000Z',
+        finishedBy: 'user-1',
+        version: 2,
+      },
+      'ws',
+    );
+    expect(history).toMatchObject({
+      collection: 'reconciles',
+      id: 'rec-1',
+      data: { accountId: 'acc-bank', finishedBy: 'user-1', statementBalance: '81230000' },
+    });
+    expect(localFromServer('reconciliations', 'rec-2', { id: 'rec-2', status: 'in_progress', accountId: 'a', statementDate: '2026-10-01', statementBalance: '0' }, 'ws')).toBeNull();
+  });
+
   it('keeps no copy of system categories, and keys occurrences by schedule and date', () => {
     expect(localFromServer('categories', 'c1', { id: 'c1', name: 'Fees', system: 'fees' }, 'ws')).toBeNull();
     const occ = localFromServer('occurrences', 'o1', { scheduleId: 's1', date: '2026-10-05', amount: '100', status: 'paid', matchedTransactionId: 't9' }, 'ws');

@@ -238,7 +238,9 @@ export function toBackendOperation(op: Operation, accounts: Account[]): BackendO
         schemaVersion: op.schemaVersion,
       };
     }
-    if (eventType === 'notes' || eventType === 'meta' || eventType === 'unlock' || eventType === 'payee' || eventType === 'link_stream' || eventType === 'one_off') {
+    // Unlock goes through POST …/transactions/:id/unlock (REST), not sync ops.
+    if (eventType === 'unlock') return { local: true };
+    if (eventType === 'notes' || eventType === 'meta' || eventType === 'payee' || eventType === 'link_stream' || eventType === 'one_off') {
       return {
         operationId: op.operationId,
         type: 'transaction.update',
@@ -421,6 +423,7 @@ const LOCAL_COLLECTION: Record<string, string> = {
   budget_months: 'budget_assigns',
   schedules: 'recurring',
   goal_allocations: 'allocations',
+  reconciliations: 'reconciles',
 };
 
 /** One change from the feed, as the local change it stands for; null when the app keeps no copy. */

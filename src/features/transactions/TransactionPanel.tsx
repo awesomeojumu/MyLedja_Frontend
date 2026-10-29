@@ -1,13 +1,30 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
-import { Amount, AmountInput, Button, DatePicker, InlineError, Panel, PillTag, Select, Text, TextInput, useToast } from '@/design/components';
+import { reconcileApi } from '@/api/reconcile';
+import {
+  Amount,
+  AmountInput,
+  Button,
+  Confirm,
+  DatePicker,
+  formatDay,
+  InlineError,
+  Panel,
+  PillTag,
+  Select,
+  Text,
+  TextInput,
+  useToast,
+} from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import type { Snapshot, TransactionInput, TxEvent } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { t } from '@/i18n';
+import { useOnline } from '@/lib/useOnline';
 import { purchaseCost, refundedSoFar } from '@/ledger';
 import { formatNaira } from '@/money';
 
@@ -46,15 +63,23 @@ function amountOf(snapshot: Snapshot, e: TxEvent): bigint {
 
 export function TransactionPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const { repo, snapshot } = useWorkspace();
+  const { client, user, source } = useAuth();
+  const online = useOnline();
+  const api = useMemo(() => reconcileApi(client), [client]);
   const toast = useToast();
   const theme = useTheme();
   const router = useRouter();
   const event = snapshot?.events.find((e) => e.id === id);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unlockOpen, setUnlockOpen] = useState(false);
+  const [unlockBusy, setUnlockBusy] = useState(false);
   const waiting = snapshot?.waiting.has(id) ?? false;
 
   if (!snapshot || !event) return null;
+  const reconcileDate =
+    snapshot.reconciles.find((r) => r.id === event.reconciledBy)?.statementDate ??
+    snapshot.reconciles.find((r) => event.lines.some((l) => l.ledgerAccountId === r.accountId))?.statementDate;
   const names = new Map([...snapshot.accounts.map((a) => [a.id, a.name] as const), ...snapshot.categories.map((c) => [c.id, c.name] as const)]);
   const money = moneyLine(snapshot, event);
   const others = event.lines.filter((l) => !money.includes(l));
@@ -91,7 +116,31 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
     toast.show(t('tx.deleted'), () => void repo.restore(event));
   };
 
+  const unlockBody = reconcileDate
+    ? t('panel.unlockBodyDated', { date: formatDay(reconcileDate) })
+    : t('panel.unlockBody');
+
+  const doUnlock = () => {
+    if (unlockBusy) return;
+    setUnlockBusy(true);
+    void (async () => {
+      try {
+        if (user && online && source !== 'mock') {
+          await api.unlock(user.workspaceId, event.id);
+        }
+        await repo.unlockEvent(event.id);
+        toast.show(t('panel.unlockDone'));
+        setUnlockOpen(false);
+      } catch {
+        setError(t('errors.network'));
+      } finally {
+        setUnlockBusy(false);
+      }
+    })();
+  };
+
   return (
+    <>
     <Panel visible title={t('panel.title')} onClose={onClose} testID="tx-panel" width={440}>
       <View style={{ gap: sp['spacing-lg'] }}>
         <View style={{ gap: sp['spacing-xs'] }}>
@@ -123,12 +172,12 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         {event.reconciledBy ? (
           <View style={{ gap: sp['spacing-sm'] }} testID="panel-locked">
             <PillTag label={t('panel.locked')} />
-            <Text tone="textSecondary">{t('panel.unlockBody')}</Text>
+            <Text tone="textSecondary">{t('panel.unlock')}</Text>
             <Button
               kind="secondary"
               testID="panel-unlock"
               label={t('panel.unlockConfirm')}
-              onPress={() => void repo.unlockEvent(event.id).then(() => toast.show(t('panel.unlockDone')))}
+              onPress={() => setUnlockOpen(true)}
             />
           </View>
         ) : null}
@@ -228,6 +277,17 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         </View>
       </View>
     </Panel>
+    {/* Sibling of Panel (GoalPanel pattern) so Confirm isn't nested inside another Modal. */}
+    <Confirm
+      visible={unlockOpen}
+      testID="panel-unlock-confirm"
+      title={t('panel.unlockTitle')}
+      body={unlockBody}
+      confirmLabel={t('panel.unlockConfirm')}
+      onCancel={() => setUnlockOpen(false)}
+      onConfirm={doUnlock}
+    />
+    </>
   );
 }
 

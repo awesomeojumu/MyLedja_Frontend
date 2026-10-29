@@ -80,6 +80,8 @@ function eventFromServer(doc: Doc, workspaceId: string): StoredEvent & { operati
     notes: str(doc.notes),
     correctionOf: str(links.correctionOf),
     cleared: Array.isArray(doc.clearedAccountIds) && doc.clearedAccountIds.length > 0 ? true : undefined,
+    // Locked by a finished reconcile (🔒). Prefer the server id; `reconciled: true` alone still locks.
+    reconciledBy: str(doc.reconciliationId) ?? (doc.reconciled === true ? 'reconciled' : undefined),
     importId: str(doc.importId),
     goalId: str(links.goalId),
     debtId: str(links.debtId),
@@ -219,6 +221,21 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         date: d.date,
         fromAccountId: str(d.fromAccountId) ?? '',
         kind: spend ? 'spend' : 'allocate',
+      });
+    }
+    case 'reconciliations': {
+      // Only finished reconciles belong in Account Details history (TB03-3).
+      if (d.status && d.status !== 'finished') return null;
+      const statement = String(d.statementBalance ?? d.statementBalanceMinor ?? '0');
+      const cleared = String(d.cleared ?? statement);
+      return rec('reconciles', id, {
+        accountId: String(d.accountId),
+        statementDate: String(d.statementDate),
+        statementBalance: statement,
+        calculatedBalance: cleared,
+        adjustment: '0',
+        finishedAt: str(d.finishedAt) ?? new Date(0).toISOString(),
+        finishedBy: str(d.finishedBy),
       });
     }
     case 'income_streams': {

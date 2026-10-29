@@ -55,6 +55,18 @@ describe('mapOperation', () => {
     });
   });
 
+  it('keeps event.unlock local (REST unlock owns the server write)', () => {
+    expect(
+      toBackendOperation(
+        op({
+          type: 'event.unlock',
+          payload: { collection: 'events', id: 'evt1', data: { reconciledBy: undefined } },
+        }),
+        [bank],
+      ),
+    ).toEqual({ local: true });
+  });
+
   it('maps backend conflict and change shapes', () => {
     expect(
       fromBackendResult({
