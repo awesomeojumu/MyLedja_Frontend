@@ -14,9 +14,10 @@ import { budgetForMonth, overspentCategories } from '../helpers';
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 
 let mockWidth = 1200;
+let mockHeight = 900;
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
-  default: () => ({ width: mockWidth, height: 900, scale: 1, fontScale: 1 }),
+  default: () => ({ width: mockWidth, height: mockHeight, scale: 1, fontScale: 1 }),
 }));
 
 async function seeded(style: 'tracking' | 'envelope' = 'tracking') {
@@ -55,6 +56,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(new Date('2026-10-28T12:00:00Z'));
   mockWidth = 1200;
+  mockHeight = 900;
   resetParams();
   jest.clearAllMocks();
 });
@@ -283,18 +285,32 @@ describe('Category page', () => {
     expect(screen.getByTestId('category-plan-note')).toHaveTextContent('Keep weekly shop under control', { exact: false });
   });
 
-  it('P06-12: Edit amount carry-over and template quick pick', async () => {
+  it('P06-12: Edit amount template quick pick; carry switch when already on (PU-07)', async () => {
     const { sync, repo, id } = await seeded();
     await repo.saveBudgetTemplate('Basics', [{ categoryId: id('Market'), amountMinor: '40000000', ruleKind: 'monthly' }]);
+    // Tracking: carry switch only when already on — enable first, then toggle off in the sheet.
+    const before = await repo.load();
+    const market = before.categories.find((c) => c.id === id('Market'))!;
+    await repo.updateCategory({ ...market, carryOver: true });
     await renderWithProviders(wrap(<BudgetScreen />), { sync });
     await fireEvent.press(await screen.findByTestId(`budget-planned-${id('Market')}`));
     await fireEvent.press(await screen.findByTestId('budget-edit-template-pick'));
+    expect(screen.getByTestId('budget-edit-carry')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('budget-edit-carry'));
     await fireEvent.press(screen.getByTestId('budget-edit-save'));
     await waitFor(async () => {
       const after = await repo.load();
       expect(repo.assigned(id('Market'), '2026-10', after)).toBe(40_000_000n);
-      expect(after.categories.find((c) => c.id === id('Market'))?.carryOver).toBe(true);
+      expect(after.categories.find((c) => c.id === id('Market'))?.carryOver).toBe(false);
     });
+  });
+
+  it('D21: tablet landscape enables 3-month control', async () => {
+    mockWidth = 900;
+    mockHeight = 600;
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<BudgetScreen />), { sync });
+    expect(await screen.findByTestId('budget-month-span')).toBeTruthy();
+    expect(screen.getByTestId('budget-summary-column')).toBeTruthy();
   });
 });

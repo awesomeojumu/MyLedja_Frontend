@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, TextInput as RNTextInput, useWindowDimensions, View } from 'react-native';
 import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { ChevronDown, ChevronLeft, ChevronRight, CircleDot, RotateCcw } from 'lucide-react-native';
 
@@ -26,7 +26,7 @@ import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { catalogue, t, type TextKey } from '@/i18n';
-import { formatNaira } from '@/money';
+import { formatNaira, parseAmount, toInputText } from '@/money';
 import { monthOf } from '@/ledger';
 
 import { categoryIconByName, defaultIconForName } from './categoryIcons';
@@ -84,8 +84,13 @@ export function BudgetScreen() {
   const toast = useToast();
   const router = useRouter();
   const size = useSizeClass();
-  const wideEnough = size === 'desktop' || size === 'wide';
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
+  // D21: tablet landscape gets 3-month + summary; desktop/wide always; portrait tablet uses strip only.
+  const tabletLandscape = size === 'tablet' && landscape;
+  const wideEnough = size === 'desktop' || size === 'wide' || tabletLandscape;
   const showSummaryColumn = wideEnough;
+  const useInlinePlanned = Platform.OS === 'web';
   const params = useGlobalSearchParams<{
     plan?: string;
     move?: string;
@@ -105,6 +110,8 @@ export function BudgetScreen() {
   const [rowMenuId, setRowMenuId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
+  const swipeStartX = useRef<number | null>(null);
 
   const monthSpan: '1' | '3' = params.months === '3' && wideEnough ? '3' : '1';
   const groupBy: BudgetGroupBy = params.group === 'type' ? 'type' : 'groups';
@@ -117,9 +124,17 @@ export function BudgetScreen() {
   const setGroupBy = (v: BudgetGroupBy) => router.setParams({ group: v === 'groups' ? undefined : v });
   const openEdit = (catId: string) => {
     setRowMenuId(null);
+    // D12: web edits Planned in the grid cell (Enter/Tab); phone/tablet keep sheet/popover via ?plan=.
+    if (useInlinePlanned) {
+      setInlineEditId(catId);
+      return;
+    }
     router.setParams({ plan: catId });
   };
-  const closeEdit = () => router.setParams({ plan: undefined });
+  const closeEdit = () => {
+    setInlineEditId(null);
+    router.setParams({ plan: undefined });
+  };
   const openMove = (fromId?: string) => router.setParams({ move: fromId ?? '1' });
   const closeMove = () => router.setParams({ move: undefined });
   const openCover = () => router.setParams({ cover: '1' });
@@ -153,26 +168,55 @@ export function BudgetScreen() {
     return model.groups.flatMap(([, cats]) => cats.map((cat) => cat.id));
   }, [model]);
 
-  const savePlanned = async (amount: bigint, opts: { carryOver: boolean; note: string }) => {
-    if (!editId || !snapshot) return;
+  const savePlannedFor = async (
+    catId: string,
+    amount: bigint,
+    opts: { carryOver: boolean; note: string },
+    andNext?: boolean,
+  ) => {
+    if (!snapshot) return;
     setError(null);
-    const cat = snapshot.categories.find((c) => c.id === editId);
-    const prevAmount = repo.assigned(editId, month, snapshot);
+    const cat = snapshot.categories.find((c) => c.id === catId);
+    const prevAmount = repo.assigned(catId, month, snapshot);
     const prevCarry = cat?.carryOver ?? false;
-    const prevNote = snapshot.assignNotes.get(`${editId}:${month}`) ?? '';
+    const prevNote = snapshot.assignNotes.get(`${catId}:${month}`) ?? '';
     if (cat && cat.carryOver !== opts.carryOver) {
       await repo.updateCategory({ ...cat, carryOver: opts.carryOver });
     }
-    await repo.setAssigned(editId, month, amount, { note: opts.note });
+    await repo.setAssigned(catId, month, amount, { note: opts.note });
     toast.show(t('budget.planSaved'), () => {
       void (async () => {
         const current = await repo.load();
-        const c2 = current.categories.find((x) => x.id === editId);
+        const c2 = current.categories.find((x) => x.id === catId);
         if (c2 && c2.carryOver !== prevCarry) await repo.updateCategory({ ...c2, carryOver: prevCarry });
-        await repo.setAssigned(editId, month, prevAmount, { note: prevNote });
+        await repo.setAssigned(catId, month, prevAmount, { note: prevNote });
       })();
     });
+    if (andNext) {
+      const i = categoryOrder.indexOf(catId);
+      const nextId = i >= 0 ? categoryOrder[i + 1] : undefined;
+      if (nextId && useInlinePlanned) {
+        setInlineEditId(nextId);
+        return;
+      }
+      if (nextId) {
+        router.setParams({ plan: nextId });
+        return;
+      }
+    }
     closeEdit();
+  };
+
+  const savePlanned = async (amount: bigint, opts: { carryOver: boolean; note: string }) => {
+    if (!editId) return;
+    await savePlannedFor(editId, amount, opts);
+  };
+
+  const saveInlinePlanned = async (catId: string, amount: bigint, andNext: boolean) => {
+    if (!snapshot) return;
+    const cat = snapshot.categories.find((c) => c.id === catId);
+    const note = snapshot.assignNotes.get(`${catId}:${month}`) ?? '';
+    await savePlannedFor(catId, amount, { carryOver: cat?.carryOver ?? false, note }, andNext);
   };
 
   const openRowMenu = (catId: string) => setRowMenuId(catId);
@@ -182,6 +226,19 @@ export function BudgetScreen() {
       <ScrollView contentContainerStyle={{ gap: sp['spacing-lg'] }}>
         <View
           testID="budget-month-swipe"
+          onTouchStart={(e) => {
+            if (size !== 'phone') return;
+            swipeStartX.current = e.nativeEvent.pageX;
+          }}
+          onTouchEnd={(e) => {
+            if (size !== 'phone') return;
+            const start = swipeStartX.current;
+            swipeStartX.current = null;
+            if (start == null) return;
+            const dx = e.nativeEvent.pageX - start;
+            if (dx < -40) setMonth(nextMonth(month));
+            else if (dx > 40) setMonth(prevMonth(month));
+          }}
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp['spacing-md'] }}
         >
           <Pressable
@@ -458,17 +515,26 @@ export function BudgetScreen() {
                                               paddingHorizontal: 2,
                                             }}
                                           >
-                                            <Pressable
-                                              testID={m === month ? `budget-planned-${cat.id}` : undefined}
-                                              accessibilityRole="button"
-                                              onPress={() => {
-                                                setMonth(m);
-                                                openEdit(cat.id);
-                                              }}
-                                              style={{ minWidth: 48, alignItems: 'flex-end' }}
-                                            >
-                                              <Amount minor={r.assigned} variant="caption" />
-                                            </Pressable>
+                                            {m === month && inlineEditId === cat.id ? (
+                                              <InlinePlannedInput
+                                                catId={cat.id}
+                                                assigned={r.assigned}
+                                                onCommit={(amount, andNext) => void saveInlinePlanned(cat.id, amount, andNext)}
+                                                onCancel={() => setInlineEditId(null)}
+                                              />
+                                            ) : (
+                                              <Pressable
+                                                testID={m === month ? `budget-planned-${cat.id}` : undefined}
+                                                accessibilityRole="button"
+                                                onPress={() => {
+                                                  setMonth(m);
+                                                  openEdit(cat.id);
+                                                }}
+                                                style={{ minWidth: 48, alignItems: 'flex-end' }}
+                                              >
+                                                <Amount minor={r.assigned} variant="caption" />
+                                              </Pressable>
+                                            )}
                                             <Pressable
                                               testID={`budget-spent-${cat.id}-${m}`}
                                               accessibilityRole="link"
@@ -491,16 +557,25 @@ export function BudgetScreen() {
                                       })
                                     : (
                                       <>
-                                        <Pressable
-                                          testID={`budget-planned-${cat.id}`}
-                                          accessibilityRole="button"
-                                          accessibilityLabel={t('budget.editPlanned', { name: cat.name })}
-                                          onPress={() => openEdit(cat.id)}
-                                          onLongPress={() => openRowMenu(cat.id)}
-                                          style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
-                                        >
-                                          <Amount minor={row.assigned} />
-                                        </Pressable>
+                                        {inlineEditId === cat.id ? (
+                                          <InlinePlannedInput
+                                            catId={cat.id}
+                                            assigned={row.assigned}
+                                            onCommit={(amount, andNext) => void saveInlinePlanned(cat.id, amount, andNext)}
+                                            onCancel={() => setInlineEditId(null)}
+                                          />
+                                        ) : (
+                                          <Pressable
+                                            testID={`budget-planned-${cat.id}`}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={t('budget.editPlanned', { name: cat.name })}
+                                            onPress={() => openEdit(cat.id)}
+                                            onLongPress={() => openRowMenu(cat.id)}
+                                            style={{ width: 88, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+                                          >
+                                            <Amount minor={row.assigned} />
+                                          </Pressable>
+                                        )}
                                         <Pressable
                                           testID={`budget-spent-${cat.id}`}
                                           accessibilityRole="link"
@@ -705,6 +780,76 @@ export function BudgetScreen() {
 
       <TemplatesSheet visible={templatesOpen} month={month} onClose={() => setTemplatesOpen(false)} />
     </AppFrame>
+  );
+}
+
+/** D12 — web in-grid Planned edit: Enter saves, Tab saves and moves down. */
+function InlinePlannedInput({
+  catId,
+  assigned,
+  onCommit,
+  onCancel,
+}: {
+  catId: string;
+  assigned: bigint;
+  onCommit: (amount: bigint, andNext: boolean) => void;
+  onCancel: () => void;
+}) {
+  const theme = useTheme();
+  const [text, setText] = useState(() => toInputText(assigned));
+  const [minor, setMinor] = useState<bigint | null>(assigned);
+  const done = useRef(false);
+  const commit = (andNext: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    if (minor === null || minor < 0n) {
+      onCancel();
+      return;
+    }
+    onCommit(minor, andNext);
+  };
+  return (
+    <RNTextInput
+      testID={`budget-planned-inline-${catId}`}
+      accessibilityLabel={t('budget.editPlanned', { name: catId })}
+      autoFocus
+      value={text}
+      keyboardType="decimal-pad"
+      inputMode="decimal"
+      selectTextOnFocus
+      onChangeText={(next) => {
+        setText(next);
+        if (next.trim() === '') {
+          setMinor(null);
+          return;
+        }
+        const parsed = parseAmount(next);
+        setMinor(parsed.ok ? parsed.minor : null);
+      }}
+      onSubmitEditing={() => commit(false)}
+      onKeyPress={(e) => {
+        const key = e.nativeEvent.key;
+        if (key === 'Tab') {
+          (e as { preventDefault?: () => void }).preventDefault?.();
+          commit(true);
+        } else if (key === 'Escape') {
+          done.current = true;
+          onCancel();
+        }
+      }}
+      onBlur={() => commit(false)}
+      style={{
+        width: 88,
+        minHeight: 44,
+        textAlign: 'right',
+        color: theme.text,
+        borderWidth: 1,
+        borderColor: theme.link,
+        borderRadius: tokens.radius['rounded-sm'],
+        paddingHorizontal: sp['spacing-xs'],
+        fontVariant: ['tabular-nums'],
+      }}
+    />
   );
 }
 

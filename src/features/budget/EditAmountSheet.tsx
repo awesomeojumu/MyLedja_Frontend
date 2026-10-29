@@ -114,8 +114,8 @@ export function EditAmountSheet({
     return categoryOrder[i + 1] ?? null;
   }, [categoryId, categoryOrder]);
 
-  // Envelope: always (addendum). Tracking: always so carry can be turned on (existing P06-12).
-  const showCarry = true;
+  // Envelope: always. Tracking: only when the category already carries (PU-07 addendum).
+  const showCarry = snapshot.settings.budgetStyle === 'envelope' || !!(category?.carryOver);
 
   const requestClose = () => (dirty ? setConfirmDiscard(true) : onClose());
 
