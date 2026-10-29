@@ -1,13 +1,18 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { WorkspaceRepository } from '@/data/workspace/repository';
 import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
+import { resetParams, setParams } from '../../../../test/helpers/router';
 import { PayeesScreen } from '../PayeesScreen';
+import { aliasOwner } from '../helpers';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
+}));
 
 async function seeded() {
   const sync = memorySync();
@@ -39,19 +44,20 @@ async function seeded() {
     date: '2026-10-15',
     payeeName: 'Corner shop',
   });
-  return { sync, repo };
+  return { sync, repo, marketId, accountId };
 }
 
 beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(new Date('2026-10-28T12:00:00Z'));
+  resetParams();
 });
 
 afterEach(() => {
   jest.useRealTimers();
 });
 
-describe('Payees page', () => {
+describe('Payees page (PU-46 / PU-47)', () => {
   it('P24-01: lists payees with counts', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
@@ -65,21 +71,98 @@ describe('Payees page', () => {
     expect(screen.getAllByText(t('payees.txCount', { count: 1 })).length).toBe(2);
   });
 
-  it('P24-03: aliases on a payee match imports', async () => {
+  it('PU00-5 / PU-46: ?payee= opens the panel', async () => {
     const { sync, repo } = await seeded();
     const shop = (await repo.load()).payees.find((p) => p.name === 'Shoprite')!;
-    await repo.updatePayee({ ...shop, aliases: ['POS SHOPRITE LEKKI'] });
+    await act(async () => setParams({ payee: shop.id }));
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
         <PayeesScreen />
       </WorkspaceProvider>,
       { sync },
     );
-    await fireEvent.press(await screen.findByText('Shoprite'));
-    expect(screen.getByTestId('payee-aliases')).toBeTruthy();
+    expect(await screen.findByTestId('payee-sheet')).toBeTruthy();
+    expect(screen.getByTestId('payee-name')).toBeTruthy();
   });
 
-  it('P24-04: merge moves transactions to the kept payee', async () => {
+  it('PU46-2: a bank name cannot belong to two payees', async () => {
+    const { sync, repo } = await seeded();
+    const before = await repo.load();
+    const shop = before.payees.find((p) => p.name === 'Shoprite')!;
+    const corner = before.payees.find((p) => p.name === 'Corner shop')!;
+    await repo.updatePayee({ ...shop, aliases: ['POS SHOPRITE'] });
+    const conflict = aliasOwner(await repo.load(), 'POS SHOPRITE', corner.id);
+    expect(conflict?.name).toBe('Shoprite');
+    const r = await repo.updatePayee({ ...corner, aliases: ['POS SHOPRITE'] });
+    expect(r.ok).toBe(false);
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <PayeesScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(await screen.findByText('Corner shop'));
+    await fireEvent.changeText(screen.getByTestId('payee-alias-input'), 'POS SHOPRITE');
+    await fireEvent.press(screen.getByTestId('payee-alias-add'));
+    expect(await screen.findByTestId('payee-alias-error')).toBeTruthy();
+    expect(screen.getByText(t('payees.aliasTaken', { name: 'Shoprite' }))).toBeTruthy();
+  });
+
+  it('PU46-1: usual category fills new transactions only', async () => {
+    const { sync, repo, marketId, accountId } = await seeded();
+    const shop = (await repo.load()).payees.find((p) => p.name === 'Shoprite')!;
+    const fuel = await repo.addCategory({ name: 'Fuel', kind: 'expense', group: 'group.transport' });
+    await repo.updatePayee({ ...shop, defaultCategoryId: fuel.id });
+    const old = (await repo.load()).events.find((e) => e.payeeId === shop.id)!;
+    const oldCat = old.lines.find((l) => l.ledgerAccountId === marketId || l.ledgerAccountId === fuel.id);
+    expect(oldCat?.ledgerAccountId).toBe(marketId);
+    await repo.addTransaction({
+      kind: 'expense',
+      accountId,
+      parts: [{ categoryId: fuel.id, amount: 1_000_000n }],
+      date: '2026-10-20',
+      payeeName: 'Shoprite',
+    });
+    const after = await repo.load();
+    const newest = after.events.find((e) => e.payeeId === shop.id && e.date === '2026-10-20')!;
+    expect(newest.lines.some((l) => l.ledgerAccountId === fuel.id)).toBe(true);
+    expect(after.events.find((e) => e.id === old.id)!.lines.some((l) => l.ledgerAccountId === marketId)).toBe(true);
+    void sync;
+  });
+
+  it('PU47-1 / PU47-2: merge moves txs and aliases; Undo restores', async () => {
+    const { sync, repo } = await seeded();
+    const before = await repo.load();
+    const shop = before.payees.find((p) => p.name === 'Shoprite')!;
+    const corner = before.payees.find((p) => p.name === 'Corner shop')!;
+    await repo.updatePayee({ ...corner, aliases: ['CORNER POS'] });
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <PayeesScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    await fireEvent.press(screen.getByTestId('payees-merge'));
+    expect(screen.getByTestId('payees-merge-sheet')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId(`payees-merge-keep-name-${shop.id}`));
+    await fireEvent.press(screen.getByTestId('payees-merge-save'));
+    await waitFor(async () => {
+      const after = await repo.load();
+      expect(after.payees.map((p) => p.name)).toEqual(['Shoprite']);
+      expect(after.events.filter((e) => e.payeeId === shop.id)).toHaveLength(2);
+      expect(after.payees[0]!.aliases).toEqual(expect.arrayContaining(['Corner shop', 'CORNER POS']));
+    });
+    const undo = await screen.findByRole('button', { name: t('common.undo') });
+    await fireEvent.press(undo);
+    await waitFor(async () => {
+      const restored = await repo.load();
+      expect(restored.payees.map((p) => p.name).sort()).toEqual(['Corner shop', 'Shoprite']);
+      expect(restored.events.filter((e) => e.payeeId === corner.id)).toHaveLength(1);
+      expect(restored.payees.find((p) => p.id === corner.id)?.aliases).toEqual(['CORNER POS']);
+    });
+  });
+
+  it('PU00-5: ?merge= opens merge sheet', async () => {
     const { sync, repo } = await seeded();
     const before = await repo.load();
     const shop = before.payees.find((p) => p.name === 'Shoprite')!;
@@ -90,16 +173,7 @@ describe('Payees page', () => {
       </WorkspaceProvider>,
       { sync },
     );
-    await fireEvent.press(screen.getByTestId('payees-merge'));
-    await fireEvent.press(screen.getByTestId('payees-merge-keep'));
-    await fireEvent.press(screen.getByRole('radio', { name: 'Shoprite' }));
-    await fireEvent.press(screen.getByTestId(`payees-merge-${corner.id}`));
-    await fireEvent.press(screen.getByTestId('payees-merge-save'));
-    await waitFor(async () => {
-      const after = await repo.load();
-      expect(after.payees.map((p) => p.name)).toEqual(['Shoprite']);
-      expect(after.events.filter((e) => e.payeeId === shop.id)).toHaveLength(2);
-    });
-    void corner;
+    await act(async () => setParams({ merge: `${shop.id},${corner.id}` }));
+    expect(await screen.findByTestId('payees-merge-sheet')).toBeTruthy();
   });
 });

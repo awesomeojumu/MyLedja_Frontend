@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
   Amount,
@@ -25,9 +25,9 @@ import { ruleFromPayee, payeeMonogram } from '@/features/rules/helpers';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
-import { MergePayeesSheet } from './MergePayeesSheet';
+import { MergePayeesSheet, type MergeKeepChoices } from './MergePayeesSheet';
 import { PayeePanel } from './PayeePanel';
-import { payeeRows, sortPayeeRows, yearOf, type PayeeSort } from './helpers';
+import { aliasOwner, payeeRows, sortPayeeRows, yearOf, type PayeeSort } from './helpers';
 
 const sp = tokens.spacing;
 const SORT_OPTIONS: { value: PayeeSort; label: string }[] = [
@@ -46,19 +46,23 @@ function matches(row: ReturnType<typeof payeeRows>[number], query: string) {
   );
 }
 
+function paramId(raw: string | string[] | undefined): string | undefined {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return v || undefined;
+}
+
 export function PayeesScreen() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const theme = useTheme();
   const router = useRouter();
+  const params = useLocalSearchParams<{ payee?: string; merge?: string }>();
   const size = useSizeClass();
   const sidePanel = size === 'desktop' || size === 'wide' || size === 'tablet';
   const year = yearOf(today());
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<PayeeSort>('name');
   const [sortOpen, setSortOpen] = useState(false);
-  const [selected, setSelected] = useState<Payee | null>(null);
-  const [mergeOpen, setMergeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const rows = useMemo(() => {
@@ -69,13 +73,85 @@ export function PayeesScreen() {
     );
   }, [snapshot, year, query, sort]);
 
+  // PU00-5 / PU-46: ?payee=<id> — derive selection from the address (no effect sync).
+  const selected = useMemo(() => {
+    const id = paramId(params.payee);
+    if (!id || !snapshot) return null;
+    return snapshot.payees.find((p) => p.id === id) ?? null;
+  }, [params.payee, snapshot]);
+
+  // PU-47: ?merge=<id>,<id>
+  const mergePayees = useMemo(() => {
+    const raw = paramId(params.merge);
+    if (!raw || !snapshot) return [];
+    const ids = raw.split(',').filter(Boolean);
+    const list = ids.map((id) => snapshot.payees.find((p) => p.id === id)).filter(Boolean) as Payee[];
+    return list.length >= 2 ? list : [];
+  }, [params.merge, snapshot]);
+  const mergeOpen = mergePayees.length >= 2;
+
+  const openPayee = (payee: Payee) => {
+    router.setParams({ payee: payee.id });
+  };
+
+  const closePayee = () => {
+    router.setParams({ payee: undefined });
+  };
+
+  const openMerge = (list?: Payee[]) => {
+    const payees = list ?? snapshot?.payees ?? [];
+    if (payees.length < 2) return;
+    router.setParams({ merge: payees.map((p) => p.id).join(',') });
+  };
+
+  const closeMerge = () => {
+    router.setParams({ merge: undefined });
+  };
+
   const openCreateRule = async (payee: Payee) => {
     if (!snapshot) return;
     const draft = ruleFromPayee(payee.name, payee.defaultCategoryId);
     const rule = await repo.createRule({ ...draft, order: snapshot.rules.length });
-    setSelected(null);
+    closePayee();
     router.push(`/rules?edit=${rule.id}`);
   };
+
+  const savePayee = async (p: Payee) => {
+    setError(null);
+    for (const alias of p.aliases ?? []) {
+      const owner = snapshot ? aliasOwner(snapshot, alias, p.id) : undefined;
+      if (owner) return { ok: false as const, aliasConflict: owner.name };
+    }
+    const r = await repo.updatePayee(p);
+    if (!r.ok) return { ok: false as const };
+    toast.show(t('payees.saved'));
+    return { ok: true as const };
+  };
+
+  const panel = selected && snapshot ? (
+    <PayeePanel
+      key={selected.id}
+      payee={selected}
+      snapshot={snapshot}
+      side={sidePanel}
+      onClose={closePayee}
+      onSave={savePayee}
+      onCreateRule={() => void openCreateRule(selected)}
+      onMergeWith={() => {
+        const others = (snapshot?.payees ?? []).filter((p) => p.id !== selected.id);
+        openMerge([selected, ...others]);
+      }}
+      onDelete={async () => {
+        const r = await repo.deletePayee(selected.id);
+        if (!r.ok) {
+          setError(t('payees.deleteHasTx'));
+          return false;
+        }
+        toast.show(t('payees.deleted'));
+        return true;
+      }}
+    />
+  ) : null;
 
   return (
     <AppFrame title={t('payees.title')}>
@@ -85,7 +161,13 @@ export function PayeesScreen() {
             <View style={{ flex: 1, minWidth: 200 }}>
               <TextInput testID="payees-search" label={t('payees.search')} value={query} onChangeText={setQuery} />
             </View>
-            <Button testID="payees-merge" kind="secondary" label={t('payees.merge')} onPress={() => setMergeOpen(true)} disabled={!snapshot || snapshot.payees.length < 2} />
+            <Button
+              testID="payees-merge"
+              kind="secondary"
+              label={t('payees.merge')}
+              onPress={() => openMerge()}
+              disabled={!snapshot || snapshot.payees.length < 2}
+            />
             <Button testID="payees-sort" kind="secondary" label={t('payees.sort')} onPress={() => setSortOpen(true)} />
           </View>
           {error ? <InlineError message={error} /> : null}
@@ -100,7 +182,7 @@ export function PayeesScreen() {
                   {t('payees.colName')}
                 </Text>
                 <Text variant="caption" tone="textSecondary" style={{ flex: 1.2 }}>
-                  {t('payees.defaultCategoryLabel')}
+                  {t('payees.usualCategory')}
                 </Text>
                 <Text variant="caption" tone="textSecondary" style={{ width: 72 }}>
                   {t('payees.colTx')}
@@ -116,7 +198,7 @@ export function PayeesScreen() {
                 </Text>
               </View>
               {rows.map((row) => (
-                <PayeeTableRow key={row.payee.id} row={row} active={selected?.id === row.payee.id} onPress={() => setSelected(row.payee)} />
+                <PayeeTableRow key={row.payee.id} row={row} active={selected?.id === row.payee.id} onPress={() => openPayee(row.payee)} />
               ))}
             </View>
           ) : (
@@ -126,7 +208,7 @@ export function PayeesScreen() {
                 testID={`payee-row-${row.payee.id}`}
                 accessibilityRole="button"
                 accessibilityLabel={t('payees.rowLabel', { name: row.payee.name, count: row.txCount })}
-                onPress={() => setSelected(row.payee)}
+                onPress={() => openPayee(row.payee)}
               >
                 <Card style={{ flexDirection: 'row', gap: sp['spacing-md'], alignItems: 'center' }}>
                   <View
@@ -137,6 +219,7 @@ export function PayeesScreen() {
                       backgroundColor: theme.tagFill,
                       alignItems: 'center',
                       justifyContent: 'center',
+                      overflow: 'hidden',
                     }}
                   >
                     <Text variant="caption" style={{ color: theme.tagText }}>
@@ -146,7 +229,7 @@ export function PayeesScreen() {
                   <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
                     <Text variant="heading-sm">{row.payee.name}</Text>
                     <Text tone="textSecondary" variant="caption">
-                      {row.defaultCategoryName ? t('payees.defaultCategory', { name: row.defaultCategoryName }) : t('payees.noDefaultCategory')}
+                      {row.defaultCategoryName ? t('payees.defaultCategory', { name: row.defaultCategoryName }) : t('payees.noUsualCategory')}
                     </Text>
                     <Text variant="caption" tone="textSecondary">
                       {t('payees.txCount', { count: row.txCount })}
@@ -162,52 +245,32 @@ export function PayeesScreen() {
           )}
         </ScrollView>
 
-        {selected && snapshot && sidePanel ? (
-          <PayeePanel
-            payee={selected}
-            snapshot={snapshot}
-            side
-            onClose={() => setSelected(null)}
-            onSave={async (p) => {
-              setError(null);
-              await repo.updatePayee(p);
-              toast.show(t('common.saved'));
-            }}
-            onCreateRule={() => void openCreateRule(selected)}
-          />
-        ) : null}
+        {sidePanel ? panel : null}
       </View>
 
-      {selected && snapshot && !sidePanel ? (
-        <PayeePanel
-          payee={selected}
-          snapshot={snapshot}
-          side={false}
-          onClose={() => setSelected(null)}
-          onSave={async (p) => {
-            setError(null);
-            await repo.updatePayee(p);
-            toast.show(t('common.saved'));
-            setSelected(null);
-          }}
-          onCreateRule={() => void openCreateRule(selected)}
-        />
-      ) : null}
+      {!sidePanel ? panel : null}
 
-      {mergeOpen && snapshot ? (
+      {mergeOpen && snapshot && mergePayees.length >= 2 ? (
         <MergePayeesSheet
           snapshot={snapshot}
-          payees={snapshot.payees}
-          onClose={() => setMergeOpen(false)}
-          onMerge={async (keepId, mergeIds) => {
+          payees={mergePayees}
+          onClose={closeMerge}
+          onMerge={async (keepId, mergeIds, keep: MergeKeepChoices) => {
             setError(null);
-            const r = await repo.mergePayees(keepId, mergeIds);
-            if (!r.ok) {
-              setError(ledgerMessage(r.error));
+            const r = await repo.mergePayees(keepId, mergeIds, {
+              nameId: keep.nameId,
+              logoId: keep.logoId,
+              categoryId: keep.categoryId,
+            });
+            if (r.ok) {
+              toast.show(t('payees.merged'), () => {
+                void repo.undoMergePayees(r.value.mergeId).then(() => toast.show(t('common.undo')));
+              });
+              closeMerge();
+              closePayee();
               return;
             }
-            toast.show(t('payees.merged'));
-            setMergeOpen(false);
+            setError(ledgerMessage(r.error));
           }}
         />
       ) : null}
@@ -270,7 +333,7 @@ function PayeeTableRow({
         <Text>{row.payee.name}</Text>
       </View>
       <Text tone="textSecondary" variant="caption" style={{ flex: 1.2 }}>
-        {row.defaultCategoryName || t('payees.noDefaultCategory')}
+        {row.defaultCategoryName || t('payees.noUsualCategory')}
       </Text>
       <Text variant="caption" style={{ width: 72 }}>
         {row.txCount}
