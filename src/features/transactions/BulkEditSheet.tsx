@@ -12,13 +12,15 @@ export function BulkEditSheet({
   count,
   onClose,
   onApply,
+  initialField = 'category',
 }: {
   snapshot: Snapshot;
   count: number;
   onClose: () => void;
   onApply: (field: BulkField, value?: string) => Promise<void>;
+  initialField?: BulkField;
 }) {
-  const [field, setField] = useState<BulkField>('category');
+  const [field, setField] = useState<BulkField>(initialField);
   const [value, setValue] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const categories = snapshot.categories.filter((c) => c.kind === 'expense').map((c) => ({ value: c.id, label: c.name }));

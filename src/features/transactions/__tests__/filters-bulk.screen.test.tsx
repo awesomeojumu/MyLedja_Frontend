@@ -42,7 +42,7 @@ async function seeded() {
 
 describe('Transactions filters and bulk', () => {
   it('P11-03: filter chips narrow the list', async () => {
-    const { sync } = await seeded();
+    const { sync, rentId } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
         <AddTransactionProvider>
@@ -52,8 +52,7 @@ describe('Transactions filters and bulk', () => {
       { sync },
     );
     await fireEvent.press(screen.getByTestId('tx-filters'));
-    await fireEvent.press(screen.getByTestId('tx-filter-category'));
-    await fireEvent.press(screen.getByRole('radio', { name: 'Rent' }));
+    await fireEvent.press(screen.getByTestId(`tx-filter-category-${rentId}`));
     await fireEvent.press(screen.getByTestId('tx-filters-apply'));
     await waitFor(() => {
       expect(screen.queryByText('Shoprite')).toBeNull();
@@ -61,7 +60,7 @@ describe('Transactions filters and bulk', () => {
     });
   });
 
-  it('P11-08: bulk categorize selected rows', async () => {
+  it('P11-08: bulk categorize selected rows via floating bar', async () => {
     const { sync, repo, marketId, rentId } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -76,7 +75,7 @@ describe('Transactions filters and bulk', () => {
     for (const e of rows) {
       await fireEvent.press(screen.getByTestId(`select-${e.id}`));
     }
-    await fireEvent.press(screen.getByTestId('tx-bulk'));
+    await fireEvent.press(screen.getByTestId('tx-float-categorize'));
     await fireEvent.press(screen.getByTestId('tx-bulk-value'));
     await fireEvent.press(screen.getByRole('radio', { name: 'Rent' }));
     await fireEvent.press(screen.getByTestId('tx-bulk-apply'));

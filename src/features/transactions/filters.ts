@@ -8,14 +8,25 @@ import { parseTags } from './tags';
 
 export type TxStatusFilter = 'posted' | 'pending' | 'waiting';
 
+/** Real event types plus connection filters (debt/goal/investment). */
+export type TxTypeFilter = EventType | 'debt' | 'goal' | 'investment';
+
 export type TxFilters = {
   dateFrom?: string;
   dateTo?: string;
+  /** @deprecated prefer accountIds */
   accountId?: string;
+  /** @deprecated prefer categoryIds */
   categoryId?: string;
+  /** @deprecated prefer payeeIds */
   payeeId?: string;
+  /** @deprecated prefer tags */
   tag?: string;
-  type?: EventType;
+  accountIds?: string[];
+  categoryIds?: string[];
+  payeeIds?: string[];
+  tags?: string[];
+  type?: TxTypeFilter;
   status?: TxStatusFilter;
   amountMin?: bigint;
   amountMax?: bigint;
@@ -28,16 +39,48 @@ export function emptyFilters(): TxFilters {
   return {};
 }
 
+function accountIdList(filters: TxFilters): string[] {
+  if (filters.accountIds?.length) return filters.accountIds;
+  return filters.accountId ? [filters.accountId] : [];
+}
+
+function categoryIdList(filters: TxFilters): string[] {
+  if (filters.categoryIds?.length) return filters.categoryIds;
+  return filters.categoryId ? [filters.categoryId] : [];
+}
+
+function payeeIdList(filters: TxFilters): string[] {
+  if (filters.payeeIds?.length) return filters.payeeIds;
+  return filters.payeeId ? [filters.payeeId] : [];
+}
+
+function tagList(filters: TxFilters): string[] {
+  if (filters.tags?.length) return filters.tags;
+  return filters.tag ? [filters.tag] : [];
+}
+
 export function applyFilters(row: Row, filters: TxFilters, snapshot: Snapshot): boolean {
   const { event } = row;
   if (filters.dateFrom && event.date < filters.dateFrom) return false;
   if (filters.dateTo && event.date > filters.dateTo) return false;
-  if (filters.type && event.type !== filters.type) return false;
-  if (filters.payeeId && event.payeeId !== filters.payeeId) return false;
 
-  if (filters.tag) {
-    const tags = parseTags(event.notes);
-    if (!tags.map((x) => x.toLowerCase()).includes(filters.tag.toLowerCase())) return false;
+  if (filters.type === 'debt') {
+    if (!event.debtId) return false;
+  } else if (filters.type === 'goal') {
+    if (!event.goalId) return false;
+  } else if (filters.type === 'investment') {
+    if (event.type !== 'investment_buy' && event.type !== 'investment_sell') return false;
+  } else if (filters.type && event.type !== filters.type) {
+    return false;
+  }
+
+  const payees = payeeIdList(filters);
+  if (payees.length && (!event.payeeId || !payees.includes(event.payeeId))) return false;
+
+  const wantTags = tagList(filters);
+  if (wantTags.length) {
+    const tags = parseTags(event.notes).map((x) => x.toLowerCase());
+    if (!wantTags.every((tag) => tags.includes(tag.toLowerCase()))) return false;
   }
 
   if (filters.status === 'waiting' && !row.waiting) return false;
@@ -48,10 +91,12 @@ export function applyFilters(row: Row, filters: TxFilters, snapshot: Snapshot): 
 
   const accountIds = new Set(snapshot.accounts.map((a) => a.id));
   const moneyAccount = event.lines.find((l) => accountIds.has(l.ledgerAccountId))?.ledgerAccountId;
-  if (filters.accountId && moneyAccount !== filters.accountId) return false;
+  const accounts = accountIdList(filters);
+  if (accounts.length && (!moneyAccount || !accounts.includes(moneyAccount))) return false;
 
   const categoryLine = event.lines.find((l) => !accountIds.has(l.ledgerAccountId));
-  if (filters.categoryId && categoryLine?.ledgerAccountId !== filters.categoryId) return false;
+  const categories = categoryIdList(filters);
+  if (categories.length && (!categoryLine || !categories.includes(categoryLine.ledgerAccountId))) return false;
   if (filters.uncategorized && categoryLine && snapshot.categories.some((c) => c.id === categoryLine.ledgerAccountId)) return false;
 
   if (filters.hasReceipt && !parseReceipt(event.notes) && !(event.notes ?? '').startsWith('http')) return false;
@@ -64,7 +109,7 @@ export function applyFilters(row: Row, filters: TxFilters, snapshot: Snapshot): 
 }
 
 export type FilterChip = {
-  key: keyof TxFilters | 'uncategorized' | 'hasReceipt' | 'edited' | 'tag' | 'status';
+  key: keyof TxFilters | 'uncategorized' | 'hasReceipt' | 'edited' | 'tag' | 'status' | 'accountIds' | 'categoryIds' | 'payeeIds' | 'tags';
   label: string;
 };
 
@@ -76,20 +121,38 @@ export function filterChips(filters: TxFilters, snapshot: Snapshot): FilterChip[
       label: t('tx.filter.date', { from: filters.dateFrom ?? t('common.notSet'), to: filters.dateTo ?? t('common.notSet') }),
     });
   }
-  if (filters.accountId) {
-    chips.push({ key: 'accountId', label: snapshot.accounts.find((a) => a.id === filters.accountId)?.name ?? '' });
+  const accounts = accountIdList(filters);
+  if (accounts.length === 1) {
+    chips.push({ key: 'accountIds', label: snapshot.accounts.find((a) => a.id === accounts[0])?.name ?? '' });
+  } else if (accounts.length > 1) {
+    chips.push({ key: 'accountIds', label: t('tx.filter.accountsCount', { count: accounts.length }) });
   }
-  if (filters.categoryId) {
-    chips.push({ key: 'categoryId', label: snapshot.categories.find((c) => c.id === filters.categoryId)?.name ?? '' });
+  const categories = categoryIdList(filters);
+  if (categories.length === 1) {
+    chips.push({ key: 'categoryIds', label: snapshot.categories.find((c) => c.id === categories[0])?.name ?? '' });
+  } else if (categories.length > 1) {
+    chips.push({ key: 'categoryIds', label: t('tx.filter.categoriesCount', { count: categories.length }) });
   }
-  if (filters.payeeId) {
-    chips.push({ key: 'payeeId', label: snapshot.payees.find((p) => p.id === filters.payeeId)?.name ?? '' });
+  const payees = payeeIdList(filters);
+  if (payees.length === 1) {
+    chips.push({ key: 'payeeIds', label: snapshot.payees.find((p) => p.id === payees[0])?.name ?? '' });
+  } else if (payees.length > 1) {
+    chips.push({ key: 'payeeIds', label: t('tx.filter.payeesCount', { count: payees.length }) });
   }
-  if (filters.tag) {
-    chips.push({ key: 'tag', label: filters.tag });
+  const tags = tagList(filters);
+  if (tags.length === 1) {
+    chips.push({ key: 'tags', label: tags[0]! });
+  } else if (tags.length > 1) {
+    chips.push({ key: 'tags', label: t('tx.filter.tagsCount', { count: tags.length }) });
   }
   if (filters.type) {
-    chips.push({ key: 'type', label: t(`panel.type.${filters.type}` as 'panel.type.expense') });
+    chips.push({
+      key: 'type',
+      label:
+        filters.type === 'debt' || filters.type === 'goal' || filters.type === 'investment'
+          ? t(`tx.filter.type.${filters.type}` as 'tx.filter.type.debt')
+          : t(`panel.type.${filters.type}` as 'panel.type.expense'),
+    });
   }
   if (filters.status) {
     chips.push({ key: 'status', label: t(`tx.filter.status.${filters.status}` as 'tx.filter.status.posted') });
@@ -123,10 +186,20 @@ export function removeChip(filters: TxFilters, key: FilterChip['key']): TxFilter
     delete next.hasReceipt;
   } else if (key === 'edited') {
     delete next.edited;
-  } else if (key === 'tag') {
+  } else if (key === 'tag' || key === 'tags') {
     delete next.tag;
+    delete next.tags;
   } else if (key === 'status') {
     delete next.status;
+  } else if (key === 'accountId' || key === 'accountIds') {
+    delete next.accountId;
+    delete next.accountIds;
+  } else if (key === 'categoryId' || key === 'categoryIds') {
+    delete next.categoryId;
+    delete next.categoryIds;
+  } else if (key === 'payeeId' || key === 'payeeIds') {
+    delete next.payeeId;
+    delete next.payeeIds;
   } else {
     delete next[key];
   }
@@ -136,10 +209,10 @@ export function removeChip(filters: TxFilters, key: FilterChip['key']): TxFilter
 export function countActive(filters: TxFilters): number {
   let n = 0;
   if (filters.dateFrom || filters.dateTo) n++;
-  if (filters.accountId) n++;
-  if (filters.categoryId) n++;
-  if (filters.payeeId) n++;
-  if (filters.tag) n++;
+  if (accountIdList(filters).length) n++;
+  if (categoryIdList(filters).length) n++;
+  if (payeeIdList(filters).length) n++;
+  if (tagList(filters).length) n++;
   if (filters.type) n++;
   if (filters.status) n++;
   if (filters.amountMin !== undefined || filters.amountMax !== undefined) n++;
@@ -185,15 +258,36 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function csv(ids: string[] | undefined): string | undefined {
+  return ids?.length ? ids.join(',') : undefined;
+}
+
+function fromCsv(raw: string | undefined): string[] | undefined {
+  if (!raw) return undefined;
+  const parts = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return parts.length ? parts : undefined;
+}
+
 /** URL params for PU-19 / TB-13 (filters live in the address). */
 export function filtersToParams(filters: TxFilters): Record<string, string> {
   const out: Record<string, string> = {};
   if (filters.dateFrom) out.from = filters.dateFrom;
   if (filters.dateTo) out.to = filters.dateTo;
-  if (filters.accountId) out.account = filters.accountId;
-  if (filters.categoryId) out.category = filters.categoryId;
-  if (filters.payeeId) out.payee = filters.payeeId;
-  if (filters.tag) out.tag = filters.tag;
+  const accounts = accountIdList(filters);
+  const categories = categoryIdList(filters);
+  const payees = payeeIdList(filters);
+  const tags = tagList(filters);
+  const account = csv(accounts);
+  const category = csv(categories);
+  const payee = csv(payees);
+  const tag = csv(tags);
+  if (account) out.account = account;
+  if (category) out.category = category;
+  if (payee) out.payee = payee;
+  if (tag) out.tag = tag;
   if (filters.type) out.type = filters.type;
   if (filters.status) out.status = filters.status;
   if (filters.amountMin !== undefined) out.min = filters.amountMin.toString();
@@ -208,11 +302,15 @@ export function filtersFromParams(params: Record<string, string | undefined>): T
   const filters: TxFilters = {};
   if (params.from) filters.dateFrom = params.from;
   if (params.to) filters.dateTo = params.to;
-  if (params.account) filters.accountId = params.account;
-  if (params.category) filters.categoryId = params.category;
-  if (params.payee) filters.payeeId = params.payee;
-  if (params.tag) filters.tag = params.tag;
-  if (params.type) filters.type = params.type as EventType;
+  const accounts = fromCsv(params.account);
+  const categories = fromCsv(params.category);
+  const payees = fromCsv(params.payee);
+  const tags = fromCsv(params.tag);
+  if (accounts) filters.accountIds = accounts;
+  if (categories) filters.categoryIds = categories;
+  if (payees) filters.payeeIds = payees;
+  if (tags) filters.tags = tags;
+  if (params.type) filters.type = params.type as TxTypeFilter;
   if (params.status === 'posted' || params.status === 'pending' || params.status === 'waiting') filters.status = params.status;
   if (params.min && /^\d+$/.test(params.min)) filters.amountMin = BigInt(params.min);
   if (params.max && /^\d+$/.test(params.max)) filters.amountMax = BigInt(params.max);
@@ -240,4 +338,10 @@ export const FILTER_PARAM_KEYS = [
 
 export function clearFilterParams(): Record<string, undefined> {
   return Object.fromEntries(FILTER_PARAM_KEYS.map((k) => [k, undefined])) as Record<string, undefined>;
+}
+
+export function toggleId(list: string[] | undefined, id: string): string[] | undefined {
+  const cur = list ?? [];
+  const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+  return next.length ? next : undefined;
 }

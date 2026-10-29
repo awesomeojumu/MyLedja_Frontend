@@ -1,6 +1,6 @@
-import { useRouter } from 'expo-router';
+import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { reconcileApi } from '@/api/reconcile';
 import {
@@ -22,7 +22,9 @@ import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import type { Snapshot, TransactionInput, TxEvent } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { ruleFromPayee } from '@/features/rules/helpers';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { pickImageUri } from '@/features/payees/pickMedia';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { purchaseCost, refundedSoFar } from '@/ledger';
@@ -34,6 +36,7 @@ import { connectedLines } from './panelConnected';
 import { ReceiptViewer } from './ReceiptViewer';
 import { parseReceipt, stripReceiptLine, withReceipt } from './receiptMeta';
 import { parseTags, stripTagsLine, withTags } from './tags';
+import { uploadReceiptFromUri } from './uploadReceipt';
 
 const sp = tokens.spacing;
 
@@ -61,6 +64,16 @@ function amountOf(snapshot: Snapshot, e: TxEvent): bigint {
   return moneyLine(snapshot, e).reduce((s, l) => s + l.amountMinor, 0n);
 }
 
+/** DESIGN D27 — who + device when provenance is on the event. */
+export function historyWho(event: TxEvent): string | null {
+  const who = event.createdBy?.trim();
+  const device = event.deviceId?.trim();
+  if (!who && !device) return null;
+  if (who && device) return t('panel.historyWhoDevice', { who, device: device.slice(0, 8) });
+  if (who) return who;
+  return t('panel.historyDevice', { device: device!.slice(0, 8) });
+}
+
 export function TransactionPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const { repo, snapshot } = useWorkspace();
   const { client, user, source } = useAuth();
@@ -69,8 +82,10 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
   const toast = useToast();
   const theme = useTheme();
   const router = useRouter();
+  const params = useGlobalSearchParams<{ edit?: string }>();
   const event = snapshot?.events.find((e) => e.id === id);
-  const [editing, setEditing] = useState(false);
+  const [editingLocal, setEditingLocal] = useState(false);
+  const editing = editingLocal || params.edit === '1';
   const [error, setError] = useState<string | null>(null);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [unlockBusy, setUnlockBusy] = useState(false);
@@ -84,7 +99,8 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
   const money = moneyLine(snapshot, event);
   const others = event.lines.filter((l) => !money.includes(l));
   const amount = amountOf(snapshot, event);
-  const payee = snapshot.payees.find((p) => p.id === event.payeeId)?.name;
+  const payee = snapshot.payees.find((p) => p.id === event.payeeId);
+  const categoryId = others.length === 1 ? others[0]?.ledgerAccountId : undefined;
   const refunds = snapshot.events.filter((e) => e.refundOf === id && e.status === 'posted');
   const left = event.type === 'expense' ? purchaseCost(snapshot.chart, event) - refundedSoFar(event, snapshot.events) : 0n;
   const history = historyOf(snapshot, event);
@@ -139,6 +155,20 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
     })();
   };
 
+  const createRule = async () => {
+    if (!payee) return;
+    const draft = ruleFromPayee(payee.name, categoryId);
+    const rule = await repo.createRule({ ...draft, order: snapshot.rules.length });
+    onClose();
+    router.push(`/rules?edit=${rule.id}`);
+  };
+
+  const alwaysUseCategory = async () => {
+    if (!payee || !categoryId) return;
+    const r = await repo.updatePayee({ ...payee, defaultCategoryId: categoryId });
+    if (r.ok) toast.show(t('common.saved'));
+  };
+
   return (
     <>
     <Panel visible title={t('panel.title')} onClose={onClose} testID="tx-panel" width={440}>
@@ -153,7 +183,10 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         </View>
 
         <View style={{ gap: sp['spacing-sm'] }}>
-          {field(t('add.payee'), payee)}
+          {field(t('add.payee'), payee?.name)}
+          {payee && categoryId ? (
+            <Button kind="link" testID="panel-always-category" label={t('panel.alwaysUseCategory')} onPress={() => void alwaysUseCategory()} />
+          ) : null}
           {field(
             t('add.category'),
             others
@@ -188,16 +221,18 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
               snapshot={snapshot}
               event={event}
               amount={amount}
-              onDone={() => setEditing(false)}
+              onDone={() => {
+                setEditingLocal(false);
+                router.setParams({ edit: undefined });
+              }}
               onError={setError}
               onSaved={(nextId) => {
-                setEditing(false);
-                // A correction replaces this event; keep the panel open on the new version.
-                router.setParams({ tx: nextId, txn: nextId });
+                setEditingLocal(false);
+                router.setParams({ tx: nextId, txn: nextId, edit: undefined });
               }}
             />
           ) : (
-            <Button kind="secondary" testID="panel-edit" label={t('panel.edit')} onPress={() => setEditing(true)} />
+            <Button kind="secondary" testID="panel-edit" label={t('panel.edit')} onPress={() => setEditingLocal(true)} />
           )
         ) : null}
 
@@ -220,12 +255,26 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         {connected.length > 0 ? (
           <View style={{ gap: sp['spacing-xs'] }} testID="panel-connected-links">
             <Text variant="heading-sm">{t('panel.connected')}</Text>
-            {connected.map((line) => (
-              <Text key={line.key} tone="textSecondary">
-                {line.label}
-                {line.detail ? `: ${line.detail}` : ''}
-              </Text>
-            ))}
+            {connected.map((line) => {
+              const label = `${line.label}${line.detail ? `: ${line.detail}` : ''}`;
+              if (line.href) {
+                return (
+                  <Pressable
+                    key={line.key}
+                    testID={`panel-connected-${line.key}`}
+                    accessibilityRole="link"
+                    onPress={() => router.push(line.href as '/goals')}
+                  >
+                    <Text tone="textSecondary">{label}</Text>
+                  </Pressable>
+                );
+              }
+              return (
+                <Text key={line.key} tone="textSecondary">
+                  {label}
+                </Text>
+              );
+            })}
           </View>
         ) : null}
 
@@ -250,27 +299,36 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
           <Text variant="heading-sm" accessibilityRole="header">
             {t('panel.history')}
           </Text>
-          {history.map((h, i) => (
-            <View
-              key={h.id}
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                borderTopWidth: i ? 1 : 0,
-                borderTopColor: theme.border,
-                paddingTop: i ? sp['spacing-xs'] : 0,
-              }}
-            >
-              <Text tone={h.id === event.id ? 'text' : 'textSecondary'}>{t(i === 0 ? 'panel.historyCreated' : 'panel.historyEdited', { date: h.date })}</Text>
-              <Amount minor={amountOf(snapshot, h)} signed={h.type !== 'transfer'} />
-            </View>
-          ))}
+          {history.map((h, i) => {
+            const who = historyWho(h);
+            return (
+              <View
+                key={h.id}
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  borderTopWidth: i ? 1 : 0,
+                  borderTopColor: theme.border,
+                  paddingTop: i ? sp['spacing-xs'] : 0,
+                }}
+              >
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text tone={h.id === event.id ? 'text' : 'textSecondary'}>{t(i === 0 ? 'panel.historyCreated' : 'panel.historyEdited', { date: h.date })}</Text>
+                  <Text variant="micro" tone="textSecondary">
+                    {who ? who : t('panel.historyOnDevice')}
+                  </Text>
+                </View>
+                <Amount minor={amountOf(snapshot, h)} signed={h.type !== 'transfer'} />
+              </View>
+            );
+          })}
           {event.status === 'reversed' ? <Text tone="textSecondary">{t('panel.historyDeleted')}</Text> : null}
         </View>
 
         {error ? <InlineError testID="panel-error" message={error} /> : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
           <Button kind="secondary" testID="panel-duplicate" label={t('panel.duplicate')} onPress={() => void duplicate()} />
+          {payee ? <Button kind="secondary" testID="panel-new-rule" label={t('panel.newRule')} onPress={() => void createRule()} /> : null}
           {event.status === 'posted' && !event.reconciledBy ? (
             <Button kind="secondary" testID="panel-delete" label={t('tx.delete')} onPress={() => void remove()} />
           ) : null}
@@ -331,13 +389,32 @@ function TagsField({ event }: { event: TxEvent }) {
 
 function ReceiptField({ event }: { event: TxEvent }) {
   const { repo } = useWorkspace();
+  const { client, user } = useAuth();
   const toast = useToast();
   const router = useRouter();
   const raw = parseReceipt(event.notes) ?? '';
   const [link, setLink] = useState(raw);
   const [receiptOpen, setReceiptOpen] = useState(false);
+
+  const persist = (next: string) => {
+    setLink(next);
+    void repo.updateNotes(event.id, withReceipt(event.notes, next.trim() || null) ?? '').then(() => toast.show(t('common.saved')));
+  };
+
   return (
     <>
+      <Button
+        kind="secondary"
+        testID="panel-receipt-photo"
+        label={t('panel.addPhoto')}
+        onPress={() => {
+          void pickImageUri().then(async (uri) => {
+            if (!uri) return;
+            const id = await uploadReceiptFromUri(client, user?.workspaceId, uri);
+            persist(id);
+          });
+        }}
+      />
       <TextInput
         testID="panel-receipt-link"
         label={t('panel.receiptLink')}

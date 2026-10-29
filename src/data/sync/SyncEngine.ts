@@ -41,6 +41,11 @@ export class SyncEngine {
     this.transport = options.transport;
   }
 
+  /** Device id stamped on outbox ops and local event provenance (Page 11 History). */
+  get deviceId(): string {
+    return this.options.deviceId;
+  }
+
   /** Saves the record and its operation together. The screen may show it as saved once this resolves. */
   async save(record: LocalRecord, type: string, payload: Record<string, unknown>, baseVersion?: number): Promise<QueuedOperation> {
     // Each of this device's unsent writes to the same record will raise the server's version by one before this one arrives.

@@ -605,6 +605,8 @@ export type StoredEvent = {
   recurringId?: string;
   incomeStreamId?: string;
   oneOff?: boolean;
+  createdBy?: string;
+  deviceId?: string;
 };
 
 export type EventMeta = {
@@ -618,6 +620,10 @@ export type EventMeta = {
   recurringId?: string;
   incomeStreamId?: string;
   oneOff?: boolean;
+  /** Who posted this version (user id) — DESIGN page 11 History. */
+  createdBy?: string;
+  /** Device that posted this version (TECH-SPEC sync deviceId). */
+  deviceId?: string;
 };
 
 export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & EventMeta): StoredEvent {
@@ -639,6 +645,8 @@ export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & 
     recurringId: e.recurringId,
     incomeStreamId: e.incomeStreamId,
     oneOff: e.oneOff,
+    createdBy: e.createdBy,
+    deviceId: e.deviceId,
   };
 }
 
@@ -665,6 +673,8 @@ export function fromStored(id: string, operationId: string, s: StoredEvent, reve
     recurringId: s.recurringId,
     incomeStreamId: s.incomeStreamId,
     oneOff: s.oneOff,
+    createdBy: s.createdBy,
+    deviceId: s.deviceId,
   };
 }
 
