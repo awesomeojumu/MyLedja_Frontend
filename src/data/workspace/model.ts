@@ -5,7 +5,21 @@ import type { EventType, LedgerKind, Line, MoneyEvent } from '@/ledger';
 export const ACCOUNT_GROUPS = ['cashBank', 'cards', 'investments', 'property', 'loans', 'other'] as const;
 export type AccountGroup = (typeof ACCOUNT_GROUPS)[number];
 
-export const ACCOUNT_KINDS = ['bank', 'savings', 'cash', 'wallet', 'card', 'investment', 'property', 'loan', 'other'] as const;
+/** Matches BE `ACCOUNT_TYPES` (TECH-SPEC B1.6 / ledger.repository). */
+export const ACCOUNT_KINDS = [
+  'bank',
+  'savings',
+  'cash',
+  'wallet',
+  'card',
+  'investment',
+  'fixed_deposit',
+  'pension',
+  'property',
+  'loan',
+  'other_asset',
+  'other_liability',
+] as const;
 export type AccountKind = (typeof ACCOUNT_KINDS)[number];
 
 export const ACCOUNT_KIND_INFO: Record<AccountKind, { group: AccountGroup; ledger: LedgerKind; countInBudget: boolean }> = {
@@ -15,9 +29,12 @@ export const ACCOUNT_KIND_INFO: Record<AccountKind, { group: AccountGroup; ledge
   wallet: { group: 'cashBank', ledger: 'asset', countInBudget: true },
   card: { group: 'cards', ledger: 'liability', countInBudget: true },
   investment: { group: 'investments', ledger: 'asset', countInBudget: false },
+  fixed_deposit: { group: 'investments', ledger: 'asset', countInBudget: false },
+  pension: { group: 'investments', ledger: 'asset', countInBudget: false },
   property: { group: 'property', ledger: 'asset', countInBudget: false },
   loan: { group: 'loans', ledger: 'liability', countInBudget: false },
-  other: { group: 'other', ledger: 'asset', countInBudget: false },
+  other_asset: { group: 'other', ledger: 'asset', countInBudget: false },
+  other_liability: { group: 'other', ledger: 'liability', countInBudget: false },
 };
 
 export type Account = {

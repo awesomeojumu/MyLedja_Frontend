@@ -1,5 +1,5 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 
 import {
@@ -77,7 +77,7 @@ const revalued = (snapshot: Snapshot, accountId: string) =>
       e.lines.some((l) => l.ledgerAccountId.endsWith(':revaluation')),
   );
 
-export function AccountScreen() {
+export function AccountScreen({ embedded, accountId }: { embedded?: boolean; accountId?: string } = {}) {
   const { snapshot, repo } = useWorkspace();
   const { engine } = useSync();
   const params = useGlobalSearchParams<{
@@ -101,13 +101,14 @@ export function AccountScreen() {
   const bank = useMemo(() => aiApi(client), [client]);
   const [pending, setPending] = useState<ServerImport[]>([]);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const resolvedId = accountId ?? (typeof params.id === 'string' ? params.id : undefined);
   const loadPending = useCallback(() => {
-    if (!online || !user || !params.id) return;
-    bank.pendingImports(user.workspaceId, params.id).then((r) => setPending(r.imports.filter((i) => i.source === 'bank')), () => setPending([]));
-  }, [bank, online, user, params.id]);
+    if (!online || !user || !resolvedId) return;
+    bank.pendingImports(user.workspaceId, resolvedId).then((r) => setPending(r.imports.filter((i) => i.source === 'bank')), () => setPending([]));
+  }, [bank, online, user, resolvedId]);
   useEffect(loadPending, [loadPending]);
 
-  const account = snapshot?.accounts.find((a) => a.id === params.id);
+  const account = snapshot?.accounts.find((a) => a.id === resolvedId);
 
   // `?account=` is PU-13; Add transaction also uses `account` as a prefill when `?add=` is set.
   const editOpen = !!account && params.account === account.id && !params.add;
@@ -137,7 +138,7 @@ export function AccountScreen() {
     return keys;
   }, [account]);
   const { value: tab, setValue: setTab } = useTabParam<Tab>({
-    pageKey: `account:${params.id ?? 'none'}`,
+    pageKey: `account:${resolvedId ?? 'none'}`,
     personId: user?.id,
     options: tabOptions,
     defaultValue: 'transactions',
@@ -168,16 +169,24 @@ export function AccountScreen() {
     };
   }, [account, router]);
 
+  const wrap = (body: ReactNode, title: string) =>
+    embedded ? (
+      <View testID="account-embedded" style={{ flex: 1 }}>
+        {body}
+      </View>
+    ) : (
+      <AppFrame title={title}>{body}</AppFrame>
+    );
+
   if (snapshot && !account) {
-    return (
-      <AppFrame title={t('accounts.title')}>
-        <EmptyState
-          title={t('account.missingTitle')}
-          body={t('account.missingBody')}
-          actionLabel={t('account.back')}
-          onAction={() => router.push('/accounts')}
-        />
-      </AppFrame>
+    return wrap(
+      <EmptyState
+        title={t('account.missingTitle')}
+        body={t('account.missingBody')}
+        actionLabel={t('account.back')}
+        onAction={() => router.push('/accounts')}
+      />,
+      t('accounts.title'),
     );
   }
 
@@ -199,8 +208,8 @@ export function AccountScreen() {
     }
   };
 
-  return (
-    <AppFrame title={account?.name ?? t('accounts.title')}>
+  return wrap(
+    <>
       <ScrollView contentContainerStyle={{ gap: sp['spacing-lg'] }}>
         {pending.map((p) => (
           <Card key={p.id} testID={`bank-review-${p.id}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp['spacing-sm'] }}>
@@ -216,14 +225,14 @@ export function AccountScreen() {
             />
           </Card>
         ))}
-        <Button kind="link" label={t('account.back')} onPress={() => router.push('/accounts')} style={{ alignSelf: 'flex-start' }} />
+        {embedded ? null : <Button kind="link" label={t('account.back')} onPress={() => router.push('/accounts')} style={{ alignSelf: 'flex-start' }} />}
         {!account || !snapshot ? (
           <Placeholder height={120} />
         ) : (
           <>
             <View style={{ gap: sp['spacing-xs'] }}>
               <Text variant="caption" tone="textSecondary">
-                {[t(`accounts.kind.${account.type}`), account.institution, t('accounts.syncedNow')].filter(Boolean).join(' · ')}
+                {[t(`accounts.kind.${account.type}` as 'accounts.kind.bank'), account.institution].filter(Boolean).join(' · ')}
               </Text>
               {owes ? (
                 <Text variant="caption" tone="textSecondary">
@@ -373,7 +382,8 @@ export function AccountScreen() {
       {account && sheet === 'sell' ? <TradeSheet direction="sell" onClose={() => setSheet(null)} /> : null}
       {account && sheet === 'dividend' ? <DividendSheet onClose={() => setSheet(null)} /> : null}
       {params.tx ? <TransactionPanel id={params.tx} onClose={() => router.setParams({ tx: undefined })} /> : null}
-    </AppFrame>
+    </>,
+    account?.name ?? t('accounts.title'),
   );
 }
 
@@ -434,7 +444,7 @@ function Details({ account, onArchive }: { account: Account; onArchive: () => vo
   );
   return (
     <Card testID="account-details" style={{ gap: sp['spacing-sm'] }}>
-      {line(t('accounts.type'), t(`accounts.kind.${account.type}`))}
+      {line(t('accounts.type'), t(`accounts.kind.${account.type}` as 'accounts.kind.bank'))}
       {line(t('accounts.institution'), account.institution ?? t('account.none'))}
       {line(t('accounts.last4'), account.last4 ? t('accounts.masked', { last4: account.last4 }) : t('account.none'))}
       {line(t('account.currency'), account.currency)}

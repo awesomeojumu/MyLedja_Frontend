@@ -224,7 +224,16 @@ export class WorkspaceRepository {
       this.store.list('prices'),
     ]);
     const reversedIds = new Set(events.map((e) => (e.data as StoredEvent).reversalOf).filter(Boolean));
-    const accountList = accounts.map((r) => ({ ...(r.data as Omit<Account, 'id'>), id: r.id })).sort((a, b) => a.order - b.order);
+    const accountList = accounts
+      .map((r) => {
+        const data = { ...(r.data as Omit<Account, 'id'>), id: r.id };
+        // Legacy coarse `other` → other_asset (Page 08 BE parity).
+        if ((data.type as string) === 'other' || !(data.type in ACCOUNT_KIND_INFO)) {
+          data.type = (data.type as string) === 'other_liability' ? 'other_liability' : 'other_asset';
+        }
+        return data;
+      })
+      .sort((a, b) => a.order - b.order);
     // Categories from the server name their group by id; show the group's name.
     const groupNames = new Map((await this.store.list('category_groups')).map((g) => [g.id, String(g.data.name ?? '')]));
     const categoryList = categories
@@ -421,7 +430,7 @@ export class WorkspaceRepository {
       'settings.update',
     );
     for (const a of body.accounts) {
-      const type = (a.type in ACCOUNT_KIND_INFO ? a.type : 'other') as AccountKind;
+      const type = (a.type in ACCOUNT_KIND_INFO ? a.type : 'other_asset') as AccountKind;
       await this.addAccount({ name: a.name, type, openingBalance: BigInt(a.openingBalance), openingDate: a.openingDate });
     }
   }
@@ -463,6 +472,27 @@ export class WorkspaceRepository {
   async updateAccount(account: Account): Promise<void> {
     const { id, ...data } = account;
     await this.put('accounts', id, { ...data, last4: data.last4?.slice(-4) }, 'account.update');
+  }
+
+  /**
+   * PU-13 edit: changing the opening / shown balance posts a correction (not income).
+   * Uses equity:Adjustments so it never hits income or spending.
+   */
+  async correctOpeningBalance(accountId: string, newBalance: bigint, date: string): Promise<Result<TxEvent | null>> {
+    const snapshot = await this.load();
+    const account = snapshot.chart.get(accountId);
+    if (!account) return { ok: false, error: 'missing_lines' };
+    const current = ledgerBalance(accountId, snapshot.events);
+    const target = account.kind === 'liability' ? -newBalance : newBalance;
+    if (target === current) return { ok: true, value: null };
+    const lines = buildAdjustment(snapshot.chart, { accountId, delta: target - current, against: 'adjustments' });
+    if (!lines.ok) return lines;
+    return this.postEvent(snapshot.chart, snapshot.events, {
+      type: 'balance_adjustment',
+      date,
+      lines: lines.value,
+      notes: 'Opening balance correction',
+    });
   }
 
   async addTransaction(input: TransactionInput): Promise<Result<TxEvent>> {
