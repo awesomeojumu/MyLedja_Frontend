@@ -173,6 +173,7 @@ const BE_TYPES = new Set([
   'payee.update',
   'tag.create',
   'budget.assign',
+  'budget.template.save',
   'schedule.create',
   'schedule.update',
   'goal.create',

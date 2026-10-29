@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { AmountInput, Button, Confirm, Footer, Sheet, Switch, Text, TextInput } from '@/design/components';
+import { AmountInput, Button, Confirm, Footer, Popover, Sheet, Switch, Text, TextInput } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import { useSizeClass } from '@/design/size';
@@ -133,79 +133,98 @@ export function EditAmountSheet({
     }
   };
 
+  const body = (
+    <View style={{ gap: sp['spacing-md'] }}>
+      <AmountInput
+        label={t('budget.plannedFor', { name: category?.name ?? '' })}
+        value={editText}
+        onChange={(text, minor) => {
+          setEditText(text);
+          setEditMinor(minor);
+        }}
+        testID="budget-edit-amount"
+      />
+      {categoryId ? (
+        <View testID="budget-edit-quick-picks" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
+          <Chip
+            label={t('budget.quickLastMonth', { amount: formatNaira(assignedOf(snapshot, categoryId, prevMonth(month))) })}
+            onPress={() => {
+              const v = assignedOf(snapshot, categoryId, prevMonth(month));
+              setEditMinor(v);
+              setEditText(toInputText(v));
+            }}
+          />
+          <Chip
+            label={t('budget.quickThreeMonthAvg', { amount: formatNaira(threeMonthAverage(snapshot, categoryId, month)) })}
+            onPress={() => {
+              const v = threeMonthAverage(snapshot, categoryId, month);
+              setEditMinor(v);
+              setEditText(toInputText(v));
+            }}
+          />
+          {templateAmount !== null ? (
+            <Chip
+              testID="budget-edit-template-pick"
+              label={t('budget.quickTemplate', { amount: formatNaira(templateAmount) })}
+              onPress={() => {
+                setEditMinor(templateAmount);
+                setEditText(toInputText(templateAmount));
+              }}
+            />
+          ) : null}
+        </View>
+      ) : null}
+      {showCarry ? (
+        <Switch testID="budget-edit-carry" label={t('budget.carryOverSwitch')} value={carryOver} onChange={setCarryOver} />
+      ) : null}
+      <TextInput
+        testID="budget-edit-note"
+        label={t('budget.notesOptional')}
+        value={note}
+        onChangeText={setNote}
+        multiline
+        // Web: Enter in amount is handled via Save; Tab moves via Next.
+        onSubmitEditing={() => void save(false)}
+      />
+      <Footer>
+        <Button kind="secondary" label={t('common.cancel')} onPress={requestClose} disabled={busy} />
+        <Button
+          testID="budget-edit-save"
+          label={phone ? t('budget.editDone') : t('budget.savePlan')}
+          onPress={() => void save(false)}
+          disabled={editMinor === null || editMinor < 0n || busy}
+        />
+      </Footer>
+      {nextId ? (
+        <Button
+          testID="budget-edit-next"
+          kind="secondary"
+          label={t('budget.editNext')}
+          onPress={() => void save(true)}
+          disabled={editMinor === null || editMinor < 0n || busy}
+        />
+      ) : null}
+    </View>
+  );
+
   return (
     <>
-      <Sheet
-        visible={visible && categoryId !== null}
-        title={t('budget.editAmount', { name: category?.name ?? '' })}
-        onClose={requestClose}
-        testID="budget-edit-sheet"
-        width={phone ? 480 : 420}
-        footer={
-          <Footer>
-            <Button kind="secondary" label={t('common.cancel')} onPress={requestClose} disabled={busy} />
-            <Button
-              testID="budget-edit-save"
-              label={t('budget.savePlan')}
-              onPress={() => void save(false)}
-              disabled={editMinor === null || editMinor < 0n || busy}
-            />
-          </Footer>
-        }
-      >
-        <AmountInput
-          label={t('budget.plannedFor', { name: category?.name ?? '' })}
-          value={editText}
-          onChange={(text, minor) => {
-            setEditText(text);
-            setEditMinor(minor);
-          }}
-          testID="budget-edit-amount"
-        />
-        {categoryId ? (
-          <View testID="budget-edit-quick-picks" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
-            <Chip
-              label={t('budget.quickLastMonth', { amount: formatNaira(assignedOf(snapshot, categoryId, prevMonth(month))) })}
-              onPress={() => {
-                const v = assignedOf(snapshot, categoryId, prevMonth(month));
-                setEditMinor(v);
-                setEditText(toInputText(v));
-              }}
-            />
-            <Chip
-              label={t('budget.quickThreeMonthAvg', { amount: formatNaira(threeMonthAverage(snapshot, categoryId, month)) })}
-              onPress={() => {
-                const v = threeMonthAverage(snapshot, categoryId, month);
-                setEditMinor(v);
-                setEditText(toInputText(v));
-              }}
-            />
-            {templateAmount !== null ? (
-              <Chip
-                testID="budget-edit-template-pick"
-                label={t('budget.quickTemplate', { amount: formatNaira(templateAmount) })}
-                onPress={() => {
-                  setEditMinor(templateAmount);
-                  setEditText(toInputText(templateAmount));
-                }}
-              />
-            ) : null}
-          </View>
-        ) : null}
-        {showCarry ? (
-          <Switch testID="budget-edit-carry" label={t('budget.carryOverSwitch')} value={carryOver} onChange={setCarryOver} />
-        ) : null}
-        <TextInput testID="budget-edit-note" label={t('budget.notesOptional')} value={note} onChangeText={setNote} multiline />
-        {nextId ? (
-          <Button
-            testID="budget-edit-next"
-            kind="secondary"
-            label={phone ? t('budget.editNext') : t('budget.editNext')}
-            onPress={() => void save(true)}
-            disabled={editMinor === null || editMinor < 0n || busy}
-          />
-        ) : null}
-      </Sheet>
+      {phone ? (
+        <Sheet
+          visible={visible && categoryId !== null}
+          title={t('budget.editAmount', { name: category?.name ?? '' })}
+          onClose={requestClose}
+          testID="budget-edit-sheet"
+          width={480}
+        >
+          {body}
+        </Sheet>
+      ) : (
+        <Popover visible={visible && categoryId !== null} onClose={requestClose} testID="budget-edit-sheet">
+          <Text variant="heading-sm">{t('budget.editAmount', { name: category?.name ?? '' })}</Text>
+          {body}
+        </Popover>
+      )}
       <Confirm
         visible={confirmDiscard}
         title={t('common.discardTitle')}

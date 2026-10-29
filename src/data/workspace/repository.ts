@@ -154,7 +154,6 @@ const LOCAL_ONLY = new Set([
   'reconcile.finish',
   'transfer.dismiss',
   'settings.update',
-  'budget.template.save',
   'payee.delete',
   'notification.create',
   'notification.read',
@@ -870,7 +869,7 @@ export class WorkspaceRepository {
     await this.put('budget_assigns', id, payload, 'budget.assign', undefined, {
       type: 'budget.assign',
       targetId: categoryId,
-      payload: { month, assigned: payload.amountMinor },
+      payload: { month, assigned: payload.amountMinor, ...(note ? { note } : {}) },
     });
   }
 
@@ -918,7 +917,18 @@ export class WorkspaceRepository {
     const template: BudgetTemplate = { id, name: name.trim(), lines };
     const { id: _id, ...data } = template;
     const version = existing ? await this.versionOf('budget_templates', id) : undefined;
-    await this.put('budget_templates', id, data, 'budget.template.save', version);
+    const rules = lines.map((line) => ({
+      categoryId: line.categoryId,
+      assigned: resolveTemplateLineAmount(snapshot, monthOf(todayInLagos()), line).toString(),
+      ...(line.ruleKind ? { kind: line.ruleKind } : {}),
+      ...(line.ruleMeta ? { meta: line.ruleMeta } : {}),
+    }));
+    await this.put('budget_templates', id, data, 'budget.template.save', version, {
+      type: 'budget.template.save',
+      targetId: id,
+      payload: { name: template.name, rules },
+      baseVersion: version ?? null,
+    });
     return template;
   }
 

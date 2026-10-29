@@ -110,6 +110,41 @@ describe('Budget page', () => {
     );
   });
 
+  it('D8: tracking banner shows Planned X of Y income', async () => {
+    const { sync, repo } = await seeded('tracking');
+    const s = await repo.load();
+    await repo.addTransaction({
+      kind: 'income',
+      accountId: s.accounts[0]!.id,
+      categoryId: s.categories.find((c) => c.key === 'cat.salary')!.id,
+      amount: 200_000_000n,
+      date: '2026-10-05',
+    });
+    const after = await repo.load();
+    const planned = [...after.assigns.values()].reduce((a, b) => a + b, 0n);
+    await renderWithProviders(wrap(<BudgetScreen />), { sync });
+    expect(await screen.findByTestId('budget-banner')).toHaveTextContent(
+      t('budget.trackingBanner', { planned: formatNaira(planned), income: formatNaira(200_000_000n) }),
+      { exact: false },
+    );
+  });
+
+  it('D9/D18: summary column with ring on wide layout', async () => {
+    const { sync } = await seeded('envelope');
+    await renderWithProviders(wrap(<BudgetScreen />), { sync });
+    expect(await screen.findByTestId('budget-summary-column')).toBeTruthy();
+    expect(screen.getByTestId('budget-summary-left-to-plan')).toBeTruthy();
+  });
+
+  it('D10: groups collapse and show totals', async () => {
+    const { sync, id } = await seeded();
+    await renderWithProviders(wrap(<BudgetScreen />), { sync });
+    expect(await screen.findByTestId(`budget-row-${id('Market')}`)).toBeTruthy();
+    expect(screen.getByTestId('budget-group-total-group.food')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('budget-group-toggle-group.food'));
+    expect(screen.queryByTestId(`budget-row-${id('Market')}`)).toBeNull();
+  });
+
   it('P06-06 / PU08: Move money from a category with available', async () => {
     const { sync, repo, id } = await seeded();
     await renderWithProviders(wrap(<BudgetScreen />), { sync });
