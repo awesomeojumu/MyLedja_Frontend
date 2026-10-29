@@ -170,7 +170,7 @@ export class SyncEngine {
         since = 0;
         continue;
       }
-      await store.apply(page.changes, page.lastSeq);
+      await store.apply(page.changes, page.lastSeq, this.now());
       since = page.lastSeq;
       if (!page.hasMore) return;
     }

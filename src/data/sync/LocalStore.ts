@@ -64,14 +64,15 @@ export class LocalStore {
     this.emit();
   }
 
-  async apply(changes: Change[], lastSeq: number): Promise<void> {
+  /** `pulledAt` is the sync engine's clock, so "how long offline" uses one clock (ms since epoch). */
+  async apply(changes: Change[], lastSeq: number, pulledAt: number = Date.now()): Promise<void> {
     const sets: [string, string][] = [];
     const removes: string[] = [];
     for (const c of changes) {
       if (c.op === 'upsert') sets.push([`${RECORD}${c.record.collection}:${c.record.id}`, JSON.stringify(c.record)]);
       else removes.push(`${RECORD}${c.collection}:${c.id}`);
     }
-    sets.push([`${META}lastSeq`, String(lastSeq)], [`${META}lastPulledAt`, new Date().toISOString()]);
+    sets.push([`${META}lastSeq`, String(lastSeq)], [`${META}lastPulledAt`, new Date(pulledAt).toISOString()]);
     if (removes.length) await this.kv.remove(removes);
     await this.kv.set(sets);
     this.emit();
