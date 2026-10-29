@@ -1,6 +1,6 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { Button, Card, Confirm, EmptyState, Placeholder, Switch, Tabs, Text, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
@@ -107,28 +107,37 @@ export function ReportsScreen() {
               active.cards
                 .filter((c) => editLayout || !c.hidden)
                 .map((card) => (
-                  <Card key={card.id} testID={`report-card-${card.id}`} style={{ gap: sp['spacing-sm'], opacity: card.hidden ? 0.5 : 1 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text variant="heading-sm">{card.title}</Text>
-                      {editLayout ? (
-                        <Switch
-                          label={t('reports.showCard')}
-                          value={!card.hidden}
-                          onChange={(show) => {
-                            if (!active || !dashboards) return;
-                            void persist(
-                              dashboards.map((d) =>
-                                d.id !== active.id
-                                  ? d
-                                  : { ...d, cards: d.cards.map((c) => (c.id === card.id ? { ...c, hidden: !show } : c)) },
-                              ),
-                            );
-                          }}
-                        />
-                      ) : null}
-                    </View>
-                    <Text>{cardBody(card.kind)}</Text>
-                  </Card>
+                  <Pressable
+                    key={card.id}
+                    testID={`report-card-${card.id}`}
+                    accessibilityRole={editLayout ? undefined : 'link'}
+                    disabled={editLayout}
+                    onPress={editLayout ? undefined : () => router.push(`/reports/view/${card.id}?from=${range.from}&to=${range.to}`)}
+                  >
+                    <Card style={{ gap: sp['spacing-sm'], opacity: card.hidden ? 0.5 : 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text variant="heading-sm">{card.title}</Text>
+                        {editLayout ? (
+                          <Switch
+                            label={t('reports.showCard')}
+                            value={!card.hidden}
+                            onChange={(show) => {
+                              if (!active || !dashboards) return;
+                              void persist(
+                                dashboards.map((d) =>
+                                  d.id !== active.id
+                                    ? d
+                                    : { ...d, cards: d.cards.map((c) => (c.id === card.id ? { ...c, hidden: !show } : c)) },
+                                ),
+                              );
+                            }}
+                          />
+                        ) : null}
+                      </View>
+                      <Text>{cardBody(card.kind)}</Text>
+                      {!editLayout ? <Text testID={`report-open-${card.id}`} tone="link">{t('reports.openReport')}</Text> : null}
+                    </Card>
+                  </Pressable>
                 ))
             )}
           </>
