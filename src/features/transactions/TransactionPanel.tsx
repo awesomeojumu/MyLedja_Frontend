@@ -8,6 +8,7 @@ import { useTheme } from '@/design/ThemeProvider';
 import type { Snapshot, TransactionInput, TxEvent } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { ruleFromPayee } from '@/features/rules/helpers';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { pickImageUri } from '@/features/payees/pickMedia';
 import { t } from '@/i18n';
 import { purchaseCost, refundedSoFar } from '@/ledger';
@@ -19,6 +20,7 @@ import { connectedLines } from './panelConnected';
 import { ReceiptViewer } from './ReceiptViewer';
 import { parseReceipt, stripReceiptLine, withReceipt } from './receiptMeta';
 import { parseTags, stripTagsLine, withTags } from './tags';
+import { uploadReceiptFromUri } from './uploadReceipt';
 
 const sp = tokens.spacing;
 
@@ -323,6 +325,7 @@ function TagsField({ event }: { event: TxEvent }) {
 
 function ReceiptField({ event }: { event: TxEvent }) {
   const { repo } = useWorkspace();
+  const { client, user } = useAuth();
   const toast = useToast();
   const router = useRouter();
   const raw = parseReceipt(event.notes) ?? '';
@@ -341,8 +344,10 @@ function ReceiptField({ event }: { event: TxEvent }) {
         testID="panel-receipt-photo"
         label={t('panel.addPhoto')}
         onPress={() => {
-          void pickImageUri().then((uri) => {
-            if (uri) persist(uri);
+          void pickImageUri().then(async (uri) => {
+            if (!uri) return;
+            const id = await uploadReceiptFromUri(client, user?.workspaceId, uri);
+            persist(id);
           });
         }}
       />

@@ -22,6 +22,7 @@ import {
 import tokens from '@/design/tokens.json';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import type { Snapshot, TransactionInput } from '@/data/workspace/repository';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
@@ -35,6 +36,7 @@ import { pickImageUri } from '@/features/payees/pickMedia';
 
 import { withReceipt } from './receiptMeta';
 import { withTags } from './tags';
+import { uploadReceiptFromUri } from './uploadReceipt';
 
 const sp = tokens.spacing;
 const LAST_TAB_KEY = 'myledja:add-txn-last-tab';
@@ -124,6 +126,7 @@ type Part = { categoryId: string | null; text: string; minor: bigint | null };
 
 function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind; prefill: Prefill; onKind: (k: AddKind) => void; onClose: () => void }) {
   const { repo, snapshot } = useWorkspace();
+  const { client, user } = useAuth();
   const toast = useToast();
   const [movementDoor, setMovementDoor] = useState<MovementDoor | null>(null);
   const accounts = useMemo(() => (snapshot?.accounts ?? []).filter((a) => !a.archived), [snapshot]);
@@ -537,8 +540,10 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
                     testID="add-receipt-photo"
                     label={t('panel.addPhoto')}
                     onPress={() => {
-                      void pickImageUri().then((uri) => {
-                        if (uri) setReceiptLink(uri);
+                      void pickImageUri().then(async (uri) => {
+                        if (!uri) return;
+                        const id = await uploadReceiptFromUri(client, user?.workspaceId, uri);
+                        setReceiptLink(id);
                       });
                     }}
                   />
