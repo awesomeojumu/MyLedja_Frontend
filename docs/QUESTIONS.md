@@ -195,3 +195,17 @@ Format and rules: build plan section 14. Each open question stops only the task 
   - Payees appear under Manage in the drawer, not the phone bottom bar (DESIGN.md 3.2).
 - Answer:
 - Status: open
+
+## Q-20: Phase 5 decisions in the app
+
+- Task: F5.1 to F5.5, and the page 19 to 23 fix merges
+- Raised by: frontend agent
+- Documents: DESIGN.md pages 5, 17 to 23 and 26; TECH-SPEC 6.10, 6.12, 6.13 decision 4; backend Q-B33
+- Decided by the owner (29 Oct): report dashboards and builder reports use the synced `report_dashboards` and `saved_reports` records, not workspace settings.
+- Decisions taken so as not to block (each can change without a data migration):
+  - **Starting dashboards.** Until someone changes a dashboard, the app shows Overview and Year in review without saving them (fixed ids `default-0` and so on, so card links work), then saves both on the first change. The server also creates them when its dashboard list is first read, so a workspace could get two copies. Recommendation: create them in a migration when a workspace is made.
+  - **"Download daily rates" switch.** DESIGN.md page 26 shows it; TECH-SPEC 6.13 decision 4 says rates are typed in by hand until a rate source has its own variable. The switch is a stored setting that does nothing yet. Recommendation: hide it until there's a source.
+  - **Health settings** are saved in the workspace settings on the device. The sync service has no operation for workspace settings, so the server's `PUT /health-settings` isn't reached from the app. Recommendation: a `workspace.settings` sync operation in both repos.
+  - **Wording where branches disagreed** follows DESIGN.md: "← Reports", "Financial health", "Health settings". "Bills & recurring" became "Bills and recurring" for the copy rules.
+- Answer:
+- Status: open

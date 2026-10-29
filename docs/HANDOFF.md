@@ -1,53 +1,51 @@
-# Handoff for the next agent (28 Oct 2026, updated after Phase 4)
+# Handoff for the next agent (29 Oct 2026, after Phase 5 and the page fix merges)
 
-Both repos: branch `claude/app-study-o8lpl5`. Build documents (DESIGN.md, TECH-SPEC.md, BUILD-PLAN.md) are not in either repo; ask the owner for them. Check out the backend at `../MyLedja_Backend` so `npm run api:sync` and `cases:check` work.
+Both repos: work on `dev` (branch from it; never push to `main` or `staging`). Build documents (DESIGN.md, TECH-SPEC.md, BUILD-PLAN.md) are not in either repo; ask the owner for them. Check out the backend at `../MyLedja_Backend` so `npm run api:sync` and `cases:check` work.
 
-## Done
+## Where things stand
 
-**Phase 1 to 2 fixes (frontend):** lint and typecheck green; `matchBillToEvent` duplicate and sign bug fixed; Welcome tablet crash (`height`); conditional hooks in the income routing row; "save by" budget template used the amount as a month; sheets reset on open instead of on every refresh; `toInputText` (src/money) replaces float money text; Holdings tab removed until Phase 5.
+- Phases 1 to 5 are built in both repos, and the per-page fix branches (`cursor/fix-page-01` to `27`) are all merged into `dev`: 17 in the backend, 27 in the app.
+- CI is green on `dev` in both repos (backend `ee4e5e0`, app `8a6fe85`), including the backend's MongoDB integration and e2e tests and the app's Playwright e2e and axe checks.
 
-**Phase 2 join to the real API:**
+## Done, by phase
 
-- Backend: a sync operation may carry `transactionIds` (device-made ids, posting order; a correction is reversal then new). `LedgerService.withClientIds` applies them. Transaction lines carry `system` (system-account key).
-- Frontend: `src/data/sync/serverRecords.ts` translates server records into local records and Phase 2 records into API bodies. `repository.put(..., remote)` attaches the exact API operation; `remote: null` and the `LOCAL_ONLY` set keep bookkeeping writes on the device. Category groups resolve to names in `load()`.
+**Phases 1 to 2:** ledger, accounts, transactions, budget, plan, income, goals, debts, payees, sync. Sync operations may carry `transactionIds` (device-made ids, posting order). In the app, `src/data/sync/serverRecords.ts` translates server records and `repository.put(..., remote)` attaches the exact API operation; a write with no operation of its own and in the `LOCAL_ONLY` set stays on the device.
 
-**Phase 3 trust:**
+**Phase 3 trust:** two-factor, backup codes, passkeys (web only in the app), sessions, recheck (`recheck_needed`), activity log, security notices; exports, backup and restore (restore makes a new workspace), account deletion; app lock.
 
-- Backend `src/modules/security`: TOTP two-factor (QR via `qrcode`), backup codes, a second sign-in step (`TwoFactorRequired`, `POST /v1/auth/two-factor`, trusted device for 30 days), passkeys (`@simplewebauthn/server`), sessions list and sign-out of one, `recheck` (sensitive actions need a sign-in or recheck within 15 min, error `recheck_needed`), change password, activity log, and security notices ("Was this you?") on a new sign-in from a second device, two-factor off, passkey added and password changed.
-- Backend `src/modules/exports`: CSV export, backup file (EJSON with checksum), restore preview, restore into a new workspace with new ids written to its change feed, account deletion job, nightly encrypted backup. `src/modules/files/cloudinary.ts` is a signed Cloudinary client.
-- Frontend: sign-in two-factor step and passkey (web only); `src/features/settings/SecuritySheets.tsx` (`useRecheck` retries an action after "Confirm it's you"); Security, Devices, Workspace activity and Import/export tabs use the API; `src/features/lock/AppLock.tsx` (app lock, app-switcher cover, hide in recents, privacy default); sign-out clears the local store (`LocalStore.clearAll`); `eas.json` and app.json plugins. Bundle id `com.planexi.myledja` is a guess: confirm with the owner.
+**Phase 4:** AI (Claude then Gemini, consent, redaction), PDF and Excel statement parsers, rules (synced, applied in the app too), Mono bank connections. Optional env vars: `GOOGLE_GEMINI_PAID_PLAN`, `MONO_WEBHOOK_SECRET`.
 
-**Phase 4:**
+**Phase 5 (Release 3):**
 
-- Backend `src/modules/ai`: Claude (`@anthropic-ai/sdk`, `claude-opus-5-5`, structured output, low effort) then Gemini fallback; per-workspace consent; redaction (`redact.ts`). Imports `statements/`: PDF (unpdf) and Excel (read-excel-file) parsers, bank detection, AI fallback. `src/modules/rules` (stored, synced via `rule.upsert`/`rule.delete`, applied to imported rows). `src/modules/banking` (Mono link, sync into import review, disconnect, webhook, daily job).
-- Frontend: import sheet takes PDF/XLSX with an AI consent prompt; AI features and Bank connections tabs; Connect bank sheet (Mono widget on web only); rules sync.
+- Ledger: `investment_buy` (E20) and `investment_sell` (E21); dividends post as `income` (E22). A holding is an asset ledger account inside an investment account; lots are rebuilt from events (lot id = buy event id), first in first out unless lots are chosen. Exchange rates use the latest rate on or before a date; without one a figure is "Partial". Net worth converts currencies and counts holdings at market value. Ledger cases 15, 16, 17 and 25 are in `test/fixtures/ledger-cases.json` (same hash in both repos).
+- Backend modules: `investments`, `currencies`, `reports` (engine, cash flow, Health, report dashboards, saved reports).
+- App pages: Investments and Holding (17, 18), Reports, Report and Report builder (19 to 21), Cash flow (22), Health (23), the Dashboard Health and Investments cards, and Settings › Currencies.
 
-**New optional env vars (TECH-SPEC 2.3 rule 4):** `GOOGLE_GEMINI_PAID_PLAN=true` (Gemini allowed in production), `MONO_WEBHOOK_SECRET` (webhooks refused until set).
+## How the page fix merges were joined (29 Oct)
 
-**Phase 4 finish (acceptance gaps closed):**
+The fix branches were written separately, so some overlapped. Where they did, both sides were kept unless they did the same thing, in which case the more complete one was kept. The decisions that matter later:
 
-- P08-08: Connect bank asks how far back to import (30, 90, 180 or 365 days; `historyDays` on the link).
-- P26-13: Bank connections shows last sync and consent (expiry when Mono gives one), with Sync now, Reconnect (`/reauth`, then Mono with the reauth token, then `/reconnected`) and Disconnect.
-- P15-07, P25-05: bank syncs create server imports with `source: 'bank'`. The Account page lists them ("N new bank transactions to review"), opens them in the normal import review (money-back prompts, duplicates, rules), then marks them `reviewed` (`GET /imports?status=mapped`, `POST /imports/:id/reviewed`). Account "Sync now" also syncs a connected bank.
-- P25-05: the person's rules apply in the app too (`ruleChangeFor` in `src/features/rules/ruleEngine.ts`): import review suggests the rule's category, Add transaction prefills it, and saving applies rename-payee and add-note actions.
-- P26-12: AI features shows the two Phase 4 switches; Health advice waits for Phase 5.
-- The redaction test caught a real bug: the card-number pattern ate an account number and the amount after it. Fixed.
+- **Report dashboards use the synced records** (`report_dashboards`, `saved_reports`, the owner's choice), not workspace settings. `src/features/reports/useDashboards.ts` is the one way in. The Reports page (19) runs cards on the device; the Report page (20) runs through `POST /reports/run`; the builder (21) previews on the device and saves to synced saved reports. `ShownResult` in `src/features/reports/helpers.ts` is what the chart, table, CSV and finding text accept from either.
+- **Account and Debt pages can be embedded** (`AccountScreen({ embedded, accountId })`, `DebtScreen({ embeddedId })`): wider screens show the account beside the list at `/accounts?view=<id>` (DESIGN.md page 8).
+- **Local push:** `src/features/notifications/localPush.ts` (bills reminders with lock-screen actions) and `LocalPushBridge` (taps) are the only push code; the app frame only sets the badge.
+- **Sync clock:** `LocalStore.apply` takes the engine's time for `lastPulledAt`; it used the wall clock, so the 180-days-offline reset and its test depended on the time of day.
+- **Fixes after merging:** Prettier and `openapi.json` in the backend; a missing `monthIncome` import, two lint errors, six strings against the copy rules, and three axe and e2e failures in the app (the line chart's scrub is pointer-only; "View as table" carries the numbers).
 
-## State of checks (all run after the Phase 4 finish)
+## State of checks
 
-- Frontend `npm run check`: lint, typecheck, 2,117 tests, web build, cases and API checks all pass.
-- Backend: lint, typecheck, 124 unit tests, build, OpenAPI check, cases check and audit pass. Integration and e2e tests (MongoDB binaries) can't run in this container; run them in CI.
-- Phase 4 tests: `src/modules/ai/__tests__` (redaction on a realistic statement; consent, fallback, fields sent), `imports/__tests__/statements.parse.test.ts` (GTBank, Access, Zenith, UBA and Kuda layouts, synthetic), `rules/__tests__`, `banking/__tests__` (webhook refused unless the secret matches), `security/__tests__/totp.test.ts` (RFC 6238 vector); app `serverRecords`, `ruleChange` and base64 tests.
+- App: lint, typecheck, 3,545 unit tests, web build, 18 Playwright tests (2 skipped), cases and API checks, audit.
+- Backend: lint, typecheck, 182 unit tests, build, OpenAPI and cases checks in this container; the MongoDB integration and e2e suites run in CI. In a container without MongoDB binaries, an in-memory stand-in can run most of them (588 of 594 pass; the 6 that don't need real BSON types, rollback, job locking or validators).
+- Playwright here needs `launchOptions.executablePath: '/opt/pw-browsers/chromium'`, because the project pins a newer Playwright than the installed browser.
 
 ## Open decisions for the owner
 
-1. Restore: DESIGN says it replaces the workspace; TECH-SPEC 11 and B3.6 say a new workspace. Built as a new workspace. The app has no workspace switcher yet, so a restored workspace isn't reachable from the app.
-2. Passkeys and Mono on phones need native modules (prototypes T0.1, T0.7); hidden on phones.
-3. Bank parsers were written without real statements; check each bank with a sample.
-4. Server-side Claude fallbacks (`fallbacks` beta) not used; Gemini covers refusals.
+1. Restore makes a new workspace (TECH-SPEC 11) while DESIGN says it replaces; the app has no workspace switcher yet.
+2. Passkeys and Mono on phones need native modules; hidden on phones.
+3. Bank parsers were written without real statements; Premium Trust and Bank78 have none (backend Q-B34).
+4. Phase 5: backend Q-B33 and app Q-20.
 
 ## Not done
 
-- Phase 3 and 4 device work: VoiceOver/TalkBack pass, performance on the reference phone, EAS store builds and signing, passkeys and Mono on phones (native modules), and the Release 2 gate's real statements from GTB, Access, Zenith, UBA and Kuda.
-- Phase 5 (next): investments E20 to E23 (holdings, lots, prices), reports, cash flow, Health, exchange rates; DESIGN pages 17 to 23 (DESIGN.md lines 1263 to 1537); Dashboard Health and Investments cards; Settings › Currencies. Plan: backend modules plus local read formulas in `src/ledger`, sync ops for holdings/prices/rates through `serverRecords.ts`.
-- Existing gaps from the first study: frontend `cases-check.mjs` looks for a lowercase sibling path; Phase 2 endpoints lack the six integration tests.
+- Device work: screen reader pass, performance on the reference phone, store builds and signing, landscape for Report and Cash flow on phones.
+- Phase 5 gaps: no separate "Exchange-rate change" line in the Net worth report (TECH-SPEC 6.13 decision 3); report cards can't be dragged or corner-resized on web; the tax summary report is "Later" in DESIGN.
+- Phase 2 endpoints lack the six integration tests.
