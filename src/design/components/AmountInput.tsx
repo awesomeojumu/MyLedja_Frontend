@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { TextInputProps as RNTextInputProps } from 'react-native';
 import { formatNaira, parseAmount } from '@/money';
 import { t } from '@/i18n';
 import { amountFieldError } from './fieldKinds';
@@ -13,6 +14,10 @@ export function AmountInput({
   allowZero = false,
   required = false,
   showError = false,
+  returnKeyType,
+  blurOnSubmit,
+  onSubmitEditing,
+  autoFocus,
 }: {
   label: string;
   value: string;
@@ -23,6 +28,10 @@ export function AmountInput({
   required?: boolean;
   /** Parent sets true on Save so errors show without waiting for blur. */
   showError?: boolean;
+  returnKeyType?: RNTextInputProps['returnKeyType'];
+  blurOnSubmit?: boolean;
+  onSubmitEditing?: RNTextInputProps['onSubmitEditing'];
+  autoFocus?: boolean;
 }) {
   const [blurred, setBlurred] = useState(false);
   const reveal = blurred || showError;
@@ -36,6 +45,10 @@ export function AmountInput({
       inputMode="decimal"
       placeholder={t('money.placeholder')}
       error={error}
+      returnKeyType={returnKeyType}
+      blurOnSubmit={blurOnSubmit}
+      onSubmitEditing={onSubmitEditing}
+      autoFocus={autoFocus}
       onBlur={() => {
         setBlurred(true);
         if (value.trim() === '') return;

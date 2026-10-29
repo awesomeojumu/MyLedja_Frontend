@@ -1,6 +1,7 @@
 import type { Holding, HoldingLot, HoldingPrice, HoldingType } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { costOfPurchase, ledgerBalance } from '@/ledger';
+import { formatNaira } from '@/money';
 
 export const HOLDING_TYPES: HoldingType[] = ['stock', 'fund', 'pension', 'crypto', 'fixedDeposit', 'other'];
 
@@ -10,9 +11,24 @@ export type HoldingFigures = {
   cost: bigint;
   price: bigint | null;
   priceDate: string | null;
+  /** True when value fell back to cost because no price was entered (P17-06). */
+  stalePrice: boolean;
   value: bigint;
   gain: bigint;
   gainPct: number | null;
+};
+
+export type PortfolioSummary = {
+  figures: HoldingFigures[];
+  totalValue: bigint;
+  totalCost: bigint;
+  unrealised: bigint;
+  realised: bigint;
+  dividends: bigint;
+  gainPct: number | null;
+  series: { date: string; value: bigint }[];
+  byType: { key: string; value: bigint }[];
+  byAccount: { key: string; label: string; value: bigint }[];
 };
 
 export function lotsFor(snapshot: Snapshot, holdingId: string): HoldingLot[] {
@@ -56,7 +72,6 @@ export function fifoCost(snapshot: Snapshot, holdingId: string, units: number): 
     const lotCost = BigInt(lot.costMinor);
     const lotUnits = Number(lot.units);
     const share = costOfPurchase(String(take), lotUnits > 0 ? lotCost / BigInt(Math.round(lotUnits)) : 0n, 0n);
-    // Prefer proportional cost: take/lotUnits * lotCost
     const portion = lotUnits > 0 ? (lotCost * BigInt(Math.round(take * 1e8))) / BigInt(Math.round(lotUnits * 1e8)) : 0n;
     cost += portion || share;
     left -= take;
@@ -70,10 +85,11 @@ export function holdingFigures(snapshot: Snapshot, holding: Holding, onDate?: st
   const cost = holdingCost(snapshot, holding);
   const px = latestPrice(snapshot, holding.id, onDate);
   const price = px ? BigInt(px.priceMinor) : null;
+  const stalePrice = price === null;
   const value = price !== null ? costOfPurchase(String(units), price, 0n) : cost;
   const gain = value - cost;
   const gainPct = cost === 0n ? null : Number((gain * 10000n) / cost) / 100;
-  return { holding, units, cost, price, priceDate: px?.date ?? null, value, gain, gainPct };
+  return { holding, units, cost, price, priceDate: px?.date ?? null, stalePrice, value, gain, gainPct };
 }
 
 export function portfolioFigures(snapshot: Snapshot, accountId?: string): HoldingFigures[] {
@@ -91,4 +107,120 @@ export function rangeStart(range: '1M' | '3M' | '1Y' | 'All', today: string): st
   if (range === '3M') dt.setUTCMonth(dt.getUTCMonth() - 3);
   if (range === '1Y') dt.setUTCFullYear(dt.getUTCFullYear() - 1);
   return dt.toISOString().slice(0, 10);
+}
+
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function monthEnd(month: string): string {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
+function addMonths(month: string, n: number): string {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return d.toISOString().slice(0, 7);
+}
+
+/** Value-line dates (mirrors BE investments.service seriesDates). */
+export function seriesDates(range: '1M' | '3M' | '1Y' | 'All', today: string, first: string | null): string[] {
+  const start = rangeStart(range, today) ?? (first && first < today ? first : today);
+  const out: string[] = [];
+  if (range === '1M' || range === '3M') {
+    for (let d = today; d >= start; d = addDays(d, -7)) out.unshift(d);
+    return out.length ? out : [today];
+  }
+  let month = today.slice(0, 7);
+  out.unshift(today);
+  for (let i = 0; i < 120; i++) {
+    month = addMonths(month, -1);
+    const end = monthEnd(month);
+    if (end < start.slice(0, 7) + '-01') break;
+    out.unshift(end);
+  }
+  return out;
+}
+
+function realisedInRange(snapshot: Snapshot, start: string | null): bigint {
+  let total = 0n;
+  for (const e of snapshot.events) {
+    if (e.type !== 'investment_sell' || e.status !== 'posted') continue;
+    if (start && e.date < start) continue;
+    for (const l of e.lines) {
+      if (l.ledgerAccountId.endsWith(':investment_gain') || l.ledgerAccountId.endsWith(':investment_loss')) {
+        total += -l.amountMinor;
+      }
+    }
+  }
+  return total;
+}
+
+function dividendsInRange(snapshot: Snapshot, start: string | null): bigint {
+  let total = 0n;
+  for (const e of snapshot.events) {
+    if (e.type !== 'income' || e.status !== 'posted' || !e.holdingId) continue;
+    if (start && e.date < start) continue;
+    for (const l of e.lines) {
+      if (l.ledgerAccountId.endsWith(':investment_income')) total += -l.amountMinor;
+    }
+  }
+  return total;
+}
+
+/** Portfolio card + charts for Page 17 (DESIGN / TB08-1). */
+export function portfolioSummary(snapshot: Snapshot, range: '1M' | '3M' | '1Y' | 'All', today: string): PortfolioSummary {
+  const figures = portfolioFigures(snapshot);
+  const start = rangeStart(range, today);
+  const totalValue = figures.reduce((s, f) => s + f.value, 0n);
+  const totalCost = figures.reduce((s, f) => s + f.cost, 0n);
+  const unrealised = totalValue - totalCost;
+  const realised = realisedInRange(snapshot, start);
+  const dividends = dividendsInRange(snapshot, start);
+  const gainPct = totalCost === 0n ? null : Number((unrealised * 10000n) / totalCost) / 100;
+
+  const firstTrade =
+    snapshot.events
+      .filter((e) => (e.type === 'investment_buy' || e.type === 'investment_sell') && e.status === 'posted')
+      .map((e) => e.date)
+      .sort()[0] ?? null;
+  const dates = seriesDates(range, today, firstTrade);
+  const series = dates.map((date) => ({
+    date,
+    value: snapshot.holdings.reduce((s, h) => s + holdingFigures(snapshot, h, date).value, 0n),
+  }));
+
+  const byTypeMap = new Map<string, bigint>();
+  const byAccountMap = new Map<string, bigint>();
+  for (const f of figures) {
+    byTypeMap.set(f.holding.type, (byTypeMap.get(f.holding.type) ?? 0n) + f.value);
+    byAccountMap.set(f.holding.accountId, (byAccountMap.get(f.holding.accountId) ?? 0n) + f.value);
+  }
+  const byType = [...byTypeMap.entries()]
+    .map(([key, value]) => ({ key, value }))
+    .sort((a, b) => (a.value === b.value ? a.key.localeCompare(b.key) : a.value > b.value ? -1 : 1));
+  const byAccount = [...byAccountMap.entries()]
+    .map(([key, value]) => ({
+      key,
+      label: snapshot.accounts.find((a) => a.id === key)?.name ?? key,
+      value,
+    }))
+    .sort((a, b) => (a.value === b.value ? a.label.localeCompare(b.label) : a.value > b.value ? -1 : 1));
+
+  return { figures, totalValue, totalCost, unrealised, realised, dividends, gainPct, series, byType, byAccount };
+}
+
+/** Format a signed gain with +/− (DESIGN D7). */
+export function formatGain(amount: bigint, pct: number | null): string {
+  const sign = amount > 0n ? '+' : amount < 0n ? '−' : '';
+  const abs = amount < 0n ? -amount : amount;
+  const body = `${sign}${formatNaira(abs)}`;
+  return pct === null ? body : `${body} (${sign}${Math.abs(pct).toFixed(1)}%)`;
+}
+
+export function isDown(gainPct: number | null): boolean {
+  return gainPct !== null && gainPct < -10;
 }

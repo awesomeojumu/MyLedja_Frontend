@@ -5,7 +5,15 @@ import { formatDay } from '@/design/components/overlays';
 import { budgetForMonth, resolveTemplateLineAmount, rowFor } from '@/features/budget/helpers';
 import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import type { RemoteOperation } from '../sync/mapOperation';
-import { goalBody, goalUpdateBody, incomeStreamBody, incomeStreamUpdateBody, scheduleBody, scheduleUpdateBody } from '../sync/serverRecords';
+import {
+  goalBody,
+  goalUpdateBody,
+  holdingTypeToServer,
+  incomeStreamBody,
+  incomeStreamUpdateBody,
+  scheduleBody,
+  scheduleUpdateBody,
+} from '../sync/serverRecords';
 import { t, type TextKey } from '@/i18n';
 import {
   buildAdjustment,
@@ -159,12 +167,9 @@ const LOCAL_ONLY = new Set([
   'notification.create',
   'notification.read',
   'notification.snooze',
-  'holding.create',
-  'holding.update',
-  'holding.delete',
+  // Lots are rebuilt on the server from buy/sell/dividend events (TECH-SPEC 6.8).
   'lot.create',
   'lot.update',
-  'price.upsert',
 ]);
 
 const todayInLagos = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(new Date());
@@ -2127,7 +2132,7 @@ export class WorkspaceRepository {
     return id;
   }
 
-  /** PU-37: add a holding; creates its ledger asset and moves no money. */
+  /** PU-37: add a holding; creates its ledger asset and moves no money. Holding id = ledger account id (BE). */
   async createHolding(input: {
     name: string;
     symbol?: string;
@@ -2142,7 +2147,6 @@ export class WorkspaceRepository {
     const name = input.name.trim();
     if (!name) return { ok: false, error: 'missing_lines' };
     const id = this.newId();
-    const ledgerAccountId = this.newId();
     const holding: Holding = {
       id,
       name,
@@ -2150,17 +2154,30 @@ export class WorkspaceRepository {
       type: input.type,
       accountId: parent.id,
       currency: input.currency ?? parent.currency,
-      ledgerAccountId,
+      ledgerAccountId: id,
     };
     const { id: _id, ...data } = holding;
-    await this.put('holdings', id, data, 'holding.create');
-    if (input.currentPriceMinor !== undefined && input.currentPriceMinor > 0n) {
-      const priceId = this.newId();
+    const priceDate = todayInLagos();
+    const price = input.currentPriceMinor !== undefined && input.currentPriceMinor > 0n ? input.currentPriceMinor.toString() : undefined;
+    await this.put('holdings', id, data, 'holding.create', undefined, {
+      type: 'holding.create',
+      payload: {
+        id,
+        name,
+        symbol: holding.symbol ?? null,
+        type: holdingTypeToServer(holding.type),
+        accountId: parent.id,
+        ...(price ? { price, priceDate } : {}),
+      },
+    });
+    if (price) {
       await this.put(
         'prices',
-        priceId,
-        { holdingId: id, date: todayInLagos(), priceMinor: input.currentPriceMinor.toString() } satisfies Omit<HoldingPrice, 'id'>,
-        'price.upsert',
+        this.newId(),
+        { holdingId: id, date: priceDate, priceMinor: price } satisfies Omit<HoldingPrice, 'id'>,
+        'holding.prices',
+        undefined,
+        null,
       );
     }
     return { ok: true, value: holding };
@@ -2168,7 +2185,18 @@ export class WorkspaceRepository {
 
   async updateHolding(holding: Holding): Promise<void> {
     const { id, ...data } = holding;
-    await this.put('holdings', id, data, 'holding.update');
+    const baseVersion = await this.versionOf('holdings', id);
+    await this.put('holdings', id, data, 'holding.update', baseVersion, {
+      type: 'holding.update',
+      targetId: id,
+      payload: {
+        baseVersion,
+        name: data.name,
+        symbol: data.symbol ?? null,
+        type: holdingTypeToServer(data.type),
+      },
+      baseVersion,
+    });
   }
 
   /** PU-38 buy (E20): cash → holding at cost; records a lot. */
@@ -2193,11 +2221,31 @@ export class WorkspaceRepository {
       fees,
     });
     if (!lines.ok) return lines;
-    const posted = await this.postEvent(chart, snapshot.events, {
-      type: 'investment_buy',
-      date: input.date,
-      lines: lines.value,
-    });
+    const posted = await this.postEvent(
+      chart,
+      snapshot.events,
+      {
+        type: 'investment_buy',
+        date: input.date,
+        lines: lines.value,
+        holdingId: holding.id,
+        investmentUnits: input.units,
+        investmentPriceMinor: input.pricePerUnit.toString(),
+        investmentFeesMinor: fees.toString(),
+      },
+      {
+        type: 'transaction.create',
+        payload: {
+          type: 'investment_buy',
+          holdingId: holding.id,
+          accountId: input.cashAccountId,
+          units: input.units,
+          price: input.pricePerUnit.toString(),
+          fees: fees.toString(),
+          date: input.date,
+        },
+      },
+    );
     if (!posted.ok) return posted;
     const cost = costOfPurchase(input.units, input.pricePerUnit, fees);
     const lotId = this.newId();
@@ -2215,6 +2263,8 @@ export class WorkspaceRepository {
         buyEventId: posted.value.id,
       } satisfies Omit<HoldingLot, 'id'>,
       'lot.create',
+      undefined,
+      null,
     );
     return posted;
   }
@@ -2252,31 +2302,52 @@ export class WorkspaceRepository {
     }
     if (left > 1e-9) return { ok: false, error: 'not_positive' };
     const costOfLots = input.costOfLots ?? cost;
+    const fees = input.fees ?? 0n;
     const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
     const lines = buildInvestmentSell(chart, {
       holdingAccountId: holding.ledgerAccountId,
       cashAccountId: input.cashAccountId,
       units: input.units,
       pricePerUnit: input.pricePerUnit,
-      fees: input.fees ?? 0n,
+      fees,
       costOfLots,
     });
     if (!lines.ok) return lines;
-    const posted = await this.postEvent(chart, snapshot.events, {
-      type: 'investment_sell',
-      date: input.date,
-      lines: lines.value,
-    });
+    const posted = await this.postEvent(
+      chart,
+      snapshot.events,
+      {
+        type: 'investment_sell',
+        date: input.date,
+        lines: lines.value,
+        holdingId: holding.id,
+        investmentUnits: input.units,
+        investmentPriceMinor: input.pricePerUnit.toString(),
+        investmentFeesMinor: fees.toString(),
+      },
+      {
+        type: 'transaction.create',
+        payload: {
+          type: 'investment_sell',
+          holdingId: holding.id,
+          accountId: input.cashAccountId,
+          units: input.units,
+          price: input.pricePerUnit.toString(),
+          fees: fees.toString(),
+          date: input.date,
+        },
+      },
+    );
     if (!posted.ok) return posted;
     for (const { lot, take } of consumes) {
       const sold = (Number(lot.soldUnits || '0') + take).toString();
       const { id, ...data } = lot;
-      await this.put('lots', id, { ...data, soldUnits: sold }, 'lot.update');
+      await this.put('lots', id, { ...data, soldUnits: sold }, 'lot.update', undefined, null);
     }
     return posted;
   }
 
-  /** PU-39 dividend: income to cash; optional reinvest lot (E22). */
+  /** PU-39 dividend: E22 `dividend` input (cash or reinvestedUnits). */
   async recordDividend(input: {
     holdingId: string;
     amount: bigint;
@@ -2293,17 +2364,32 @@ export class WorkspaceRepository {
     const sys = chart.system('investment_income');
     if (!sys) return { ok: false, error: 'unknown_account' };
     if (input.reinvested && input.units && input.pricePerUnit !== undefined) {
-      // Reinvested: Dr H · Cr investment income; new lot (TECH-SPEC E22).
       const cost = costOfPurchase(input.units, input.pricePerUnit, 0n);
       if (cost <= 0n) return { ok: false, error: 'not_positive' };
-      const posted = await this.postEvent(chart, snapshot.events, {
-        type: 'income',
-        date: input.date,
-        lines: [
-          { ledgerAccountId: holding.ledgerAccountId, amountMinor: cost, currency: holding.currency },
-          { ledgerAccountId: sys.id, amountMinor: -cost, currency: holding.currency },
-        ],
-      });
+      const posted = await this.postEvent(
+        chart,
+        snapshot.events,
+        {
+          type: 'income',
+          date: input.date,
+          lines: [
+            { ledgerAccountId: holding.ledgerAccountId, amountMinor: cost, currency: holding.currency },
+            { ledgerAccountId: sys.id, amountMinor: -cost, currency: holding.currency },
+          ],
+          holdingId: holding.id,
+          investmentUnits: input.units,
+        },
+        {
+          type: 'transaction.create',
+          payload: {
+            type: 'dividend',
+            holdingId: holding.id,
+            amount: input.amount.toString(),
+            reinvestedUnits: input.units,
+            date: input.date,
+          },
+        },
+      );
       if (!posted.ok) return posted;
       await this.put(
         'lots',
@@ -2319,32 +2405,62 @@ export class WorkspaceRepository {
           buyEventId: posted.value.id,
         } satisfies Omit<HoldingLot, 'id'>,
         'lot.create',
+        undefined,
+        null,
       );
       return posted;
     }
     const cash = chart.get(input.cashAccountId);
     if (!cash) return { ok: false, error: 'unknown_account' };
     if (input.amount <= 0n) return { ok: false, error: 'not_positive' };
-    return this.postEvent(chart, snapshot.events, {
-      type: 'income',
-      date: input.date,
-      lines: [
-        { ledgerAccountId: cash.id, amountMinor: input.amount, currency: cash.currency },
-        { ledgerAccountId: sys.id, amountMinor: -input.amount, currency: cash.currency },
-      ],
-    });
+    return this.postEvent(
+      chart,
+      snapshot.events,
+      {
+        type: 'income',
+        date: input.date,
+        lines: [
+          { ledgerAccountId: cash.id, amountMinor: input.amount, currency: cash.currency },
+          { ledgerAccountId: sys.id, amountMinor: -input.amount, currency: cash.currency },
+        ],
+        holdingId: holding.id,
+      },
+      {
+        type: 'transaction.create',
+        payload: {
+          type: 'dividend',
+          holdingId: holding.id,
+          amount: input.amount.toString(),
+          accountId: cash.id,
+          date: input.date,
+        },
+      },
+    );
   }
 
-  /** PU-40: save filled prices; empty rows keep the old price. */
+  /** PU-40: save filled prices; empty rows keep the old price. Syncs as `holding.prices`. */
   async savePrices(rows: { holdingId: string; priceMinor: bigint }[], date: string): Promise<void> {
-    for (const row of rows) {
-      if (row.priceMinor <= 0n) continue;
+    const filled = rows.filter((r) => r.priceMinor > 0n);
+    if (filled.length === 0) return;
+    let first = true;
+    for (const row of filled) {
       await this.put(
         'prices',
         this.newId(),
         { holdingId: row.holdingId, date, priceMinor: row.priceMinor.toString() } satisfies Omit<HoldingPrice, 'id'>,
-        'price.upsert',
+        'holding.prices',
+        undefined,
+        first
+          ? {
+              type: 'holding.prices',
+              payload: {
+                date,
+                prices: filled.map((r) => ({ holdingId: r.holdingId, price: r.priceMinor.toString() })),
+              },
+            }
+          : null,
       );
+      first = false;
     }
   }
 
@@ -2401,13 +2517,17 @@ export class WorkspaceRepository {
     chart: Chart,
     events: TxEvent[],
     input: Omit<MoneyEvent, 'id' | 'operationId' | 'status' | 'lines'> & { lines: Line[] } & EventMeta,
-    remote?: null,
+    remote?: RemoteOperation | null,
   ): Promise<Result<TxEvent>> {
     const id = this.newId();
     const event: TxEvent = { ...input, id, operationId: id, status: 'posted' };
     const checked = checkEvent(chart, event, new Map(events.map((e) => [e.id, e])));
     if (!checked.ok) return checked;
-    await this.put('events', id, { ...toStored(input), operationId: id }, `event.${input.type}`, undefined, remote);
+    const remoteWithIds =
+      remote && remote !== null
+        ? { ...remote, transactionIds: remote.transactionIds ?? [id] }
+        : remote;
+    await this.put('events', id, { ...toStored(input), operationId: id }, `event.${input.type}`, undefined, remoteWithIds);
     return { ok: true, value: event };
   }
 }

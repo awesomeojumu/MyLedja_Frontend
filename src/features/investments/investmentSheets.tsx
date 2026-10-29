@@ -23,7 +23,7 @@ import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 import { costOfPurchase } from '@/ledger';
 
-import { HOLDING_TYPES, fifoCost, holdingUnits } from './helpers';
+import { HOLDING_TYPES, fifoCost, holdingUnits, latestPrice } from './helpers';
 
 const sp = tokens.spacing;
 
@@ -163,8 +163,9 @@ export function TradeSheet({
   const [direction, setDirection] = useState<'buy' | 'sell'>(initial);
   const [holding, setHolding] = useState(holdingId ?? holdings[0]?.id ?? '');
   const [units, setUnits] = useState('');
-  const [priceText, setPriceText] = useState('');
-  const [priceMinor, setPriceMinor] = useState<bigint | null>(null);
+  const defaultPrice = snapshot && (holdingId ?? holdings[0]?.id) ? latestPrice(snapshot, holdingId ?? holdings[0]!.id) : null;
+  const [priceText, setPriceText] = useState(defaultPrice ? formatNaira(BigInt(defaultPrice.priceMinor)) : '');
+  const [priceMinor, setPriceMinor] = useState<bigint | null>(defaultPrice ? BigInt(defaultPrice.priceMinor) : null);
   const [feesText, setFeesText] = useState('');
   const [feesMinor, setFeesMinor] = useState<bigint | null>(0n);
   const [cashId, setCashId] = useState(cashAccounts[0]?.id ?? '');
@@ -433,6 +434,7 @@ export function UpdatePricesSheet({ holdingId, onClose }: { holdingId?: string; 
   const [date, setDate] = useState(today());
   const [busy, setBusy] = useState(false);
   const filled = rows.filter((h) => (values[h.id]?.minor ?? null) !== null && (values[h.id]?.minor ?? 0n) > 0n);
+  const [focusIndex, setFocusIndex] = useState(0);
 
   const save = async () => {
     if (busy || filled.length === 0) return;
@@ -469,15 +471,28 @@ export function UpdatePricesSheet({ holdingId, onClose }: { holdingId?: string; 
     >
       <View style={{ gap: sp['spacing-md'] }}>
         <DatePicker label={t('common.date')} value={date} onChange={setDate} />
-        {rows.map((h) => (
-          <AmountInput
-            key={h.id}
-            testID={`price-row-${h.id}`}
-            label={h.name}
-            value={values[h.id]?.text ?? ''}
-            onChange={(text, minor) => setValues((v) => ({ ...v, [h.id]: { text, minor } }))}
-          />
-        ))}
+        {rows.map((h, i) => {
+          const last = snapshot ? latestPrice(snapshot, h.id) : null;
+          const label = last
+            ? `${h.name} · ${t('investments.lastPrice', { price: formatNaira(BigInt(last.priceMinor)), date: last.date })}`
+            : h.name;
+          const isLast = i === rows.length - 1;
+          return (
+            <AmountInput
+              key={`${h.id}-${focusIndex === i ? 'f' : 'b'}`}
+              testID={`price-row-${h.id}`}
+              label={label}
+              value={values[h.id]?.text ?? ''}
+              onChange={(text, minor) => setValues((v) => ({ ...v, [h.id]: { text, minor } }))}
+              returnKeyType={isLast ? 'done' : 'next'}
+              blurOnSubmit={isLast}
+              autoFocus={focusIndex === i && i > 0}
+              onSubmitEditing={() => {
+                if (!isLast) setFocusIndex(i + 1);
+              }}
+            />
+          );
+        })}
         <Text variant="caption" tone="textSecondary">
           {t('investments.pricesCaption')}
         </Text>

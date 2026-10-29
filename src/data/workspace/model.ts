@@ -586,6 +586,12 @@ export type StoredEvent = {
   recurringId?: string;
   incomeStreamId?: string;
   oneOff?: boolean;
+  /** Investment holding this event belongs to (E20–E22). */
+  holdingId?: string;
+  /** Units / price / fees for sync remapping of investment_buy and investment_sell. */
+  investmentUnits?: string;
+  investmentPriceMinor?: string;
+  investmentFeesMinor?: string;
 };
 
 export type EventMeta = {
@@ -599,6 +605,10 @@ export type EventMeta = {
   recurringId?: string;
   incomeStreamId?: string;
   oneOff?: boolean;
+  holdingId?: string;
+  investmentUnits?: string;
+  investmentPriceMinor?: string;
+  investmentFeesMinor?: string;
 };
 
 export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & EventMeta): StoredEvent {
@@ -620,6 +630,10 @@ export function toStored(e: Omit<MoneyEvent, 'id' | 'operationId' | 'status'> & 
     recurringId: e.recurringId,
     incomeStreamId: e.incomeStreamId,
     oneOff: e.oneOff,
+    holdingId: e.holdingId,
+    investmentUnits: e.investmentUnits,
+    investmentPriceMinor: e.investmentPriceMinor,
+    investmentFeesMinor: e.investmentFeesMinor,
   };
 }
 
@@ -646,6 +660,10 @@ export function fromStored(id: string, operationId: string, s: StoredEvent, reve
     recurringId: s.recurringId,
     incomeStreamId: s.incomeStreamId,
     oneOff: s.oneOff,
+    holdingId: s.holdingId,
+    investmentUnits: s.investmentUnits,
+    investmentPriceMinor: s.investmentPriceMinor,
+    investmentFeesMinor: s.investmentFeesMinor,
   };
 }
 
