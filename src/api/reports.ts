@@ -1,4 +1,14 @@
 import type { ApiClient } from './client';
+import type { components } from './types';
+
+type CashFlow = components['schemas']['CashFlow'];
+
+export type CashFlowQuery = {
+  from: string;
+  to: string;
+  accountIds?: string[];
+  includeTransfers?: boolean;
+};
 
 /**
  * Hand-typed against BE `reports.contract.ts` until coordinator lands `api:sync`
@@ -86,11 +96,18 @@ export type ReportResultWire = {
   note: string | null;
 };
 
-/** Workspace report runner (TECH-SPEC §8 / BUILD-PLAN P20). */
+/** Reports API: the report runner (BUILD-PLAN P20) and cash flow (DESIGN page 22). */
 export function reportsApi(client: ApiClient) {
   return {
     run: (workspaceId: string, body: RunReportBody) =>
       client.request<ReportResultWire>('POST', `/v1/workspaces/${workspaceId}/reports/run`, body),
+    cashFlow: (workspaceId: string, q: CashFlowQuery) => {
+      const params = new URLSearchParams({ from: q.from, to: q.to });
+      if (q.accountIds?.length) params.set('accountIds', q.accountIds.join(','));
+      if (q.includeTransfers) params.set('includeTransfers', 'true');
+      else params.set('includeTransfers', 'false');
+      return client.request<CashFlow>('GET', `/v1/workspaces/${workspaceId}/cash-flow?${params}`);
+    },
   };
 }
 
