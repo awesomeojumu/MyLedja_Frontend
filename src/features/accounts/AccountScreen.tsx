@@ -408,7 +408,7 @@ function RegisterLine({
     >
       <View style={{ flex: 1, gap: sp['spacing-xxs'] }}>
         <Text>{row.title}</Text>
-        <Text variant="caption" tone="textSecondary">
+        <Text variant="caption" tone="textSecondary" testID={row.event.reconciledBy ? `reg-lock-${row.event.id}` : undefined}>
           {[row.event.reconciledBy ? t('account.locked') : row.event.cleared ? t('account.clearedMark') : null].filter(Boolean).join(' · ')}
         </Text>
       </View>
@@ -424,6 +424,7 @@ function RegisterLine({
 
 function Details({ account, onArchive }: { account: Account; onArchive: () => void }) {
   const { snapshot, repo } = useWorkspace();
+  const { user } = useAuth();
   const toast = useToast();
   const history = (snapshot?.reconciles ?? []).filter((r) => r.accountId === account.id);
   const line = (label: string, value: string) => (
@@ -432,6 +433,11 @@ function Details({ account, onArchive }: { account: Account; onArchive: () => vo
       <Text>{value}</Text>
     </View>
   );
+  const who = (finishedBy?: string) => {
+    if (!finishedBy) return null;
+    if (user && finishedBy === user.id) return t('account.reconcileByYou');
+    return t('account.reconcileBy', { who: finishedBy.slice(0, 8) });
+  };
   return (
     <Card testID="account-details" style={{ gap: sp['spacing-sm'] }}>
       {line(t('accounts.type'), t(`accounts.kind.${account.type}`))}
@@ -463,6 +469,11 @@ function Details({ account, onArchive }: { account: Account; onArchive: () => vo
             <Text>{formatDay(r.statementDate)}</Text>
             <Amount minor={BigInt(r.statementBalance)} />
             <Text tone="textSecondary">{r.adjustment === '0' ? t('account.noAdjustment') : t('account.adjusted', { amount: fmt(BigInt(r.adjustment)) })}</Text>
+            {who(r.finishedBy) ? (
+              <Text testID={`reconcile-who-${r.id}`} tone="textSecondary">
+                {who(r.finishedBy)}
+              </Text>
+            ) : null}
           </View>
         ))
       )}
