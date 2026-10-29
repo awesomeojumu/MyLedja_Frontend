@@ -387,6 +387,8 @@ export type GoalAllocation = {
   fromAccountId: string;
   /** Spending from goal (E19) stores a negative amount. */
   kind?: 'allocate' | 'spend';
+  /** Linked transfer/expense event when one was posted (PU-30 allocation rows). */
+  transactionId?: string;
 };
 
 export type RecurrenceEvery = 'day' | 'week' | 'month' | 'year';

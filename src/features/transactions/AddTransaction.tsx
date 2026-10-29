@@ -48,7 +48,7 @@ const MORE_DOORS: { key: MovementDoor; labelKey: 'add.door.lend' | 'add.door.pay
 export type AddKind = 'expense' | 'income' | 'transfer';
 const KINDS: AddKind[] = ['expense', 'income', 'transfer'];
 
-type Prefill = { accountId?: string; date?: string; goalName?: string };
+type Prefill = { accountId?: string; date?: string; goalName?: string; goalId?: string };
 type AddApi = { open: (kind?: AddKind, prefill?: Prefill) => void };
 const Ctx = createContext<AddApi | null>(null);
 
@@ -76,16 +76,25 @@ function writeLastTab(kind: AddKind) {
 /** The global Add transaction popup. Its state lives in the address (`?add=expense`), so a refresh keeps it open (E-16 / PU00-5). */
 export function AddTransactionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const params = useGlobalSearchParams<{ add?: string; account?: string; date?: string; goal?: string }>();
+  const params = useGlobalSearchParams<{ add?: string; account?: string; date?: string; goal?: string; goalId?: string }>();
   const kind = KINDS.includes(params.add as AddKind) ? (params.add as AddKind) : null;
   const open = useCallback(
     (k: AddKind = readLastTab(), prefill: Prefill = {}) => {
       writeLastTab(k);
-      router.setParams({ add: k, account: prefill.accountId, date: prefill.date, goal: prefill.goalName });
+      router.setParams({
+        add: k,
+        account: prefill.accountId,
+        date: prefill.date,
+        goal: prefill.goalName,
+        goalId: prefill.goalId,
+      });
     },
     [router],
   );
-  const close = useCallback(() => router.setParams({ add: undefined, account: undefined, date: undefined, goal: undefined }), [router]);
+  const close = useCallback(
+    () => router.setParams({ add: undefined, account: undefined, date: undefined, goal: undefined, goalId: undefined }),
+    [router],
+  );
   const api = useMemo(() => ({ open }), [open]);
 
   useEffect(() => {
@@ -106,10 +115,10 @@ export function AddTransactionProvider({ children }: { children: ReactNode }) {
       {kind ? (
         <AddTransactionSheet
           kind={kind}
-          prefill={{ accountId: params.account, date: params.date, goalName: params.goal }}
+          prefill={{ accountId: params.account, date: params.date, goalName: params.goal, goalId: params.goalId }}
           onKind={(k) => {
             writeLastTab(k);
-            open(k, { accountId: params.account, date: params.date, goalName: params.goal });
+            open(k, { accountId: params.account, date: params.date, goalName: params.goal, goalId: params.goalId });
           }}
           onClose={close}
         />
@@ -249,6 +258,22 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
   const postNormal = async (another: boolean) => {
     if (!valid || !accountId || amount.minor === null) return;
     const notesCombined = combinedNotes();
+    // DESIGN D15 / PU-30: spend from a goal uses E19 via the PU-01 shell.
+    if (kind === 'expense' && prefill.goalId && categoryId && !split) {
+      const spent = await repo.spendFromGoal(prefill.goalId, {
+        accountId,
+        categoryId,
+        amount: amount.minor,
+        date,
+        payeeName: payee.trim() || undefined,
+      });
+      if (!spent.ok) {
+        setError(ledgerMessage(spent.error));
+        return;
+      }
+      await finishSave(another, spent.value.event);
+      return;
+    }
     const input: TransactionInput =
       kind === 'transfer'
         ? {

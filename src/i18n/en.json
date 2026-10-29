@@ -2239,5 +2239,12 @@
   "goals.alreadySavedTooHigh": "Already saved cannot be more than the account balance.",
   "goals.pauseSchedule": "Pause schedule",
   "goals.resumeSchedule": "Resume schedule",
-  "notifications.goalReached": "{name} reached its target."
+  "notifications.goalReached": "{name} reached its target.",
+  "plan.weekday.sun": "Sunday",
+  "plan.weekday.mon": "Monday",
+  "plan.weekday.tue": "Tuesday",
+  "plan.weekday.wed": "Wednesday",
+  "plan.weekday.thu": "Thursday",
+  "plan.weekday.fri": "Friday",
+  "plan.weekday.sat": "Saturday"
 }

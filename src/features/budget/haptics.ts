@@ -10,9 +10,9 @@ export function warningHaptic(): void {
   }
 }
 
-/** Success haptic when a goal is reached (DESIGN page 14). No-op on web. */
-export function successHaptic(): void {
-  if (Platform.OS === 'web') return;
+/** Success haptic when a goal is reached (DESIGN page 14 D9). No-op on web or reduce-motion. */
+export function successHaptic(reduceMotion = false): void {
+  if (Platform.OS === 'web' || reduceMotion) return;
   try {
     Vibration.vibrate([0, 30, 40, 30]);
   } catch {

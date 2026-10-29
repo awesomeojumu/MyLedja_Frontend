@@ -1,21 +1,21 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ScrollView, useWindowDimensions, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Button, InlineError, Placeholder, SegmentedControl, Text, useToast } from '@/design/components';
+import { Button, InlineError, Placeholder, SegmentedControl, Text, useReduceMotion, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import type { Goal } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
+import { successHaptic } from '@/features/budget/haptics';
+import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
-import { successHaptic } from '@/features/budget/haptics';
-
 import { GoalCardView } from './GoalCard';
 import { GoalPanel } from './GoalPanel';
-import { AddGoalSheet, AllocateSheet, GoalScheduleSheet, SpendFromGoalSheet } from './goalSheets';
+import { AddGoalSheet, AllocateSheet, GoalScheduleSheet } from './goalSheets';
 import { activeGoals, completedGoals, goalCards, gridColumns } from './helpers';
 import { GOAL_URL, goalsTabParam, parseGoalsTab, type GoalsListTab } from './popupUrl';
 
@@ -24,16 +24,18 @@ const sp = tokens.spacing;
 export function GoalsScreen() {
   const { snapshot, repo } = useWorkspace();
   const size = useSizeClass();
-  const cols = gridColumns(size);
+  const { width, height } = useWindowDimensions();
+  const cols = gridColumns(size, { width, height });
   const todayStr = today();
   const params = useLocalSearchParams<{ tab?: string; goal?: string; allocate?: string; goalSchedule?: string }>();
   const router = useRouter();
   const toast = useToast();
+  const reduceMotion = useReduceMotion();
+  const addTxn = useOptionalAddTransaction();
 
   const listTab = parseGoalsTab(typeof params.tab === 'string' ? params.tab : undefined);
   const [editGoal, setEditGoal] = useState<Goal | null>(null);
   const [starterName, setStarterName] = useState<string | null>(null);
-  const [spendGoal, setSpendGoal] = useState<Goal | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const cards = useMemo(() => (snapshot ? goalCards(snapshot, todayStr) : []), [snapshot, todayStr]);
@@ -48,6 +50,11 @@ export function GoalsScreen() {
   const selectedCard = selected ? cards.find((c) => c.goal.id === selected.id) ?? null : null;
   const allocateGoal = allocateParam && snapshot ? snapshot.goals.find((g) => g.id === allocateParam) ?? null : null;
   const scheduleGoal = scheduleParam && snapshot ? snapshot.goals.find((g) => g.id === scheduleParam) ?? null : null;
+
+  useEffect(() => {
+    if (!repo) return;
+    void repo.runGoalAutoAllocations(todayStr);
+  }, [repo, todayStr, snapshot?.goals.length]);
 
   const setTab = (tab: GoalsListTab) => {
     router.setParams({ [GOAL_URL.tab]: goalsTabParam(tab) });
@@ -179,7 +186,7 @@ export function GoalsScreen() {
               return;
             }
             if (r.value.completed) {
-              successHaptic();
+              successHaptic(reduceMotion);
               toast.show(t('goals.reached'));
             }
             clearParams(GOAL_URL.allocate);
@@ -200,8 +207,13 @@ export function GoalsScreen() {
           }}
           onSchedule={() => router.setParams({ [GOAL_URL.goalSchedule]: selectedCard.goal.id })}
           onSpend={() => {
-            setSpendGoal(selectedCard.goal);
             clearParams(GOAL_URL.goal);
+            // DESIGN D15: open PU-01 expense with this goal (not a dedicated-only sheet).
+            addTxn?.open('expense', {
+              accountId: selectedCard.goal.accountId,
+              goalId: selectedCard.goal.id,
+              goalName: selectedCard.goal.name,
+            });
           }}
           onAllocate={() => router.setParams({ [GOAL_URL.allocate]: selectedCard.goal.id })}
         />
@@ -209,24 +221,6 @@ export function GoalsScreen() {
 
       {scheduleGoal && snapshot ? (
         <GoalScheduleSheet goal={scheduleGoal} snapshot={snapshot} repo={repo} onClose={() => clearParams(GOAL_URL.goalSchedule)} />
-      ) : null}
-
-      {spendGoal && snapshot ? (
-        <SpendFromGoalSheet
-          goal={spendGoal}
-          snapshot={snapshot}
-          onClose={() => setSpendGoal(null)}
-          onSave={async (input) => {
-            setError(null);
-            const r = await repo.spendFromGoal(spendGoal.id, input);
-            if (!r.ok) {
-              setError(ledgerMessage(r.error));
-              return;
-            }
-            toast.show(t('goals.spendSaved'));
-            setSpendGoal(null);
-          }}
-        />
       ) : null}
     </AppFrame>
   );

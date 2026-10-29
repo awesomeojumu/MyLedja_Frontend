@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { GraduationCap, Home, Laptop, MoreHorizontal, PiggyBank, Plane, Target } from 'lucide-react-native';
 
 import { Amount, Button, Confirm, Icon, LineChart, Menu, Panel, StatusPill, Text, formatDay, useToast } from '@/design/components';
@@ -10,6 +11,7 @@ import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
 import { type GoalCard, goalProgressPoints, goalStatusKind, statusPillFor } from './helpers';
+import { GOAL_URL } from './popupUrl';
 
 const PANEL_ICONS = {
   target: Target,
@@ -45,6 +47,7 @@ export function GoalPanel({
 }) {
   const theme = useTheme();
   const toast = useToast();
+  const router = useRouter();
   const { goal } = card;
   const category = goal.categoryId ? snapshot.categories.find((c) => c.id === goal.categoryId)?.name : undefined;
   const allocations = snapshot.allocations.filter((a) => a.goalId === goal.id).sort((a, b) => b.date.localeCompare(a.date));
@@ -53,6 +56,18 @@ export function GoalPanel({
   const kind = goalStatusKind(card, today);
   const pill = statusPillFor(kind);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const openAllocation = (allocationId: string, transactionId?: string, date?: string) => {
+    const linked =
+      (transactionId ? snapshot.events.find((e) => e.id === transactionId) : undefined) ??
+      snapshot.events.find((e) => e.goalId === goal.id && (!date || e.date === date));
+    if (linked) {
+      router.push({ pathname: '/transactions', params: { tx: linked.id, txn: linked.id } });
+      return;
+    }
+    // Same-account earmark has no event — open allocate sheet for this goal (PU-30).
+    router.setParams({ [GOAL_URL.allocate]: goal.id, allocation: allocationId });
+  };
 
   const iconKey = (goal.icon ?? 'target') as keyof typeof PANEL_ICONS;
   const Glyph = PANEL_ICONS[iconKey] ?? Target;
@@ -133,10 +148,19 @@ export function GoalPanel({
               <Text tone="textSecondary">{t('goals.noAllocations')}</Text>
             ) : (
               allocations.map((a) => (
-                <Text key={a.id} variant="caption" tone="textSecondary">
-                  {formatDay(a.date)} · {a.kind === 'spend' ? '−' : '+'}
-                  {formatNaira(BigInt(a.amountMinor))}
-                </Text>
+                <Pressable
+                  key={a.id}
+                  testID={`goal-allocation-${a.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('goals.panelAllocations')}
+                  onPress={() => openAllocation(a.id, a.transactionId, a.date)}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text variant="caption" tone="textSecondary">
+                    {formatDay(a.date)} · {a.kind === 'spend' ? '−' : '+'}
+                    {formatNaira(BigInt(a.amountMinor))}
+                  </Text>
+                </Pressable>
               ))
             )}
           </View>

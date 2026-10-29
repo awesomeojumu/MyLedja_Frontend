@@ -172,4 +172,26 @@ describe('Goals popups (PU-30…33, TB-05)', () => {
     expect(goal.scheduleDayOfMonth).toBe(28);
     expect(goal.scheduleAutoAllocate).toBe(true);
   });
+
+  it('PU-33 R4: auto-allocate day runner funds on schedule day', async () => {
+    const { repo } = await seeded();
+    const s = await repo.load();
+    const savings = s.accounts.find((a) => a.name === 'Savings')!;
+    const created = await repo.addGoal({ name: 'Auto', targetMinor: 100_000_00n, accountId: savings.id });
+    if (!created.ok) throw new Error(created.error);
+    await repo.setGoalSchedule({
+      ...created.value,
+      scheduleAmountMinor: '500000',
+      scheduleDayOfMonth: 28,
+      scheduleEvery: 'month',
+      scheduleStarts: '2026-10-01',
+      scheduleAutoAllocate: true,
+    });
+    const n = await repo.runGoalAutoAllocations('2026-10-28');
+    expect(n).toBe(1);
+    const after = await repo.load();
+    expect(after.allocations.filter((a) => a.goalId === created.value.id)).toHaveLength(1);
+    // Idempotent on the same day.
+    expect(await repo.runGoalAutoAllocations('2026-10-28')).toBe(0);
+  });
 });

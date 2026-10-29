@@ -1566,6 +1566,7 @@ export class WorkspaceRepository {
       amountMinor: input.amount.toString(),
       date: input.date,
       fromAccountId: fromId,
+      transactionId: transferId,
     };
     const { id, ...data } = allocation;
     await this.put('allocations', id, data, 'goal.allocate', undefined, {
@@ -1595,6 +1596,33 @@ export class WorkspaceRepository {
       }
     }
     return { ok: true, value: { allocation, completed } };
+  }
+
+  /** PU-33 day runner: when auto-allocate is on and today matches the schedule, earmark without asking. */
+  async runGoalAutoAllocations(today = workspaceToday()): Promise<number> {
+    const snapshot = await this.load();
+    let count = 0;
+    for (const goal of snapshot.goals) {
+      if (goal.status !== 'active') continue;
+      if (!goal.scheduleAutoAllocate || !goal.scheduleAmountMinor || !goal.scheduleDayOfMonth) continue;
+      if (goal.scheduleStarts && goal.scheduleStarts > today) continue;
+      const [y, m, d] = today.split('-').map(Number);
+      const date = new Date(Date.UTC(y!, m! - 1, d!));
+      let due = false;
+      if (goal.scheduleEvery === 'week') {
+        due = date.getUTCDay() === Math.min(6, Math.max(0, goal.scheduleDayOfMonth));
+      } else {
+        const last = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+        const on = goal.scheduleDayOfMonth === 31 ? last : Math.min(goal.scheduleDayOfMonth, last);
+        due = d === on;
+      }
+      if (!due) continue;
+      const already = snapshot.allocations.some((a) => a.goalId === goal.id && a.date === today && a.kind !== 'spend');
+      if (already) continue;
+      const r = await this.allocateToGoal(goal.id, { amount: BigInt(goal.scheduleAmountMinor), date: today });
+      if (r.ok) count += 1;
+    }
+    return count;
   }
 
   debtBalance(debt: PersonDebt, snapshot: Snapshot, onDate?: string): bigint {
@@ -2123,6 +2151,7 @@ export class WorkspaceRepository {
       date: input.date,
       fromAccountId: input.accountId,
       kind: 'spend',
+      transactionId: posted.value.id,
     };
     const { id, ...data } = allocation;
     await this.put('allocations', id, data, 'goal.spend', undefined, {

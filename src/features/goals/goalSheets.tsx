@@ -363,7 +363,13 @@ export function GoalScheduleSheet({
   const [amountText, setAmountText] = useState(goal.scheduleAmountMinor ? formatNaira(BigInt(goal.scheduleAmountMinor)) : '');
   const [amountMinor, setAmountMinor] = useState<bigint | null>(goal.scheduleAmountMinor ? BigInt(goal.scheduleAmountMinor) : null);
   const [every, setEvery] = useState<'week' | 'month'>(goal.scheduleEvery ?? 'month');
-  const [day, setDay] = useState(goal.scheduleDayOfMonth ? String(goal.scheduleDayOfMonth) : String(new Date().getUTCDate()));
+  const [day, setDay] = useState(
+    goal.scheduleDayOfMonth
+      ? String(goal.scheduleDayOfMonth)
+      : every === 'week'
+        ? String(new Date().getUTCDay())
+        : String(new Date().getUTCDate()),
+  );
   const [starts, setStarts] = useState(goal.scheduleStarts ?? today);
   const [autoAllocate, setAutoAllocate] = useState(goal.scheduleAutoAllocate ?? false);
   const [busy, setBusy] = useState(false);
@@ -371,6 +377,20 @@ export function GoalScheduleSheet({
   const saved = goalSaved(goal.id, snapshot);
   const target = BigInt(goal.targetMinor);
   const reaches = amountMinor && amountMinor > 0n ? reachesByDate(saved, target, amountMinor, every, starts) : null;
+  const weekdayOptions = [
+    { value: '0', label: t('plan.weekday.sun') },
+    { value: '1', label: t('plan.weekday.mon') },
+    { value: '2', label: t('plan.weekday.tue') },
+    { value: '3', label: t('plan.weekday.wed') },
+    { value: '4', label: t('plan.weekday.thu') },
+    { value: '5', label: t('plan.weekday.fri') },
+    { value: '6', label: t('plan.weekday.sat') },
+  ];
+  const monthDayOptions = Array.from({ length: 31 }, (_, i) => {
+    const n = i + 1;
+    return { value: String(n), label: n === 31 ? t('plan.lastDayOfMonth') : String(n) };
+  });
+  const onOptions = every === 'week' ? weekdayOptions : monthDayOptions;
 
   return (
     <Sheet
@@ -387,12 +407,15 @@ export function GoalScheduleSheet({
             disabled={amountMinor === null || amountMinor <= 0n || !day.trim() || busy}
             onPress={() => {
               if (amountMinor === null) return;
+              const on = Number(day);
+              const scheduleDayOfMonth =
+                every === 'week' ? Math.min(6, Math.max(0, Number.isFinite(on) ? on : 1)) : Math.min(31, Math.max(1, Number.isFinite(on) ? on : 1));
               setBusy(true);
               void repo
                 .setGoalSchedule({
                   ...goal,
                   scheduleAmountMinor: amountMinor.toString(),
-                  scheduleDayOfMonth: Math.min(31, Math.max(1, Number(day) || 1)),
+                  scheduleDayOfMonth,
                   scheduleEvery: every,
                   scheduleStarts: starts,
                   scheduleAutoAllocate: autoAllocate,
@@ -420,13 +443,22 @@ export function GoalScheduleSheet({
         testID="goal-schedule-every"
         label={t('goals.scheduleEvery')}
         value={every}
-        onChange={setEvery}
+        onChange={(v) => {
+          setEvery(v);
+          setDay(v === 'week' ? String(new Date().getUTCDay()) : String(new Date().getUTCDate()));
+        }}
         options={[
           { value: 'week', label: t('goals.scheduleWeekly') },
           { value: 'month', label: t('goals.scheduleMonthly') },
         ]}
       />
-      <TextInput testID="goal-schedule-day" label={t('goals.scheduleDay')} value={day} onChangeText={setDay} keyboardType="number-pad" />
+      <Select
+        testID="goal-schedule-day"
+        label={every === 'week' ? t('plan.dayOfWeek') : t('plan.dayOfMonth')}
+        options={onOptions}
+        value={day}
+        onChange={setDay}
+      />
       <DatePicker testID="goal-schedule-starts" label={t('goals.scheduleStarts')} value={starts} onChange={setStarts} />
       <Switch testID="goal-schedule-auto" label={t('goals.scheduleAuto')} value={autoAllocate} onChange={setAutoAllocate} />
       {reaches ? (

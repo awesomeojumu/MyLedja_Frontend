@@ -222,6 +222,7 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         date: d.date,
         fromAccountId: str(d.fromAccountId) ?? '',
         kind: spend ? 'spend' : 'allocate',
+        transactionId: str(d.transactionId),
       });
     }
     case 'income_streams': {
