@@ -16,7 +16,22 @@ const r = tokens.radius;
 const backdrop = `${tokens.color['brand-dark-900']}73`;
 
 /** Quick detail of one item: a full-screen sheet on phones and tablets, a right-side panel from 1024 (DESIGN.md 4). */
-export function Panel({ visible, title, onClose, children, testID }: { visible: boolean; title: string; onClose: () => void; children: ReactNode; testID?: string }) {
+export function Panel({
+  visible,
+  title,
+  onClose,
+  children,
+  testID,
+  width = 440,
+}: {
+  visible: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  testID?: string;
+  /** Side-panel width on desktop (PU-18: 440). */
+  width?: number;
+}) {
   const theme = useTheme();
   const size = useSizeClass();
   const side = size === 'desktop' || size === 'wide';
@@ -28,7 +43,7 @@ export function Panel({ visible, title, onClose, children, testID }: { visible: 
           testID={testID}
           accessibilityViewIsModal
           style={{
-            width: side ? (size === 'wide' ? 480 : 420) : '100%',
+            width: side ? width : '100%',
             backgroundColor: theme.card,
             borderLeftWidth: side ? 1 : 0,
             borderColor: theme.border,
