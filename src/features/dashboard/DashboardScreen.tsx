@@ -25,11 +25,13 @@ import { monthLabel, nextMonth, prevMonth } from '@/features/budget/helpers';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useSecurityApi } from '@/features/settings/SecuritySheets';
+import { adviceText, reasonText } from '@/features/health/HealthScreen';
+import { healthPage } from '@/features/health/helpers';
 import { today } from '@/features/transactions/helpers';
 import { filtersToParams } from '@/features/transactions/filters';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
-import { monthOf, monthsEndingAt, monthIncome, monthSpent, periodTotals, prevMonth as ledgerPrev, ledgerBalance } from '@/ledger';
+import { monthOf } from '@/ledger';
 
 import { CustomizeDashboardSheet } from './CustomizeDashboardSheet';
 import { checklist, dashboardModel, endOfMonth, type ComingUpRow } from './helpers';
@@ -711,50 +713,32 @@ function StatTile({
   );
 }
 
+/** F5.5: score ring and one line of advice → Health. */
 function HealthCard({ month, onOpen }: { month: string; onOpen: () => void }) {
-  const { snapshot, repo } = useWorkspace();
-  const summary = useMemo(() => {
-    if (!snapshot) return null;
-    const settings = repo.defaultHealthSettings(snapshot);
-    const complete = monthsEndingAt(ledgerPrev(month), 3);
-    const totals = periodTotals(snapshot.events);
-    let incomeSum = 0n;
-    let spentSum = 0n;
-    for (const m of complete) {
-      incomeSum += monthIncome(snapshot.chart, totals, m);
-      spentSum += monthSpent(snapshot.chart, totals, m);
-    }
-    const savingRatio = incomeSum > 0n ? Number((incomeSum - spentSum) * 100n) / Number(incomeSum) : 0;
-    const saving = Math.max(0, Math.min(100, Math.round(savingRatio <= 0 ? 0 : savingRatio >= 20 ? 100 : (savingRatio / 20) * 100)));
-    const liquid = settings.cashAccountIds.reduce((s, id) => s + ledgerBalance(id, snapshot.events), 0n);
-    const medianSpend = spentSum / BigInt(Math.max(1, complete.length));
-    const runwayMonths = medianSpend > 0n ? Number(liquid) / Number(medianSpend) : 0;
-    const runway = Math.max(0, Math.min(100, Math.round(runwayMonths <= 0 ? 0 : runwayMonths >= settings.emergencyMonths ? 100 : (runwayMonths / settings.emergencyMonths) * 100)));
-    const ready = complete.length >= 2;
-    const score = ready ? Math.round((saving + runway) / 2) : null;
-    return { score, ready, advice: t('health.runwayLine', { months: runwayMonths.toFixed(1), target: String(settings.emergencyMonths) }) };
-  }, [snapshot, repo, month]);
-
-  if (!summary) return null;
+  const { snapshot } = useWorkspace();
+  const onDate = today();
+  const page = useMemo(
+    () => (snapshot ? healthPage(snapshot, month < onDate.slice(0, 7) ? month : onDate.slice(0, 7), onDate, { history: false }) : null),
+    [snapshot, month, onDate],
+  );
+  if (!page) return null;
   return (
     <LiftPressable testID="dashboard-health" accessibilityRole="link" onPress={onOpen}>
       <Card style={{ gap: sp['spacing-sm'] }}>
         <Text variant="heading-sm">{t('dashboard.healthCard')}</Text>
-        {summary.ready && summary.score !== null ? (
+        {page.ready && page.score !== null ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-md'] }}>
-            <ProgressRing value={summary.score / 100} label={t('health.scoreLabel', { score: String(summary.score) })} />
-            <View style={{ flex: 1 }}>
+            <ProgressRing value={page.score / 100} label={t('health.scoreLabel', { score: String(page.score) })} />
+            <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
               <Text variant="heading-md" testID="dashboard-health-score">
-                {String(summary.score)}
+                {String(page.score)}
               </Text>
-              <Text variant="caption" tone="textSecondary">
-                {summary.advice}
-              </Text>
+              <Text tone="textSecondary">{reasonText(page) || (page.advice[0] ? adviceText(page.advice[0], formatNaira) : '')}</Text>
             </View>
           </View>
         ) : (
           <Text tone="textSecondary" testID="dashboard-health-not-ready">
-            {t('health.notReady')}
+            {t('health.notReadyTitle')}
           </Text>
         )}
       </Card>
