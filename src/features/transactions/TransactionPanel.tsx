@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Amount, AmountInput, Button, DatePicker, InlineError, Panel, PillTag, Select, Sheet, Text, TextInput, useToast } from '@/design/components';
+import { Amount, AmountInput, Button, DatePicker, InlineError, Panel, PillTag, Select, Text, TextInput, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import type { Snapshot, TransactionInput, TxEvent } from '@/data/workspace/repository';
@@ -14,7 +14,9 @@ import { formatNaira } from '@/money';
 import { ledgerMessage, today } from './helpers';
 import { duplicateInput } from './duplicate';
 import { connectedLines } from './panelConnected';
-import { RefundSheet } from './RefundSheet';
+import { ReceiptViewer } from './ReceiptViewer';
+import { parseReceipt, stripReceiptLine, withReceipt } from './receiptMeta';
+import { parseTags, stripTagsLine, withTags } from './tags';
 
 const sp = tokens.spacing;
 
@@ -49,8 +51,8 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
   const router = useRouter();
   const event = snapshot?.events.find((e) => e.id === id);
   const [editing, setEditing] = useState(false);
-  const [refundOpen, setRefundOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const waiting = snapshot?.waiting.has(id) ?? false;
 
   if (!snapshot || !event) return null;
   const names = new Map([...snapshot.accounts.map((a) => [a.id, a.name] as const), ...snapshot.categories.map((c) => [c.id, c.name] as const)]);
@@ -90,13 +92,14 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
   };
 
   return (
-    <Panel visible title={t('panel.title')} onClose={onClose} testID="tx-panel">
+    <Panel visible title={t('panel.title')} onClose={onClose} testID="tx-panel" width={440}>
       <View style={{ gap: sp['spacing-lg'] }}>
         <View style={{ gap: sp['spacing-xs'] }}>
           <Amount minor={amount} variant="display-md" signed={event.type !== 'transfer'} testID="panel-amount" />
-          <View style={{ flexDirection: 'row', gap: sp['spacing-xs'] }}>
+          <View style={{ flexDirection: 'row', gap: sp['spacing-xs'], flexWrap: 'wrap' }}>
             <PillTag label={t(`panel.type.${event.type}`)} />
             {event.correctionOf ? <PillTag label={t('panel.edited')} /> : null}
+            {waiting ? <PillTag label={t('tx.waiting')} /> : null}
           </View>
         </View>
 
@@ -111,16 +114,20 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
           )}
           {field(t('add.account'), money.map((l) => names.get(l.ledgerAccountId) ?? '').join(' → '))}
           {field(t('add.date'), event.date)}
-          {field(t('panel.status'), t(event.status === 'reversed' ? 'panel.status.reversed' : 'panel.status.posted'))}
+          {field(
+            t('panel.status'),
+            t(event.status === 'reversed' ? 'panel.status.reversed' : waiting ? 'tx.waiting' : 'panel.status.posted'),
+          )}
         </View>
 
         {event.reconciledBy ? (
           <View style={{ gap: sp['spacing-sm'] }} testID="panel-locked">
             <PillTag label={t('panel.locked')} />
+            <Text tone="textSecondary">{t('panel.unlockBody')}</Text>
             <Button
               kind="secondary"
               testID="panel-unlock"
-              label={t('panel.unlock')}
+              label={t('panel.unlockConfirm')}
               onPress={() => void repo.unlockEvent(event.id).then(() => toast.show(t('panel.unlockDone')))}
             />
           </View>
@@ -137,7 +144,7 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
               onSaved={(nextId) => {
                 setEditing(false);
                 // A correction replaces this event; keep the panel open on the new version.
-                router.setParams({ tx: nextId });
+                router.setParams({ tx: nextId, txn: nextId });
               }}
             />
           ) : (
@@ -146,7 +153,7 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
         ) : null}
 
         <NotesField key={event.id} event={event} />
-
+        <TagsField key={`tags-${event.id}`} event={event} />
         <ReceiptField event={event} />
 
         {splitParts.length > 0 ? (
@@ -185,7 +192,7 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
               </View>
             ))}
             {left > 0n && event.status === 'posted' ? (
-              <Button kind="link" testID="panel-add-refund" label={t('panel.addRefund')} onPress={() => setRefundOpen(true)} />
+              <Button kind="link" testID="panel-add-refund" label={t('panel.addRefund')} onPress={() => router.setParams({ refund: event.id })} />
             ) : null}
           </View>
         ) : null}
@@ -220,17 +227,53 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
           ) : null}
         </View>
       </View>
-      {refundOpen ? (
-        <RefundSheet event={event} purchaseAmount={amount} left={left} onClose={() => setRefundOpen(false)} />
-      ) : null}
     </Panel>
+  );
+}
+
+function TagsField({ event }: { event: TxEvent }) {
+  const { repo } = useWorkspace();
+  const toast = useToast();
+  const [tags, setTags] = useState(() => parseTags(event.notes));
+  const [draft, setDraft] = useState('');
+  const [adding, setAdding] = useState(false);
+  const persist = (next: string[]) => {
+    setTags(next);
+    void repo.updateNotes(event.id, withTags(event.notes, next) ?? '').then(() => toast.show(t('common.saved')));
+  };
+  return (
+    <View style={{ gap: sp['spacing-xs'] }} testID="panel-tags">
+      <Text variant="caption" tone="textSecondary">
+        {t('add.tags')}
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'] }}>
+        {tags.map((tag) => (
+          <PillTag key={tag} label={tag} selected onPress={() => persist(tags.filter((x) => x !== tag))} />
+        ))}
+        <Button kind="link" testID="panel-add-tag" label={t('add.addTag')} onPress={() => setAdding(true)} />
+      </View>
+      {adding ? (
+        <TextInput
+          testID="panel-tag-input"
+          label={t('add.tagName')}
+          value={draft}
+          onChangeText={setDraft}
+          onBlur={() => {
+            if (draft.trim()) persist([...tags, draft.trim()]);
+            setDraft('');
+            setAdding(false);
+          }}
+        />
+      ) : null}
+    </View>
   );
 }
 
 function ReceiptField({ event }: { event: TxEvent }) {
   const { repo } = useWorkspace();
   const toast = useToast();
-  const raw = event.notes?.startsWith('receipt:') ? event.notes.slice(8) : '';
+  const router = useRouter();
+  const raw = parseReceipt(event.notes) ?? '';
   const [link, setLink] = useState(raw);
   const [receiptOpen, setReceiptOpen] = useState(false);
   return (
@@ -241,18 +284,42 @@ function ReceiptField({ event }: { event: TxEvent }) {
         value={link}
         onChangeText={setLink}
         onBlur={() => {
-          const trimmed = link.trim();
-          const next = trimmed ? `receipt:${trimmed}` : (event.notes?.replace(/^receipt:[^\n]*/, '').trim() ?? '');
+          const next = withReceipt(event.notes, link.trim() || null) ?? '';
           if ((event.notes ?? '') === next) return;
           void repo.updateNotes(event.id, next).then(() => toast.show(t('common.saved')));
         }}
       />
-      {(event.notes?.startsWith('receipt:') || event.notes?.startsWith('http')) && link ? (
-        <Button kind="link" testID="panel-receipt" label={t('panel.viewReceipt')} onPress={() => setReceiptOpen(true)} />
+      {link ? (
+        <Button
+          kind="link"
+          testID="panel-receipt"
+          label={t('panel.viewReceipt')}
+          onPress={() => {
+            setReceiptOpen(true);
+            router.setParams({ receipt: link });
+          }}
+        />
       ) : null}
-      <Sheet visible={receiptOpen} title={t('panel.receiptTitle')} onClose={() => setReceiptOpen(false)}>
-        <Text>{link || t('panel.receiptEmpty')}</Text>
-      </Sheet>
+      {receiptOpen ? (
+        <ReceiptViewer
+          fileId={link}
+          onClose={() => {
+            setReceiptOpen(false);
+            router.setParams({ receipt: undefined });
+          }}
+          onReplace={(next) => {
+            setLink(next);
+            void repo.updateNotes(event.id, withReceipt(event.notes, next) ?? '').then(() => toast.show(t('common.saved')));
+            router.setParams({ receipt: next });
+          }}
+          onRemove={() => {
+            setLink('');
+            setReceiptOpen(false);
+            void repo.updateNotes(event.id, withReceipt(event.notes, null) ?? '').then(() => toast.show(t('common.saved')));
+            router.setParams({ receipt: undefined });
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -260,7 +327,7 @@ function ReceiptField({ event }: { event: TxEvent }) {
 function NotesField({ event }: { event: TxEvent }) {
   const { repo } = useWorkspace();
   const toast = useToast();
-  const [notes, setNotes] = useState((event.notes ?? '').replace(/^receipt:[^\n]*\n?/, ''));
+  const [notes, setNotes] = useState(stripTagsLine(stripReceiptLine(event.notes)));
   return (
     <TextInput
       testID="panel-notes"
@@ -268,11 +335,13 @@ function NotesField({ event }: { event: TxEvent }) {
       value={notes}
       onChangeText={setNotes}
       onBlur={() => {
-        const trimmed = notes.trim();
-        const receiptPart = event.notes?.match(/^receipt:[^\n]*/)?.[0];
-        const combined = [receiptPart, trimmed].filter(Boolean).join('\n');
-        if ((event.notes ?? '') === combined) return;
-        void repo.updateNotes(event.id, combined).then(() => toast.show(t('common.saved')));
+        const receipt = parseReceipt(event.notes);
+        const tags = parseTags(event.notes);
+        let next = notes.trim() || undefined;
+        next = withReceipt(next, receipt);
+        next = withTags(next, tags);
+        if ((event.notes ?? '') === (next ?? '')) return;
+        void repo.updateNotes(event.id, next ?? '').then(() => toast.show(t('common.saved')));
       }}
     />
   );

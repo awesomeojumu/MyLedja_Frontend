@@ -135,6 +135,7 @@ const LOCAL_ONLY = new Set([
   'debt.update',
   'occurrence.paid',
   'occurrence.matched',
+  'occurrence.unpaid',
   'reconcile.finish',
   'transfer.dismiss',
   'settings.update',
@@ -228,6 +229,7 @@ export class WorkspaceRepository {
       exchangeRates: raw?.exchangeRates,
       downloadDailyRates: raw?.downloadDailyRates,
       deviceSync: raw?.deviceSync,
+      dueSoonDays: raw?.dueSoonDays === 3 || raw?.dueSoonDays === 7 || raw?.dueSoonDays === 14 || raw?.dueSoonDays === 30 ? raw.dueSoonDays : undefined,
     };
     const assigns = new Map<string, bigint>();
     const assignNotes = new Map<string, string>();
@@ -1320,6 +1322,8 @@ export class WorkspaceRepository {
     if (!event || event.type !== 'expense') return { ok: false, error: 'missing_lines' };
     const occId = `${recurringId}:${dueDate}`;
     if (snapshot.occurrences.some((o) => o.id === occId && o.status === 'paid')) return { ok: false, error: 'already_reversed' };
+    // PU26-1: one transaction can't pay two occurrences.
+    if (snapshot.occurrences.some((o) => o.eventId === eventId && o.status === 'paid')) return { ok: false, error: 'already_reversed' };
     const accountIds = new Set(snapshot.accounts.map((a) => a.id));
     // An expense credits the account it was paid from, so the money that left is minus the account lines.
     const amountMinor = -event.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + l.amountMinor, 0n);
@@ -1339,6 +1343,21 @@ export class WorkspaceRepository {
       await this.put('notifications', billNotificationId, { ...(note.data as object), read: true }, 'notification.read', note.version);
     }
     return { ok: true, value: occurrence };
+  }
+
+  /** PU-26 — Undo mark paid (unlink occurrence; keeps the transaction). */
+  async unmarkBillPaid(recurringId: string, dueDate: string): Promise<Result<void>> {
+    const snapshot = await this.load();
+    const occId = `${recurringId}:${dueDate}`;
+    const existing = snapshot.occurrences.find((o) => o.id === occId);
+    if (!existing || existing.status !== 'paid') return { ok: false, error: 'missing_lines' };
+    await this.put(
+      'occurrences',
+      occId,
+      { recurringId, dueDate, amountMinor: existing.amountMinor, status: 'upcoming', eventId: undefined },
+      'occurrence.unpaid',
+    );
+    return { ok: true, value: undefined };
   }
 
   async addIncomeStream(input: Omit<IncomeStream, 'id'>): Promise<IncomeStream> {
