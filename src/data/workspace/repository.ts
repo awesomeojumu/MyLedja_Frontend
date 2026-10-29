@@ -321,7 +321,10 @@ export class WorkspaceRepository {
         ...DEFAULT_NOTIFICATION_PREFS,
         ...raw?.notificationPrefs,
         billReminderDays: raw?.notificationPrefs?.billReminderDays ?? DEFAULT_NOTIFICATION_PREFS.billReminderDays,
+        // Older workspaces only had `budget`; treat missing budgetOver as same as near-limit.
+        budgetOver: raw?.notificationPrefs?.budgetOver ?? raw?.notificationPrefs?.budget ?? DEFAULT_NOTIFICATION_PREFS.budgetOver,
       },
+      extraCategoryGroups: raw?.extraCategoryGroups,
       aiPrefs: raw?.aiPrefs,
       carryOverDefault: raw?.carryOverDefault,
       budgetTypesShown: raw?.budgetTypesShown,

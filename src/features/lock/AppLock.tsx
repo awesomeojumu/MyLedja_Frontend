@@ -10,13 +10,23 @@ import tokens from '@/design/tokens.json';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { t } from '@/i18n';
 
-/** App lock and app-switcher privacy on phones (DESIGN.md 10.3, 10.4; build plan F3.3, G-11). */
+/** App lock and app-switcher privacy on phones (DESIGN.md 10.3, 10.4; build plan F3.3, G-11; TB-11 Security timing). */
 
-const LOCK_AFTER_MS = 5 * 60_000;
+/** Immediately | After 1 minute | After 5 minutes (TB-11). */
+export type LockAfterMs = 0 | 60_000 | 300_000;
+export const LOCK_AFTER_OPTIONS: LockAfterMs[] = [0, 60_000, 300_000];
+const DEFAULT_LOCK_AFTER_MS: LockAfterMs = 300_000;
+
 let store: ReturnType<typeof openKeyValue> | null = null;
 /** Opened on first use, so importing this file doesn't open the phone's database. */
 const kv = () => (store ??= openKeyValue('myledja-device'));
-const KEYS = { enabled: 'lock:enabled', offered: 'lock:offered', privacy: 'lock:privacyDefault', hideRecents: 'lock:hideInRecents' } as const;
+const KEYS = {
+  enabled: 'lock:enabled',
+  offered: 'lock:offered',
+  privacy: 'lock:privacyDefault',
+  hideRecents: 'lock:hideInRecents',
+  afterMs: 'lock:afterMs',
+} as const;
 
 const phone = Platform.OS === 'ios' || Platform.OS === 'android';
 
@@ -30,9 +40,39 @@ async function readFlag(key: string, fallback: boolean) {
 }
 const writeFlag = (key: string, value: boolean) => kv().set([[key, value ? '1' : '0']]);
 
+async function readAfterMs(): Promise<LockAfterMs> {
+  try {
+    const v = await kv().get(KEYS.afterMs);
+    if (v === '0') return 0;
+    if (v === '60000') return 60_000;
+    if (v === '300000') return 300_000;
+  } catch {
+    /* keep default */
+  }
+  return DEFAULT_LOCK_AFTER_MS;
+}
+
+const writeAfterMs = (ms: LockAfterMs) => kv().set([[KEYS.afterMs, String(ms)]]);
+
 async function canUseBiometrics() {
   if (!phone) return false;
   return (await LocalAuthentication.hasHardwareAsync()) && (await LocalAuthentication.isEnrolledAsync());
+}
+
+/** iOS Face ID / Touch ID label; fingerprint/face wording on Android (DESIGN Page 26). */
+export async function appLockBiometricLabel(): Promise<string> {
+  if (Platform.OS === 'ios') {
+    try {
+      const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+      if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) return t('settings.security.appLockFaceId');
+      if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) return t('settings.security.appLockTouchId');
+    } catch {
+      /* fall through */
+    }
+    return t('settings.security.appLockFaceId');
+  }
+  if (Platform.OS === 'android') return t('settings.security.appLockBiometric');
+  return t('settings.security.appLock');
 }
 
 async function applyHideInRecents(hide: boolean) {
@@ -46,17 +86,23 @@ export function useAppLockSetting() {
   const [enabled, setEnabledState] = useState(false);
   const [privacyDefault, setPrivacyState] = useState(false);
   const [hideInRecents, setHideState] = useState(false);
+  const [afterMs, setAfterMsState] = useState<LockAfterMs>(DEFAULT_LOCK_AFTER_MS);
+  const [lockLabel, setLockLabel] = useState(t('settings.security.appLock'));
   useEffect(() => {
     void (async () => {
       setEnabledState(await readFlag(KEYS.enabled, false));
       setPrivacyState(await readFlag(KEYS.privacy, false));
       setHideState(await readFlag(KEYS.hideRecents, false));
+      setAfterMsState(await readAfterMs());
+      setLockLabel(await appLockBiometricLabel());
     })();
   }, []);
   return {
     enabled,
     privacyDefault,
     hideInRecents,
+    afterMs,
+    lockLabel,
     setEnabled: async (on: boolean) => {
       // Turning it on proves the face or fingerprint works first.
       if (on) {
@@ -75,12 +121,16 @@ export function useAppLockSetting() {
       await applyHideInRecents(on);
       setHideState(on);
     },
+    setAfterMs: async (ms: LockAfterMs) => {
+      await writeAfterMs(ms);
+      setAfterMsState(ms);
+    },
   };
 }
 
 /**
- * Wraps the signed-in app. Reopening after 5 minutes asks for the face or fingerprint; the app switcher shows a
- * plain cover instead of balances; app lock is offered once after the first sign-in.
+ * Wraps the signed-in app. Reopening after the chosen lock delay asks for biometrics;
+ * the app switcher shows a plain cover instead of balances; app lock is offered once after first sign-in.
  */
 export function AppLockGate({ children }: { children: ReactNode }) {
   const theme = useTheme();
@@ -107,12 +157,15 @@ export function AppLockGate({ children }: { children: ReactNode }) {
       if (state === 'active' && leftAt.current !== null) {
         const away = Date.now() - leftAt.current;
         leftAt.current = null;
-        void readFlag(KEYS.enabled, false).then((on) => {
-          if (on && away >= LOCK_AFTER_MS) {
+        void (async () => {
+          const on = await readFlag(KEYS.enabled, false);
+          if (!on) return;
+          const after = await readAfterMs();
+          if (away >= after) {
             setLocked(true);
             void unlock();
           }
-        });
+        })();
       }
     });
     return () => sub.remove();
