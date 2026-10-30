@@ -100,16 +100,41 @@ export function RedesignBottomNav({
   );
 }
 
-/** Top bar with ≥44px touch headroom (Figma TopBar Size=Phone). */
+/** Top bar with ≥44px touch headroom (Figma TopBar Size=Phone). Supports menu, back, or plain title. */
 export function RedesignTopBar({
   title,
   onMenu,
+  onBack,
   trailing,
 }: {
   title: string;
   onMenu?: () => void;
+  onBack?: () => void;
   trailing?: ReactNode;
 }) {
+  const leading = onBack ? (
+    <Pressable
+      testID="redesign-back"
+      accessibilityRole="button"
+      accessibilityLabel={t('common.back')}
+      onPress={onBack}
+      style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <RedesignIcon name="arrow-left" size={size['icon-lg']} color={theme.text} />
+    </Pressable>
+  ) : onMenu ? (
+    <Pressable
+      testID="redesign-menu"
+      accessibilityRole="button"
+      accessibilityLabel={t('nav.menu')}
+      onPress={onMenu}
+      style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <RedesignIcon name="menu" size={size['icon-lg']} color={theme.text} />
+    </Pressable>
+  ) : (
+    <View style={{ width: sp.lg }} />
+  );
   return (
     <View
       testID="redesign-top-bar"
@@ -124,20 +149,12 @@ export function RedesignTopBar({
         gap: sp.xs,
       }}
     >
-      {onMenu ? (
-        <Pressable
-          testID="redesign-menu"
-          accessibilityRole="button"
-          accessibilityLabel={t('nav.menu')}
-          onPress={onMenu}
-          style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <RedesignIcon name="menu" size={size['icon-lg']} color={theme.text} />
-        </Pressable>
-      ) : (
-        <View style={{ width: sp.lg }} />
-      )}
-      <RedesignText variant="headline" accessibilityRole="header" style={{ flex: 1, textAlign: onMenu ? 'center' : 'left' }}>
+      {leading}
+      <RedesignText
+        variant="headline"
+        accessibilityRole="header"
+        style={{ flex: 1, textAlign: onBack || onMenu ? 'center' : 'left' }}
+      >
         {title}
       </RedesignText>
       {trailing ?? <View style={{ width: density.minTarget }} />}
@@ -366,6 +383,7 @@ export function RedesignListRow({
   onPress,
   icon,
   testID,
+  showChevron,
 }: {
   title: string;
   subtitle?: string;
@@ -373,7 +391,10 @@ export function RedesignListRow({
   onPress?: () => void;
   icon?: RedesignIconName;
   testID?: string;
+  /** Defaults to true when onPress is set. Set false for amount-trailing rows (Figma Bills). */
+  showChevron?: boolean;
 }) {
+  const chevron = showChevron ?? !!onPress;
   return (
     <Pressable
       testID={testID}
@@ -418,7 +439,7 @@ export function RedesignListRow({
           {trailing}
         </RedesignText>
       ) : null}
-      {onPress ? <RedesignIcon name="chevron-right" size={size['icon-md']} color={theme.textSecondary} /> : null}
+      {chevron ? <RedesignIcon name="chevron-right" size={size['icon-md']} color={theme.textSecondary} /> : null}
     </Pressable>
   );
 }
