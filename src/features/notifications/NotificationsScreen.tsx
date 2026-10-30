@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { Settings } from 'lucide-react-native';
 
 import { Button, EmptyState, InlineError, Placeholder, Text, useToast } from '@/design/components';
+import { isRedesignEnabled } from '@/design/redesign';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
@@ -24,6 +25,7 @@ import {
 import { syncLocalBillReminder } from './localPush';
 import { MatchBillSheet } from './MatchBillSheet';
 import { NotificationRow } from './NotificationRow';
+import { RedesignNotificationsScreen } from './RedesignNotificationsScreen';
 import { RecordDebtPaymentSheet } from './RecordDebtPaymentSheet';
 
 const sp = tokens.spacing;
@@ -40,6 +42,11 @@ function emptyCopy(filter: NotificationCategory | 'all'): { title: TextKey; body
 }
 
 export function NotificationsScreen() {
+  if (isRedesignEnabled()) return <RedesignNotificationsScreen />;
+  return <LegacyNotificationsScreen />;
+}
+
+function LegacyNotificationsScreen() {
   const { snapshot, repo } = useWorkspace();
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
