@@ -2,8 +2,10 @@ import { DEFAULT_HEALTH_SETTINGS, normalizeHealthSettings, type HealthSettings }
 import type { Snapshot } from '@/data/workspace/repository';
 import { budgetForMonth } from '@/features/budget/helpers';
 import { holdingFigures } from '@/features/investments/helpers';
-import { health, type Health, type HealthInput, type PillarKey } from '@/ledger/health';
+import { t, type TextKey } from '@/i18n';
+import { health, type Advice, type Health, type HealthInput, type Pillar, type PillarKey } from '@/ledger/health';
 import { nextMonth, prevMonth, type EventType, type MoneyEvent } from '@/ledger';
+import { roundHalfAwayFromZero } from '@/money';
 
 /** The same rules as the server's (TECH-SPEC 6.10 and 6.13): change both together. */
 const LIQUID_TYPES = new Set(['bank', 'cash', 'wallet', 'savings']);
@@ -217,4 +219,49 @@ export function healthPage(snapshot: Snapshot, month: string, today: string, opt
     input,
     settings,
   };
+}
+
+/** "26%" from basis points. */
+const pctText = (bp: bigint) => `${roundHalfAwayFromZero(bp, 100n)}%`;
+/** "3.2" from hundredths of a month. */
+const monthsLabel = (h: bigint) => `${h / 100n}.${(h % 100n) / 10n}`;
+
+/** What a pillar's tile says (DESIGN.md page 23). */
+export function pillarValue(p: Pillar): string {
+  if (p.value === null && p.score === null) return t('health.notEnough');
+  switch (p.key) {
+    case 'saving':
+      return p.value === null ? t('health.notEnough') : t('health.value.saving', { pct: pctText(p.value) });
+    case 'runway':
+      return p.value === null
+        ? t('health.value.runwayNoSpending')
+        : t('health.value.runway', { months: monthsLabel(p.value), target: String(p.used.target) });
+    case 'debt_load':
+      return p.value === null ? t('health.value.debtNoIncome') : t('health.value.debt', { pct: pctText(p.value) });
+    case 'bills':
+      return t('health.value.bills', { pct: pctText(p.value ?? 0n) });
+    case 'budget':
+      return t('health.value.budget', { within: String(p.used.within), planned: String(p.used.planned) });
+  }
+}
+
+/** One plain sentence on why (P23-01): what's going well and what would lift the score. */
+export function reasonText(page: HealthPage): string {
+  const parts: string[] = [];
+  if (page.reason.strongest) parts.push(t(`health.good.${page.reason.strongest}` as TextKey));
+  if (page.reason.weakest && page.band !== 'strong') parts.push(t(`health.next.${page.reason.weakest}` as TextKey));
+  return parts.join(' ');
+}
+
+export function adviceText(a: Advice, show: (v: bigint) => string): string {
+  switch (a.pillar) {
+    case 'runway':
+      return t('health.advice.runway', { amount: show(a.monthly) });
+    case 'bills':
+      return t('health.advice.bills', { count: String(a.late) });
+    case 'budget':
+      return t('health.advice.budget', { count: String(a.overspent) });
+    default:
+      return t(`health.advice.${a.pillar}` as TextKey);
+  }
 }

@@ -21,6 +21,7 @@ import {
   formatDay,
   useToast,
 } from '@/design/components';
+import { isRedesignEnabled } from '@/design/redesign';
 import tokens from '@/design/tokens.json';
 import { usePopupParam } from '@/design/usePopupParam';
 import { useSizeClass } from '@/design/size';
@@ -33,59 +34,27 @@ import { AppFrame } from '@/features/frame/AppFrame';
 import { today } from '@/features/transactions/helpers';
 import { t, type TextKey } from '@/i18n';
 import { stress, type Advice, type Pillar, type PillarKey } from '@/ledger/health';
-import { formatNaira, parseAmount, PRIVACY_MASK, roundHalfAwayFromZero } from '@/money';
+import { formatNaira, parseAmount, PRIVACY_MASK } from '@/money';
 
-import { healthPage, shiftMonth, type HealthPage } from './helpers';
+import { adviceText, healthPage, pillarValue, reasonText, shiftMonth, type HealthPage } from './helpers';
+import { RedesignHealthScreen } from './RedesignHealthScreen';
 
 const sp = tokens.spacing;
 const MONEY_USED = new Set(['income', 'spending', 'cash', 'essential', 'borrowed', 'payments']);
 const PAGES: Record<Advice['link'], string> = { budget: '/budget', goals: '/goals', debts: '/debts', plan: '/plan' };
 
-/** "26%" from basis points. */
-const pct = (bp: bigint) => `${roundHalfAwayFromZero(bp, 100n)}%`;
+export { adviceText, pillarValue, reasonText };
+
 /** "3.2" from hundredths of a month. */
 const months = (h: bigint) => `${h / 100n}.${(h % 100n) / 10n}`;
 
-/** What a pillar's tile says (DESIGN.md page 23). */
-export function pillarValue(p: Pillar): string {
-  if (p.value === null && p.score === null) return t('health.notEnough');
-  switch (p.key) {
-    case 'saving':
-      return p.value === null ? t('health.notEnough') : t('health.value.saving', { pct: pct(p.value) });
-    case 'runway':
-      return p.value === null ? t('health.value.runwayNoSpending') : t('health.value.runway', { months: months(p.value), target: String(p.used.target) });
-    case 'debt_load':
-      return p.value === null ? t('health.value.debtNoIncome') : t('health.value.debt', { pct: pct(p.value) });
-    case 'bills':
-      return t('health.value.bills', { pct: pct(p.value ?? 0n) });
-    case 'budget':
-      return t('health.value.budget', { within: String(p.used.within), planned: String(p.used.planned) });
-  }
-}
-
-/** One plain sentence on why (P23-01): what's going well and what would lift the score. */
-export function reasonText(page: HealthPage): string {
-  const parts: string[] = [];
-  if (page.reason.strongest) parts.push(t(`health.good.${page.reason.strongest}` as TextKey));
-  if (page.reason.weakest && page.band !== 'strong') parts.push(t(`health.next.${page.reason.weakest}` as TextKey));
-  return parts.join(' ');
-}
-
-export function adviceText(a: Advice, show: (v: bigint) => string): string {
-  switch (a.pillar) {
-    case 'runway':
-      return t('health.advice.runway', { amount: show(a.monthly) });
-    case 'bills':
-      return t('health.advice.bills', { count: String(a.late) });
-    case 'budget':
-      return t('health.advice.budget', { count: String(a.overspent) });
-    default:
-      return t(`health.advice.${a.pillar}` as TextKey);
-  }
-}
-
-/** Health (DESIGN.md page 23): one honest score, the reasons behind it, and what to do next. */
+/** Health (DESIGN.md page 23 / Figma 5:2231 when redesign on). */
 export function HealthScreen() {
+  if (isRedesignEnabled()) return <RedesignHealthScreen />;
+  return <LegacyHealthScreen />;
+}
+
+function LegacyHealthScreen() {
   const { snapshot, repo } = useWorkspace();
   const { user, client } = useAuth();
   const router = useRouter();
