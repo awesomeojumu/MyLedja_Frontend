@@ -19,6 +19,7 @@ import {
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
+import { isRedesignEnabled } from '@/design/redesign';
 import type { Payee } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
@@ -28,6 +29,7 @@ import { t } from '@/i18n';
 
 import { MergePayeesSheet, type MergeKeepChoices } from './MergePayeesSheet';
 import { PayeePanel } from './PayeePanel';
+import { RedesignPayeesScreen } from './RedesignPayeesScreen';
 import { aliasOwner, payeeRows, sortPayeeRows, yearOf, type PayeeSort } from './helpers';
 
 const sp = tokens.spacing;
@@ -53,6 +55,11 @@ function paramId(raw: string | string[] | undefined): string | undefined {
 }
 
 export function PayeesScreen() {
+  if (isRedesignEnabled()) return <RedesignPayeesScreen />;
+  return <LegacyPayeesScreen />;
+}
+
+function LegacyPayeesScreen() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const theme = useTheme();
