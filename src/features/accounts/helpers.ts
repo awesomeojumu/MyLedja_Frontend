@@ -122,3 +122,22 @@ export function reorderAccountIds(ids: string[], fromId: string, toId: string): 
   next.splice(to, 0, fromId);
   return next;
 }
+
+/** Uncleared + session-ticked rows up to the statement date (DESIGN / BE candidates). */
+export function reconcileRows(
+  snapshot: Snapshot,
+  accountId: string,
+  statementDate: string,
+  ticked: Set<string>,
+): RegisterRow[] {
+  return register(snapshot, accountId).filter(
+    (r) => r.event.date <= statementDate && !r.event.reconciledBy && (!r.event.cleared || ticked.has(r.event.id)),
+  );
+}
+
+/** Cleared total as the person sees it (assets: balance; liabilities: amount owed). */
+export function clearedShown(rows: RegisterRow[], eventIds: Set<string>, liability: boolean): bigint {
+  let total = 0n;
+  for (const r of rows) if (eventIds.has(r.event.id)) total += r.line;
+  return liability ? -total : total;
+}

@@ -96,7 +96,9 @@ describe('Page 08 redesign Accounts', () => {
     expect(screen.getByText(t('redesign.accounts.connectPrivacy'))).toBeTruthy();
     expect(screen.getByTestId('redesign-bank-gtbank')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('redesign-bank-gtbank'));
-    await waitFor(() => expect(screen.getByText(t('accounts.connect.monoBody'))).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('redesign-connect-bank-flow')).toBeTruthy());
+    expect(screen.getByText(t('redesign.connect.beforeBody'))).toBeTruthy();
+    expect(screen.getByText(t('redesign.connect.continueToBank', { bank: 'GTBank' }))).toBeTruthy();
   });
 
   it('shows empty state copy from Figma', async () => {

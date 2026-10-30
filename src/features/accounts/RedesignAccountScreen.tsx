@@ -35,7 +35,8 @@ import { t } from '@/i18n';
 import { formatNaira, PRIVACY_MASK } from '@/money';
 import { ledgerBalance } from '@/ledger';
 
-import { AccountImportSheet, classifyDroppedFile, statementCsv } from './AccountImportSheet';
+import { classifyDroppedFile, statementCsv } from './AccountImportSheet';
+import { RedesignImportSheet } from './RedesignImportSheet';
 import { ArchiveSheet, EditAccountSheet, UpdateValueSheet } from './accountSheets';
 import { clearedSplit, hasHoldingsTab, hasValueTab, register, type RegisterRow } from './helpers';
 
@@ -645,7 +646,7 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
         </RedesignSheet>
       ) : null}
       {importOpen ? (
-        <AccountImportSheet
+        <RedesignImportSheet
           account={account}
           initialText={dropped?.kind === 'csv' ? dropped.text : null}
           initialStatement={dropped?.kind === 'statement' ? dropped : null}

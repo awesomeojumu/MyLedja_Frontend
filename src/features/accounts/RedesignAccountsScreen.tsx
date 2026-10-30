@@ -30,9 +30,10 @@ import { ledgerBalance, monthOf, monthsEndingAt, netWorth, prevMonth } from '@/l
 import { formatNaira, PRIVACY_MASK } from '@/money';
 
 import { AccountScreen } from './AccountScreen';
-import { ArchiveSheet, ConnectBankSheet, EditAccountSheet, UpdateValueSheetForAccount } from './accountSheets';
+import { ArchiveSheet, EditAccountSheet, UpdateValueSheetForAccount } from './accountSheets';
 import { accountRows, type AccountRow } from './helpers';
 import { RedesignAddAccountSheet, RedesignConnectBankSearchSheet } from './RedesignAccountSheets';
+import { RedesignConnectBankFlow } from './RedesignConnectBankFlow';
 import {
   REDESIGN_ACCOUNT_GROUPS,
   redesignGroupFor,
@@ -222,7 +223,6 @@ export function RedesignAccountsScreen() {
   const { width, height } = useWindowDimensions();
   const landscapeTablet = size !== 'phone' && width >= height;
   const phone = size === 'phone';
-  const [legacyConnect, setLegacyConnect] = useState(false);
   const [connectBankLabel, setConnectBankLabel] = useState<string | null>(null);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [bankLinks, setBankLinks] = useState<BankLink[]>([]);
@@ -232,12 +232,11 @@ export function RedesignAccountsScreen() {
   const editId = params.account && params.account !== 'new' ? params.account : null;
   const valueId = params.value ?? null;
   const viewId = typeof params.view === 'string' ? params.view : null;
-  const connectSearch = params.connect === '1' && !legacyConnect;
+  const connectSearch = params.connect === '1' && !connectBankLabel;
 
   const closeAccountParam = () => router.setParams({ account: undefined });
   const closeValueParam = () => router.setParams({ value: undefined });
   const closeConnect = () => {
-    setLegacyConnect(false);
     setConnectBankLabel(null);
     router.setParams({ connect: undefined });
   };
@@ -249,7 +248,7 @@ export function RedesignAccountsScreen() {
       (r) => setBankLinks(r.links.filter((l) => l.status !== 'disconnected')),
       () => setBankLinks([]),
     );
-  }, [client, user, connectSearch, legacyConnect]);
+  }, [client, user, connectSearch, connectBankLabel]);
 
   const syncByAccount = useMemo(() => {
     const map = new Map<string, BankLink>();
@@ -297,7 +296,7 @@ export function RedesignAccountsScreen() {
 
   const openAdd = () => router.setParams({ account: 'new' });
   const openConnect = () => {
-    setLegacyConnect(false);
+    setConnectBankLabel(null);
     router.setParams({ connect: '1' });
   };
 
@@ -424,11 +423,19 @@ export function RedesignAccountsScreen() {
           onClose={closeConnect}
           onContinue={(label) => {
             setConnectBankLabel(label);
-            setLegacyConnect(true);
           }}
         />
       ) : null}
-      {legacyConnect ? <ConnectBankSheet onClose={closeConnect} /> : null}
+      {connectBankLabel ? (
+        <RedesignConnectBankFlow
+          bankLabel={connectBankLabel}
+          onClose={closeConnect}
+          onManual={() => {
+            closeConnect();
+            openAdd();
+          }}
+        />
+      ) : null}
       {editAccount ? <EditAccountSheet account={editAccount} onClose={closeAccountParam} /> : null}
       {valueId ? <UpdateValueSheetForAccount accountId={valueId} onClose={closeValueParam} /> : null}
       {archiveAccount && snapshot ? (
@@ -436,8 +443,6 @@ export function RedesignAccountsScreen() {
       ) : null}
     </>
   );
-
-  void connectBankLabel;
 
   if (phone) {
     return (
