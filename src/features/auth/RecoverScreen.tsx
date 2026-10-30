@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ApiError } from '@/api/client';
 import { Banner, Button, CodeInput, InlineError, Text, TextInput } from '@/design/components';
+import { isRedesignEnabled } from '@/design/redesign';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { AuthFrame } from './AuthFrame';
@@ -9,8 +10,14 @@ import { AuthStepPanel } from './AuthStepPanel';
 import { useAuth } from './AuthProvider';
 import { checkPassword, EMAIL_PATTERN } from './password';
 import { PasswordStrength } from './PasswordStrength';
+import { RedesignRecoverScreen } from './RedesignRecoverScreen';
 
 export function RecoverScreen({ now = () => Date.now() }: { now?: () => number }) {
+  if (isRedesignEnabled()) return <RedesignRecoverScreen now={now} />;
+  return <LegacyRecoverScreen now={now} />;
+}
+
+function LegacyRecoverScreen({ now = () => Date.now() }: { now?: () => number }) {
   const router = useRouter();
   const { api } = useAuth();
   const online = useOnline();
