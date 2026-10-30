@@ -4,6 +4,7 @@ export { redesignLight, redesignTokens } from './theme';
 export { RedesignIcon, REDESIGN_ICON_NAMES, type RedesignIconName } from './icons';
 export { RedesignText, redesignTypeStyle, type RedesignTypeStyle } from './Text';
 export { RedesignAppFrame, RedesignMoreScreen } from './AppFrame';
+export { RedesignAuthFrame, RedesignLogo } from './Auth';
 export {
   RedesignBottomNav,
   RedesignTopBar,
@@ -15,8 +16,12 @@ export {
   RedesignChoiceCard,
   RedesignChip,
   RedesignSegmented,
+  RedesignButton,
   RedesignField,
   RedesignInlineError,
+  RedesignDividerLabel,
+  RedesignCheckbox,
+  RedesignCodeInput,
   RedesignAmount,
   RedesignProgress,
   RedesignSkeleton,
