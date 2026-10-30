@@ -40,20 +40,14 @@ import {
   EditAccountSheet,
   UpdateValueSheetForAccount,
 } from './accountSheets';
-import { isInvestmentAccount, reorderAccountIds, sortAccountRows, type AccountSort } from './helpers';
+import { accountRows, isInvestmentAccount, reorderAccountIds, sortAccountRows, type AccountRow, type AccountSort } from './helpers';
+import { isRedesignEnabled } from '@/design/redesign';
+import { RedesignAccountsScreen } from './RedesignAccountsScreen';
 
 const sp = tokens.spacing;
 
-export type AccountRow = { account: Account; balance: bigint; waiting: boolean };
-
-/** Balances as signed contributions to net worth: what you owe is negative (P08-02). */
-export function accountRows(snapshot: Snapshot): AccountRow[] {
-  return snapshot.accounts.map((account) => {
-    const balance = ledgerBalance(account.id, snapshot.events);
-    const waiting = snapshot.events.some((e) => snapshot.waiting.has(e.id) && e.lines.some((l) => l.ledgerAccountId === account.id));
-    return { account, balance, waiting };
-  });
-}
+export type { AccountRow };
+export { accountRows };
 
 const SORT_OPTIONS: { value: AccountSort; label: string }[] = [
   { value: 'custom', label: t('accounts.sort.custom') },
@@ -63,6 +57,11 @@ const SORT_OPTIONS: { value: AccountSort; label: string }[] = [
 ];
 
 export function AccountsScreen() {
+  if (isRedesignEnabled()) return <RedesignAccountsScreen />;
+  return <LegacyAccountsScreen />;
+}
+
+function LegacyAccountsScreen() {
   const { snapshot } = useWorkspace();
   const theme = useTheme();
   const router = useRouter();

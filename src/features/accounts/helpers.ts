@@ -1,9 +1,21 @@
 import { ACCOUNT_GROUPS, ACCOUNT_KIND_INFO, ACCOUNT_KINDS, type Account, type AccountGroup, type AccountKind } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
+import { ledgerBalance } from '@/ledger';
 
 import type { RegisterRow } from './AccountScreen';
 
 export type AccountSort = 'custom' | 'balance' | 'name' | 'type';
+
+export type AccountRow = { account: Account; balance: bigint; waiting: boolean };
+
+/** Balances as signed contributions to net worth: what you owe is negative (P08-02). */
+export function accountRows(snapshot: Snapshot): AccountRow[] {
+  return snapshot.accounts.map((account) => {
+    const balance = ledgerBalance(account.id, snapshot.events);
+    const waiting = snapshot.events.some((e) => snapshot.waiting.has(e.id) && e.lines.some((l) => l.ledgerAccountId === account.id));
+    return { account, balance, waiting };
+  });
+}
 
 export const ACCOUNT_KINDS_BY_GROUP: Record<AccountGroup, AccountKind[]> = ACCOUNT_GROUPS.reduce(
   (acc, group) => {
