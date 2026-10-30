@@ -20,7 +20,6 @@ import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
 import { ACCOUNT_KIND_INFO } from '@/data/workspace/model';
-import type { Snapshot } from '@/data/workspace/repository';
 import { useSync } from '@/data/sync/SyncProvider';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -31,28 +30,13 @@ import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { formatNaira } from '@/money';
 
-import { register, type RegisterRow } from './AccountScreen';
+import { isRedesignEnabled } from '@/design/redesign';
+import { RedesignReconcileScreen } from './RedesignReconcileScreen';
+import { clearedShown, reconcileRows } from './helpers';
+
+export { clearedShown, reconcileRows } from './helpers';
 
 const sp = tokens.spacing;
-
-/** Uncleared + session-ticked rows up to the statement date (DESIGN / BE candidates). */
-export function reconcileRows(
-  snapshot: Snapshot,
-  accountId: string,
-  statementDate: string,
-  ticked: Set<string>,
-): RegisterRow[] {
-  return register(snapshot, accountId).filter(
-    (r) => r.event.date <= statementDate && !r.event.reconciledBy && (!r.event.cleared || ticked.has(r.event.id)),
-  );
-}
-
-/** Cleared total as the person sees it (assets: balance; liabilities: amount owed). */
-export function clearedShown(rows: RegisterRow[], eventIds: Set<string>, liability: boolean): bigint {
-  let total = 0n;
-  for (const r of rows) if (eventIds.has(r.event.id)) total += r.line;
-  return liability ? -total : total;
-}
 
 function successHaptic() {
   if (Platform.OS === 'web') return;
@@ -64,6 +48,11 @@ function successHaptic() {
 }
 
 export function ReconcileScreen() {
+  if (isRedesignEnabled()) return <RedesignReconcileScreen />;
+  return <LegacyReconcileScreen />;
+}
+
+function LegacyReconcileScreen() {
   const { snapshot, repo } = useWorkspace();
   const { engine } = useSync();
   const { client, user, source } = useAuth();
