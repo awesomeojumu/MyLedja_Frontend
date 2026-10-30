@@ -113,3 +113,89 @@ export function payeeMonogram(name: string): string {
   if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
   return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
 }
+
+/** Figma Phone / Rules list title: "If payee contains Shoprite". */
+export function ruleIfTitle(rule: TransactionRule, snapshot: Snapshot): string {
+  if (rule.conditions.length === 0) return t('rules.redesign.ifAnything');
+  const parts = rule.conditions.map((c) => {
+    const field = t(`rules.field.${c.field}` as TextKey).toLowerCase();
+    const op = t(`rules.op.${c.op}` as TextKey);
+    let value = c.value;
+    if (c.field === 'category') value = snapshot.categories.find((x) => x.id === c.value)?.name ?? c.value;
+    if (c.field === 'account') value = snapshot.accounts.find((x) => x.id === c.value)?.name ?? c.value;
+    if (c.op === 'isEmpty' || c.op === 'isIn' || c.op === 'isOut') return `${field} ${op}`;
+    return `${field} ${op} ${value}`;
+  });
+  const join = rule.matchMode === 'any' ? ` ${t('rules.redesign.or')} ` : ` ${t('rules.redesign.and')} `;
+  return t('rules.redesign.ifLine', { parts: parts.join(join) });
+}
+
+/** Figma list subtitle: "Set category to Groceries". */
+export function ruleThenTitle(rule: TransactionRule, snapshot: Snapshot): string {
+  if (rule.actions.length === 0) return t('rules.thenEmpty');
+  return rule.actions
+    .map((a) => {
+      if (a.kind === 'setCategory') {
+        const name = snapshot.categories.find((c) => c.id === a.value)?.name ?? a.value;
+        return t('rules.redesign.setCategory', { name });
+      }
+      if (a.kind === 'renamePayee') return t('rules.redesign.renamePayee', { name: a.value });
+      if (a.kind === 'addNote') return t('rules.redesign.addNote', { note: a.value });
+      return actionLabel(a, snapshot);
+    })
+    .join(t('rules.actionJoin'));
+}
+
+export type SuggestedRule = {
+  key: string;
+  payeeName: string;
+  categoryId: string;
+  categoryName: string;
+  matchCount: number;
+};
+
+/**
+ * Heuristic suggestions (Figma Phone / Rules / Suggested): payees with ≥2 txs
+ * sharing one category and no existing payee-contains rule for that name.
+ */
+export function suggestRules(snapshot: Snapshot): SuggestedRule[] {
+  const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+  const byPayee = new Map<string, Map<string, number>>();
+  for (const e of snapshot.events) {
+    if (e.status !== 'posted' || e.type !== 'expense' || !e.payeeId) continue;
+    const cat = e.lines.find((l) => !accountIds.has(l.ledgerAccountId))?.ledgerAccountId;
+    if (!cat) continue;
+    const cats = byPayee.get(e.payeeId) ?? new Map<string, number>();
+    cats.set(cat, (cats.get(cat) ?? 0) + 1);
+    byPayee.set(e.payeeId, cats);
+  }
+  const out: SuggestedRule[] = [];
+  for (const [payeeId, cats] of byPayee) {
+    const payee = snapshot.payees.find((p) => p.id === payeeId);
+    if (!payee) continue;
+    let bestId = '';
+    let bestCount = 0;
+    for (const [catId, n] of cats) {
+      if (n > bestCount) {
+        bestId = catId;
+        bestCount = n;
+      }
+    }
+    if (bestCount < 2 || !bestId) continue;
+    const covered = snapshot.rules.some(
+      (r) =>
+        r.conditions.some((c) => c.field === 'payee' && c.op === 'contains' && c.value.toLowerCase() === payee.name.toLowerCase()) &&
+        r.actions.some((a) => a.kind === 'setCategory' && a.value === bestId),
+    );
+    if (covered) continue;
+    const categoryName = snapshot.categories.find((c) => c.id === bestId)?.name ?? '';
+    out.push({
+      key: `${payeeId}:${bestId}`,
+      payeeName: payee.name,
+      categoryId: bestId,
+      categoryName,
+      matchCount: bestCount,
+    });
+  }
+  return out.sort((a, b) => b.matchCount - a.matchCount).slice(0, 8);
+}
