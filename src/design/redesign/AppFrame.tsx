@@ -93,7 +93,16 @@ export function RedesignStackFrame({
 }
 
 /** Redesign phone app frame: five tabs + floating Add (Figma Mobile App Bottom nav). */
-export function RedesignAppFrame({ title, children }: { title: string; children: ReactNode }) {
+export function RedesignAppFrame({
+  title,
+  children,
+  trailingExtra,
+}: {
+  title: string;
+  children: ReactNode;
+  /** Optional leading trailing actions (e.g. Accounts plus). */
+  trailingExtra?: ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const online = useOnline();
@@ -120,6 +129,7 @@ export function RedesignAppFrame({ title, children }: { title: string; children:
           title={title}
           trailing={
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {trailingExtra}
               <CommandSearchButton />
               <NotificationsBell items={inbox} />
               <PrivacyToggle />
