@@ -19,6 +19,7 @@ import {
   Text,
   useToast,
 } from '@/design/components';
+import { isRedesignEnabled } from '@/design/redesign';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useTabParam } from '@/design/useTabParam';
@@ -43,6 +44,7 @@ import {
   pricesFor,
   type Range,
 } from './helpers';
+import { RedesignHoldingScreen } from './RedesignHoldingScreen';
 
 const sp = tokens.spacing;
 const TABS = ['lots', 'dividends', 'trades', 'prices'] as const;
@@ -50,6 +52,11 @@ type Tab = (typeof TABS)[number];
 
 /** DESIGN.md page 18: one investment in depth — paid / worth / earned. */
 export function HoldingScreen() {
+  if (isRedesignEnabled()) return <RedesignHoldingScreen />;
+  return <LegacyHoldingScreen />;
+}
+
+function LegacyHoldingScreen() {
   const { snapshot, repo } = useWorkspace();
   const params = useGlobalSearchParams<{ id?: string; tab?: string; trade?: string; dividend?: string; prices?: string; holding?: string }>();
   const router = useRouter();
