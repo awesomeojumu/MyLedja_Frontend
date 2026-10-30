@@ -44,6 +44,8 @@ import {
 import { DeleteCategorySheet, EditCategorySheet, type CategoryDraft } from '@/features/budget/CategorySheets';
 import { monthOf } from '@/ledger';
 import { ChangeEmailSheet, useRecheck } from './SecuritySheets';
+import { isRedesignEnabled } from '@/design/redesign';
+import { RedesignSettingsScreen } from './RedesignSettingsScreen';
 import { settingsTabShipped, type SettingsTabId } from './shipped';
 
 const sp = tokens.spacing;
@@ -97,6 +99,11 @@ function tabFromParam(raw: string | string[] | undefined): SettingsTab | null {
 }
 
 export function SettingsScreen() {
+  if (isRedesignEnabled()) return <RedesignSettingsScreen />;
+  return <LegacySettingsScreen />;
+}
+
+function LegacySettingsScreen() {
   const size = useSizeClass();
   const theme = useTheme();
   const router = useRouter();
