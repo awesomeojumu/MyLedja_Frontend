@@ -60,7 +60,7 @@ import {
   removeChip,
   type TxFilters,
 } from './filters';
-import { ledgerMessage, rowsFor, today, type Row } from './helpers';
+import { ledgerMessage, matchesSearch, rowsFor, today, type Row } from './helpers';
 import {
   deleteSavedView,
   getSavedView,
@@ -72,25 +72,12 @@ import {
 import { SwipeRow } from './SwipeRow';
 import { parseTags, withTags } from './tags';
 import { purchaseCost, refundedSoFar } from '@/ledger';
+import { isRedesignEnabled } from '@/design/redesign';
+import { RedesignTransactionsScreen } from './RedesignTransactionsScreen';
 
 const sp = tokens.spacing;
 
-/** Search matches payee, note, category or amount (P11-02). */
-export function matchesSearch(row: Row, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  const digits = q.replace(/[₦,\s]/g, '');
-  const amount = (row.amount < 0n ? -row.amount : row.amount).toString();
-  const naira = formatNaira(row.amount < 0n ? -row.amount : row.amount).replace(/[₦,]/g, '');
-  return (
-    row.title.toLowerCase().includes(q) ||
-    row.category.toLowerCase().includes(q) ||
-    (row.event.notes ?? '').toLowerCase().includes(q) ||
-    (digits !== '' && /^\d+(\.\d{0,2})?$/.test(digits) && (naira.startsWith(digits) || amount.startsWith(digits)))
-  );
-}
-
-export { matchesSearch as matches };
+export { matchesSearch, matchesSearch as matches } from './helpers';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!target || typeof target !== 'object') return false;
@@ -99,6 +86,11 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function TransactionsScreen() {
+  if (isRedesignEnabled()) return <RedesignTransactionsScreen />;
+  return <LegacyTransactionsScreen />;
+}
+
+function LegacyTransactionsScreen() {
   const { repo, snapshot } = useWorkspace();
   const { client, user } = useAuth();
   const online = useOnline();

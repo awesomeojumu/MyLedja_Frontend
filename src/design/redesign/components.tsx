@@ -1078,14 +1078,37 @@ export function RedesignSkeleton({ width = '100%', height = 16, testID }: { widt
   );
 }
 
-export function RedesignBanner({ message, testID }: { message: string; testID?: string }) {
+export function RedesignBanner({
+  message,
+  testID,
+  actionLabel,
+  onAction,
+}: {
+  message: string;
+  testID?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
   return (
     <View
       testID={testID}
       accessibilityRole="alert"
-      style={{ backgroundColor: theme.primarySoft, borderRadius: shape['radius-md'], padding: sp.md }}
+      style={{
+        backgroundColor: theme.primarySoft,
+        borderRadius: shape['radius-md'],
+        padding: sp.md,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp.md,
+      }}
     >
-      <RedesignText variant="helper">{message}</RedesignText>
+      <RedesignIcon name="info" size={size['icon-md']} color={theme.primary} />
+      <RedesignText variant="helper" style={{ flex: 1 }}>
+        {message}
+      </RedesignText>
+      {actionLabel && onAction ? (
+        <RedesignButton testID={testID ? `${testID}-action` : undefined} kind="link" label={actionLabel} onPress={onAction} />
+      ) : null}
     </View>
   );
 }
@@ -1095,21 +1118,47 @@ export function RedesignEmpty({
   body,
   actionLabel,
   onAction,
+  secondaryLabel,
+  onSecondary,
+  tertiaryLabel,
+  onTertiary,
 }: {
   title: string;
   body: string;
   actionLabel: string;
   onAction: () => void;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+  tertiaryLabel?: string;
+  onTertiary?: () => void;
 }) {
   return (
     <View testID="redesign-empty" style={{ alignItems: 'center', gap: sp.md, padding: sp.xl }}>
+      <View
+        style={{
+          width: size.avatar,
+          height: size.avatar,
+          borderRadius: size.avatar / 2,
+          backgroundColor: theme.surfaceMuted,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <RedesignIcon name="list" size={size['icon-lg']} color={theme.textSecondary} />
+      </View>
       <RedesignText variant="headline" accessibilityRole="header">
         {title}
       </RedesignText>
       <RedesignText tone="textSecondary" style={{ textAlign: 'center' }}>
         {body}
       </RedesignText>
-      <RedesignChip label={actionLabel} selected onPress={onAction} />
+      {secondaryLabel && onSecondary ? (
+        <RedesignButton testID="redesign-empty-secondary" kind="secondary" label={secondaryLabel} onPress={onSecondary} />
+      ) : null}
+      <RedesignButton testID="redesign-empty-action" kind="primary" label={actionLabel} onPress={onAction} fullWidth />
+      {tertiaryLabel && onTertiary ? (
+        <RedesignButton testID="redesign-empty-tertiary" kind="link" label={tertiaryLabel} onPress={onTertiary} />
+      ) : null}
     </View>
   );
 }

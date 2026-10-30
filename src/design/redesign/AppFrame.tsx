@@ -96,10 +96,13 @@ export function RedesignStackFrame({
 export function RedesignAppFrame({
   title,
   children,
+  trailing,
   trailingExtra,
 }: {
   title: string;
   children: ReactNode;
+  /** Override default Search / Bell / Privacy trailing (page-specific chrome). */
+  trailing?: ReactNode;
   /** Optional leading trailing actions (e.g. Accounts plus). */
   trailingExtra?: ReactNode;
 }) {
@@ -128,12 +131,14 @@ export function RedesignAppFrame({
         <RedesignTopBar
           title={title}
           trailing={
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              {trailingExtra}
-              <CommandSearchButton />
-              <NotificationsBell items={inbox} />
-              <PrivacyToggle />
-            </View>
+            trailing ?? (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {trailingExtra}
+                <CommandSearchButton />
+                <NotificationsBell items={inbox} />
+                <PrivacyToggle />
+              </View>
+            )
           }
         />
         {offline ? <RedesignOfflineStrip /> : null}

@@ -1,6 +1,7 @@
 import type { Snapshot, TxEvent } from '@/data/workspace/repository';
 import { t } from '@/i18n';
 import type { LedgerErrorCode } from '@/ledger';
+import { formatNaira } from '@/money';
 
 /** TECH-SPEC 6.4: dates are days in the workspace's time zone. */
 export const WORKSPACE_TIME_ZONE = 'Africa/Lagos';
@@ -77,3 +78,20 @@ export function rowsFor(snapshot: Snapshot): Row[] {
   }
   return rows;
 }
+
+/** Search matches payee, note, category or amount (P11-02). */
+export function matchesSearch(row: Row, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const digits = q.replace(/[₦,\s]/g, '');
+  const amount = (row.amount < 0n ? -row.amount : row.amount).toString();
+  const naira = formatNaira(row.amount < 0n ? -row.amount : row.amount).replace(/[₦,]/g, '');
+  return (
+    row.title.toLowerCase().includes(q) ||
+    row.category.toLowerCase().includes(q) ||
+    (row.event.notes ?? '').toLowerCase().includes(q) ||
+    (digits !== '' && /^\d+(\.\d{0,2})?$/.test(digits) && (naira.startsWith(digits) || amount.startsWith(digits)))
+  );
+}
+
+export { matchesSearch as matches };

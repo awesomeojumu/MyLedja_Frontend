@@ -380,7 +380,16 @@ function BottomBar() {
   );
 }
 
-export function AppFrame({ title, children }: { title: string; children: ReactNode }) {
+export function AppFrame({
+  title,
+  children,
+  trailing,
+}: {
+  title: string;
+  children: ReactNode;
+  /** Redesign phone only — overrides default top-bar trailing. */
+  trailing?: ReactNode;
+}) {
   const size = useSizeClass();
   const theme = useTheme();
   const online = useOnline();
@@ -400,7 +409,11 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
   }, [inbox]);
   // Redesign phone chrome only (five tabs + floating Add). Flag default off.
   if (redesignPhone) {
-    return <RedesignAppFrame title={title}>{children}</RedesignAppFrame>;
+    return (
+      <RedesignAppFrame title={title} trailing={trailing}>
+        {children}
+      </RedesignAppFrame>
+    );
   }
   // Taps on a system notification are handled by LocalPushBridge (Bills reminders and the inbox).
 
