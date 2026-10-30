@@ -54,6 +54,8 @@ import { CoverSheet } from './CoverSheet';
 import { EditAmountSheet } from './EditAmountSheet';
 import { MoveMoneySheet } from './MoveMoneySheet';
 import { TemplatesSheet } from './TemplatesSheet';
+import { isRedesignEnabled } from '@/design/redesign';
+import { RedesignBudgetScreen } from './RedesignBudgetScreen';
 
 function groupLabel(group: string): string {
   if (group in catalogue) return t(group as TextKey);
@@ -79,6 +81,11 @@ function remainingColor(state: ReturnType<typeof barFor>, theme: ReturnType<type
 }
 
 export function BudgetScreen() {
+  if (isRedesignEnabled()) return <RedesignBudgetScreen />;
+  return <LegacyBudgetScreen />;
+}
+
+function LegacyBudgetScreen() {
   const { snapshot, repo } = useWorkspace();
   const theme = useTheme();
   const toast = useToast();
