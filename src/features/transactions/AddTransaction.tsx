@@ -19,6 +19,7 @@ import {
   TextInput,
   useToast,
 } from '@/design/components';
+import { isRedesignEnabled, RedesignMoreWaysToAdd } from '@/design/redesign';
 import tokens from '@/design/tokens.json';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import type { Snapshot, TransactionInput } from '@/data/workspace/repository';
@@ -47,6 +48,18 @@ const MORE_DOORS: { key: MovementDoor; labelKey: 'add.door.lend' | 'add.door.pay
   { key: 'debtPayment', labelKey: 'add.door.payment' },
   { key: 'allocate', labelKey: 'add.door.allocate' },
   { key: 'spend', labelKey: 'add.door.spend' },
+];
+
+const REDESIGN_DOORS: {
+  key: MovementDoor;
+  labelKey: 'add.door.lend' | 'add.door.payment' | 'add.door.allocate' | 'add.door.spend' | 'add.door.investment';
+  icon: 'swap' | 'repeat' | 'target' | 'trending-up';
+}[] = [
+  { key: 'lend', labelKey: 'add.door.lend', icon: 'swap' },
+  { key: 'debtPayment', labelKey: 'add.door.payment', icon: 'repeat' },
+  { key: 'allocate', labelKey: 'add.door.allocate', icon: 'target' },
+  { key: 'spend', labelKey: 'add.door.spend', icon: 'target' },
+  { key: 'investment', labelKey: 'add.door.investment', icon: 'trending-up' },
 ];
 
 export type AddKind = 'expense' | 'income' | 'transfer';
@@ -391,11 +404,13 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
             <View style={{ flex: 1, minWidth: 200 }}>
               <Tabs testID="add-kind" options={KINDS.map((k) => ({ value: k, label: t(`add.kind.${k}`) }))} value={kind} onChange={onKind} />
             </View>
-            <Menu
-              testID="add-more-menu"
-              trigger={(openMenu) => <Button kind="secondary" size="sm" testID="add-more" label={t('add.more')} onPress={openMenu} />}
-              items={MORE_DOORS.map((d) => ({ key: d.key, label: t(d.labelKey), onPress: () => setMovementDoor(d.key) }))}
-            />
+            {isRedesignEnabled() ? null : (
+              <Menu
+                testID="add-more-menu"
+                trigger={(openMenu) => <Button kind="secondary" size="sm" testID="add-more" label={t('add.more')} onPress={openMenu} />}
+                items={MORE_DOORS.map((d) => ({ key: d.key, label: t(d.labelKey), onPress: () => setMovementDoor(d.key) }))}
+              />
+            )}
           </View>
           {prefill.goalName ? (
             <Text testID="add-goal-line" tone="textSecondary">
@@ -578,6 +593,12 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
             </>
           ) : null}
           {error ? <InlineError testID="add-error" message={error} /> : null}
+          {isRedesignEnabled() ? (
+            <RedesignMoreWaysToAdd
+              doors={REDESIGN_DOORS.map((d) => ({ key: d.key, label: t(d.labelKey), icon: d.icon }))}
+              onPick={(key) => setMovementDoor(key as MovementDoor)}
+            />
+          ) : null}
         </View>
       </Sheet>
       <Confirm

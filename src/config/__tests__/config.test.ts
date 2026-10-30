@@ -11,8 +11,17 @@ describe('readConfig', () => {
       appEnv: 'staging',
       apiUrl: 'https://api.example.test',
       monoPublicKey: 'test_pk',
+      redesign: false,
       problems: [],
     });
+  });
+  it('reads optional EXPO_PUBLIC_REDESIGN without treating it as a problem', () => {
+    const off = readConfig({ EXPO_PUBLIC_API_URL: 'https://api.example.test/' });
+    expect(off.redesign).toBe(false);
+    expect(off.problems).toEqual([]);
+    const on = readConfig({ EXPO_PUBLIC_API_URL: 'https://api.example.test/', EXPO_PUBLIC_REDESIGN: '1' });
+    expect(on.redesign).toBe(true);
+    expect(on.problems).toEqual([]);
   });
   it('reports a missing API URL by name', () => {
     const c = readConfig({});

@@ -20,6 +20,7 @@ import { useUnreadDocumentTitle } from '@/features/notifications/useUnreadDocume
 import { SyncIssuesBanner } from '@/features/sync/SyncIssues';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
 import { today } from '@/features/transactions/helpers';
+import { isRedesignEnabled, RedesignAppFrame } from '@/design/redesign';
 import { SHIPPED_PAGES, MANAGE_PAGES, PLAN_PAGES, WEALTH_PAGES, PHONE_BOTTOM_PAGES, type NavItem } from './navigation';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
@@ -386,6 +387,7 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
   const { snapshot } = useWorkspace();
   const [drawer, setDrawer] = useState(false);
   const phone = size === 'phone';
+  const redesignPhone = isRedesignEnabled() && phone;
   const navWidth = size === 'tablet' ? tokens.frame.rail : tokens.frame.sidebar;
   const day = today();
   const inbox = useMemo(
@@ -396,6 +398,10 @@ export function AppFrame({ title, children }: { title: string; children: ReactNo
   useEffect(() => {
     void setUnreadBadge(unreadCount(inbox));
   }, [inbox]);
+  // Redesign phone chrome only (five tabs + floating Add). Flag default off.
+  if (redesignPhone) {
+    return <RedesignAppFrame title={title}>{children}</RedesignAppFrame>;
+  }
   // Taps on a system notification are handled by LocalPushBridge (Bills reminders and the inbox).
 
   const content = (

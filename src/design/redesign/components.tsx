@@ -1,0 +1,815 @@
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Modal, Pressable, ScrollView, TextInput as RNTextInput, View, type ViewProps } from 'react-native';
+import { t } from '@/i18n';
+import { RedesignIcon, type RedesignIconName } from './icons';
+import { RedesignText, redesignTypeStyle } from './Text';
+import { redesignLight as theme, redesignTokens as tokens } from './theme';
+
+const sp = tokens.space;
+const shape = tokens.shape;
+const size = tokens.size;
+const density = tokens.density.touch;
+
+/** Bottom nav + floating Add fixed together (Mobile App Phone / Bottom nav). */
+export function RedesignBottomNav({
+  tabs,
+  activeKey,
+  onTab,
+  onAdd,
+}: {
+  tabs: { key: string; label: string; icon: RedesignIconName }[];
+  activeKey: string;
+  onTab: (key: string) => void;
+  onAdd: () => void;
+}) {
+  return (
+    <View testID="redesign-bottom-nav" style={{ height: tokens.frame.bottomNavHeight + tokens.frame.fabOffset, justifyContent: 'flex-end' }}>
+      <Pressable
+        testID="redesign-fab-add"
+        accessibilityRole="button"
+        accessibilityLabel={t('nav.add')}
+        onPress={onAdd}
+        style={{
+          position: 'absolute',
+          alignSelf: 'center',
+          top: 0,
+          zIndex: 2,
+          width: size['add-fab'],
+          height: size['add-fab'],
+          borderRadius: shape['radius-pill'],
+          backgroundColor: theme.primary,
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: tokens.elevation['2'],
+        }}
+      >
+        <RedesignIcon name="plus" size={size['icon-xl']} color={theme.textOnPrimary} />
+      </Pressable>
+      <View
+        testID="redesign-tab-bar"
+        role="navigation"
+        style={{
+          height: tokens.frame.bottomNavHeight,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-around',
+          backgroundColor: theme.surface,
+          borderTopWidth: 1,
+          borderColor: theme.border,
+          paddingTop: sp.sm,
+        }}
+      >
+        {tabs.map((tab) => {
+          const active = tab.key === activeKey;
+          return (
+            <Pressable
+              key={tab.key}
+              testID={`redesign-nav-${tab.key}`}
+              accessibilityRole="link"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={tab.label}
+              onPress={() => onTab(tab.key)}
+              style={{
+                width: size['nav-tab'],
+                minHeight: density.minTarget,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: sp.xxs,
+              }}
+            >
+              <View
+                style={{
+                  width: size['nav-pill-w'],
+                  height: size['nav-pill-h'],
+                  borderRadius: shape['radius-pill'],
+                  backgroundColor: active ? theme.navActivePill : 'transparent',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <RedesignIcon name={tab.icon} size={size['icon-lg']} color={active ? theme.navActive : theme.navInactive} />
+              </View>
+              <RedesignText variant="nav-label" tone={active ? 'text' : 'textSecondary'}>
+                {tab.label}
+              </RedesignText>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** Top bar with ≥44px touch headroom (Figma TopBar Size=Phone). */
+export function RedesignTopBar({
+  title,
+  onMenu,
+  trailing,
+}: {
+  title: string;
+  onMenu?: () => void;
+  trailing?: ReactNode;
+}) {
+  return (
+    <View
+      testID="redesign-top-bar"
+      style={{
+        minHeight: Math.max(size['top-bar'], tokens.frame.topBarHeadroom),
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: sp.sm,
+        backgroundColor: theme.surface,
+        borderBottomWidth: 1,
+        borderColor: theme.border,
+        gap: sp.xs,
+      }}
+    >
+      {onMenu ? (
+        <Pressable
+          testID="redesign-menu"
+          accessibilityRole="button"
+          accessibilityLabel={t('nav.menu')}
+          onPress={onMenu}
+          style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <RedesignIcon name="menu" size={size['icon-lg']} color={theme.text} />
+        </Pressable>
+      ) : (
+        <View style={{ width: sp.lg }} />
+      )}
+      <RedesignText variant="headline" accessibilityRole="header" style={{ flex: 1, textAlign: onMenu ? 'center' : 'left' }}>
+        {title}
+      </RedesignText>
+      {trailing ?? <View style={{ width: density.minTarget }} />}
+    </View>
+  );
+}
+
+export function RedesignSheet({
+  visible,
+  title,
+  onClose,
+  children,
+  footer,
+  testID,
+  dirty = false,
+}: {
+  visible: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+  testID?: string;
+  dirty?: boolean;
+}) {
+  const [discard, setDiscard] = useState(false);
+  if (!visible && discard) setDiscard(false);
+  const requestClose = () => (dirty ? setDiscard(true) : onClose());
+  return (
+    <>
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={requestClose}>
+        <View style={{ flex: 1, backgroundColor: `${tokens.seed.ink}73`, justifyContent: 'flex-end' }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={requestClose} style={{ flex: 1 }} />
+          <View
+            testID={testID}
+            accessibilityViewIsModal
+            style={{
+              backgroundColor: theme.surface,
+              borderTopLeftRadius: shape['radius-lg'],
+              borderTopRightRadius: shape['radius-lg'],
+              maxHeight: '92%',
+              paddingBottom: sp.xl,
+            }}
+          >
+            <View style={{ alignItems: 'center', paddingVertical: sp.sm }}>
+              <View style={{ width: size['handle-w'], height: size['handle-h'], borderRadius: shape['radius-pill'], backgroundColor: theme.handle }} />
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: sp.lg, minHeight: size['control-md'] }}>
+              <RedesignText variant="headline" accessibilityRole="header" style={{ flex: 1 }}>
+                {title}
+              </RedesignText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
+                onPress={requestClose}
+                style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <RedesignIcon name="x" size={size['icon-lg']} color={theme.text} />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: sp.xl, gap: sp.lg, paddingBottom: sp.lg }}>{children}</ScrollView>
+            {footer ? <View style={{ paddingHorizontal: sp.xl }}>{footer}</View> : null}
+          </View>
+        </View>
+      </Modal>
+      <RedesignDialog
+        visible={discard}
+        title={t('common.discardTitle')}
+        body={t('common.discardBody')}
+        confirmLabel={t('common.discardConfirm')}
+        onCancel={() => setDiscard(false)}
+        onConfirm={() => {
+          setDiscard(false);
+          onClose();
+        }}
+      />
+    </>
+  );
+}
+
+export function RedesignDialog({
+  visible,
+  title,
+  body,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+  destructive,
+  testID,
+}: {
+  visible: boolean;
+  title: string;
+  body: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  destructive?: boolean;
+  testID?: string;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={{ flex: 1, backgroundColor: `${tokens.seed.ink}73`, justifyContent: 'center', alignItems: 'center', padding: sp.xl }}>
+        <View
+          testID={testID ?? 'redesign-dialog'}
+          accessibilityViewIsModal
+          style={{
+            width: '100%',
+            maxWidth: 420,
+            backgroundColor: theme.surface,
+            borderRadius: shape['radius-lg'],
+            padding: sp.xl,
+            gap: sp.lg,
+            boxShadow: tokens.elevation['3'],
+          }}
+        >
+          <RedesignText variant="headline" accessibilityRole="header">
+            {title}
+          </RedesignText>
+          <RedesignText tone="textSecondary">{body}</RedesignText>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: sp.sm }}>
+            <RedesignChip label={cancelLabel ?? t('common.cancel')} onPress={onCancel} />
+            <RedesignChip
+              label={confirmLabel}
+              selected
+              onPress={onConfirm}
+              testID="redesign-dialog-confirm"
+              style={destructive ? { backgroundColor: theme.danger } : undefined}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+type ToastItem = { id: number; message: string; onUndo?: () => void };
+
+export function useRedesignToastController() {
+  const [items, setItems] = useState<ToastItem[]>([]);
+  const nextId = useRef(1);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const timer of pending) clearTimeout(timer);
+    };
+  }, []);
+  const dismiss = (id: number) => setItems((all) => all.filter((x) => x.id !== id));
+  const show = (message: string, onUndo?: () => void) => {
+    const id = nextId.current++;
+    setItems((all) => [...all, { id, message, onUndo }].slice(-3));
+    const timer = setTimeout(
+      () => {
+        timers.current.delete(timer);
+        dismiss(id);
+      },
+      onUndo ? 8000 : 4000,
+    );
+    timers.current.add(timer);
+  };
+  return { items, show, dismiss };
+}
+
+export function RedesignToastHost({
+  items,
+  onDismiss,
+}: {
+  items: ToastItem[];
+  onDismiss: (id: number) => void;
+}) {
+  return (
+    <View
+      pointerEvents="box-none"
+      accessibilityLiveRegion="polite"
+      style={{
+        position: 'absolute',
+        bottom: tokens.frame.bottomNavHeight + tokens.frame.fabOffset + sp.lg,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        gap: sp.sm,
+      }}
+    >
+      {items.map((item) => (
+        <View
+          key={item.id}
+          testID="redesign-toast"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: sp.md,
+            backgroundColor: theme.surface,
+            borderRadius: shape['radius-md'],
+            paddingHorizontal: sp.lg,
+            paddingVertical: sp.sm,
+            boxShadow: tokens.elevation['2'],
+          }}
+        >
+          <RedesignText>{item.message}</RedesignText>
+          {item.onUndo ? (
+            <Pressable
+              testID="redesign-toast-undo"
+              accessibilityRole="button"
+              accessibilityLabel={t('common.undo')}
+              onPress={() => {
+                item.onUndo?.();
+                onDismiss(item.id);
+              }}
+            >
+              <RedesignText variant="label" tone="primary">
+                {t('common.undo')}
+              </RedesignText>
+            </Pressable>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function RedesignListRow({
+  title,
+  subtitle,
+  trailing,
+  onPress,
+  icon,
+  testID,
+}: {
+  title: string;
+  subtitle?: string;
+  trailing?: string;
+  onPress?: () => void;
+  icon?: RedesignIconName;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole={onPress ? 'button' : undefined}
+      onPress={onPress}
+      style={{
+        minHeight: size['list-row'],
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp.md,
+        paddingHorizontal: sp.md,
+        paddingVertical: density.rowPadY,
+        borderRadius: shape['radius-md'],
+      }}
+    >
+      <View
+        style={{
+          width: size.avatar,
+          height: size.avatar,
+          borderRadius: size.avatar / 2,
+          backgroundColor: theme.surfaceMuted,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {icon ? (
+          <RedesignIcon name={icon} size={size['icon-md']} color={theme.text} />
+        ) : (
+          <RedesignText variant="label">{title.slice(0, 1).toUpperCase()}</RedesignText>
+        )}
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <RedesignText numberOfLines={1}>{title}</RedesignText>
+        {subtitle ? (
+          <RedesignText variant="helper" tone="textSecondary" numberOfLines={1}>
+            {subtitle}
+          </RedesignText>
+        ) : null}
+      </View>
+      {trailing ? (
+        <RedesignText variant="label" style={{ fontVariant: ['tabular-nums'] }}>
+          {trailing}
+        </RedesignText>
+      ) : null}
+      {onPress ? <RedesignIcon name="chevron-right" size={size['icon-md']} color={theme.textSecondary} /> : null}
+    </Pressable>
+  );
+}
+
+export function RedesignChoiceCard({
+  title,
+  body,
+  selected,
+  onPress,
+  testID,
+}: {
+  title: string;
+  body?: string;
+  selected?: boolean;
+  onPress: () => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!selected }}
+      onPress={onPress}
+      style={{
+        borderWidth: 1,
+        borderColor: selected ? theme.primary : theme.border,
+        backgroundColor: selected ? theme.primarySoft : theme.surface,
+        borderRadius: shape['radius-lg'],
+        padding: sp.lg,
+        gap: sp.xs,
+        minHeight: density.minTarget,
+      }}
+    >
+      <RedesignText variant="label">{title}</RedesignText>
+      {body ? (
+        <RedesignText variant="helper" tone="textSecondary">
+          {body}
+        </RedesignText>
+      ) : null}
+    </Pressable>
+  );
+}
+
+export function RedesignChip({
+  label,
+  selected,
+  onPress,
+  testID,
+  style,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress?: () => void;
+  testID?: string;
+  style?: ViewProps['style'];
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!selected }}
+      onPress={onPress}
+      style={[
+        {
+          minHeight: size['control-sm'],
+          paddingHorizontal: sp.md,
+          borderRadius: shape['radius-pill'],
+          backgroundColor: selected ? theme.primary : theme.surface,
+          borderWidth: selected ? 0 : 1,
+          borderColor: theme.border,
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'row',
+          gap: sp.xs,
+        },
+        style,
+      ]}
+    >
+      {selected ? <RedesignIcon name="check" size={size['icon-sm']} color={theme.textOnPrimary} /> : null}
+      <RedesignText variant="label" tone={selected ? 'textOnPrimary' : 'text'}>
+        {label}
+      </RedesignText>
+    </Pressable>
+  );
+}
+
+export function RedesignSegmented({
+  options,
+  value,
+  onChange,
+  testID,
+}: {
+  options: { key: string; label: string }[];
+  value: string;
+  onChange: (key: string) => void;
+  testID?: string;
+}) {
+  return (
+    <View
+      testID={testID}
+      style={{
+        flexDirection: 'row',
+        gap: sp.xs,
+        padding: sp.xs,
+        borderRadius: shape['radius-pill'],
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
+        minHeight: size['control-md'],
+      }}
+    >
+      {options.map((opt) => {
+        const selected = opt.key === value;
+        return (
+          <Pressable
+            key={opt.key}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(opt.key)}
+            style={{
+              flex: 1,
+              minHeight: size['control-sm'] + 4,
+              borderRadius: shape['radius-pill'],
+              backgroundColor: selected ? theme.primary : 'transparent',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <RedesignText variant="label" tone={selected ? 'textOnPrimary' : 'text'}>
+              {opt.label}
+            </RedesignText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export function RedesignField({
+  label,
+  value,
+  onChangeText,
+  error,
+  placeholder,
+  testID,
+  secureTextEntry,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  error?: string | null;
+  placeholder?: string;
+  testID?: string;
+  secureTextEntry?: boolean;
+}) {
+  return (
+    <View style={{ gap: sp.xs }}>
+      <RedesignText variant="label">{label}</RedesignText>
+      <RNTextInput
+        testID={testID}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.textSecondary}
+        secureTextEntry={secureTextEntry}
+        style={[
+          redesignTypeStyle('body'),
+          {
+            minHeight: size.field,
+            borderWidth: 1,
+            borderColor: error ? theme.danger : theme.border,
+            borderRadius: shape['radius-sm'],
+            paddingHorizontal: density.fieldPadX,
+            color: theme.text,
+            backgroundColor: theme.surface,
+          },
+        ]}
+      />
+      {error ? <RedesignInlineError message={error} /> : null}
+    </View>
+  );
+}
+
+export function RedesignInlineError({ message }: { message: string }) {
+  return (
+    <View accessibilityRole="alert" style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+      <RedesignIcon name="alert" size={size['icon-sm']} color={theme.danger} />
+      <RedesignText variant="helper" style={{ color: theme.danger, flexShrink: 1 }}>
+        {message}
+      </RedesignText>
+    </View>
+  );
+}
+
+export function RedesignAmount({
+  text,
+  hidden,
+  sign,
+  sizeVariant = 'amount',
+  testID,
+}: {
+  text: string;
+  hidden?: boolean;
+  sign?: '+' | '−' | null;
+  sizeVariant?: 'amount' | 'display' | 'body';
+  testID?: string;
+}) {
+  const shown = hidden ? '••••••' : text;
+  return (
+    <RedesignText
+      testID={testID}
+      variant={sizeVariant}
+      style={{ fontVariant: ['tabular-nums'] }}
+      accessibilityLabel={hidden ? t('money.privacyLabel') : undefined}
+    >
+      {sign && !hidden ? `${sign}${shown}` : shown}
+    </RedesignText>
+  );
+}
+
+export function RedesignProgress({
+  value,
+  max,
+  overPlan,
+  testID,
+}: {
+  value: number;
+  max: number;
+  overPlan?: boolean;
+  testID?: string;
+}) {
+  const pct = max <= 0 ? 0 : Math.min(1, value / max);
+  return (
+    <View style={{ gap: sp.xs }}>
+      {overPlan ? (
+        <View
+          testID={testID ? `${testID}-over` : 'redesign-over-plan'}
+          style={{
+            alignSelf: 'flex-start',
+            borderWidth: 1,
+            borderColor: theme.primary,
+            borderRadius: shape['radius-pill'],
+            paddingHorizontal: sp.sm,
+            paddingVertical: 2,
+          }}
+        >
+          <RedesignText variant="caption">{t('redesign.overPlan')}</RedesignText>
+        </View>
+      ) : null}
+      <View
+        testID={testID}
+        style={{
+          height: size.progress,
+          borderRadius: shape['radius-pill'],
+          backgroundColor: theme.progressTrack,
+          overflow: 'hidden',
+        }}
+      >
+        <View
+          style={{
+            width: `${Math.round(pct * 100)}%`,
+            height: '100%',
+            backgroundColor: overPlan ? theme.danger : theme.progressFill,
+            borderRadius: shape['radius-pill'],
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+export function RedesignSkeleton({ width = '100%', height = 16, testID }: { width?: number | `${number}%`; height?: number; testID?: string }) {
+  return (
+    <View
+      testID={testID ?? 'redesign-skeleton'}
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+      style={{ width, height, borderRadius: shape['radius-sm'], backgroundColor: theme.border }}
+    />
+  );
+}
+
+export function RedesignBanner({ message, testID }: { message: string; testID?: string }) {
+  return (
+    <View
+      testID={testID}
+      accessibilityRole="alert"
+      style={{ backgroundColor: theme.primarySoft, borderRadius: shape['radius-md'], padding: sp.md }}
+    >
+      <RedesignText variant="helper">{message}</RedesignText>
+    </View>
+  );
+}
+
+export function RedesignEmpty({
+  title,
+  body,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  body: string;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <View testID="redesign-empty" style={{ alignItems: 'center', gap: sp.md, padding: sp.xl }}>
+      <RedesignText variant="headline" accessibilityRole="header">
+        {title}
+      </RedesignText>
+      <RedesignText tone="textSecondary" style={{ textAlign: 'center' }}>
+        {body}
+      </RedesignText>
+      <RedesignChip label={actionLabel} selected onPress={onAction} />
+    </View>
+  );
+}
+
+export function RedesignCouldNotLoad({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View testID="redesign-could-not-load" style={{ alignItems: 'center', gap: sp.md, padding: sp.xl }}>
+      <RedesignIcon name="cloud-off" size={32} color={theme.textSecondary} />
+      <RedesignText variant="headline">{t('redesign.couldNotLoad')}</RedesignText>
+      <RedesignText tone="textSecondary" style={{ textAlign: 'center' }}>
+        {t('redesign.couldNotLoadBody')}
+      </RedesignText>
+      <RedesignChip label={t('common.retry')} selected onPress={onRetry} />
+    </View>
+  );
+}
+
+export function RedesignOfflineStrip() {
+  return (
+    <View
+      testID="redesign-offline-strip"
+      accessibilityRole="alert"
+      style={{
+        backgroundColor: theme.primarySoft,
+        paddingVertical: sp.sm,
+        paddingHorizontal: sp.lg,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp.sm,
+      }}
+    >
+      <RedesignIcon name="cloud-off" size={size['icon-sm']} color={theme.offline} />
+      <RedesignText variant="helper" tone="textSecondary" style={{ flex: 1 }}>
+        {t('common.offline')}
+      </RedesignText>
+    </View>
+  );
+}
+
+export function RedesignMoreWaysToAdd({
+  doors,
+  onPick,
+}: {
+  doors: { key: string; label: string; icon: RedesignIconName }[];
+  onPick: (key: string) => void;
+}) {
+  return (
+    <View testID="redesign-more-ways" style={{ gap: sp.sm, paddingTop: sp.md }}>
+      <RedesignText variant="label" tone="textSecondary">
+        {t('redesign.moreWaysToAdd')}
+      </RedesignText>
+      {doors.map((d) => (
+        <Pressable
+          key={d.key}
+          testID={`redesign-door-${d.key}`}
+          accessibilityRole="button"
+          onPress={() => onPick(d.key)}
+          style={{
+            minHeight: size['control-lg'],
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: sp.md,
+            paddingHorizontal: sp.md,
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderRadius: shape['radius-md'],
+          }}
+        >
+          <RedesignIcon name={d.icon} size={size['icon-lg']} color={theme.text} />
+          <RedesignText style={{ flex: 1 }}>{d.label}</RedesignText>
+          <RedesignIcon name="chevron-right" size={size['icon-md']} color={theme.textSecondary} />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+export function useDensity() {
+  return useMemo(() => ({ touch: tokens.density.touch, pointer: tokens.density.pointer }), []);
+}
