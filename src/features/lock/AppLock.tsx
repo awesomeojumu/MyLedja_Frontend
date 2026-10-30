@@ -5,10 +5,12 @@ import * as ScreenCapture from 'expo-screen-capture';
 
 import { openKeyValue } from '@/data/kv';
 import { Button, Confirm, Text } from '@/design/components';
+import { isRedesignEnabled, RedesignDialog } from '@/design/redesign';
 import { useDesign, useTheme } from '@/design/ThemeProvider';
 import tokens from '@/design/tokens.json';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { t } from '@/i18n';
+import { RedesignAppLockCover } from './RedesignAppLockCover';
 
 /** App lock and app-switcher privacy on phones (DESIGN.md 10.3, 10.4; build plan F3.3, G-11; TB-11 Security timing). */
 
@@ -75,6 +77,22 @@ export async function appLockBiometricLabel(): Promise<string> {
   return t('settings.security.appLock');
 }
 
+/** Primary unlock CTA for the redesign lock cover (Figma 6:2755). */
+export async function appLockUnlockLabel(): Promise<string> {
+  if (Platform.OS === 'ios') {
+    try {
+      const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+      if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) return t('lock.redesign.unlockFace');
+      if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) return t('lock.redesign.unlockTouch');
+    } catch {
+      /* fall through */
+    }
+    return t('lock.redesign.unlockFace');
+  }
+  if (Platform.OS === 'android') return t('lock.redesign.unlockBiometric');
+  return t('lock.redesign.unlock');
+}
+
 async function applyHideInRecents(hide: boolean) {
   if (Platform.OS !== 'android') return;
   if (hide) await ScreenCapture.preventScreenCaptureAsync('recents');
@@ -134,15 +152,21 @@ export function useAppLockSetting() {
  */
 export function AppLockGate({ children }: { children: ReactNode }) {
   const theme = useTheme();
+  const redesign = isRedesignEnabled();
   const { status } = useAuth();
   const { setPrivacy } = useDesign();
   const [locked, setLocked] = useState(false);
   const [covered, setCovered] = useState(false);
   const [offer, setOffer] = useState(false);
+  const [unlockLabel, setUnlockLabel] = useState(t('lock.redesign.unlock'));
   const leftAt = useRef<number | null>(null);
 
-  const unlock = useCallback(async () => {
-    const res = await LocalAuthentication.authenticateAsync({ promptMessage: t('lock.prompt') });
+  const unlock = useCallback(async (preferPasscode = false) => {
+    const res = await LocalAuthentication.authenticateAsync({
+      promptMessage: preferPasscode ? t('lock.redesign.passcodePrompt') : t('lock.prompt'),
+      fallbackLabel: t('lock.redesign.passcode'),
+      disableDeviceFallback: false,
+    });
     if (res.success) setLocked(false);
   }, []);
 
@@ -163,7 +187,7 @@ export function AppLockGate({ children }: { children: ReactNode }) {
           const after = await readAfterMs();
           if (away >= after) {
             setLocked(true);
-            void unlock();
+            void unlock(false);
           }
         })();
       }
@@ -181,40 +205,69 @@ export function AppLockGate({ children }: { children: ReactNode }) {
     })();
   }, [status]);
 
+  useEffect(() => {
+    if (!redesign || !locked) return;
+    void appLockUnlockLabel().then(setUnlockLabel);
+  }, [redesign, locked]);
+
   const cover = locked || covered;
   return (
     <View style={{ flex: 1 }}>
       {children}
       {cover ? (
-        <View
-          testID="app-lock-cover"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: theme.page,
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: tokens.spacing['spacing-md'],
-          }}
-        >
-          <Text variant="display-md">{t('app.name')}</Text>
-          {locked ? <Button label={t('lock.unlock')} onPress={() => void unlock()} /> : null}
-        </View>
+        redesign ? (
+          <RedesignAppLockCover
+            locked={locked}
+            unlockLabel={unlockLabel}
+            onUnlock={() => void unlock(false)}
+            onPasscode={() => void unlock(true)}
+          />
+        ) : (
+          <View
+            testID="app-lock-cover"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: theme.page,
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: tokens.spacing['spacing-md'],
+            }}
+          >
+            <Text variant="display-md">{t('app.name')}</Text>
+            {locked ? <Button label={t('lock.unlock')} onPress={() => void unlock(false)} /> : null}
+          </View>
+        )
       ) : null}
-      <Confirm
-        visible={offer}
-        title={t('lock.offerTitle')}
-        body={t('lock.offerBody')}
-        confirmLabel={t('lock.offerConfirm')}
-        onConfirm={() => {
-          setOffer(false);
-          void writeFlag(KEYS.enabled, true);
-        }}
-        onCancel={() => setOffer(false)}
-      />
+      {redesign ? (
+        <RedesignDialog
+          visible={offer}
+          title={t('lock.offerTitle')}
+          body={t('lock.offerBody')}
+          confirmLabel={t('lock.offerConfirm')}
+          onConfirm={() => {
+            setOffer(false);
+            void writeFlag(KEYS.enabled, true);
+          }}
+          onCancel={() => setOffer(false)}
+          testID="app-lock-offer"
+        />
+      ) : (
+        <Confirm
+          visible={offer}
+          title={t('lock.offerTitle')}
+          body={t('lock.offerBody')}
+          confirmLabel={t('lock.offerConfirm')}
+          onConfirm={() => {
+            setOffer(false);
+            void writeFlag(KEYS.enabled, true);
+          }}
+          onCancel={() => setOffer(false)}
+        />
+      )}
     </View>
   );
 }
