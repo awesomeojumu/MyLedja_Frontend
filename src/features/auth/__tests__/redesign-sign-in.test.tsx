@@ -73,6 +73,7 @@ describe('Page 01 redesign Sign in (EXPO_PUBLIC_REDESIGN on)', () => {
   it('links Forgot password and Create an account', async () => {
     await renderWithProviders(<SignInScreen />);
     await fireEvent.changeText(screen.getByTestId('email'), DEMO.email);
+    expect(screen.getByTestId('forgot-row')).toHaveStyle({ alignItems: 'flex-end' });
     await fireEvent.press(screen.getByRole('link', { name: t('signIn.redesign.forgot') }));
     expect(router.push).toHaveBeenCalledWith('/recover');
     await fireEvent.press(screen.getByRole('link', { name: t('signIn.redesign.createOne') }));

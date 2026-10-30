@@ -331,7 +331,7 @@ export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => n
               onSubmitEditing={() => void submit()}
               error={passwordError}
             />
-            <View style={{ alignItems: 'flex-start' }}>
+            <View testID="forgot-row" style={{ alignItems: 'flex-end', width: '100%' }}>
               <RedesignButton
                 kind="link"
                 label={t('signIn.redesign.forgot')}
