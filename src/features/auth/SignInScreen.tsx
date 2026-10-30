@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { ApiError } from '@/api/client';
 import { isTwoFactorRequired, securityApi } from '@/api/security';
 import { Button, Checkbox, CodeInput, Divider, InlineError, Text, TextInput } from '@/design/components';
+import { isRedesignEnabled } from '@/design/redesign';
 import tokens from '@/design/tokens.json';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
@@ -14,11 +15,17 @@ import { GoogleSignInButton } from './GoogleSignInButton';
 import { loadGoogleSignIn, peekGoogleLinkPending, runGoogleSignIn, takeGoogleLinkPending } from './googleSignIn';
 import { EMAIL_PATTERN } from './password';
 import { passkeyAssertion, passkeysAvailable } from './passkey';
+import { RedesignSignInScreen } from './RedesignSignInScreen';
 import { rememberTrustedDevice, trustedDeviceToken } from './trustedDevice';
 
 type Session = Parameters<ReturnType<typeof useAuth>['completeSignIn']>[0];
 
 export function SignInScreen({ now = () => Date.now() }: { now?: () => number }) {
+  if (isRedesignEnabled()) return <RedesignSignInScreen now={now} />;
+  return <LegacySignInScreen now={now} />;
+}
+
+function LegacySignInScreen({ now = () => Date.now() }: { now?: () => number }) {
   const router = useRouter();
   const { api, client, completeSignIn } = useAuth();
   const security = securityApi(client);

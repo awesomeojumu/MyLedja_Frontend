@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, TextInput as RNTextInput, View, type ViewProps } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
+import { Modal, Pressable, ScrollView, TextInput as RNTextInput, View, type TextInputProps, type ViewProps } from 'react-native';
 import { t } from '@/i18n';
 import { RedesignIcon, type RedesignIconName } from './icons';
 import { RedesignText, redesignTypeStyle } from './Text';
@@ -557,6 +557,63 @@ export function RedesignSegmented({
   );
 }
 
+export function RedesignButton({
+  label,
+  onPress,
+  disabled,
+  kind = 'primary',
+  testID,
+  fullWidth,
+  leading,
+  accessibilityRole = 'button',
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  kind?: 'primary' | 'secondary' | 'soft' | 'link';
+  testID?: string;
+  fullWidth?: boolean;
+  leading?: ReactNode;
+  accessibilityRole?: 'button' | 'link';
+}) {
+  const soft = kind === 'soft';
+  const secondary = kind === 'secondary';
+  const link = kind === 'link';
+  const bg = link ? 'transparent' : soft ? theme.primarySoft : secondary ? theme.surface : theme.primary;
+  const border = secondary ? theme.borderStrong : 'transparent';
+  const tone = soft || secondary || link ? ('primary' as const) : ('textOnPrimary' as const);
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={{
+        minHeight: link ? density.minTarget : size['control-lg'],
+        paddingHorizontal: link ? sp.md : sp.xl,
+        borderRadius: shape['radius-pill'],
+        backgroundColor: bg,
+        borderWidth: secondary ? 1 : 0,
+        borderColor: border,
+        opacity: disabled ? 0.45 : 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: sp.sm,
+        alignSelf: fullWidth || !link ? (fullWidth ? 'stretch' : undefined) : 'flex-start',
+        width: fullWidth ? '100%' : undefined,
+      }}
+    >
+      {leading}
+      <RedesignText variant={link ? 'body' : 'button'} tone={tone}>
+        {label}
+      </RedesignText>
+    </Pressable>
+  );
+}
+
 export function RedesignField({
   label,
   value,
@@ -565,6 +622,13 @@ export function RedesignField({
   placeholder,
   testID,
   secureTextEntry,
+  autoCapitalize,
+  autoComplete,
+  textContentType,
+  keyboardType,
+  onSubmitEditing,
+  autoFocus,
+  showSecureToggle,
 }: {
   label: string;
   value: string;
@@ -573,31 +637,199 @@ export function RedesignField({
   placeholder?: string;
   testID?: string;
   secureTextEntry?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  autoComplete?: TextInputProps['autoComplete'];
+  textContentType?: TextInputProps['textContentType'];
+  keyboardType?: TextInputProps['keyboardType'];
+  onSubmitEditing?: () => void;
+  autoFocus?: boolean;
+  showSecureToggle?: boolean;
 }) {
+  const [revealed, setRevealed] = useState(false);
+  const secure = !!secureTextEntry && !revealed;
   return (
     <View style={{ gap: sp.xs }}>
       <RedesignText variant="label">{label}</RedesignText>
-      <RNTextInput
-        testID={testID}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={theme.textSecondary}
-        secureTextEntry={secureTextEntry}
-        style={[
-          redesignTypeStyle('body'),
-          {
-            minHeight: size.field,
-            borderWidth: 1,
-            borderColor: error ? theme.danger : theme.border,
-            borderRadius: shape['radius-sm'],
-            paddingHorizontal: density.fieldPadX,
-            color: theme.text,
-            backgroundColor: theme.surface,
-          },
-        ]}
-      />
+      <View
+        style={{
+          minHeight: size.field,
+          borderWidth: 1,
+          borderColor: error ? theme.danger : theme.border,
+          borderRadius: shape['radius-md'],
+          paddingLeft: density.fieldPadX,
+          paddingRight: sp.sm,
+          backgroundColor: theme.surface,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: sp.sm,
+        }}
+      >
+        <RNTextInput
+          testID={testID}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={theme.textSecondary}
+          secureTextEntry={secure}
+          autoCapitalize={autoCapitalize}
+          autoComplete={autoComplete}
+          textContentType={textContentType}
+          keyboardType={keyboardType}
+          onSubmitEditing={onSubmitEditing}
+          autoFocus={autoFocus}
+          style={[
+            redesignTypeStyle('body'),
+            {
+              flex: 1,
+              minHeight: size.field,
+              color: theme.text,
+              paddingVertical: sp.sm,
+            },
+          ]}
+        />
+        {showSecureToggle || secureTextEntry ? (
+          <Pressable
+            testID={testID ? `${testID}-toggle` : undefined}
+            accessibilityRole="button"
+            accessibilityLabel={revealed ? t('common.hidePassword') : t('common.showPassword')}
+            onPress={() => setRevealed((v) => !v)}
+            style={{
+              minWidth: density.minTarget,
+              minHeight: density.minTarget,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <RedesignText variant="button" tone="primary">
+              {revealed ? t('redesign.hide') : t('redesign.show')}
+            </RedesignText>
+          </Pressable>
+        ) : null}
+      </View>
       {error ? <RedesignInlineError message={error} /> : null}
+    </View>
+  );
+}
+
+export function RedesignDividerLabel({ label }: { label: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.lg }}>
+      <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+      <RedesignText variant="label" tone="textSecondary">
+        {label}
+      </RedesignText>
+      <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+    </View>
+  );
+}
+
+export function RedesignCheckbox({
+  label,
+  checked,
+  onChange,
+  caption,
+  testID,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  caption?: string;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      accessibilityLabel={label}
+      onPress={() => onChange(!checked)}
+      style={{ flexDirection: 'row', gap: sp.md, alignItems: 'flex-start', minHeight: density.minTarget }}
+    >
+      <View
+        style={{
+          width: size['icon-lg'],
+          height: size['icon-lg'],
+          borderRadius: shape['radius-xs'],
+          borderWidth: 1.5,
+          borderColor: checked ? theme.primary : theme.borderStrong,
+          backgroundColor: checked ? theme.primary : theme.surface,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginTop: 2,
+        }}
+      >
+        {checked ? <RedesignIcon name="check" size={size['icon-sm']} color={theme.textOnPrimary} /> : null}
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <RedesignText>{label}</RedesignText>
+        {caption ? (
+          <RedesignText variant="caption" tone="textSecondary">
+            {caption}
+          </RedesignText>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+export function RedesignCodeInput({
+  value,
+  onChange,
+  testID = 'two-factor-code',
+}: {
+  value: string;
+  onChange: (code: string) => void;
+  testID?: string;
+}) {
+  const refs = useRef<(ComponentRef<typeof RNTextInput> | null)[]>([]);
+  const digits = Array.from({ length: 6 }, (_, i) => value[i] ?? '');
+  const handle = (index: number, text: string) => {
+    const clean = text.replace(/\D/g, '');
+    if (clean.length > 1) {
+      const next = (value.slice(0, index) + clean).slice(0, 6);
+      onChange(next);
+      refs.current[Math.min(next.length, 5)]?.focus();
+      return;
+    }
+    const chars = digits.slice();
+    chars[index] = clean;
+    onChange(chars.join('').slice(0, 6));
+    if (clean && index < 5) refs.current[index + 1]?.focus();
+  };
+  return (
+    <View style={{ flexDirection: 'row', gap: sp.sm, justifyContent: 'space-between' }}>
+      {digits.map((d, i) => (
+        <RNTextInput
+          key={i}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          testID={`${testID}-${i}`}
+          accessibilityLabel={t('signUp.codeDigit', { n: i + 1 })}
+          value={d}
+          onChangeText={(text) => handle(i, text)}
+          onKeyPress={(e) => {
+            if (e.nativeEvent.key === 'Backspace' && !d && i > 0) refs.current[i - 1]?.focus();
+          }}
+          keyboardType="number-pad"
+          textContentType={i === 0 ? 'oneTimeCode' : 'none'}
+          autoComplete={i === 0 ? 'one-time-code' : 'off'}
+          style={[
+            redesignTypeStyle('code'),
+            {
+              width: size['control-md'],
+              height: 60,
+              textAlign: 'center',
+              color: theme.text,
+              backgroundColor: theme.surface,
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: shape['radius-md'],
+              fontVariant: ['tabular-nums'],
+            },
+          ]}
+        />
+      ))}
     </View>
   );
 }
