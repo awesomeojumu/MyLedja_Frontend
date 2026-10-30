@@ -13,6 +13,11 @@ import { budgetForMonth, overspentCategories } from '../helpers';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 
+/** Legacy Budget/Category suites must stay on the pre-redesign path even if another file mocked the flag on. */
+jest.mock('@/design/redesign/flag', () => ({
+  isRedesignEnabled: () => false,
+}));
+
 let mockWidth = 1200;
 let mockHeight = 900;
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
