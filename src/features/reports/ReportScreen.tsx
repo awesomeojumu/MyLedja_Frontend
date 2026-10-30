@@ -18,7 +18,10 @@ import { emptyFilters, type TxFilters } from '@/features/transactions/filters';
 import { today } from '@/features/transactions/helpers';
 import { t, type TextKey } from '@/i18n';
 
+import { isRedesignEnabled } from '@/design/redesign';
+
 import { aboutKey, cardTitle, drillHref, rangeCaption, reportCsv, shareCsv, viewResult, type ViewReportResult } from './helpers';
+import { RedesignReportScreen } from './RedesignReportScreen';
 import { ReportChartView, ReportTable } from './ReportView';
 import { useDashboards } from './useDashboards';
 
@@ -40,8 +43,13 @@ function paramOne(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-/** Report (DESIGN.md page 20): one report, full size, with its numbers. */
+/** Report (DESIGN.md page 20 / Figma 5:2369 when redesign on). */
 export function ReportScreen({ runner }: { runner?: ReportRunner } = {}) {
+  if (isRedesignEnabled()) return <RedesignReportScreen runner={runner} />;
+  return <LegacyReportScreen runner={runner} />;
+}
+
+function LegacyReportScreen({ runner }: { runner?: ReportRunner } = {}) {
   const rawId = useLocalSearchParams<{ id?: string | string[] }>().id;
   const id = paramOne(rawId);
   const params = useGlobalSearchParams<{ from?: string; to?: string }>();
