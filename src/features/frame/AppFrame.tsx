@@ -384,11 +384,14 @@ export function AppFrame({
   title,
   children,
   trailing,
+  offlineMessage,
 }: {
   title: string;
   children: ReactNode;
   /** Redesign phone only — overrides default top-bar trailing. */
   trailing?: ReactNode;
+  /** Redesign phone only — overrides offline strip copy. */
+  offlineMessage?: string;
 }) {
   const size = useSizeClass();
   const theme = useTheme();
@@ -410,7 +413,7 @@ export function AppFrame({
   // Redesign phone chrome only (five tabs + floating Add). Flag default off.
   if (redesignPhone) {
     return (
-      <RedesignAppFrame title={title} trailing={trailing}>
+      <RedesignAppFrame title={title} trailing={trailing} offlineMessage={offlineMessage}>
         {children}
       </RedesignAppFrame>
     );

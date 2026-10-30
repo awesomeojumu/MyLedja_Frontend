@@ -1003,7 +1003,8 @@ export function RedesignAmount({
   sizeVariant?: 'amount' | 'display' | 'body';
   testID?: string;
 }) {
-  const shown = hidden ? '••••••' : text;
+  // Figma amounts-hidden (e.g. Phone Transactions 13:6740) keeps the naira sign.
+  const shown = hidden ? '₦ ••••••' : text;
   return (
     <RedesignText
       testID={testID}
@@ -1176,7 +1177,7 @@ export function RedesignCouldNotLoad({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-export function RedesignOfflineStrip() {
+export function RedesignOfflineStrip({ message }: { message?: string } = {}) {
   return (
     <View
       testID="redesign-offline-strip"
@@ -1192,7 +1193,7 @@ export function RedesignOfflineStrip() {
     >
       <RedesignIcon name="cloud-off" size={size['icon-sm']} color={theme.offline} />
       <RedesignText variant="helper" tone="textSecondary" style={{ flex: 1 }}>
-        {t('common.offline')}
+        {message ?? t('common.offline')}
       </RedesignText>
     </View>
   );

@@ -2956,5 +2956,7 @@
   "tx.redesign.showEarlier": "Show earlier",
   "tx.redesign.filterTitle": "Filter",
   "tx.redesign.notSorted": "Not sorted",
-  "common.review": "Review"
+  "common.review": "Review",
+  "tx.redesign.waitingBanner": "{count} changes waiting to sync",
+  "tx.redesign.offline": "You are offline. New transactions are saved on this phone."
 }

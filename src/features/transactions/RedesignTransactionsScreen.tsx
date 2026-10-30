@@ -79,10 +79,18 @@ function amountSign(row: Row): '+' | '−' | null {
   return row.amount < 0n ? '−' : row.amount > 0n ? '+' : null;
 }
 
+const PRIVACY_MASK = '₦ ••••••';
+
 function amountText(row: Row, hidden: boolean): string {
-  if (hidden) return '••••••';
+  if (hidden) return PRIVACY_MASK;
   const mag = row.amount < 0n ? -row.amount : row.amount;
   return formatNaira(mag).replace(/^₦/, '₦');
+}
+
+/** Figma phone rows: `{Category|Not sorted}, {Account}` (Mobile 2:1549). */
+function rowSubtitle(row: Row): string {
+  const category = row.category || t('tx.redesign.notSorted');
+  return row.account ? `${category}, ${row.account}` : category;
 }
 
 /**
@@ -475,20 +483,24 @@ export function RedesignTransactionsScreen() {
 
   if (phone && searchOpen) {
     return (
-      <AppFrame title={t('tx.search')} trailing={
-        <Pressable
-          testID="tx-search-back"
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          onPress={() => {
-            setSearchOpen(false);
-            setQuery('');
-          }}
-          style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <RedesignIcon name="arrow-left" size={tokens.size['icon-lg']} color={theme.text} />
-        </Pressable>
-      }>
+      <AppFrame
+        title={t('tx.search')}
+        offlineMessage={t('tx.redesign.offline')}
+        trailing={
+          <Pressable
+            testID="tx-search-back"
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            onPress={() => {
+              setSearchOpen(false);
+              setQuery('');
+            }}
+            style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <RedesignIcon name="arrow-left" size={tokens.size['icon-lg']} color={theme.text} />
+          </Pressable>
+        }
+      >
         <View testID="redesign-tx-search" style={{ gap: sp.lg, flex: 1 }}>
           <RedesignField
             testID="tx-search"
@@ -507,8 +519,8 @@ export function RedesignTransactionsScreen() {
                 key={row.event.id}
                 testID={`tx-${row.event.id}`}
                 title={row.title}
-                subtitle={row.category || t('tx.redesign.notSorted')}
-                trailing={privacy ? '₦ ••••••' : formatNaira(row.amount, { signed: row.event.type !== 'transfer' })}
+                subtitle={rowSubtitle(row)}
+                trailing={privacy ? PRIVACY_MASK : formatNaira(row.amount, { signed: row.event.type !== 'transfer' })}
                 onPress={() => {
                   setSearchOpen(false);
                   openPanel(row.event.id);
@@ -549,7 +561,9 @@ export function RedesignTransactionsScreen() {
           onAction={sortUncategorized}
         />
       ) : null}
-      {waitingCount > 0 ? <RedesignBanner testID="tx-waiting-banner" message={t('tx.waitingBanner', { count: waitingCount })} /> : null}
+      {waitingCount > 0 ? (
+        <RedesignBanner testID="tx-waiting-banner" message={t('tx.redesign.waitingBanner', { count: waitingCount })} />
+      ) : null}
       {bankPending > 0 ? (
         <Pressable testID="tx-bank-pending-banner" accessibilityRole="button" onPress={() => router.push('/accounts')}>
           <RedesignBanner message={t('tx.bankPendingBanner', { count: bankPending })} />
@@ -574,7 +588,6 @@ export function RedesignTransactionsScreen() {
       setSelected(new Set([row.event.id]));
       openBulk('category');
     };
-    const subtitle = row.category || t('tx.redesign.notSorted');
     return (
       <SwipeRow
         key={row.event.id}
@@ -606,8 +619,8 @@ export function RedesignTransactionsScreen() {
         >
           <RedesignListRow
             title={row.title}
-            subtitle={subtitle}
-            trailing={privacy ? '₦ ••••••' : formatNaira(row.amount, { signed: row.event.type !== 'transfer' })}
+            subtitle={rowSubtitle(row)}
+            trailing={privacy ? PRIVACY_MASK : formatNaira(row.amount, { signed: row.event.type !== 'transfer' })}
           />
         </Pressable>
       </SwipeRow>
@@ -668,7 +681,13 @@ export function RedesignTransactionsScreen() {
           {row.account}
         </RedesignText>
         <View style={{ width: 120, alignItems: 'flex-end' }}>
-          <RedesignAmount text={amountText(row, privacy)} sign={privacy ? null : amountSign(row)} hidden={privacy} sizeVariant="body" />
+          {privacy ? (
+            <RedesignText variant="body" style={{ fontVariant: ['tabular-nums'] }} accessibilityLabel={t('money.privacyLabel')}>
+              {PRIVACY_MASK}
+            </RedesignText>
+          ) : (
+            <RedesignAmount text={amountText(row, false)} sign={amountSign(row)} sizeVariant="body" />
+          )}
         </View>
       </Pressable>
     );
@@ -705,7 +724,7 @@ export function RedesignTransactionsScreen() {
               {formatTxDayHeader(day.date)}
             </RedesignText>
             <RedesignAmount
-              text={privacy ? '••••••' : formatNaira(day.net < 0n ? -day.net : day.net)}
+              text={privacy ? PRIVACY_MASK : formatNaira(day.net < 0n ? -day.net : day.net)}
               sign={privacy ? null : day.net < 0n ? '−' : day.net > 0n ? '+' : null}
               hidden={privacy}
               sizeVariant="body"
@@ -752,14 +771,14 @@ export function RedesignTransactionsScreen() {
   );
 
   return (
-    <AppFrame title={t('tx.title')} trailing={topTrailing}>
+    <AppFrame title={t('tx.title')} trailing={topTrailing} offlineMessage={t('tx.redesign.offline')}>
       <View testID="redesign-transactions" style={{ flex: 1, gap: sp.md }}>
         {!phone ? (
           <View style={{ gap: sp.sm }}>
             <RedesignText variant="helper" tone="textSecondary">
               {t('tx.redesign.summary', {
                 count: monthCount,
-                out: privacy ? '₦ ••••••' : formatNaira(monthOut < 0n ? -monthOut : monthOut, { signed: true }),
+                out: privacy ? PRIVACY_MASK : formatNaira(monthOut < 0n ? -monthOut : monthOut, { signed: true }),
               })}
             </RedesignText>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.sm, alignItems: 'center' }}>

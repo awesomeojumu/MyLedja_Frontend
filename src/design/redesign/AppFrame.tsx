@@ -98,6 +98,7 @@ export function RedesignAppFrame({
   children,
   trailing,
   trailingExtra,
+  offlineMessage,
 }: {
   title: string;
   children: ReactNode;
@@ -105,6 +106,8 @@ export function RedesignAppFrame({
   trailing?: ReactNode;
   /** Optional leading trailing actions (e.g. Accounts plus). */
   trailingExtra?: ReactNode;
+  /** Override default offline strip copy (page-specific Figma). */
+  offlineMessage?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -141,7 +144,7 @@ export function RedesignAppFrame({
             )
           }
         />
-        {offline ? <RedesignOfflineStrip /> : null}
+        {offline ? <RedesignOfflineStrip message={offlineMessage} /> : null}
         <SyncIssuesBanner />
         <View nativeID="main" style={{ flex: 1, padding: tokens.space.lg }}>
           {children}

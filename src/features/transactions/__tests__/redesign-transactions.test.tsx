@@ -71,12 +71,18 @@ describe('Page 11 redesign Transactions (EXPO_PUBLIC_REDESIGN on)', () => {
     expect(router.setParams).toHaveBeenCalled();
   });
 
-  it('shows day header Today and the payee row', async () => {
+  it('shows day header Today and phone row subtitle Category, Account', async () => {
     const { sync } = await seeded();
     await show(sync);
     await waitFor(() => expect(screen.getByText(t('date.today'))).toBeTruthy());
     expect(await screen.findByText('Shoprite Lekki')).toBeTruthy();
-    expect(screen.getByText(t('cat.market'))).toBeTruthy();
+    // Figma 2:1549 — subtitle is "{Category}, {Account}"
+    expect(screen.getByText('Market, GTBank')).toBeTruthy();
+  });
+
+  it('uses Figma waiting and offline copy strings', () => {
+    expect(t('tx.redesign.waitingBanner', { count: 2 })).toBe('2 changes waiting to sync');
+    expect(t('tx.redesign.offline')).toBe('You are offline. New transactions are saved on this phone.');
   });
 
   it('opens search mode from the top bar', async () => {
