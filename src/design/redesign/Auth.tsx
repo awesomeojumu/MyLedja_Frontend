@@ -41,31 +41,42 @@ export function RedesignLogo({ testID = 'redesign-logo' }: { testID?: string }) 
   );
 }
 
-/**
- * Auth shell matching Auth file Phone (390 full-bleed) and Tablet/Web (canvas + 480 card).
- * Figma: Auth / Mobile 3:278 · Auth / Tablet 4:440 · Auth / Web 5:440
- */
-export function RedesignAuthFrame({ children }: { children: ReactNode }) {
+function RedesignChromeFrame({
+  children,
+  testID,
+  cardMaxWidth,
+  showLogoOnPhone = false,
+}: {
+  children: ReactNode;
+  testID: string;
+  cardMaxWidth: number;
+  showLogoOnPhone?: boolean;
+}) {
   const online = useOnline();
   const { width } = useWindowDimensions();
   const phone = sizeClassFor(width) === 'phone';
-  const pagePadX = phone ? sp.xl : tokens.frame.phoneWidth >= 390 && width >= 834 ? 48 : sp.xxl;
+  const pagePadX = phone ? sp.xl : width >= 834 ? 48 : sp.xxl;
   const headerPadTop = phone ? tokens.frame.topBarHeadroom + 4 : sp.xxl;
   const card = !phone;
+  const showLogo = !phone || showLogoOnPhone;
 
   return (
-    <View testID="redesign-auth-frame" style={{ flex: 1, backgroundColor: phone ? theme.surface : theme.page }}>
+    <View testID={testID} style={{ flex: 1, backgroundColor: phone ? theme.surface : theme.page }}>
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
-          <View style={{ paddingTop: headerPadTop, paddingHorizontal: pagePadX, paddingBottom: sp.sm }}>
-            <RedesignLogo />
-          </View>
+          {showLogo ? (
+            <View style={{ paddingTop: headerPadTop, paddingHorizontal: pagePadX, paddingBottom: sp.sm }}>
+              <RedesignLogo />
+            </View>
+          ) : (
+            <View style={{ height: headerPadTop }} />
+          )}
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
               flexGrow: 1,
               paddingHorizontal: pagePadX,
-              paddingTop: sp.xxl,
+              paddingTop: phone && !showLogoOnPhone ? sp.lg : sp.xxl,
               paddingBottom: phone ? sp.xxl : 64,
               alignItems: card ? 'center' : undefined,
             }}
@@ -75,14 +86,14 @@ export function RedesignAuthFrame({ children }: { children: ReactNode }) {
                 card
                   ? {
                       width: '100%',
-                      maxWidth: 480,
+                      maxWidth: cardMaxWidth,
                       backgroundColor: theme.surface,
                       borderRadius: shape['radius-lg'],
                       padding: 40,
                       gap: sp.xl,
                       boxShadow: tokens.elevation['2'],
                     }
-                  : { width: '100%', gap: sp.xl }
+                  : { width: '100%', gap: sp.xl, flexGrow: 1 }
               }
             >
               {!online ? <RedesignBanner message={t('auth.offline')} testID="auth-offline" /> : null}
@@ -92,5 +103,29 @@ export function RedesignAuthFrame({ children }: { children: ReactNode }) {
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
+  );
+}
+
+/**
+ * Auth shell matching Auth file Phone (390 full-bleed) and Tablet/Web (canvas + 480 card).
+ * Figma: Auth / Mobile 3:278 · Auth / Tablet 4:440 · Auth / Web 5:440
+ */
+export function RedesignAuthFrame({ children }: { children: ReactNode }) {
+  return (
+    <RedesignChromeFrame testID="redesign-auth-frame" cardMaxWidth={480} showLogoOnPhone>
+      {children}
+    </RedesignChromeFrame>
+  );
+}
+
+/**
+ * Welcome / setup shell: Phone full-bleed (no logo); Tablet/Web logo + 560 card.
+ * Figma: Welcome / Mobile 4:271 · Tablet 3:271 · Web 2:341
+ */
+export function RedesignSetupFrame({ children }: { children: ReactNode }) {
+  return (
+    <RedesignChromeFrame testID="redesign-setup-frame" cardMaxWidth={560}>
+      {children}
+    </RedesignChromeFrame>
   );
 }
