@@ -60,6 +60,38 @@ function PrivacyToggle() {
   );
 }
 
+/**
+ * Secondary stack page (Figma Phone / Investments, Bills, Goals, …).
+ * Top bar with Back; no bottom nav.
+ */
+export function RedesignStackFrame({
+  title,
+  children,
+  onBack,
+  trailing,
+  testID,
+}: {
+  title: string;
+  children: ReactNode;
+  onBack: () => void;
+  trailing?: ReactNode;
+  testID?: string;
+}) {
+  const online = useOnline();
+  const sync = useSyncStatus();
+  const offline = !online || sync?.state === 'offline';
+  return (
+    <SafeAreaView testID={testID ?? 'redesign-stack-frame'} style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+      <RedesignTopBar title={title} onBack={onBack} trailing={trailing} />
+      {offline ? <RedesignOfflineStrip /> : null}
+      <SyncIssuesBanner />
+      <View nativeID="main" style={{ flex: 1, padding: tokens.space.lg }}>
+        {children}
+      </View>
+    </SafeAreaView>
+  );
+}
+
 /** Redesign phone app frame: five tabs + floating Add (Figma Mobile App Bottom nav). */
 export function RedesignAppFrame({ title, children }: { title: string; children: ReactNode }) {
   const router = useRouter();

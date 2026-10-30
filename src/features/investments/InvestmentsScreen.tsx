@@ -14,6 +14,7 @@ import {
   Text,
   formatDay,
 } from '@/design/components';
+import { isRedesignEnabled } from '@/design/redesign';
 import { usePopupParam } from '@/design/usePopupParam';
 import { useSizeClass } from '@/design/size';
 import tokens from '@/design/tokens.json';
@@ -34,6 +35,7 @@ import {
   emptyTradeDraft,
 } from './investmentSheets';
 import { formatGain, isDown, portfolioSummary, type HoldingFigures } from './helpers';
+import { RedesignInvestmentsScreen } from './RedesignInvestmentsScreen';
 
 const sp = tokens.spacing;
 const ruby = tokens.color.ruby;
@@ -61,8 +63,13 @@ function GainCell({ f }: { f: HoldingFigures }) {
   );
 }
 
-/** TB-08 Investments page */
+/** TB-08 Investments page — redesign when EXPO_PUBLIC_REDESIGN is on. */
 export function InvestmentsScreen() {
+  if (isRedesignEnabled()) return <RedesignInvestmentsScreen />;
+  return <LegacyInvestmentsScreen />;
+}
+
+function LegacyInvestmentsScreen() {
   const { snapshot } = useWorkspace();
   const router = useRouter();
   const theme = useTheme();

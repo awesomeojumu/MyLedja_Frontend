@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, TextInput as RNTextInput, View, type TextInputProps, type ViewProps } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { t } from '@/i18n';
 import { RedesignIcon, type RedesignIconName } from './icons';
 import { RedesignText, redesignTypeStyle } from './Text';
@@ -109,6 +110,7 @@ export function RedesignTopBar({
 }: {
   title: string;
   onMenu?: () => void;
+  /** Secondary pages (Investments, Bills, …): back instead of menu. */
   onBack?: () => void;
   trailing?: ReactNode;
 }) {
@@ -135,6 +137,7 @@ export function RedesignTopBar({
   ) : (
     <View style={{ width: sp.lg }} />
   );
+  const centered = !!(onMenu || onBack);
   return (
     <View
       testID="redesign-top-bar"
@@ -153,7 +156,7 @@ export function RedesignTopBar({
       <RedesignText
         variant="headline"
         accessibilityRole="header"
-        style={{ flex: 1, textAlign: onBack || onMenu ? 'center' : 'left' }}
+        style={{ flex: 1, textAlign: centered ? 'center' : 'left' }}
       >
         {title}
       </RedesignText>
@@ -650,10 +653,14 @@ export function RedesignField({
   onSubmitEditing,
   autoFocus,
   showSecureToggle,
+  prefix,
+  trailing,
+  editable = true,
+  onPress,
 }: {
   label: string;
   value: string;
-  onChangeText: (v: string) => void;
+  onChangeText?: (v: string) => void;
   error?: string | null;
   placeholder?: string;
   testID?: string;
@@ -665,26 +672,40 @@ export function RedesignField({
   onSubmitEditing?: () => void;
   autoFocus?: boolean;
   showSecureToggle?: boolean;
+  /** e.g. ₦ before amount fields (Figma AmountInput). */
+  prefix?: string;
+  trailing?: ReactNode;
+  editable?: boolean;
+  onPress?: () => void;
 }) {
   const [revealed, setRevealed] = useState(false);
   const secure = !!secureTextEntry && !revealed;
-  return (
-    <View style={{ gap: sp.xs }}>
-      <RedesignText variant="label">{label}</RedesignText>
-      <View
-        style={{
-          minHeight: size.field,
-          borderWidth: 1,
-          borderColor: error ? theme.danger : theme.border,
-          borderRadius: shape['radius-md'],
-          paddingLeft: density.fieldPadX,
-          paddingRight: sp.sm,
-          backgroundColor: theme.surface,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: sp.sm,
-        }}
-      >
+  const field = (
+    <View
+      style={{
+        minHeight: size.field,
+        borderWidth: 1,
+        borderColor: error ? theme.danger : theme.border,
+        borderRadius: shape['radius-md'],
+        paddingLeft: density.fieldPadX,
+        paddingRight: sp.sm,
+        backgroundColor: theme.surface,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp.sm,
+      }}
+    >
+      {prefix ? <RedesignText tone="textSecondary">{prefix}</RedesignText> : null}
+      {onPress || !editable ? (
+        <Pressable
+          testID={testID}
+          accessibilityRole="button"
+          onPress={onPress}
+          style={{ flex: 1, minHeight: size.field, justifyContent: 'center' }}
+        >
+          <RedesignText tone={value ? 'text' : 'textSecondary'}>{value || placeholder || ''}</RedesignText>
+        </Pressable>
+      ) : (
         <RNTextInput
           testID={testID}
           value={value}
@@ -708,26 +729,129 @@ export function RedesignField({
             },
           ]}
         />
-        {showSecureToggle || secureTextEntry ? (
-          <Pressable
-            testID={testID ? `${testID}-toggle` : undefined}
-            accessibilityRole="button"
-            accessibilityLabel={revealed ? t('common.hidePassword') : t('common.showPassword')}
-            onPress={() => setRevealed((v) => !v)}
-            style={{
-              minWidth: density.minTarget,
-              minHeight: density.minTarget,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <RedesignText variant="button" tone="primary">
-              {revealed ? t('redesign.hide') : t('redesign.show')}
-            </RedesignText>
-          </Pressable>
-        ) : null}
-      </View>
+      )}
+      {trailing}
+      {showSecureToggle || secureTextEntry ? (
+        <Pressable
+          testID={testID ? `${testID}-toggle` : undefined}
+          accessibilityRole="button"
+          accessibilityLabel={revealed ? t('common.hidePassword') : t('common.showPassword')}
+          onPress={() => setRevealed((v) => !v)}
+          style={{
+            minWidth: density.minTarget,
+            minHeight: density.minTarget,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <RedesignText variant="button" tone="primary">
+            {revealed ? t('redesign.hide') : t('redesign.show')}
+          </RedesignText>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+  return (
+    <View style={{ gap: sp.xs }}>
+      <RedesignText variant="label">{label}</RedesignText>
+      {field}
       {error ? <RedesignInlineError message={error} /> : null}
+    </View>
+  );
+}
+
+/** Figma Switch — immediate settings (Components). */
+export function RedesignSwitch({
+  label,
+  value,
+  onChange,
+  testID,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: value }}
+      onPress={() => onChange(!value)}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: sp.md,
+        minHeight: density.minTarget,
+      }}
+    >
+      <RedesignText style={{ flex: 1 }}>{label}</RedesignText>
+      <View
+        style={{
+          width: 48,
+          height: 28,
+          borderRadius: shape['radius-pill'],
+          backgroundColor: value ? theme.primary : theme.surfaceMuted,
+          justifyContent: 'center',
+          paddingHorizontal: 3,
+        }}
+      >
+        <View
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 11,
+            backgroundColor: theme.surface,
+            alignSelf: value ? 'flex-end' : 'flex-start',
+          }}
+        />
+      </View>
+    </Pressable>
+  );
+}
+
+/** Compact filled area line (Figma LineChart on Investments). */
+export function RedesignLineChart({
+  points,
+  testID,
+  height = 120,
+}: {
+  points: { value: bigint }[];
+  testID?: string;
+  height?: number;
+}) {
+  const [width, setWidth] = useState(0);
+  if (points.length === 0) return <View testID={testID} style={{ height }} />;
+  const min = points.reduce((m, p) => (p.value < m ? p.value : m), points[0]!.value);
+  const max = points.reduce((m, p) => (p.value > m ? p.value : m), points[0]!.value);
+  const span = max - min || 1n;
+  const pad = 4;
+  const step = points.length > 1 && width > 0 ? (width - pad * 2) / (points.length - 1) : 0;
+  const yOf = (v: bigint) => pad + (1 - Number(((v - min) * 10_000n) / span) / 10_000) * (height - pad * 2);
+  const pts =
+    width > 0
+      ? points.map((p, i) => ({ x: pad + i * step, y: yOf(p.value) }))
+      : [];
+  const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+  const first = pts[0];
+  const last = pts.at(-1);
+  const area = pts.length > 1 && first && last ? `${d} L${last.x},${height} L${first.x},${height} Z` : null;
+  return (
+    <View
+      testID={testID}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      style={{ height, width: '100%' }}
+      accessibilityRole="image"
+      accessibilityLabel={t('investments.valueLine')}
+    >
+      {width > 0 ? (
+        <Svg width={width} height={height}>
+          {area ? <Path d={area} fill={theme.primarySoft} fillOpacity={0.55} /> : null}
+          {pts.length > 1 ? <Path d={d} stroke={theme.primary} strokeWidth={2} fill="none" /> : null}
+        </Svg>
+      ) : null}
     </View>
   );
 }
