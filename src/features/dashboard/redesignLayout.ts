@@ -3,18 +3,18 @@ import type { SizeClass } from '@/design/size';
 import type { TextKey } from '@/i18n';
 
 /**
- * Live Figma Mobile Edit Home `2:1199` + Phone Home `2:727`.
- * Default On: left to spend → net worth → coming up → budget → recent → goals.
- * Default Hidden: averages, investments, debts, health, cash flow.
+ * Live Figma card set.
+ * Order matches Tablet/Web Home (`11:922` / `1:141`): Left → Net worth → Monthly averages → …
+ * Phone Home `2:727` / Edit `2:1199`: averages On=False by default (same order when toggled on).
  */
 export const REDESIGN_CARD_IDS = [
   'leftToSpend',
   'netWorth',
+  'averages',
   'comingUp',
   'budget',
   'recent',
   'goals',
-  'averages',
   'investments',
   'debts',
   'health',
@@ -23,12 +23,15 @@ export const REDESIGN_CARD_IDS = [
 
 export type RedesignCardId = (typeof REDESIGN_CARD_IDS)[number];
 
+export type RedesignDeviceKind = 'phone' | 'larger';
+
 export type RedesignDashboardLayout = {
   order: RedesignCardId[];
   hidden: RedesignCardId[];
 };
 
-export const DEFAULT_REDESIGN_HIDDEN: RedesignCardId[] = [
+/** Phone Edit Home `2:1199`: averages Off. */
+export const DEFAULT_REDESIGN_HIDDEN_PHONE: RedesignCardId[] = [
   'averages',
   'investments',
   'debts',
@@ -36,10 +39,26 @@ export const DEFAULT_REDESIGN_HIDDEN: RedesignCardId[] = [
   'cashFlow',
 ];
 
-export const DEFAULT_REDESIGN_LAYOUT: RedesignDashboardLayout = {
-  order: [...REDESIGN_CARD_IDS],
-  hidden: [...DEFAULT_REDESIGN_HIDDEN],
-};
+/** Tablet/Web Home show Monthly averages by default. */
+export const DEFAULT_REDESIGN_HIDDEN_LARGER: RedesignCardId[] = [
+  'investments',
+  'debts',
+  'health',
+  'cashFlow',
+];
+
+/** @deprecated Prefer defaultRedesignHidden('phone') — kept for call sites that mean phone. */
+export const DEFAULT_REDESIGN_HIDDEN = DEFAULT_REDESIGN_HIDDEN_PHONE;
+
+export function defaultRedesignHidden(kind: RedesignDeviceKind): RedesignCardId[] {
+  return kind === 'phone' ? [...DEFAULT_REDESIGN_HIDDEN_PHONE] : [...DEFAULT_REDESIGN_HIDDEN_LARGER];
+}
+
+export function defaultRedesignLayout(kind: RedesignDeviceKind = 'phone'): RedesignDashboardLayout {
+  return { order: [...REDESIGN_CARD_IDS], hidden: defaultRedesignHidden(kind) };
+}
+
+export const DEFAULT_REDESIGN_LAYOUT: RedesignDashboardLayout = defaultRedesignLayout('phone');
 
 const CARD_LABELS: Record<RedesignCardId, TextKey> = {
   leftToSpend: 'dashboard.card.leftToSpend',
@@ -64,11 +83,14 @@ function isCardId(value: string): value is RedesignCardId {
 }
 
 /** Merge saved layout with redesign defaults; drop legacy card ids. */
-export function resolveRedesignLayout(raw?: StoredDashboardLayout): RedesignDashboardLayout {
+export function resolveRedesignLayout(
+  raw?: StoredDashboardLayout,
+  kind: RedesignDeviceKind = 'phone',
+): RedesignDashboardLayout {
   const hasRedesign =
     (raw?.order ?? []).some(isCardId) || (raw?.hidden ?? []).some(isCardId);
   if (!raw || !hasRedesign) {
-    return { order: [...REDESIGN_CARD_IDS], hidden: [...DEFAULT_REDESIGN_HIDDEN] };
+    return defaultRedesignLayout(kind);
   }
 
   const hiddenSet = new Set((raw.hidden ?? []).filter(isCardId));
@@ -89,8 +111,11 @@ export function toStoredRedesignLayout(layout: RedesignDashboardLayout): StoredD
   return { order: [...layout.order], hidden: [...layout.hidden] };
 }
 
-export function visibleRedesignCards(layout: RedesignDashboardLayout): RedesignCardId[] {
-  const resolved = resolveRedesignLayout(layout);
+export function visibleRedesignCards(
+  layout: RedesignDashboardLayout,
+  kind: RedesignDeviceKind = 'phone',
+): RedesignCardId[] {
+  const resolved = resolveRedesignLayout(layout, kind);
   const hidden = new Set(resolved.hidden);
   return resolved.order.filter((id) => !hidden.has(id));
 }
@@ -123,14 +148,14 @@ export function reorderRedesignCard(order: RedesignCardId[], fromId: RedesignCar
   return copy;
 }
 
-function layoutDeviceKind(size: SizeClass): 'phone' | 'larger' {
+export function layoutDeviceKind(size: SizeClass): RedesignDeviceKind {
   return size === 'phone' ? 'phone' : 'larger';
 }
 
 export function resolveRedesignLayoutForDevice(settings: WorkspaceSettings | undefined, size: SizeClass): RedesignDashboardLayout {
   const kind = layoutDeviceKind(size);
   const raw = kind === 'phone' ? settings?.dashboardLayoutPhone ?? settings?.dashboardLayout : settings?.dashboardLayout;
-  return resolveRedesignLayout(raw);
+  return resolveRedesignLayout(raw, kind);
 }
 
 export function withStoredRedesignLayoutForDevice(

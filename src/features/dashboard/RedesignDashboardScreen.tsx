@@ -39,6 +39,7 @@ import {
 } from './redesignHelpers';
 import {
   redesignCardSpan,
+  layoutDeviceKind,
   resolveRedesignLayoutForDevice,
   visibleRedesignCards,
   withStoredRedesignLayoutForDevice,
@@ -166,8 +167,9 @@ export function RedesignDashboardScreen() {
     () => (snapshot ? redesignChecklist(snapshot, checklistHidden || !!snapshot.settings.checklistHidden) : []),
     [snapshot, checklistHidden],
   );
+  const deviceKind = layoutDeviceKind(size);
   const layout = useMemo(() => resolveRedesignLayoutForDevice(snapshot?.settings, size), [snapshot?.settings, size]);
-  const cards = useMemo(() => visibleRedesignCards(layout), [layout]);
+  const cards = useMemo(() => visibleRedesignCards(layout, deviceKind), [layout, deviceKind]);
   const averages = useMemo(() => (snapshot ? monthlyAverages(snapshot, month) : null), [snapshot, month]);
   const weekRows = useMemo(() => (snapshot ? comingUpWeek(snapshot, today()) : []), [snapshot]);
   const toSort = useMemo(() => (snapshot ? unsortedCount(snapshot) : 0), [snapshot]);
@@ -765,7 +767,13 @@ export function RedesignDashboardScreen() {
           </View>
         ) : null}
       </ScrollView>
-      <RedesignEditHomeSheet visible={editOpen} layout={layout} onClose={closeEdit} onSave={saveLayout} />
+      <RedesignEditHomeSheet
+        visible={editOpen}
+        layout={layout}
+        deviceKind={deviceKind}
+        onClose={closeEdit}
+        onSave={saveLayout}
+      />
     </AppFrame>
   );
 }

@@ -10,13 +10,14 @@ import { redesignLight as theme, redesignTokens as tokens } from '@/design/redes
 import { t } from '@/i18n';
 
 import {
-  DEFAULT_REDESIGN_LAYOUT,
+  defaultRedesignLayout,
   moveRedesignCard,
   redesignCardLabel,
   reorderRedesignCard,
   toggleRedesignHidden,
   type RedesignCardId,
   type RedesignDashboardLayout,
+  type RedesignDeviceKind,
 } from './redesignLayout';
 
 const sp = tokens.space;
@@ -25,6 +26,7 @@ const shape = tokens.shape;
 type Props = {
   visible: boolean;
   layout: RedesignDashboardLayout;
+  deviceKind?: RedesignDeviceKind;
   onClose: () => void;
   onSave: (layout: RedesignDashboardLayout) => Promise<void> | void;
 };
@@ -34,7 +36,7 @@ function same(a: RedesignDashboardLayout, b: RedesignDashboardLayout): boolean {
 }
 
 /** Figma Phone / Edit Home 17:1663 and Web / Edit Home 10:591. */
-export function RedesignEditHomeSheet({ visible, layout, onClose, onSave }: Props) {
+export function RedesignEditHomeSheet({ visible, layout, deviceKind = 'phone', onClose, onSave }: Props) {
   const [draft, setDraft] = useState(layout);
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -212,7 +214,7 @@ export function RedesignEditHomeSheet({ visible, layout, onClose, onSave }: Prop
                 testID="redesign-edit-reset"
                 kind="link"
                 label={t('dashboard.redesign.reset')}
-                onPress={() => setDraft({ order: [...DEFAULT_REDESIGN_LAYOUT.order], hidden: [...DEFAULT_REDESIGN_LAYOUT.hidden] })}
+                onPress={() => setDraft(defaultRedesignLayout(deviceKind))}
               />
             </View>
           </ScrollView>

@@ -7,7 +7,12 @@ import { t } from '@/i18n';
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
 import { resetParams, router } from '../../../../test/helpers/router';
 import { DashboardScreen } from '../DashboardScreen';
-import { resolveRedesignLayout, visibleRedesignCards, DEFAULT_REDESIGN_HIDDEN } from '../redesignLayout';
+import {
+  DEFAULT_REDESIGN_HIDDEN_LARGER,
+  DEFAULT_REDESIGN_HIDDEN_PHONE,
+  resolveRedesignLayout,
+  visibleRedesignCards,
+} from '../redesignLayout';
 import { monthlyAverages, redesignChecklist, comingUpWeek } from '../redesignHelpers';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
@@ -50,9 +55,9 @@ async function seeded() {
 }
 
 describe('redesignLayout', () => {
-  it('defaults On Home and Hidden per Figma Edit Home 17:1663', () => {
-    const layout = resolveRedesignLayout(undefined);
-    expect(visibleRedesignCards(layout)).toEqual([
+  it('phone default hides Monthly averages (Mobile Edit 2:1199)', () => {
+    const layout = resolveRedesignLayout(undefined, 'phone');
+    expect(visibleRedesignCards(layout, 'phone')).toEqual([
       'leftToSpend',
       'netWorth',
       'comingUp',
@@ -60,8 +65,23 @@ describe('redesignLayout', () => {
       'recent',
       'goals',
     ]);
-    expect(layout.hidden).toEqual(DEFAULT_REDESIGN_HIDDEN);
-    expect(DEFAULT_REDESIGN_HIDDEN).toContain('averages');
+    expect(layout.hidden).toEqual(DEFAULT_REDESIGN_HIDDEN_PHONE);
+    expect(DEFAULT_REDESIGN_HIDDEN_PHONE).toContain('averages');
+  });
+
+  it('tablet/web default shows Monthly averages between Net worth and Coming up', () => {
+    const layout = resolveRedesignLayout(undefined, 'larger');
+    expect(visibleRedesignCards(layout, 'larger')).toEqual([
+      'leftToSpend',
+      'netWorth',
+      'averages',
+      'comingUp',
+      'budget',
+      'recent',
+      'goals',
+    ]);
+    expect(layout.hidden).toEqual(DEFAULT_REDESIGN_HIDDEN_LARGER);
+    expect(DEFAULT_REDESIGN_HIDDEN_LARGER).not.toContain('averages');
   });
 });
 
