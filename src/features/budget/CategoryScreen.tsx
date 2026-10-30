@@ -38,6 +38,8 @@ import {
 } from './helpers';
 import { selectHaptic } from './haptics';
 import { DeleteCategorySheet, EditCategorySheet, type CategoryDraft } from './CategorySheets';
+import { isRedesignEnabled } from '@/design/redesign';
+import { RedesignCategoryScreen } from './RedesignCategoryScreen';
 
 const sp = tokens.spacing;
 
@@ -51,6 +53,11 @@ const GROUP_OPTIONS: { value: string; labelKey: TextKey }[] = [
 ];
 
 export function CategoryScreen() {
+  if (isRedesignEnabled()) return <RedesignCategoryScreen />;
+  return <LegacyCategoryScreen />;
+}
+
+function LegacyCategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const params = useGlobalSearchParams<{ category?: string }>();
   const { snapshot, repo } = useWorkspace();
