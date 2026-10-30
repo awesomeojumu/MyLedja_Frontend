@@ -1,3 +1,4 @@
+import '@/lib/cryptoPolyfill';
 import { Inter_300Light, Inter_400Regular, useFonts } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
