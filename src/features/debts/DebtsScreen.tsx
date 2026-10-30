@@ -17,6 +17,7 @@ import {
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
+import { isRedesignEnabled } from '@/design/redesign';
 import { useTheme } from '@/design/ThemeProvider';
 import type { PersonDebt } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
@@ -40,11 +41,17 @@ import {
 } from './popupUrl';
 import { debtIsOverdue, debtOriginalAmount, debtProgress, nextInstallment } from './schedule';
 import { debtClosedDate, debtInitials, debtRows, debtTotals, findRecentPayment, type DebtFilter } from './helpers';
+import { RedesignDebtsScreen } from './RedesignDebtsScreen';
 
 const sp = tokens.spacing;
 const FILTERS: DebtFilter[] = ['all', 'owedToMe', 'iOwe', 'settled'];
 
 export function DebtsScreen() {
+  if (isRedesignEnabled()) return <RedesignDebtsScreen />;
+  return <LegacyDebtsScreen />;
+}
+
+function LegacyDebtsScreen() {
   const { snapshot, repo } = useWorkspace();
   const router = useRouter();
   const theme = useTheme();
