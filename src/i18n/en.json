@@ -3104,5 +3104,12 @@
   "tx.redesign.notSorted": "Not sorted",
   "common.review": "Review",
   "tx.redesign.waitingBanner": "{count} changes waiting to sync",
-  "tx.redesign.offline": "You are offline. New transactions are saved on this phone."
+  "tx.redesign.offline": "You are offline. New transactions are saved on this phone.",
+  "rules.redesign.setValueCategory": "Category",
+  "rules.redesign.opContains": "Contains",
+  "rules.redesign.opEquals": "Equals",
+  "rules.redesign.opGreaterThan": "Greater than",
+  "rules.redesign.opLessThan": "Less than",
+  "rules.redesign.opIsIn": "Is in",
+  "rules.redesign.opIsOut": "Is out"
 }

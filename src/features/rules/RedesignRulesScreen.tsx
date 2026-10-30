@@ -46,13 +46,14 @@ const FIELD_OPTIONS: { value: RuleConditionField; label: string }[] = [
   { value: 'category', label: t('rules.field.category') },
 ];
 
+/** Figma Rule `6:2377` Matches value is title-case (Contains), not legacy lowercase ops. */
 const OP_OPTIONS: { value: RuleConditionOp; label: string }[] = [
-  { value: 'contains', label: t('rules.op.contains') },
-  { value: 'equals', label: t('rules.op.equals') },
-  { value: 'greaterThan', label: t('rules.op.greaterThan') },
-  { value: 'lessThan', label: t('rules.op.lessThan') },
-  { value: 'isIn', label: t('rules.op.isIn') },
-  { value: 'isOut', label: t('rules.op.isOut') },
+  { value: 'contains', label: t('rules.redesign.opContains') },
+  { value: 'equals', label: t('rules.redesign.opEquals') },
+  { value: 'greaterThan', label: t('rules.redesign.opGreaterThan') },
+  { value: 'lessThan', label: t('rules.redesign.opLessThan') },
+  { value: 'isIn', label: t('rules.redesign.opIsIn') },
+  { value: 'isOut', label: t('rules.redesign.opIsOut') },
 ];
 
 /**
@@ -540,7 +541,7 @@ function RedesignRuleEditor({
         <PickerField
           testID="rule-action-kind"
           label={t('rules.redesign.set')}
-          value={t('rules.actionKind.setCategory')}
+          value={t('rules.redesign.setValueCategory')}
           onPress={() => setSetOpen(true)}
         />
         <PickerField testID="rule-action-value" label={t('rules.redesign.to')} value={categoryName} onPress={() => setToOpen(true)} />
@@ -623,7 +624,7 @@ function RedesignRuleEditor({
       <OptionSheet
         visible={setOpen}
         title={t('rules.redesign.set')}
-        options={[{ value: 'setCategory', label: t('rules.actionKind.setCategory') }]}
+        options={[{ value: 'setCategory', label: t('rules.redesign.setValueCategory') }]}
         onClose={() => setSetOpen(false)}
         onPick={() => {
           setAction({ kind: 'setCategory' });

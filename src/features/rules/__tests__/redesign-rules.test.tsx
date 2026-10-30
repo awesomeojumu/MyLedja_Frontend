@@ -106,6 +106,10 @@ describe('Page 25 redesign Rules (EXPO_PUBLIC_REDESIGN on)', () => {
     expect(screen.getByText(t('rules.redesign.newTitle'))).toBeTruthy();
     expect(screen.getByText(t('rules.redesign.whenTxn'))).toBeTruthy();
     expect(screen.getByTestId('rule-save')).toBeTruthy();
+    // Figma Rule 6:2377 — Matches value Contains; Set value Category (not Set category).
+    expect(screen.getByTestId('rule-op')).toHaveTextContent(/Contains/);
+    expect(screen.getByTestId('rule-action-kind')).toHaveTextContent(/Category/);
+    expect(screen.queryByText('Set category')).toBeNull();
   });
 
   it('saves a rule from the redesign editor', async () => {
