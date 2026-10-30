@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Button, InlineError, Placeholder, SegmentedControl, Text, useReduceMotion, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
+import { isRedesignEnabled } from '@/design/redesign';
 import type { Goal } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
@@ -18,10 +19,16 @@ import { GoalPanel } from './GoalPanel';
 import { AddGoalSheet, AllocateSheet, GoalScheduleSheet } from './goalSheets';
 import { activeGoals, completedGoals, goalCards, gridColumns } from './helpers';
 import { GOAL_URL, goalsTabParam, parseGoalsTab, type GoalsListTab } from './popupUrl';
+import { RedesignGoalsScreen } from './RedesignGoalsScreen';
 
 const sp = tokens.spacing;
 
 export function GoalsScreen() {
+  if (isRedesignEnabled()) return <RedesignGoalsScreen />;
+  return <LegacyGoalsScreen />;
+}
+
+function LegacyGoalsScreen() {
   const { snapshot, repo } = useWorkspace();
   const size = useSizeClass();
   const { width, height } = useWindowDimensions();
