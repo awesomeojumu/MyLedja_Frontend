@@ -3,7 +3,7 @@ export { useFigtreeFonts, figtreeFamily, FIGTREE } from './fonts';
 export { redesignLight, redesignTokens } from './theme';
 export { RedesignIcon, REDESIGN_ICON_NAMES, type RedesignIconName } from './icons';
 export { RedesignText, redesignTypeStyle, type RedesignTypeStyle } from './Text';
-export { RedesignAppFrame, RedesignMoreScreen } from './AppFrame';
+export { RedesignAppFrame, RedesignMoreScreen, RedesignStackFrame } from './AppFrame';
 export { RedesignAuthFrame, RedesignLogo } from './Auth';
 export {
   RedesignBottomNav,
@@ -18,6 +18,8 @@ export {
   RedesignSegmented,
   RedesignButton,
   RedesignField,
+  RedesignSwitch,
+  RedesignLineChart,
   RedesignInlineError,
   RedesignDividerLabel,
   RedesignCheckbox,

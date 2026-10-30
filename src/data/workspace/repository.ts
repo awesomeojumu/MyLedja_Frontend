@@ -2879,6 +2879,62 @@ export class WorkspaceRepository {
     return { ok: true, value: holding };
   }
 
+  /**
+   * Figma Phone / Investments / Add investment: record an existing holding
+   * (value today + you put in) without moving cash. One unit at cost; mark to market with value.
+   */
+  async seedHoldingBook(input: {
+    name: string;
+    type: HoldingType;
+    accountId: string;
+    costMinor: bigint;
+    valueMinor: bigint;
+    currency?: string;
+    countInBudget?: boolean;
+  }): Promise<Result<Holding>> {
+    if (input.costMinor < 0n || input.valueMinor < 0n) return { ok: false, error: 'not_positive' };
+    if (input.costMinor === 0n && input.valueMinor === 0n) return { ok: false, error: 'not_positive' };
+    const created = await this.createHolding({
+      name: input.name,
+      type: input.type,
+      accountId: input.accountId,
+      currency: input.currency,
+      currentPriceMinor: input.valueMinor > 0n ? input.valueMinor : undefined,
+    });
+    if (!created.ok) return created;
+    const holding = created.value;
+    const cost = input.costMinor > 0n ? input.costMinor : input.valueMinor;
+    const value = input.valueMinor > 0n ? input.valueMinor : cost;
+    const date = todayInLagos();
+    await this.put(
+      'lots',
+      this.newId(),
+      {
+        holdingId: holding.id,
+        date,
+        units: '1',
+        soldUnits: '0',
+        costMinor: cost.toString(),
+        pricePerUnitMinor: cost.toString(),
+        feesMinor: '0',
+      } satisfies Omit<HoldingLot, 'id'>,
+      'lot.create',
+      undefined,
+      null,
+    );
+    if (value !== cost || input.valueMinor === 0n) {
+      await this.savePrices([{ holdingId: holding.id, priceMinor: value }], date);
+    }
+    if (input.countInBudget !== undefined) {
+      const snapshot = await this.load();
+      const parent = snapshot.accounts.find((a) => a.id === input.accountId);
+      if (parent && parent.countInBudget !== input.countInBudget) {
+        await this.updateAccount({ ...parent, countInBudget: input.countInBudget });
+      }
+    }
+    return { ok: true, value: holding };
+  }
+
   async updateHolding(holding: Holding): Promise<void> {
     const { id, ...data } = holding;
     const baseVersion = await this.versionOf('holdings', id);
