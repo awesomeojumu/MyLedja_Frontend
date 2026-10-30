@@ -25,6 +25,7 @@ import {
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
+import { isRedesignEnabled } from '@/design/redesign';
 import type { Recurring } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
@@ -38,6 +39,7 @@ import { formatNaira } from '@/money';
 import { MarkPaidMatchSheet } from './MarkPaidMatchSheet';
 import { billMatchCandidates, billMatchReviewCount } from './match';
 import { RecurringFormSheet } from './RecurringFormSheet';
+import { RedesignPlanScreen } from './RedesignPlanScreen';
 import {
   calendarDays,
   dayListTitle,
@@ -60,6 +62,11 @@ type ViewMode = 'list' | 'calendar';
 type PlanTab = 'month' | 'all';
 
 export function PlanScreen() {
+  if (isRedesignEnabled()) return <RedesignPlanScreen />;
+  return <LegacyPlanScreen />;
+}
+
+function LegacyPlanScreen() {
   const router = useRouter();
   const params = useGlobalSearchParams<{
     tab?: string;
