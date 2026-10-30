@@ -36,8 +36,10 @@ import { monthOf } from '@/ledger';
 import { CustomizeDashboardSheet } from './CustomizeDashboardSheet';
 import { checklist, dashboardModel, endOfMonth, type ComingUpRow } from './helpers';
 import { cardColumnSpan, resolveLayoutForDevice, visibleDashboardCards, withStoredLayoutForDevice, type DashboardLayout, type DashboardCardId } from './layout';
+import { RedesignDashboardScreen } from './RedesignDashboardScreen';
 import { SpendingTrendChart } from './SpendingTrendChart';
 import { WhereItWentChart } from './WhereItWentChart';
+import { isRedesignEnabled } from '@/design/redesign';
 
 const sp = tokens.spacing;
 const c = tokens.color;
@@ -113,6 +115,11 @@ function useCountUp(target: bigint, active: boolean): bigint {
 }
 
 export function DashboardScreen() {
+  if (isRedesignEnabled()) return <RedesignDashboardScreen />;
+  return <LegacyDashboardScreen />;
+}
+
+function LegacyDashboardScreen() {
   const { snapshot, repo } = useWorkspace();
   const { user } = useAuth();
   const security = useSecurityApi();
