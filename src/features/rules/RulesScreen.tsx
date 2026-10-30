@@ -20,6 +20,7 @@ import {
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
+import { isRedesignEnabled } from '@/design/redesign';
 import type { TransactionRule } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
@@ -28,6 +29,7 @@ import { ledgerMessage } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 
 import { RULE_STAGES, newBlankRule, ruleSentence, showRuleStages, stageTitle } from './helpers';
+import { RedesignRulesScreen } from './RedesignRulesScreen';
 import { RuleEditorSheet } from './RuleEditorSheet';
 import { RunRulesSheet } from './RunRulesSheet';
 
@@ -41,6 +43,11 @@ function matchesRule(rule: TransactionRule, query: string, snapshot: Parameters<
 }
 
 export function RulesScreen() {
+  if (isRedesignEnabled()) return <RedesignRulesScreen />;
+  return <LegacyRulesScreen />;
+}
+
+function LegacyRulesScreen() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const router = useRouter();
