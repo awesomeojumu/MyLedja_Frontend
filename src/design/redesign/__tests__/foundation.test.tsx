@@ -87,7 +87,7 @@ describe('W0 redesign foundation', () => {
       </>,
     );
     expect(screen.getByTestId('amt')).toBeTruthy();
-    expect(screen.getByTestId('amt-hidden')).toBeTruthy();
+    expect(screen.getByTestId('amt-hidden')).toHaveTextContent('₦ ••••••');
     expect(screen.getByTestId('prog-over')).toBeTruthy();
     expect(screen.getByTestId('redesign-offline-strip')).toBeTruthy();
     expect(screen.getByTestId('redesign-could-not-load')).toBeTruthy();

@@ -1004,6 +1004,7 @@ export function RedesignAmount({
   testID?: string;
 }) {
   // Figma amounts-hidden (e.g. Phone Transactions 13:6740) keeps the naira sign.
+  // Figma Phone Amounts hidden `6:2861` / Web `8:312`: `₦ ••••••` (naira kept).
   const shown = hidden ? '₦ ••••••' : text;
   return (
     <RedesignText
