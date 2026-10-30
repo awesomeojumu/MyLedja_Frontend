@@ -19,7 +19,8 @@ import {
   TextInput,
   useToast,
 } from '@/design/components';
-import { isRedesignEnabled, RedesignMoreWaysToAdd } from '@/design/redesign';
+import { RedesignMoreWaysToAdd } from '@/design/redesign/components';
+import { isRedesignEnabled } from '@/design/redesign/flag';
 import tokens from '@/design/tokens.json';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import type { Snapshot, TransactionInput } from '@/data/workspace/repository';
