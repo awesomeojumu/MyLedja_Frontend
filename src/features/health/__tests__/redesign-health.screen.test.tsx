@@ -62,6 +62,11 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.useRealTimers();
+  jest.clearAllTimers();
+});
+
+afterAll(() => {
+  jest.useRealTimers();
 });
 
 describe('Redesign Health (Figma 5:2231)', () => {
