@@ -68,6 +68,7 @@ describe('Redesign Holding (Figma 5:2062 / 5:2131)', () => {
     expect(screen.getByText(t('investments.redesign.youPutIn'))).toBeTruthy();
     expect(screen.getByText(t('investments.redesign.countsInBudget'))).toBeTruthy();
     expect(screen.getByText(t('investments.redesign.history'))).toBeTruthy();
+    expect(screen.getByTestId('redesign-holding-footer')).toHaveStyle({ flexDirection: 'column' });
     expect(screen.getByTestId('redesign-holding-update')).toBeTruthy();
     expect(screen.getByTestId('redesign-holding-add-money')).toBeTruthy();
     expect(screen.getByTestId('redesign-holding-more')).toBeTruthy();

@@ -265,8 +265,9 @@ export function RedesignHoldingScreen() {
 
       {holding && figures ? (
         <View
+          testID="redesign-holding-footer"
           style={{
-            flexDirection: 'row',
+            flexDirection: 'column',
             gap: sp.sm,
             paddingTop: sp.md,
             borderTopWidth: 1,
@@ -274,23 +275,19 @@ export function RedesignHoldingScreen() {
             backgroundColor: theme.page,
           }}
         >
-          <View style={{ flex: 1 }}>
-            <RedesignButton
-              testID="redesign-holding-update"
-              label={t('investments.redesign.updateValue')}
-              onPress={() => openSheet('update')}
-              fullWidth
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <RedesignButton
-              testID="redesign-holding-add-money"
-              kind="secondary"
-              label={t('investments.redesign.addMoney')}
-              onPress={() => openSheet('add')}
-              fullWidth
-            />
-          </View>
+          <RedesignButton
+            testID="redesign-holding-update"
+            label={t('investments.redesign.updateValue')}
+            onPress={() => openSheet('update')}
+            fullWidth
+          />
+          <RedesignButton
+            testID="redesign-holding-add-money"
+            kind="secondary"
+            label={t('investments.redesign.addMoney')}
+            onPress={() => openSheet('add')}
+            fullWidth
+          />
         </View>
       ) : null}
 
