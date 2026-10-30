@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Circle, CircleDashed, CircleDot, CircleHelp,
 
 import { Amount, Button, Card, EmptyState, Icon, InlineError, Placeholder, Popover, Select, Sheet, Text, useToast } from '@/design/components';
 import tokens from '@/design/tokens.json';
+import { isRedesignEnabled } from '@/design/redesign';
 import { budgetAssignId, type IncomeStream } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
@@ -32,10 +33,16 @@ import {
 import { IncomeTwelveMonthChart } from './IncomeTwelveMonthChart';
 import { MarkReceivedSheet } from './MarkReceivedSheet';
 import type { MarkReceivedPayload } from './markReceived';
+import { RedesignIncomeScreen } from './RedesignIncomeScreen';
 
 const sp = tokens.spacing;
 
 export function IncomeScreen() {
+  if (isRedesignEnabled()) return <RedesignIncomeScreen />;
+  return <LegacyIncomeScreen />;
+}
+
+function LegacyIncomeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const toast = useToast();
