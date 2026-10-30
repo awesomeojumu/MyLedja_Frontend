@@ -16,7 +16,7 @@ import { redesignTokens as tokens } from '@/design/redesign/theme';
 import { t } from '@/i18n';
 import { parseAmount } from '@/money';
 
-import { HOLDING_TYPES } from './helpers';
+import { HOLDING_TYPES, defaultCashAccountId, formatGain } from './helpers';
 
 const sp = tokens.space;
 
@@ -216,4 +216,232 @@ export function RedesignAddInvestmentSheet({
       </RedesignSheet>
     </>
   );
+}
+
+/** Figma Phone / Holding / Update value (5:2131). */
+export function RedesignUpdateValueSheet({
+  holdingId,
+  currentValue,
+  lastPriceDate,
+  units,
+  onClose,
+}: {
+  holdingId: string;
+  currentValue: bigint;
+  lastPriceDate: string | null;
+  units: number;
+  onClose: () => void;
+}) {
+  const { repo } = useWorkspace();
+  const toast = useToast();
+  const [valueText, setValueText] = useState('');
+  const [asOf, setAsOf] = useState(today());
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const parsed = valueText.trim() ? parseAmount(valueText) : null;
+  const nextValue = parsed?.ok ? parsed.minor : null;
+  const delta = nextValue !== null ? nextValue - currentValue : null;
+  const sinceLabel = lastPriceDate
+    ? t('investments.redesign.deltaSince', {
+        delta: delta !== null ? formatGain(delta, null) : '',
+        date: formatMonthDay(lastPriceDate),
+      })
+    : null;
+
+  const save = async () => {
+    setError(null);
+    if (!parsed || !parsed.ok || parsed.minor <= 0n) {
+      setError(t('investments.redesign.error.amount'));
+      return;
+    }
+    const u = units > 0 ? units : 1;
+    // Price is per unit; total value = units × price.
+    const price =
+      u === 1 ? parsed.minor : (parsed.minor * 1_000_000n) / BigInt(Math.round(u * 1e6));
+    if (price <= 0n) {
+      setError(t('investments.redesign.error.amount'));
+      return;
+    }
+    setBusy(true);
+    try {
+      await repo.savePrices([{ holdingId, priceMinor: price }], asOf || today());
+      toast.show(t('investments.redesign.valueUpdated'));
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <RedesignSheet
+      visible
+      testID="redesign-update-value-sheet"
+      title={t('investments.redesign.updateValue')}
+      onClose={onClose}
+      dirty={valueText.trim().length > 0}
+      footer={
+        <RedesignButton
+          testID="redesign-update-value-save"
+          label={t('common.save')}
+          onPress={() => void save()}
+          disabled={busy}
+          fullWidth
+        />
+      }
+    >
+      <RedesignField
+        testID="redesign-update-value-amount"
+        label={t('investments.redesign.valueToday')}
+        value={valueText}
+        onChangeText={setValueText}
+        prefix="₦"
+        keyboardType="decimal-pad"
+        error={error}
+      />
+      <RedesignField
+        testID="redesign-update-value-as-of"
+        label={t('investments.redesign.asOf')}
+        value={asOf === today() ? t('investments.redesign.today') : asOf}
+        onChangeText={setAsOf}
+        placeholder={t('investments.redesign.today')}
+      />
+      {delta !== null && lastPriceDate ? (
+        <RedesignText testID="redesign-update-value-delta" tone="textSecondary">
+          {sinceLabel}
+        </RedesignText>
+      ) : null}
+    </RedesignSheet>
+  );
+}
+
+/** Add money → buy against cash (Figma Holding footer Add money). */
+export function RedesignAddMoneySheet({
+  holdingId,
+  onClose,
+}: {
+  holdingId: string;
+  onClose: () => void;
+}) {
+  const { snapshot, repo } = useWorkspace();
+  const toast = useToast();
+  const [amountText, setAmountText] = useState('');
+  const [cashId, setCashId] = useState(() => (snapshot ? defaultCashAccountId(snapshot, holdingId) : ''));
+  const [date, setDate] = useState(today());
+  const [pickingCash, setPickingCash] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const cashAccounts =
+    snapshot?.accounts.filter((a) => !a.archived && ['bank', 'savings', 'cash', 'wallet'].includes(a.type)) ?? [];
+  const cashName = cashAccounts.find((a) => a.id === cashId)?.name ?? '';
+
+  const save = async () => {
+    setError(null);
+    const parsed = parseAmount(amountText);
+    if (!parsed.ok || parsed.minor <= 0n) {
+      setError(t('investments.redesign.error.amount'));
+      return;
+    }
+    if (!cashId) {
+      setError(t('investments.redesign.error.cash'));
+      return;
+    }
+    // One unit at this cost (value-tracked style), matching seedHoldingBook.
+    setBusy(true);
+    try {
+      const r = await repo.buyHolding({
+        holdingId,
+        units: '1',
+        pricePerUnit: parsed.minor,
+        fees: 0n,
+        cashAccountId: cashId,
+        date: date || today(),
+      });
+      if (!r.ok) {
+        setError(t('investments.redesign.error.save'));
+        return;
+      }
+      toast.show(t('investments.redesign.moneyAdded'));
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <RedesignSheet
+        visible
+        testID="redesign-add-money-sheet"
+        title={t('investments.redesign.addMoney')}
+        onClose={onClose}
+        dirty={amountText.trim().length > 0}
+        footer={
+          <RedesignButton
+            testID="redesign-add-money-save"
+            label={t('common.save')}
+            onPress={() => void save()}
+            disabled={busy}
+            fullWidth
+          />
+        }
+      >
+        <RedesignField
+          testID="redesign-add-money-amount"
+          label={t('investments.redesign.amount')}
+          value={amountText}
+          onChangeText={setAmountText}
+          prefix="₦"
+          keyboardType="decimal-pad"
+          error={error}
+        />
+        <RedesignField
+          testID="redesign-add-money-cash"
+          label={t('investments.redesign.payFrom')}
+          value={cashName || t('investments.redesign.chooseAccount')}
+          editable={false}
+          onPress={() => setPickingCash(true)}
+          trailing={<RedesignIcon name="chevron-down" size={20} color={tokens.color.light.textSecondary} />}
+        />
+        <RedesignField
+          testID="redesign-add-money-date"
+          label={t('investments.redesign.date')}
+          value={date === today() ? t('investments.redesign.today') : date}
+          onChangeText={setDate}
+        />
+      </RedesignSheet>
+
+      <RedesignSheet
+        visible={pickingCash}
+        title={t('investments.redesign.payFrom')}
+        onClose={() => setPickingCash(false)}
+        testID="redesign-add-money-cash-sheet"
+      >
+        <View style={{ gap: sp.sm }}>
+          {cashAccounts.map((a) => (
+            <RedesignButton
+              key={a.id}
+              kind={cashId === a.id ? 'primary' : 'secondary'}
+              label={a.name}
+              onPress={() => {
+                setCashId(a.id);
+                setPickingCash(false);
+              }}
+              fullWidth
+            />
+          ))}
+        </View>
+      </RedesignSheet>
+    </>
+  );
+}
+
+function formatMonthDay(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long' }).format(new Date(Date.UTC(y, m - 1, d)));
+}
+
+function today() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(new Date());
 }
