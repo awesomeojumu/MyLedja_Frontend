@@ -3,6 +3,7 @@ import { BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, use
 import { useNavigation, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmountInput, Button, DatePicker, Card, InlineError, PillTag, Text, TextInput } from '@/design/components';
+import { isRedesignEnabled } from '@/design/redesign';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useTheme } from '@/design/ThemeProvider';
@@ -14,6 +15,7 @@ import type { SetupBody } from '@/api/auth';
 import { successHaptic } from '@/features/budget/haptics';
 import { useSync } from '@/data/sync/SyncProvider';
 import { WorkspaceRepository } from '@/data/workspace/repository';
+import { RedesignWelcomeScreen } from './RedesignWelcomeScreen';
 import { WelcomeCurrencyPicker } from './WelcomeCurrencyPicker';
 import { WelcomeInstitutionBadge } from './WelcomeInstitutionBadge';
 import { fromApiInstitutions, matchInstitution, NG_INSTITUTIONS, type Institution } from './institutions';
@@ -77,6 +79,11 @@ function WelcomeFooter({
 }
 
 export function WelcomeScreen() {
+  if (isRedesignEnabled()) return <RedesignWelcomeScreen />;
+  return <LegacyWelcomeScreen />;
+}
+
+function LegacyWelcomeScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const theme = useTheme();
