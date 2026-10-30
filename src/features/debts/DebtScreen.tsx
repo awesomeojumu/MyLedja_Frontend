@@ -24,6 +24,7 @@ import {
   type MenuItem,
 } from '@/design/components';
 import tokens from '@/design/tokens.json';
+import { isRedesignEnabled } from '@/design/redesign';
 import { useTheme } from '@/design/ThemeProvider';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
@@ -46,6 +47,7 @@ import {
   timelineKindLabel,
 } from './schedule';
 import type { Snapshot } from '@/data/workspace/repository';
+import { RedesignDebtScreen } from './RedesignDebtScreen';
 
 const sp = tokens.spacing;
 
@@ -57,6 +59,11 @@ function statusPillFor(status: 'paid' | 'due' | 'overdue' | 'upcoming') {
 }
 
 export function DebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
+  if (isRedesignEnabled()) return <RedesignDebtScreen embeddedId={embeddedId} />;
+  return <LegacyDebtScreen embeddedId={embeddedId} />;
+}
+
+function LegacyDebtScreen({ embeddedId }: { embeddedId?: string } = {}) {
   const params = useLocalSearchParams<{ id: string; tab?: string; payment?: string; debtSchedule?: string }>();
   const id = embeddedId ?? (typeof params.id === 'string' ? params.id : undefined);
   const tabParam = params.tab;
