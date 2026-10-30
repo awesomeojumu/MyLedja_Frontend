@@ -28,7 +28,7 @@ import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AppFrame } from '@/features/frame/AppFrame';
 import { applyFilters, countActive, emptyFilters, filterChips, removeChip, type TxFilters } from '@/features/transactions/filters';
 import { FiltersSheet } from '@/features/transactions/FiltersSheet';
-import { rowsFor, today, type Row } from '@/features/transactions/helpers';
+import { today } from '@/features/transactions/helpers';
 import { rowIndicators } from '@/features/transactions/panelConnected';
 import { matchesSearch } from '@/features/transactions/TransactionsScreen';
 import { TransactionPanel } from '@/features/transactions/TransactionPanel';
@@ -46,41 +46,27 @@ import { ArchiveSheet, EditAccountSheet, UpdateValueSheet } from './accountSheet
 import { DividendSheet, HoldingSheet, TradeSheet } from '@/features/investments/investmentSheets';
 import { portfolioFigures } from '@/features/investments/helpers';
 
-import { accountInitials, groupRegisterByDay, hasHoldingsTab, hasValueTab } from './helpers';
+import {
+  accountInitials,
+  clearedSplit,
+  groupRegisterByDay,
+  hasHoldingsTab,
+  hasValueTab,
+  register,
+  type RegisterRow,
+} from './helpers';
+import { isRedesignEnabled } from '@/design/redesign';
+import { RedesignAccountScreen } from './RedesignAccountScreen';
 
 const sp = tokens.spacing;
 
 type Tab = 'transactions' | 'holdings' | 'value' | 'details';
-export type RegisterRow = Row & { line: bigint; running: bigint };
+export type { RegisterRow };
+export { register, clearedSplit };
 
 type DroppedPayload =
   | { kind: 'csv'; text: string }
   | { kind: 'statement'; fileName: string; base64: string };
-
-/** Rows that touch the account, newest first, with the balance after each (P09-01 / TB03-2). Pending (M19) left out. */
-export function register(snapshot: Snapshot, accountId: string): RegisterRow[] {
-  const rows = rowsFor(snapshot)
-    .filter((r) => r.event.status !== 'pending')
-    .map((r) => ({ ...r, line: r.event.lines.filter((l) => l.ledgerAccountId === accountId).reduce((s, l) => s + l.amountMinor, 0n) }))
-    .filter((r) => r.event.lines.some((l) => l.ledgerAccountId === accountId));
-  let running = 0n;
-  const out: RegisterRow[] = [];
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const r = rows[i]!;
-    running += r.line;
-    out.unshift({ ...r, running });
-  }
-  return out;
-}
-
-export function clearedSplit(rows: RegisterRow[]): { cleared: bigint; notCleared: bigint } {
-  let cleared = 0n;
-  let notCleared = 0n;
-  for (const r of rows)
-    if (r.event.cleared) cleared += r.line;
-    else notCleared += r.line;
-  return { cleared, notCleared };
-}
 
 const revalued = (snapshot: Snapshot, accountId: string) =>
   snapshot.events.filter(
@@ -92,6 +78,11 @@ const revalued = (snapshot: Snapshot, accountId: string) =>
   );
 
 export function AccountScreen({ embedded, accountId }: { embedded?: boolean; accountId?: string } = {}) {
+  if (isRedesignEnabled()) return <RedesignAccountScreen embedded={embedded} accountId={accountId} />;
+  return <LegacyAccountScreen embedded={embedded} accountId={accountId} />;
+}
+
+function LegacyAccountScreen({ embedded, accountId }: { embedded?: boolean; accountId?: string } = {}) {
   const { snapshot, repo } = useWorkspace();
   const { engine } = useSync();
   const params = useGlobalSearchParams<{
