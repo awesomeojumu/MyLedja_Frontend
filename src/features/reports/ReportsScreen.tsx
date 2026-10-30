@@ -31,7 +31,10 @@ import { RangeBar, type DateRange } from '@/features/cashflow/RangeBar';
 import { today } from '@/features/transactions/helpers';
 import { t, type TextKey } from '@/i18n';
 
+import { isRedesignEnabled } from '@/design/redesign';
+
 import { cardTitle, findingText, GALLERY, kindName, moveCard, newCard, rangeCaption, runCard, setHighlight } from './helpers';
+import { RedesignReportsScreen } from './RedesignReportsScreen';
 import { ReportChartView } from './ReportView';
 import { useDashboards } from './useDashboards';
 
@@ -68,8 +71,13 @@ function ensurePrintStyles() {
   document.head.appendChild(style);
 }
 
-/** Reports (DESIGN.md page 19): dashboards of report cards. */
+/** Reports (DESIGN.md page 19 / Figma 5:2297 when redesign on). */
 export function ReportsScreen() {
+  if (isRedesignEnabled()) return <RedesignReportsScreen />;
+  return <LegacyReportsScreen />;
+}
+
+function LegacyReportsScreen() {
   const { snapshot } = useWorkspace();
   const router = useRouter();
   const toast = useToast();
