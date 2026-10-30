@@ -5,6 +5,7 @@ import { isTwoFactorRequired } from '@/api/security';
 import { ApiError } from '@/api/client';
 import type { SessionResponse } from '@/api/auth';
 import { Button, Checkbox, CodeInput, Divider, InlineError, Sheet, Text, TextInput, useToast } from '@/design/components';
+import { isRedesignEnabled } from '@/design/redesign';
 import tokens from '@/design/tokens.json';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
@@ -15,10 +16,16 @@ import { GoogleSignInButton } from './GoogleSignInButton';
 import { loadGoogleSignIn, runGoogleSignIn } from './googleSignIn';
 import { checkPassword, EMAIL_PATTERN } from './password';
 import { PasswordStrength } from './PasswordStrength';
+import { RedesignSignUpScreen } from './RedesignSignUpScreen';
 
 const RESEND_SECONDS = 45;
 
 export function SignUpScreen() {
+  if (isRedesignEnabled()) return <RedesignSignUpScreen />;
+  return <LegacySignUpScreen />;
+}
+
+function LegacySignUpScreen() {
   const router = useRouter();
   const toast = useToast();
   const { api, completeSignIn } = useAuth();
