@@ -1,12 +1,13 @@
 import { ACCOUNT_GROUPS, ACCOUNT_KIND_INFO, ACCOUNT_KINDS, type Account, type AccountGroup, type AccountKind } from '@/data/workspace/model';
 import type { Snapshot } from '@/data/workspace/repository';
 import { ledgerBalance } from '@/ledger';
-
-import type { RegisterRow } from './AccountScreen';
+import { rowsFor, type Row } from '@/features/transactions/helpers';
 
 export type AccountSort = 'custom' | 'balance' | 'name' | 'type';
 
 export type AccountRow = { account: Account; balance: bigint; waiting: boolean };
+
+export type RegisterRow = Row & { line: bigint; running: bigint };
 
 /** Balances as signed contributions to net worth: what you owe is negative (P08-02). */
 export function accountRows(snapshot: Snapshot): AccountRow[] {
@@ -15,6 +16,31 @@ export function accountRows(snapshot: Snapshot): AccountRow[] {
     const waiting = snapshot.events.some((e) => snapshot.waiting.has(e.id) && e.lines.some((l) => l.ledgerAccountId === account.id));
     return { account, balance, waiting };
   });
+}
+
+/** Rows that touch the account, newest first, with the balance after each (P09-01 / TB03-2). Pending (M19) left out. */
+export function register(snapshot: Snapshot, accountId: string): RegisterRow[] {
+  const rows = rowsFor(snapshot)
+    .filter((r) => r.event.status !== 'pending')
+    .map((r) => ({ ...r, line: r.event.lines.filter((l) => l.ledgerAccountId === accountId).reduce((s, l) => s + l.amountMinor, 0n) }))
+    .filter((r) => r.event.lines.some((l) => l.ledgerAccountId === accountId));
+  let running = 0n;
+  const out: RegisterRow[] = [];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i]!;
+    running += r.line;
+    out.unshift({ ...r, running });
+  }
+  return out;
+}
+
+export function clearedSplit(rows: RegisterRow[]): { cleared: bigint; notCleared: bigint } {
+  let cleared = 0n;
+  let notCleared = 0n;
+  for (const r of rows)
+    if (r.event.cleared) cleared += r.line;
+    else notCleared += r.line;
+  return { cleared, notCleared };
 }
 
 export const ACCOUNT_KINDS_BY_GROUP: Record<AccountGroup, AccountKind[]> = ACCOUNT_GROUPS.reduce(
