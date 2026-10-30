@@ -5,6 +5,7 @@ import { v7 as uuidv7 } from 'uuid';
 
 import { reportsApi } from '@/api/reports';
 import { Button, Card, Confirm, Placeholder, SegmentedControl, Select, Sheet, Text, TextInput } from '@/design/components';
+import { isRedesignEnabled } from '@/design/redesign';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import type { BuilderSpecModel, ReportChart } from '@/data/workspace/model';
@@ -20,6 +21,7 @@ import { RangeBar, type DateRange } from '../cashflow/RangeBar';
 import { BuilderPreview } from './BuilderPreview';
 import { defaultBuilderName, EMPTY_SPEC, runBuilderPreview } from './builderRunner';
 import { newCard } from './helpers';
+import { RedesignReportBuilderScreen } from './RedesignReportBuilderScreen';
 import { useDashboards } from './useDashboards';
 
 const sp = tokens.spacing;
@@ -60,8 +62,13 @@ function activeFilterCount(f: BuilderSpecModel['filters']): number {
   return n;
 }
 
-/** Report builder (DESIGN.md page 21): make your own report; preview updates as you change anything. */
+/** Report builder (DESIGN.md page 21 / Figma 5:2436 when redesign on). */
 export function ReportBuilderScreen() {
+  if (isRedesignEnabled()) return <RedesignReportBuilderScreen />;
+  return <LegacyReportBuilderScreen />;
+}
+
+function LegacyReportBuilderScreen() {
   const params = useGlobalSearchParams<{ from?: string; to?: string; dashboard?: string; card?: string }>();
   const { snapshot, repo } = useWorkspace();
   const { client, user } = useAuth();
