@@ -3,18 +3,18 @@ import type { SizeClass } from '@/design/size';
 import type { TextKey } from '@/i18n';
 
 /**
- * Figma Dashboard Edit Home card set (Phone 17:1663).
- * Default On Home: left to spend → net worth → averages → coming up → budget → recent → goals.
- * Default Hidden: investments, debts, health, cash flow.
+ * Live Figma Mobile Edit Home `2:1199` + Phone Home `2:727`.
+ * Default On: left to spend → net worth → coming up → budget → recent → goals.
+ * Default Hidden: averages, investments, debts, health, cash flow.
  */
 export const REDESIGN_CARD_IDS = [
   'leftToSpend',
   'netWorth',
-  'averages',
   'comingUp',
   'budget',
   'recent',
   'goals',
+  'averages',
   'investments',
   'debts',
   'health',
@@ -28,7 +28,13 @@ export type RedesignDashboardLayout = {
   hidden: RedesignCardId[];
 };
 
-export const DEFAULT_REDESIGN_HIDDEN: RedesignCardId[] = ['investments', 'debts', 'health', 'cashFlow'];
+export const DEFAULT_REDESIGN_HIDDEN: RedesignCardId[] = [
+  'averages',
+  'investments',
+  'debts',
+  'health',
+  'cashFlow',
+];
 
 export const DEFAULT_REDESIGN_LAYOUT: RedesignDashboardLayout = {
   order: [...REDESIGN_CARD_IDS],

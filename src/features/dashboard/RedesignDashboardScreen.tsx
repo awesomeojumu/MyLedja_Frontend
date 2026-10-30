@@ -362,17 +362,24 @@ export function RedesignDashboardScreen() {
           </CardShell>,
         );
       case 'averages': {
+        // Tablet `11:922`: Income / Spending + Monthly average.
+        // Web `1:141`: Average monthly income / spending + Last 6 months.
+        // Phone list (when shown): Income / Spending + Last 6 months.
+        const web = size === 'desktop' || size === 'wide';
+        const incomeLabel = web ? t('dashboard.redesign.avgIncomeLong') : t('dashboard.redesign.avgIncome');
+        const spendingLabel = web ? t('dashboard.redesign.avgSpendingLong') : t('dashboard.redesign.avgSpending');
+        const avgHint = size === 'tablet' ? t('dashboard.redesign.monthlyAverage') : t('dashboard.redesign.last6');
         const rows = [
           {
             key: 'income',
-            label: phone ? t('dashboard.redesign.avgIncome') : t('dashboard.redesign.avgIncomeLong'),
-            hint: phone ? t('dashboard.redesign.last6') : t('dashboard.redesign.monthlyAverage'),
+            label: incomeLabel,
+            hint: avgHint,
             value: money(averages.avgIncome, privacy),
           },
           {
             key: 'spending',
-            label: phone ? t('dashboard.redesign.avgSpending') : t('dashboard.redesign.avgSpendingLong'),
-            hint: phone ? t('dashboard.redesign.last6') : t('dashboard.redesign.monthlyAverage'),
+            label: spendingLabel,
+            hint: avgHint,
             value: money(averages.avgSpending, privacy),
           },
           {
@@ -556,7 +563,14 @@ export function RedesignDashboardScreen() {
                     transform: [{ rotate: '-45deg' }],
                   }}
                 />
-                <RedesignText variant="label">{t('dashboard.redesign.savedPct', { pct })}</RedesignText>
+                <View style={{ alignItems: 'center' }} testID="redesign-home-goals-ring">
+                  <RedesignText variant="label">
+                    {phone ? t('dashboard.redesign.savedScore', { pct }) : t('dashboard.redesign.savedPct', { pct })}
+                  </RedesignText>
+                  <RedesignText variant="caption" tone="textSecondary" style={{ fontSize: 10, lineHeight: 12 }}>
+                    {phone ? t('dashboard.redesign.outOf100') : t('dashboard.redesign.savedLabel')}
+                  </RedesignText>
+                </View>
               </View>
               <View style={{ flex: 1, gap: sp.xs }}>
                 <RedesignText variant="body-medium">{goal.goal.name}</RedesignText>

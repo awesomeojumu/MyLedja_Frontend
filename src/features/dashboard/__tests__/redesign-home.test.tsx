@@ -55,13 +55,13 @@ describe('redesignLayout', () => {
     expect(visibleRedesignCards(layout)).toEqual([
       'leftToSpend',
       'netWorth',
-      'averages',
       'comingUp',
       'budget',
       'recent',
       'goals',
     ]);
     expect(layout.hidden).toEqual(DEFAULT_REDESIGN_HIDDEN);
+    expect(DEFAULT_REDESIGN_HIDDEN).toContain('averages');
   });
 });
 
@@ -77,7 +77,7 @@ describe('Page 05 redesign Home (EXPO_PUBLIC_REDESIGN on)', () => {
     expect(await screen.findByTestId('redesign-home')).toBeTruthy();
     expect(screen.getByTestId('redesign-home-left')).toBeTruthy();
     expect(screen.getByTestId('redesign-home-net-worth')).toBeTruthy();
-    expect(screen.getByTestId('redesign-home-averages')).toBeTruthy();
+    expect(screen.queryByTestId('redesign-home-averages')).toBeNull();
     expect(screen.getByTestId('redesign-home-coming-up')).toBeTruthy();
     expect(screen.getByTestId('redesign-home-budget')).toBeTruthy();
     expect(screen.getByTestId('redesign-home-recent')).toBeTruthy();
@@ -87,7 +87,7 @@ describe('Page 05 redesign Home (EXPO_PUBLIC_REDESIGN on)', () => {
     expect(screen.getByText(t('dashboard.redesign.editHome'))).toBeTruthy();
   });
 
-  it('opens Edit Home sheet from Edit Home', async () => {
+  it('opens Edit Home sheet from Edit Home with live Figma hint', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
       <WorkspaceProvider workspaceId="ws-personal">
@@ -97,7 +97,33 @@ describe('Page 05 redesign Home (EXPO_PUBLIC_REDESIGN on)', () => {
     );
     await screen.findByTestId('redesign-home');
     await fireEvent.press(screen.getByTestId('redesign-home-edit'));
-    expect(router.setParams).toHaveBeenCalledWith({ customize: '1' });
+    expect(await screen.findByTestId('redesign-edit-home')).toBeTruthy();
+    expect(screen.getByText(t('dashboard.redesign.editHint'))).toBeTruthy();
+    expect(t('dashboard.redesign.editHint')).toBe('Drag to move. Switch off what you do not need.');
+    expect(screen.getByTestId('redesign-edit-toggle-averages').props.accessibilityState).toMatchObject({
+      checked: false,
+    });
+  });
+
+  it('Goals ring centre uses phone out of 100 copy', async () => {
+    const { sync, repo } = await seeded();
+    const s = await repo.load();
+    const added = await repo.addGoal({
+      name: 'Emergency fund',
+      targetMinor: 100_000_000n,
+      accountId: s.accounts[0]!.id,
+      targetDate: '2027-03-01',
+      alreadySavedMinor: 72_000_000n,
+    });
+    expect(added.ok).toBe(true);
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <DashboardScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(await screen.findByTestId('redesign-home-goals-ring')).toBeTruthy();
+    expect(screen.getByText(t('dashboard.redesign.outOf100'))).toBeTruthy();
   });
 
   it('shows Get started checklist until hidden', async () => {
