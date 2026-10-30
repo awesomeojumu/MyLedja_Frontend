@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { Amount, Button, Card, EmptyState, Icon, Placeholder, Switch, Text } from '@/design/components';
+import { isRedesignEnabled } from '@/design/redesign';
 import tokens from '@/design/tokens.json';
 import { useSizeClass } from '@/design/size';
 import { useDesign, useTheme } from '@/design/ThemeProvider';
@@ -16,6 +17,7 @@ import { formatNaira, PRIVACY_MASK } from '@/money';
 import { cashFlowPage, drillHref, percentText, rangeCaption, type FlowGroup } from './helpers';
 import { spendingAccounts } from './local';
 import { RangeBar, type DateRange } from './RangeBar';
+import { RedesignCashFlowScreen } from './RedesignCashFlowScreen';
 import { Sankey, sinksOf, sourcesOf } from './Sankey';
 
 const sp = tokens.spacing;
@@ -27,8 +29,13 @@ function parseAccountIds(raw: string | string[] | undefined): string[] {
   return s.split(',').map((x) => x.trim()).filter(Boolean);
 }
 
-/** Cash flow (DESIGN.md page 22): where money came from and where it went, as a picture. */
+/** Cash flow (DESIGN.md page 22 / Figma 5:2532 when redesign on). */
 export function CashFlowScreen() {
+  if (isRedesignEnabled()) return <RedesignCashFlowScreen />;
+  return <LegacyCashFlowScreen />;
+}
+
+function LegacyCashFlowScreen() {
   const { snapshot } = useWorkspace();
   const router = useRouter();
   const theme = useTheme();
