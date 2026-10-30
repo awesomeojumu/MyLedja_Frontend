@@ -14,6 +14,27 @@ export type PayeeRow = {
 
 export type PayeeSort = 'name' | 'mostUsed' | 'mostSpent';
 
+/** Figma Phone / Payees chips: All · Most used · Not sorted. */
+export type PayeeChipFilter = 'all' | 'mostUsed' | 'notSorted';
+
+export function applyPayeeChipFilter(rows: PayeeRow[], filter: PayeeChipFilter): PayeeRow[] {
+  if (filter === 'notSorted') {
+    return sortPayeeRows(
+      rows.filter((r) => !r.payee.defaultCategoryId),
+      'name',
+    );
+  }
+  if (filter === 'mostUsed') return sortPayeeRows(rows, 'mostUsed');
+  return sortPayeeRows(rows, 'name');
+}
+
+/** Row subtitle: "Groceries, 14 times" / "Not sorted, 4 times". */
+export function payeeRowSubtitle(row: PayeeRow, notSortedLabel: string, timesLabel: (n: number) => string): string {
+  const cat = row.defaultCategoryName.trim() || notSortedLabel;
+  if (row.txCount <= 0) return cat;
+  return `${cat}, ${timesLabel(row.txCount)}`;
+}
+
 export function payeeRows(snapshot: Snapshot, year: number): PayeeRow[] {
   const catName = (id?: string) => snapshot.categories.find((c) => c.id === id)?.name ?? '';
   const stats = new Map<string, { count: number; spent: bigint; last: string | null }>();
@@ -70,8 +91,10 @@ export function payeeTransactions(snapshot: Snapshot, payeeId: string, limit = 1
     .map((e) => {
       const categoryLine = e.lines.find((l) => !accountIds.has(l.ledgerAccountId));
       const category = snapshot.categories.find((c) => c.id === categoryLine?.ledgerAccountId)?.name ?? '';
+      const accountLine = e.lines.find((l) => accountIds.has(l.ledgerAccountId));
+      const accountName = snapshot.accounts.find((a) => a.id === accountLine?.ledgerAccountId)?.name ?? '';
       const amount = e.lines.filter((l) => accountIds.has(l.ledgerAccountId)).reduce((s, l) => s + l.amountMinor, 0n);
-      return { id: e.id, date: e.date, category, amount };
+      return { id: e.id, date: e.date, category, accountName, amount };
     });
 }
 
