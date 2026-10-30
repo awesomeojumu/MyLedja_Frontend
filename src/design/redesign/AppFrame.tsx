@@ -96,12 +96,18 @@ export function RedesignStackFrame({
 export function RedesignAppFrame({
   title,
   children,
+  trailing,
   trailingExtra,
+  offlineMessage,
 }: {
   title: string;
   children: ReactNode;
+  /** Override default Search / Bell / Privacy trailing (page-specific chrome). */
+  trailing?: ReactNode;
   /** Optional leading trailing actions (e.g. Accounts plus). */
   trailingExtra?: ReactNode;
+  /** Override default offline strip copy (page-specific Figma). */
+  offlineMessage?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -128,15 +134,17 @@ export function RedesignAppFrame({
         <RedesignTopBar
           title={title}
           trailing={
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              {trailingExtra}
-              <CommandSearchButton />
-              <NotificationsBell items={inbox} />
-              <PrivacyToggle />
-            </View>
+            trailing ?? (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {trailingExtra}
+                <CommandSearchButton />
+                <NotificationsBell items={inbox} />
+                <PrivacyToggle />
+              </View>
+            )
           }
         />
-        {offline ? <RedesignOfflineStrip /> : null}
+        {offline ? <RedesignOfflineStrip message={offlineMessage} /> : null}
         <SyncIssuesBanner />
         <View nativeID="main" style={{ flex: 1, padding: tokens.space.lg }}>
           {children}
