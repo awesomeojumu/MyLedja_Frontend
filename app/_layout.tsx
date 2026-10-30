@@ -5,13 +5,16 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { config } from '@/config';
 import { DesignProvider } from '@/design/ThemeProvider';
 import { ToastProvider } from '@/design/components';
+import { isRedesignEnabled, useFigtreeFonts } from '@/design/redesign';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { SyncProvider } from '@/data/sync/SyncProvider';
 import { ConfigErrorScreen } from '@/features/dev/ConfigErrorScreen';
 import { DevMenu } from '@/features/dev/DevMenu';
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ Inter_300Light, Inter_400Regular });
+  const [interLoaded] = useFonts({ Inter_300Light, Inter_400Regular });
+  const figtreeLoaded = useFigtreeFonts();
+  const fontsLoaded = interLoaded && (!isRedesignEnabled() || figtreeLoaded);
   const configBroken = config.appEnv === 'development' && config.problems.length > 0;
 
   return (
