@@ -114,7 +114,7 @@ export function RedesignReportScreen({ runner }: { runner?: ReportRunner } = {})
   const card = found?.card ?? null;
   const title = card && snapshot ? cardTitle(card, snapshot.savedReports) : t('reports.title');
   const savedSpec = card?.savedReportId
-    ? (snapshot?.savedReports.find((r) => r.id === card.savedReportId)?.spec ?? null)
+    ? (snapshot?.savedReports.find((r) => r.id === card.savedReportId)?.spec ?? card.spec ?? null)
     : (card?.spec ?? null);
 
   const buildBody = useCallback((): RunReportBody | null => {

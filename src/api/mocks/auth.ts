@@ -2,6 +2,7 @@ import type { Transport, TransportRequest, TransportResponse } from '../client';
 import type { User } from '../auth';
 import en from '@/i18n/en.json';
 
+import { createReportsMock } from './reports';
 import { createSecurityMock } from './security';
 
 /** Demo person from build plan 2.7. Works only with the mock adapter. */
@@ -15,6 +16,7 @@ export function createAuthMock() {
   const failures = new Map<string, number>();
   const operations = new Map<string, TransportResponse>();
   const security = createSecurityMock();
+  const reports = createReportsMock();
   let counter = 0;
 
   users.set(DEMO.email, {
@@ -148,6 +150,8 @@ export function createAuthMock() {
           version: 'mock',
         });
       default: {
+        const fromReports = reports(req);
+        if (fromReports) return fromReports;
         const fromSecurity = security(req);
         if (fromSecurity) return fromSecurity;
         const setup = req.path.match(/^\/v1\/workspaces\/([^/]+)\/setup$/);

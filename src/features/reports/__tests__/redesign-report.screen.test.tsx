@@ -8,6 +8,7 @@ import { t } from '@/i18n';
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
 import { resetParams, router, setParams } from '../../../../test/helpers/router';
 import { RedesignReportScreen } from '../RedesignReportScreen';
+import { newCard } from '../helpers';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 
@@ -148,5 +149,22 @@ describe('Redesign Report (Figma 5:2369 / 12:6128)', () => {
     );
     expect(await screen.findByTestId('redesign-report-failed')).toBeTruthy();
     expect(screen.getByText(t('reports.redesign.loadFailedTitle'))).toBeTruthy();
+  });
+
+  it('Mock API builds Spending by payee (custom + payee) without an injected runner', async () => {
+    const { sync, repo } = await seeded();
+    const card = newCard('payee-card', 'custom', 0, {
+      title: 'Spending by payee',
+      range: 'this_month',
+      spec: { show: 'spending', groupBy: 'payee', splitBy: null, chart: 'bar', filters: {} },
+    });
+    await repo.createDashboard('Overview', [card]);
+    setParams({ id: card.id });
+    // No runner: uses AuthProvider Mock transport → createReportsMock.
+    await renderWithProviders(wrap(<RedesignReportScreen />), { sync });
+    expect(await screen.findByTestId('redesign-report-total')).toBeTruthy();
+    expect(screen.queryByTestId('redesign-report-failed')).toBeNull();
+    expect(screen.getByText('Shoprite')).toBeTruthy();
+    expect(screen.getByText('Total Energies')).toBeTruthy();
   });
 });
