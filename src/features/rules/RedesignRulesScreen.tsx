@@ -15,6 +15,7 @@ import {
   RedesignListRow,
   RedesignSheet,
   RedesignText,
+  RedesignShell,
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { t } from '@/i18n';
@@ -165,7 +166,7 @@ export function RedesignRulesScreen() {
   }
 
   return (
-    <SafeAreaView testID="redesign-rules" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="redesign-rules" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <StackTopBar
         title={t('rules.title')}
         onBack={() => router.back()}
@@ -283,7 +284,7 @@ export function RedesignRulesScreen() {
         }}
         destructive
       />
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 
@@ -375,7 +376,7 @@ function SuggestedRulesView({
   onDismiss: (s: SuggestedRule) => void;
 }) {
   return (
-    <SafeAreaView testID="rules-suggested" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="rules-suggested" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <StackTopBar title={t('rules.redesign.suggestedTitle')} onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: sp.lg, gap: sp.lg }}>
         <RedesignText>{t('rules.redesign.suggestedIntro')}</RedesignText>
@@ -422,7 +423,7 @@ function SuggestedRulesView({
           ))
         )}
       </ScrollView>
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 
@@ -499,7 +500,7 @@ function RedesignRuleEditor({
   };
 
   return (
-    <SafeAreaView testID="rule-editor" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="rule-editor" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <StackTopBar title={blank ? t('rules.redesign.newTitle') : t('rules.editorTitle')} onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: sp.lg, gap: sp.lg, flexGrow: 1 }}>
         {error ? <RedesignInlineError message={error} /> : null}
@@ -641,7 +642,7 @@ function RedesignRuleEditor({
           setToOpen(false);
         }}
       />
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 

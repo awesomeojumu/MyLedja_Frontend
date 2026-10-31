@@ -1,5 +1,6 @@
 import Svg, { Path } from 'react-native-svg';
 import type { SvgProps } from 'react-native-svg';
+import { redesignLight } from './theme';
 
 export type RedesignIconName =
   | 'alert'
@@ -16,12 +17,14 @@ export type RedesignIconName =
   | 'clock'
   | 'cloud-off'
   | 'edit'
+  | 'export'
   | 'eye'
   | 'eye-off'
   | 'file'
   | 'filter'
   | 'flow'
   | 'home'
+  | 'import'
   | 'info'
   | 'list'
   | 'lock'
@@ -34,6 +37,7 @@ export type RedesignIconName =
   | 'refresh'
   | 'repeat'
   | 'search'
+  | 'select'
   | 'sliders'
   | 'swap'
   | 'target'
@@ -47,10 +51,11 @@ export type RedesignIconName =
 type Props = SvgProps & { name: RedesignIconName; size?: number; color?: string };
 
 /** 41 Figma icons from MyLedja Components (file 5M9YOpaMJAiJ9VJv567rs9). Stroke uses current color. */
-export function RedesignIcon({ name, size = 24, color = '#001D34', ...rest }: Props) {
+export function RedesignIcon({ name, size = 24, color, ...rest }: Props) {
+  const stroke = color ?? redesignLight.text;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" {...rest}>
-      {renderIcon(name, color)}
+      {renderIcon(name, stroke)}
     </Svg>
   );
 }
@@ -148,6 +153,13 @@ function renderIcon(name: RedesignIconName, color: string) {
           <Path d="M16.5 3.50001C16.8978 3.10219 17.4374 2.87869 18 2.87869C18.5626 2.87869 19.1022 3.10219 19.5 3.50001C19.8978 3.89784 20.1213 4.4374 20.1213 5.00001C20.1213 5.56262 19.8978 6.10219 19.5 6.50001L7 19L3 20L4 16L16.5 3.50001Z" stroke={color} fill="none" strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" />
         </>
       );
+    case 'export':
+      return (
+        <>
+          <Path d="M12 16V4M8 8L12 4L16 8" stroke={color} fill="none" strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M4 17V19C4 20.1046 4.89543 21 6 21H18C19.1046 21 20 20.1046 20 19V17" stroke={color} fill="none" strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      );
     case 'eye':
       return (
         <>
@@ -186,6 +198,13 @@ function renderIcon(name: RedesignIconName, color: string) {
       return (
         <>
           <Path d="M3 10.5L12 3L21 10.5V20C21 20.2652 20.8946 20.5196 20.7071 20.7071C20.5196 20.8946 20.2652 21 20 21H15V15H9V21H4C3.73478 21 3.48043 20.8946 3.29289 20.7071C3.10536 20.5196 3 20.2652 3 20V10.5Z" stroke={color} fill="none" strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      );
+    case 'import':
+      return (
+        <>
+          <Path d="M12 3V15M8 11L12 15L16 11" stroke={color} fill="none" strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M4 17V19C4 20.1046 4.89543 21 6 21H18C19.1046 21 20 20.1046 20 19V17" stroke={color} fill="none" strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" />
         </>
       );
     case 'info':
@@ -272,6 +291,13 @@ function renderIcon(name: RedesignIconName, color: string) {
           <Path d="M21 21L16.7 16.7" stroke={color} fill="none" strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" />
         </>
       );
+    case 'select':
+      return (
+        <>
+          <Path d="M6 4H18C19.1046 4 20 4.89543 20 6V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V6C4 4.89543 4.89543 4 6 4Z" stroke={color} fill="none" strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M8 12L11 15L16 9" stroke={color} fill="none" strokeWidth={2.0} strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      );
     case 'sliders':
       return (
         <>
@@ -353,12 +379,14 @@ export const REDESIGN_ICON_NAMES: RedesignIconName[] = [
   'clock',
   'cloud-off',
   'edit',
+  'export',
   'eye',
   'eye-off',
   'file',
   'filter',
   'flow',
   'home',
+  'import',
   'info',
   'list',
   'lock',
@@ -371,6 +399,7 @@ export const REDESIGN_ICON_NAMES: RedesignIconName[] = [
   'refresh',
   'repeat',
   'search',
+  'select',
   'sliders',
   'swap',
   'target',

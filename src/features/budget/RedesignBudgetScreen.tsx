@@ -496,10 +496,10 @@ export function RedesignBudgetScreen() {
                 selected={monthSpan === '3'}
                 onPress={() => router.setParams({ months: '3' })}
               />
-              <RedesignButton testID="budget-copy-last" kind="secondary" label={t('budget.menuCopyLast')} onPress={() => void copyLastMonth()} />
-              <RedesignButton testID="budget-move" kind="secondary" label={t('budget.moveMoney')} onPress={() => openMove()} />
+              <RedesignChip testID="budget-copy-last" label={t('budget.menuCopyLast')} onPress={() => void copyLastMonth()} />
+              <RedesignChip testID="budget-move" label={t('budget.moveMoney')} onPress={() => openMove()} />
               {snapshot && snapshot.assigns.size > 0 ? (
-                <RedesignButton testID="budget-templates" kind="secondary" label={t('budget.templates')} onPress={() => setTemplatesOpen(true)} />
+                <RedesignChip testID="budget-templates" label={t('budget.templates')} onPress={() => setTemplatesOpen(true)} />
               ) : null}
             </View>
           ) : null}

@@ -4,9 +4,9 @@ import { Text, TextInput } from '@/design/components';
 import tokens from '@/design/tokens.json';
 import { useTheme } from '@/design/ThemeProvider';
 import { t } from '@/i18n';
-import { filterCurrencies } from './welcomeCurrencies';
+import { currencyLabel, filterCurrencies } from './currencies';
 
-export function WelcomeCurrencyPicker() {
+export function WelcomeCurrencyPicker({ value, onChange }: { value: string; onChange: (code: string) => void }) {
   const theme = useTheme();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
@@ -25,7 +25,7 @@ export function WelcomeCurrencyPicker() {
         onChangeText={setQuery}
         onFocus={() => setFocused(true)}
         onBlur={() => setTimeout(() => setFocused(false), 150)}
-        placeholder={t('welcome.step2.ngn')}
+        placeholder={currencyLabel(value)}
       />
       {showList ? (
         <View
@@ -35,6 +35,7 @@ export function WelcomeCurrencyPicker() {
             borderColor: theme.border,
             borderRadius: tokens.radius['rounded-md'],
             overflow: 'hidden',
+            maxHeight: 280,
           }}
         >
           {options.map((c) => (
@@ -42,29 +43,24 @@ export function WelcomeCurrencyPicker() {
               key={c.code}
               testID={`currency-${c.code}`}
               accessibilityRole="button"
-              accessibilityState={{ selected: c.code === 'NGN' && c.active }}
-              disabled={!c.active}
+              accessibilityState={{ selected: c.code === value }}
               onPress={() => {
-                if (c.active) setQuery('');
+                onChange(c.code);
+                setQuery('');
+                setFocused(false);
               }}
               style={{
                 padding: tokens.spacing['spacing-md'],
-                backgroundColor: c.code === 'NGN' ? theme.tagFill : theme.card,
-                opacity: c.active ? 1 : 0.55,
+                backgroundColor: c.code === value ? theme.tagFill : theme.card,
               }}
             >
-              <Text tone={c.code === 'NGN' ? 'text' : 'textSecondary'}>{t(c.labelKey)}</Text>
-              {!c.active ? (
-                <Text variant="micro" tone="textHelper">
-                  {t('welcome.currency.soon')}
-                </Text>
-              ) : null}
+              <Text>{currencyLabel(c.code)}</Text>
             </Pressable>
           ))}
         </View>
       ) : (
         <Text testID="currency-selected" variant="caption">
-          {t('welcome.step2.ngn')}
+          {currencyLabel(value)}
         </Text>
       )}
     </View>

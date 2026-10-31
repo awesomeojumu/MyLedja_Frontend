@@ -5,15 +5,9 @@ import { redesignLight } from './theme';
 
 export type RedesignTypeStyle = keyof typeof tokens.type;
 
-const toneColor = {
-  text: redesignLight.text,
-  textSecondary: redesignLight.textSecondary,
-  textOnPrimary: redesignLight.textOnPrimary,
-  primary: redesignLight.primary,
-  danger: redesignLight.danger,
-} as const;
+const TONES = ['text', 'textSecondary', 'textOnPrimary', 'primary', 'danger'] as const;
 
-export type RedesignTone = keyof typeof toneColor;
+export type RedesignTone = (typeof TONES)[number];
 
 export function redesignTypeStyle(name: RedesignTypeStyle): TextStyle {
   const s = tokens.type[name] as {
@@ -39,5 +33,5 @@ export function RedesignText({
   style,
   ...rest
 }: RNTextProps & { variant?: RedesignTypeStyle; tone?: RedesignTone }) {
-  return <RNText {...rest} style={[redesignTypeStyle(variant), { color: toneColor[tone] }, style]} />;
+  return <RNText {...rest} style={[redesignTypeStyle(variant), { color: redesignLight[tone] }, style]} />;
 }

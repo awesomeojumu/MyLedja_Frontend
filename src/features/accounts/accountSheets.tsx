@@ -29,6 +29,7 @@ import { ACCOUNT_GROUPS, ACCOUNT_KIND_INFO, type Account, type AccountKind } fro
 import type { Snapshot } from '@/data/workspace/repository';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { matchInstitution, NG_INSTITUTIONS } from '@/features/setup/institutions';
+import { CURRENCIES, currencyLabel } from '@/features/setup/currencies';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 import { formatNaira, toInputText } from '@/money';
@@ -101,12 +102,7 @@ const bankOptions = [
   { value: '', label: t('common.notSet') },
   ...NG_INSTITUTIONS.map((i) => ({ value: i.label, label: `${i.initials} · ${i.label}` })),
 ];
-const currencyOptions = [
-  { value: 'NGN', label: '₦ Naira (NGN)' },
-  { value: 'USD', label: '$ US dollar (USD)' },
-  { value: 'GBP', label: '£ Pound (GBP)' },
-  { value: 'EUR', label: '€ Euro (EUR)' },
-];
+const currencyOptions = CURRENCIES.map((c) => ({ value: c.code, label: currencyLabel(c.code) }));
 
 /** Popup #13 — Add account in two steps (PU-13). Opens via `?account=new`. */
 export function AddAccountSheet({ onClose }: { onClose: () => void }) {

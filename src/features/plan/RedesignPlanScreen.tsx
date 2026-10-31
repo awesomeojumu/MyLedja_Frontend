@@ -19,6 +19,7 @@ import {
   RedesignSheet,
   RedesignText,
   RedesignTopBar,
+  RedesignShell,
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { useToast } from '@/design/components';
@@ -252,7 +253,7 @@ export function RedesignPlanScreen() {
   }
 
   return (
-    <SafeAreaView testID="redesign-plan" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="redesign-plan" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <RedesignTopBar
         title={t('plan.title')}
         onBack={() => router.push('/more')}
@@ -485,7 +486,7 @@ export function RedesignPlanScreen() {
           }}
         />
       ) : null}
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 
@@ -642,7 +643,7 @@ function FoundRepeatsView({
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
   const visible = suggestions.filter((s) => !ignored.has(s.id));
   return (
-    <SafeAreaView testID="plan-redesign-found" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="plan-redesign-found" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <RedesignTopBar title={t('plan.redesign.foundTitle')} onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: sp.lg, gap: sp.md }}>
         <RedesignText tone="textSecondary">{t('plan.redesign.foundBody')}</RedesignText>
@@ -687,7 +688,7 @@ function FoundRepeatsView({
         ))}
         {visible.length === 0 ? <RedesignText tone="textSecondary">{t('plan.findEmpty')}</RedesignText> : null}
       </ScrollView>
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 
@@ -722,7 +723,7 @@ function BillDetailView({
   const dueLabel = row ? longWeekdayDate(row.dueDate) : null;
 
   return (
-    <SafeAreaView testID="plan-redesign-detail" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="plan-redesign-detail" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <RedesignTopBar
         title={recurring.name}
         onBack={onBack}
@@ -851,7 +852,7 @@ function BillDetailView({
           />
         </View>
       ) : null}
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 

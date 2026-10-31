@@ -19,6 +19,7 @@ import tokens from '@/design/tokens.json';
 import type { Holding, HoldingType } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { AddAccountSheet } from '@/features/accounts/accountSheets';
+import { CURRENCIES, currencyLabel } from '@/features/setup/currencies';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
@@ -28,12 +29,7 @@ import { HOLDING_TYPES, defaultCashAccountId, fifoCost, holdingUnits, latestPric
 
 const sp = tokens.spacing;
 
-const CURRENCY_OPTIONS = [
-  { value: 'NGN', label: '₦ Naira (NGN)' },
-  { value: 'USD', label: '$ US dollar (USD)' },
-  { value: 'GBP', label: '£ Pound (GBP)' },
-  { value: 'EUR', label: '€ Euro (EUR)' },
-];
+const CURRENCY_OPTIONS = CURRENCIES.map((c) => ({ value: c.code, label: currencyLabel(c.code) }));
 
 export type HoldingDraft = {
   name: string;

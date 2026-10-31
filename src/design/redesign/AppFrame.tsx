@@ -14,6 +14,8 @@ import { SyncIssuesBanner } from '@/features/sync/SyncIssues';
 import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
 import { today } from '@/features/transactions/helpers';
 import { useDesign } from '@/design/ThemeProvider';
+import { useSizeClass } from '@/design/size';
+import { DesktopFrame } from '@/features/frame/DesktopFrame';
 import { t } from '@/i18n';
 import {
   RedesignBottomNav,
@@ -60,9 +62,16 @@ function PrivacyToggle() {
   );
 }
 
+/** Phone keeps the page as-is. Tablet and desktop add the sidebar. */
+export function RedesignShell({ children }: { children: ReactNode }) {
+  const size = useSizeClass();
+  if (size === 'phone') return <>{children}</>;
+  return <DesktopFrame>{children}</DesktopFrame>;
+}
+
 /**
  * Secondary stack page (Figma Phone / Investments, Bills, Goals, …).
- * Top bar with Back; no bottom nav.
+ * Top bar with Back; no bottom nav. Wide screens keep the app sidebar.
  */
 export function RedesignStackFrame({
   title,
@@ -81,14 +90,16 @@ export function RedesignStackFrame({
   const sync = useSyncStatus();
   const offline = !online || sync?.state === 'offline';
   return (
-    <SafeAreaView testID={testID ?? 'redesign-stack-frame'} style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
-      <RedesignTopBar title={title} onBack={onBack} trailing={trailing} />
-      {offline ? <RedesignOfflineStrip /> : null}
-      <SyncIssuesBanner />
-      <View nativeID="main" style={{ flex: 1, padding: tokens.space.lg }}>
-        {children}
-      </View>
-    </SafeAreaView>
+    <RedesignShell>
+      <SafeAreaView testID={testID ?? 'redesign-stack-frame'} style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+        <RedesignTopBar title={title} onBack={onBack} trailing={trailing} />
+        {offline ? <RedesignOfflineStrip /> : null}
+        <SyncIssuesBanner />
+        <View nativeID="main" style={{ flex: 1, padding: tokens.space.lg }}>
+          {children}
+        </View>
+      </SafeAreaView>
+    </RedesignShell>
   );
 }
 
@@ -169,6 +180,7 @@ export function RedesignAppFrame({
 /** More hub — Plan / Wealth / Manage destinations (Figma Phone / More). */
 export function RedesignMoreScreen() {
   const router = useRouter();
+  const size = useSizeClass();
   const sections: { title: string; items: { label: string; href: string; icon: RedesignIconName; subtitle?: string }[] }[] = [
     {
       title: t('nav.plan'),
@@ -199,8 +211,7 @@ export function RedesignMoreScreen() {
     },
   ];
 
-  return (
-    <RedesignAppFrame title={t('nav.more')}>
+  const body = (
       <View testID="redesign-more-screen" style={{ gap: tokens.space.xl }}>
         {sections.map((section) => (
           <View key={section.title} style={{ gap: tokens.space.sm }}>
@@ -260,6 +271,22 @@ export function RedesignMoreScreen() {
           {t('redesign.more.pinTip')}
         </RedesignText>
       </View>
-    </RedesignAppFrame>
   );
+
+  if (size !== 'phone') {
+    return (
+      <DesktopFrame>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+          <View nativeID="main" style={{ flex: 1, padding: tokens.space.lg }}>
+            <RedesignText variant="title" accessibilityRole="header">
+              {t('nav.more')}
+            </RedesignText>
+            {body}
+          </View>
+        </SafeAreaView>
+      </DesktopFrame>
+    );
+  }
+
+  return <RedesignAppFrame title={t('nav.more')}>{body}</RedesignAppFrame>;
 }

@@ -15105,8 +15105,7 @@ export interface operations {
             content: {
                 "application/json": {
                     workspaceName: string;
-                    /** @constant */
-                    currency: "NGN";
+                    currency: string;
                     /** @enum {string} */
                     weekStart: "monday" | "sunday" | "saturday";
                     accounts: {
@@ -15122,6 +15121,8 @@ export interface operations {
                         openingBalance: string;
                         /** @description YYYY-MM-DD in the workspace time zone. */
                         openingDate: string;
+                        /** @description This account's currency. Defaults to the workspace currency. */
+                        currency?: string;
                     }[];
                     categories: {
                         /** @description Starter-set key, or "custom-<n>" for your own. */

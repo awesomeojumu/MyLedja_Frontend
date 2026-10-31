@@ -63,7 +63,7 @@ describe('Page 04 redesign Welcome (EXPO_PUBLIC_REDESIGN on)', () => {
     await fireEvent.press(screen.getByTestId('continue')); // start → space
     await fireEvent.press(screen.getByTestId('continue')); // → money
     expect(screen.getByTestId('redesign-welcome-money')).toBeTruthy();
-    expect(screen.getByText(t('welcome.redesign.currencyNgn'))).toBeTruthy();
+    expect(screen.getByTestId('currency-field')).toBeTruthy();
     expect(screen.getByTestId('week-monday')).toBeSelected();
 
     await fireEvent.press(screen.getByTestId('continue')); // → accounts
@@ -100,6 +100,11 @@ describe('Page 04 redesign Welcome (EXPO_PUBLIC_REDESIGN on)', () => {
     await fireEvent.press(screen.getByTestId('continue'));
 
     expect(screen.getByTestId('redesign-welcome-manual')).toBeTruthy();
+    expect(screen.getByTestId('preferred-NGN')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('add-preferred-currency'));
+    await fireEvent.press(screen.getByTestId('currency-USD'));
+    expect(screen.getByTestId('preferred-USD')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('preferred-NGN'));
     await fireEvent.changeText(screen.getByTestId('account-name-0'), 'GTBank Current');
     expect(screen.getByTestId('institution-0')).toBeTruthy();
     await fireEvent.changeText(screen.getByTestId('account-opening-0'), '412500');
@@ -112,7 +117,7 @@ describe('Page 04 redesign Welcome (EXPO_PUBLIC_REDESIGN on)', () => {
 
     const setup = calls.find((c) => c.path.endsWith('/setup'))!.body as Record<string, unknown>;
     expect(setup.accounts).toEqual([
-      expect.objectContaining({ name: 'GTBank Current', type: 'bank', openingBalance: '41250000' }),
+      expect.objectContaining({ name: 'GTBank Current', type: 'bank', openingBalance: '41250000', currency: 'NGN' }),
     ]);
   });
 

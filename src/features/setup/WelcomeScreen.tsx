@@ -95,6 +95,7 @@ function LegacyWelcomeScreen() {
   const [skipped, setSkipped] = useState<number[]>([]);
   const [workspaceName, setWorkspaceName] = useState(t('welcome.step1.default'));
   const [weekStart, setWeekStart] = useState<(typeof WEEK_STARTS)[number]>('monday');
+  const [currency, setCurrency] = useState('NGN');
   const [accounts, setAccounts] = useState<AccountRow[]>([{ name: '', type: 'bank', amountText: '', minor: null, date: todayIso() }]);
   const [off, setOff] = useState<Set<string>>(new Set());
   const [custom, setCustom] = useState<string[]>([]);
@@ -162,7 +163,7 @@ function LegacyWelcomeScreen() {
         );
         const body: SetupBody = {
           workspaceName: skip.includes(1) ? t('welcome.step1.default') : workspaceName.trim(),
-          currency: 'NGN',
+          currency,
           weekStart,
           accounts: skip.includes(3)
             ? []
@@ -185,7 +186,7 @@ function LegacyWelcomeScreen() {
         setBusy(false);
       }
     },
-    [user, api, sync.store, sync.engine, workspaceName, weekStart, accounts, off, custom, style, takeHome, setUser],
+    [user, api, sync.store, sync.engine, workspaceName, weekStart, currency, accounts, off, custom, style, takeHome, setUser],
   );
 
   const next = useCallback(
@@ -223,7 +224,7 @@ function LegacyWelcomeScreen() {
       return (
         <View style={{ gap: sp['spacing-lg'] }}>
           <StepTitle>{t('welcome.step2.title')}</StepTitle>
-          <WelcomeCurrencyPicker />
+          <WelcomeCurrencyPicker value={currency} onChange={setCurrency} />
           <View style={{ gap: sp['spacing-xs'] }}>
             <Text variant="caption" tone="textSecondary">{t('welcome.step2.weekStart')}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }} accessibilityRole="radiogroup">

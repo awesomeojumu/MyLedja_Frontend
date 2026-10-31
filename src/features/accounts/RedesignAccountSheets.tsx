@@ -14,6 +14,8 @@ import {
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { NG_INSTITUTIONS } from '@/features/setup/institutions';
+import { CurrencySheet } from '@/features/setup/CurrencyPicker';
+import { currencyLabel } from '@/features/setup/currencies';
 import { today } from '@/features/transactions/helpers';
 import { t } from '@/i18n';
 import { parseAmount } from '@/money';
@@ -21,13 +23,6 @@ import { parseAmount } from '@/money';
 import { redesignGroupFor, redesignGroupLabel, REDESIGN_ACCOUNT_GROUPS } from './redesignGroups';
 
 const sp = tokens.space;
-
-const CURRENCIES: { value: string; label: string }[] = [
-  { value: 'NGN', label: t('redesign.accounts.currencyNgn') },
-  { value: 'USD', label: t('redesign.accounts.currencyUsd') },
-  { value: 'GBP', label: t('redesign.accounts.currencyGbp') },
-  { value: 'EUR', label: t('redesign.accounts.currencyEur') },
-];
 
 const POPULAR_BANK_IDS = ['access', 'gtbank', 'kuda', 'opay', 'moniepoint', 'zenith', 'first-bank'] as const;
 
@@ -52,7 +47,7 @@ export function RedesignAddAccountSheet({ onClose }: { onClose: () => void }) {
   const canSave = nameOk && typeOk && balanceOk && !busy;
 
   const typeLabel = type ? t(`accounts.kind.${type}`) : '';
-  const currencyLabel = CURRENCIES.find((c) => c.value === currency)?.label ?? currency;
+  const selectedCurrency = currencyLabel(currency);
 
   const save = async () => {
     setNameTouched(true);
@@ -151,7 +146,7 @@ export function RedesignAddAccountSheet({ onClose }: { onClose: () => void }) {
               justifyContent: 'space-between',
             }}
           >
-            <RedesignText>{currencyLabel}</RedesignText>
+            <RedesignText>{selectedCurrency}</RedesignText>
             <RedesignIcon name="chevron-down" size={20} color={theme.textSecondary} />
           </View>
         </Pressable>
@@ -232,27 +227,16 @@ export function RedesignAddAccountSheet({ onClose }: { onClose: () => void }) {
       ) : null}
 
       {currencyOpen ? (
-        <RedesignSheet visible title={t('redesign.accounts.currency')} onClose={() => setCurrencyOpen(false)} testID="redesign-currency-picker">
-          {CURRENCIES.map((c) => (
-            <Pressable
-              key={c.value}
-              testID={`redesign-currency-${c.value}`}
-              accessibilityRole="button"
-              onPress={() => {
-                setCurrency(c.value);
-                setCurrencyOpen(false);
-              }}
-              style={{
-                minHeight: tokens.density.touch.minTarget,
-                paddingVertical: sp.sm,
-                borderBottomWidth: 1,
-                borderColor: theme.border,
-              }}
-            >
-              <RedesignText tone={currency === c.value ? 'primary' : 'text'}>{c.label}</RedesignText>
-            </Pressable>
-          ))}
-        </RedesignSheet>
+        <CurrencySheet
+          visible
+          selected={currency}
+          testID="redesign-currency-picker"
+          onClose={() => setCurrencyOpen(false)}
+          onPick={(code) => {
+            setCurrency(code);
+            setCurrencyOpen(false);
+          }}
+        />
       ) : null}
     </>
   );

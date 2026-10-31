@@ -13,6 +13,7 @@ import {
   RedesignEmpty,
   RedesignField,
   RedesignIcon,
+  type RedesignIconName,
   RedesignInlineError,
   RedesignListRow,
   RedesignSheet,
@@ -308,6 +309,7 @@ export function RedesignTransactionsScreen() {
   const shownDays = days.slice(0, visibleDays);
   const chips = snapshot ? filterChips(filters, snapshot) : [];
   const activeFilterCount = countActive(filters);
+  const extraFilterCount = Math.max(0, activeFilterCount - (filters.dateFrom || filters.dateTo ? 1 : 0));
 
   const monthRange = filtersForPeriod('thisMonth', dayIso, {});
   const monthRows = snapshot
@@ -792,10 +794,16 @@ export function RedesignTransactionsScreen() {
                 />
               </View>
               {periodChips}
-              <RedesignButton testID="tx-filters" kind="secondary" label={t('tx.redesign.filterTitle')} onPress={() => setFiltersOpen(true)} />
-              <RedesignButton testID="tx-import" kind="secondary" label={t('tx.import')} onPress={() => setImportOpen(true)} />
-              <RedesignButton testID="tx-select" kind="secondary" label={t('tx.select')} onPress={() => setSelectMode((v) => !v)} />
-              <RedesignButton testID="tx-export" kind="secondary" label={t('tx.export')} onPress={() => router.setParams({ export: '1' })} />
+              <TxIconButton
+                testID="tx-filters"
+                label={extraFilterCount > 0 ? t('tx.filtersCount', { count: extraFilterCount }) : t('tx.redesign.filterTitle')}
+                icon="filter"
+                selected={extraFilterCount > 0}
+                onPress={() => setFiltersOpen(true)}
+              />
+              <TxIconButton testID="tx-import" label={t('tx.import')} icon="import" onPress={() => setImportOpen(true)} />
+              <TxIconButton testID="tx-select" label={t('tx.select')} icon="select" selected={selectMode} onPress={() => setSelectMode((v) => !v)} />
+              <TxIconButton testID="tx-export" label={t('tx.export')} icon="export" onPress={() => router.setParams({ export: '1' })} />
               <RedesignButton testID="tx-add" label={t('tx.add')} onPress={() => add.open('expense')} />
             </View>
           </View>
@@ -942,6 +950,42 @@ export function RedesignTransactionsScreen() {
         </View>
       ) : null}
     </AppFrame>
+  );
+}
+
+function TxIconButton({
+  testID,
+  label,
+  icon,
+  onPress,
+  selected,
+}: {
+  testID: string;
+  label: string;
+  icon: RedesignIconName;
+  onPress: () => void;
+  selected?: boolean;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: !!selected }}
+      onPress={onPress}
+      style={{
+        width: tokens.size['control-sm'],
+        height: tokens.size['control-sm'],
+        borderRadius: tokens.shape['radius-pill'],
+        backgroundColor: selected ? theme.primary : theme.surface,
+        borderWidth: selected ? 0 : 1,
+        borderColor: theme.borderStrong,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <RedesignIcon name={icon} size={tokens.size['icon-md']} color={selected ? theme.textOnPrimary : theme.primary} />
+    </Pressable>
   );
 }
 

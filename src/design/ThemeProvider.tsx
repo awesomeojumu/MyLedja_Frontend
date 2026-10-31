@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, useColorScheme } from 'react-native';
+import { syncRedesignTheme } from './redesign/theme';
 import { darkTheme, lightTheme, type Theme } from './theme';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
@@ -42,8 +43,10 @@ export function DesignProvider({
     };
   }, [reduceMotionOverride]);
 
+  const dark = choice === 'dark' || (choice === 'system' && scheme === 'dark');
+  syncRedesignTheme(dark ? 'dark' : 'light');
+
   const value = useMemo<DesignContext>(() => {
-    const dark = choice === 'dark' || (choice === 'system' && scheme === 'dark');
     return {
       theme: dark ? darkTheme : lightTheme,
       choice,
@@ -52,7 +55,7 @@ export function DesignProvider({
       setPrivacy,
       reduceMotion: reduceMotionOverride ?? systemReduceMotion,
     };
-  }, [choice, scheme, privacy, reduceMotionOverride, systemReduceMotion]);
+  }, [dark, choice, privacy, reduceMotionOverride, systemReduceMotion]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

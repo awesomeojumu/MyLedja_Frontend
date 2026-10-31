@@ -21,8 +21,8 @@ describe('W0 redesign foundation', () => {
     expect(isRedesignEnabled()).toBe(false);
   });
 
-  it('ships 41 Figma icons', async () => {
-    expect(REDESIGN_ICON_NAMES).toHaveLength(41);
+  it('ships the icon set', async () => {
+    expect(REDESIGN_ICON_NAMES).toHaveLength(44);
     const view = await renderWithProviders(<RedesignIcon name="home" />);
     expect(view.toJSON()).toBeTruthy();
   });

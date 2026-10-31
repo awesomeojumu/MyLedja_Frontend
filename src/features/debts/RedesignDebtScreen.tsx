@@ -16,6 +16,7 @@ import {
   RedesignSheet,
   RedesignText,
   RedesignTopBar,
+  RedesignShell,
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { t } from '@/i18n';
@@ -118,9 +119,9 @@ export function RedesignDebtScreen({ embeddedId }: { embeddedId?: string } = {})
 
   if (!snapshot || !id || !row) {
     return (
-      <SafeAreaView testID="redesign-debt-loading" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+      <RedesignShell><SafeAreaView testID="redesign-debt-loading" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
         <RedesignTopBar title={t('debts.detailTitle')} onBack={() => router.push('/debts')} />
-      </SafeAreaView>
+      </SafeAreaView></RedesignShell>
     );
   }
 
@@ -142,9 +143,9 @@ export function RedesignDebtScreen({ embeddedId }: { embeddedId?: string } = {})
         {body}
       </View>
     ) : (
-      <SafeAreaView testID="redesign-debt" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+      <RedesignShell><SafeAreaView testID="redesign-debt" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
         {body}
-      </SafeAreaView>
+      </SafeAreaView></RedesignShell>
     );
 
   return shell(

@@ -11,6 +11,12 @@ import { REDESIGN_SETTINGS_GROUPS } from '../redesignNav';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 jest.mock('@/design/redesign/flag', () => ({ isRedesignEnabled: () => true }));
+
+let mockWidth = 375;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockWidth, height: 900, scale: 1, fontScale: 1 }),
+}));
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
 }));
@@ -40,10 +46,24 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  mockWidth = 375;
   jest.useRealTimers();
 });
 
 describe('Page 26 redesign Settings (EXPO_PUBLIC_REDESIGN on)', () => {
+  it('wide window keeps Settings inside the sidebar shell', async () => {
+    mockWidth = 1100;
+    const { sync } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(await screen.findByTestId('frame-sidebar')).toBeTruthy();
+    expect(screen.getByTestId('redesign-settings')).toBeTruthy();
+  });
+
   it('hub shows profile + Everyday/Safety/Your data/More with all 13 links (6:2461)', async () => {
     const { sync } = await seeded();
     await renderWithProviders(
@@ -81,9 +101,13 @@ describe('Page 26 redesign Settings (EXPO_PUBLIC_REDESIGN on)', () => {
     );
     expect(await screen.findByTestId('redesign-settings-general')).toBeTruthy();
     expect(screen.getByText(t('settings.redesign.language'))).toBeTruthy();
-    expect(screen.getByText(t('settings.redesign.currencyNgn'))).toBeTruthy();
+    expect(screen.getByText('Nigerian naira (NGN)')).toBeTruthy();
     expect(screen.getByTestId('settings-theme')).toHaveTextContent(/Light|Match my phone/);
     expect(screen.getByTestId('settings-hide-amounts')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('settings-date-format'));
+    expect(await screen.findByTestId('settings-option-DD/MM/YYYY')).toBeTruthy();
+    expect(screen.getByTestId('settings-option-MM/DD/YYYY')).toBeTruthy();
+    expect(screen.getByTestId('settings-option-YYYY-MM-DD')).toBeTruthy();
   });
 
   it('Budget section shows Plan every amount options and warn controls', async () => {

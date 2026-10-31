@@ -639,7 +639,7 @@ export function RedesignDashboardScreen() {
   const checklistCard =
     items.length > 0 ? (
       <View key="checklist" style={{ width: '100%', gap: sp.lg, marginBottom: sp.sm }}>
-        <View style={{ gap: sp.xs }}>
+        <View style={{ gap: sp.md }}>
           <RedesignText variant="headline" testID="redesign-home-welcome">
             {t('dashboard.redesign.welcome', { name: user?.name?.split(' ')[0] || user?.name || '' })}
           </RedesignText>

@@ -19,6 +19,7 @@ import {
   RedesignListRow,
   RedesignSheet,
   RedesignText,
+  RedesignShell,
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { t } from '@/i18n';
@@ -204,7 +205,7 @@ export function RedesignPayeesScreen() {
   }
 
   return (
-    <SafeAreaView testID="redesign-payees" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="redesign-payees" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <StackTopBar
         title={t('payees.title')}
         onBack={() => router.back()}
@@ -294,7 +295,7 @@ export function RedesignPayeesScreen() {
           </RedesignText>
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 
@@ -500,7 +501,7 @@ function RedesignPayeeDetail({
   };
 
   return (
-    <SafeAreaView testID="redesign-payee-detail" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="redesign-payee-detail" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <StackTopBar
         title={name}
         onBack={onBack}
@@ -794,7 +795,7 @@ function RedesignPayeeDetail({
         }}
         destructive
       />
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 
@@ -847,7 +848,7 @@ function RedesignMergeView({
   const canMerge = selected.length >= 2 && keepName.trim().length > 0;
 
   return (
-    <SafeAreaView testID="payees-merge-sheet" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="payees-merge-sheet" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <StackTopBar title={t('payees.mergeTitle')} onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: sp.lg, gap: sp.lg, flexGrow: 1 }}>
         <RedesignText>{t('payees.redesign.mergeIntro')}</RedesignText>
@@ -888,6 +889,6 @@ function RedesignMergeView({
           }}
         />
       </View>
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }

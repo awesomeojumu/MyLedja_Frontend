@@ -17,6 +17,7 @@ import {
   RedesignProgress,
   RedesignSkeleton,
   RedesignText,
+  RedesignShell,
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { useToast } from '@/design/components';
@@ -81,7 +82,7 @@ function DetailChrome({
   children: ReactNode;
 }) {
   return (
-    <SafeAreaView testID="redesign-category-frame" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="redesign-category-frame" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <View
         testID="redesign-top-bar"
         style={{
@@ -110,7 +111,7 @@ function DetailChrome({
         {trailing ?? <View style={{ width: density.minTarget }} />}
       </View>
       <View style={{ flex: 1 }}>{children}</View>
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 

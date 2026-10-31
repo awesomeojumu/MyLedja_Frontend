@@ -411,19 +411,25 @@ export class WorkspaceRepository {
       reportDashboards: live<ReportDashboardModel>(dashboardRows).sort((a, b) => a.sortOrder - b.sortOrder),
       savedReports: live<SavedReportModel>(savedRows),
       waiting,
-      chart: this.chartFor(accountList, categoryList, debts, holdings),
+      chart: this.chartFor(accountList, categoryList, debts, holdings, settings.currency),
     };
   }
 
-  chartFor(accounts: Account[], categories: Category[], debts: PersonDebt[] = [], holdings: Holding[] = []): Chart {
+  chartFor(
+    accounts: Account[],
+    categories: Category[],
+    debts: PersonDebt[] = [],
+    holdings: Holding[] = [],
+    ledgerCurrency = 'NGN',
+  ): Chart {
     const ledger: LedgerAccount[] = [
       ...accounts.map((a) => ({ id: a.id, kind: ACCOUNT_KIND_INFO[a.type].ledger, name: a.name, currency: a.currency })),
-      ...categories.map((c) => ({ id: c.id, kind: c.kind, name: c.name, currency: 'NGN', categoryId: c.id, countInBudget: c.countInBudget })),
+      ...categories.map((c) => ({ id: c.id, kind: c.kind, name: c.name, currency: ledgerCurrency, categoryId: c.id, countInBudget: c.countInBudget })),
       ...debts.map((d) => ({
         id: d.ledgerAccountId,
         kind: d.direction === 'owedToMe' ? ('asset' as const) : ('liability' as const),
         name: d.name,
-        currency: 'NGN',
+        currency: ledgerCurrency,
       })),
       ...holdings.map((h) => ({
         id: h.ledgerAccountId,
@@ -497,6 +503,9 @@ export class WorkspaceRepository {
       {
         budgetStyle: body.budgetStyle,
         currency: body.currency,
+        preferredCurrencies: [
+          ...new Set([body.currency, ...body.accounts.map((a) => a.currency).filter((code): code is string => !!code)]),
+        ],
         weekStart: body.weekStart,
         skippedSteps: [...new Set(body.skippedSteps)].sort((a, b) => a - b),
       },
@@ -504,7 +513,13 @@ export class WorkspaceRepository {
     );
     for (const a of body.accounts) {
       const type = (a.type in ACCOUNT_KIND_INFO ? a.type : 'other_asset') as AccountKind;
-      await this.addAccount({ name: a.name, type, openingBalance: BigInt(a.openingBalance), openingDate: a.openingDate });
+      await this.addAccount({
+        name: a.name,
+        type,
+        currency: a.currency,
+        openingBalance: BigInt(a.openingBalance),
+        openingDate: a.openingDate,
+      });
     }
     // DESIGN step 5: optional monthly take-home fills a suggested first budget.
     if (body.monthlyTakeHome != null && !body.skippedSteps.includes(5)) {
@@ -532,7 +547,7 @@ export class WorkspaceRepository {
       id: this.newId(),
       name: input.name,
       type: input.type,
-      currency: input.currency ?? 'NGN',
+      currency: input.currency ?? snapshot.settings.currency ?? 'NGN',
       institution: input.institution,
       last4: input.last4?.slice(-4),
       countInBudget: input.countInBudget ?? ACCOUNT_KIND_INFO[input.type].countInBudget,
@@ -543,7 +558,13 @@ export class WorkspaceRepository {
     const { id, ...data } = account;
     await this.put('accounts', id, data, 'account.create');
     if (input.openingBalance > 0n) {
-      const chart = this.chartFor([...snapshot.accounts, account], snapshot.categories);
+      const chart = this.chartFor(
+        [...snapshot.accounts, account],
+        snapshot.categories,
+        snapshot.debts,
+        snapshot.holdings,
+        snapshot.settings.currency,
+      );
       const lines = buildOpeningBalance(chart, { accountId: id, amount: input.openingBalance });
       if (!lines.ok) return lines;
       await this.postEvent(chart, snapshot.events, { type: 'opening_balance', date: input.openingDate, lines: lines.value });
@@ -2345,7 +2366,13 @@ export class WorkspaceRepository {
       accountId: input.accountId,
       openedOn: input.date,
     };
-    const chart = this.chartFor(snapshot.accounts, snapshot.categories, [...snapshot.debts, debt]);
+    const chart = this.chartFor(
+      snapshot.accounts,
+      snapshot.categories,
+      [...snapshot.debts, debt],
+      snapshot.holdings,
+      snapshot.settings.currency,
+    );
     const lines =
       input.direction === 'owedToMe'
         ? buildLend(chart, { receivableId: ledgerAccountId, accountId: input.accountId, amount: input.amount })
@@ -2982,7 +3009,13 @@ export class WorkspaceRepository {
     const holding = snapshot.holdings.find((h) => h.id === input.holdingId);
     if (!holding) return { ok: false, error: 'unknown_account' };
     const fees = input.fees ?? 0n;
-    const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
+    const chart = this.chartFor(
+      snapshot.accounts,
+      snapshot.categories,
+      snapshot.debts,
+      snapshot.holdings,
+      snapshot.settings.currency,
+    );
     const lines = buildInvestmentBuy(chart, {
       holdingAccountId: holding.ledgerAccountId,
       cashAccountId: input.cashAccountId,
@@ -3093,7 +3126,13 @@ export class WorkspaceRepository {
     }
     const costOfLots = input.costOfLots ?? cost;
     const fees = input.fees ?? 0n;
-    const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
+    const chart = this.chartFor(
+      snapshot.accounts,
+      snapshot.categories,
+      snapshot.debts,
+      snapshot.holdings,
+      snapshot.settings.currency,
+    );
     const lines = buildInvestmentSell(chart, {
       holdingAccountId: holding.ledgerAccountId,
       cashAccountId: input.cashAccountId,
@@ -3154,7 +3193,13 @@ export class WorkspaceRepository {
     const snapshot = await this.load();
     const holding = snapshot.holdings.find((h) => h.id === input.holdingId);
     if (!holding) return { ok: false, error: 'unknown_account' };
-    const chart = this.chartFor(snapshot.accounts, snapshot.categories, snapshot.debts, snapshot.holdings);
+    const chart = this.chartFor(
+      snapshot.accounts,
+      snapshot.categories,
+      snapshot.debts,
+      snapshot.holdings,
+      snapshot.settings.currency,
+    );
     const sys = chart.system('investment_income');
     if (!sys) return { ok: false, error: 'unknown_account' };
     const remoteDividend = (extra: Record<string, unknown>): RemoteOperation => ({

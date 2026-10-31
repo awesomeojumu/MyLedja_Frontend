@@ -2,9 +2,11 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { useAuth } from '@/features/auth/AuthProvider';
-import { DEFAULT_NOTIFICATION_PREFS } from '@/data/workspace/model';
+import { CurrencySheet } from '@/features/setup/CurrencyPicker';
+import { addPreferredCurrency } from '@/features/setup/currencies';
+import { DEFAULT_NOTIFICATION_PREFS, type DateFormat } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { useDesign } from '@/design/ThemeProvider';
 import { useToast } from '@/design/components';
 import {
@@ -21,6 +23,22 @@ import { redesignLight as theme, redesignTokens as tokens } from '@/design/redes
 import { t, type TextKey } from '@/i18n';
 import { LOCK_AFTER_OPTIONS, type LockAfterMs, useAppLockSetting } from '@/features/lock/AppLock';
 import { formatNaira } from '@/money';
+import {
+  currencyLabel,
+  DATE_FORMATS,
+  dateFormatLabel,
+  LANGUAGE_OPTIONS,
+  MONTH_STARTS,
+  monthStartLabel,
+  NUMBER_FORMAT_OPTIONS,
+  QUIET_HOURS,
+  quietHoursLabel,
+  WARN_AT_OPTIONS,
+  WEEK_OPTIONS,
+  weekLabel,
+  type MonthStart,
+  type WarnAt,
+} from './pickerLists';
 import type { SettingsTabId } from './shipped';
 import { REDESIGN_SETTINGS_TITLE } from './redesignNav';
 import {
@@ -158,10 +176,14 @@ function GeneralSection() {
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [weekOpen, setWeekOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const [numberOpen, setNumberOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
   const [name, setName] = useState(user?.name ?? '');
 
   const currency = snapshot?.settings.currency ?? 'NGN';
   const weekStart = snapshot?.settings.weekStart ?? 'monday';
+  const dateFormat = snapshot?.settings.dateFormat ?? 'DD/MM/YYYY';
 
   const saveSettings = async (patch: Record<string, unknown>) => {
     if (!snapshot) return;
@@ -176,36 +198,30 @@ function GeneralSection() {
           testID="settings-language"
           label={t('settings.redesign.language')}
           value={t('settings.redesign.languageEnglish')}
-          onPress={() => undefined}
+          onPress={() => setLanguageOpen(true)}
         />
         <PickerRow
           testID="settings-currency"
           label={t('settings.redesign.currency')}
-          value={
-            currency === 'USD'
-              ? t('settings.redesign.currencyUsd')
-              : currency === 'GBP'
-                ? t('settings.redesign.currencyGbp')
-                : t('settings.redesign.currencyNgn')
-          }
+          value={currencyLabel(currency)}
           onPress={() => setCurrencyOpen(true)}
         />
         <PickerRow
           testID="settings-number-format"
           label={t('settings.redesign.numberFormat')}
           value={t('settings.redesign.numberFormatNg')}
-          onPress={() => undefined}
+          onPress={() => setNumberOpen(true)}
         />
         <PickerRow
           testID="settings-date-format"
           label={t('settings.redesign.dateFormat')}
-          value={t('settings.redesign.dateFormatExample')}
-          onPress={() => undefined}
+          value={dateFormatLabel(dateFormat)}
+          onPress={() => setDateOpen(true)}
         />
         <PickerRow
           testID="settings-week-start"
           label={t('settings.redesign.weekStarts')}
-          value={weekStart === 'sunday' ? t('settings.redesign.sunday') : t('settings.redesign.monday')}
+          value={weekLabel(weekStart)}
           onPress={() => setWeekOpen(true)}
         />
         <PickerRow
@@ -241,13 +257,32 @@ function GeneralSection() {
         />
       </Card>
       <OptionSheet
+        visible={languageOpen}
+        title={t('settings.redesign.language')}
+        options={LANGUAGE_OPTIONS.map((value) => ({ value, label: t('settings.redesign.languageEnglish') }))}
+        onClose={() => setLanguageOpen(false)}
+        onPick={() => setLanguageOpen(false)}
+      />
+      <OptionSheet
+        visible={numberOpen}
+        title={t('settings.redesign.numberFormat')}
+        options={NUMBER_FORMAT_OPTIONS.map((value) => ({ value, label: t('settings.redesign.numberFormatNg') }))}
+        onClose={() => setNumberOpen(false)}
+        onPick={() => setNumberOpen(false)}
+      />
+      <OptionSheet
+        visible={dateOpen}
+        title={t('settings.redesign.dateFormat')}
+        options={DATE_FORMATS.map((value) => ({ value, label: dateFormatLabel(value) }))}
+        onClose={() => setDateOpen(false)}
+        onPick={(v) => {
+          setDateOpen(false);
+          void saveSettings({ dateFormat: v as DateFormat });
+        }}
+      />
+      <CurrencySheet
         visible={currencyOpen}
-        title={t('settings.redesign.currency')}
-        options={[
-          { value: 'NGN', label: t('settings.redesign.currencyNgn') },
-          { value: 'USD', label: t('settings.redesign.currencyUsd') },
-          { value: 'GBP', label: t('settings.redesign.currencyGbp') },
-        ]}
+        selected={currency}
         onClose={() => setCurrencyOpen(false)}
         onPick={(v) => {
           setCurrencyOpen(false);
@@ -257,10 +292,7 @@ function GeneralSection() {
       <OptionSheet
         visible={weekOpen}
         title={t('settings.redesign.weekStarts')}
-        options={[
-          { value: 'monday', label: t('settings.redesign.monday') },
-          { value: 'sunday', label: t('settings.redesign.sunday') },
-        ]}
+        options={WEEK_OPTIONS.map((value) => ({ value, label: weekLabel(value) }))}
         onClose={() => setWeekOpen(false)}
         onPick={(v) => {
           setWeekOpen(false);
@@ -290,10 +322,13 @@ function BudgetSection() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const [styleOpen, setStyleOpen] = useState(false);
+  const [monthOpen, setMonthOpen] = useState(false);
+  const [warnOpen, setWarnOpen] = useState(false);
   const style = snapshot?.settings.budgetStyle ?? 'tracking';
   const carry = snapshot?.settings.carryOverDefault ?? true;
+  const monthStart = snapshot?.settings.monthStart ?? '1';
   const [warn, setWarn] = useState(true);
-  const [warnAt] = useState(90);
+  const warnAt = snapshot?.settings.warnAtPercent ?? 90;
 
   const save = async (patch: Record<string, unknown>) => {
     if (!snapshot) return;
@@ -314,8 +349,8 @@ function BudgetSection() {
       <PickerRow
         testID="settings-month-starts"
         label={t('settings.redesign.monthStarts')}
-        value={t('settings.redesign.monthStartsDay')}
-        onPress={() => undefined}
+        value={monthStartLabel(monthStart)}
+        onPress={() => setMonthOpen(true)}
       />
       <RedesignSwitch
         testID="settings-carry-over"
@@ -333,7 +368,7 @@ function BudgetSection() {
         testID="settings-warn-at"
         label={t('settings.redesign.warnAt')}
         value={t('settings.redesign.warnAtValue', { pct: warnAt })}
-        onPress={() => undefined}
+        onPress={() => setWarnOpen(true)}
       />
       <OptionSheet
         visible={styleOpen}
@@ -346,6 +381,29 @@ function BudgetSection() {
         onPick={(v) => {
           setStyleOpen(false);
           void save({ budgetStyle: v });
+        }}
+      />
+      <OptionSheet
+        visible={monthOpen}
+        title={t('settings.redesign.monthStarts')}
+        options={MONTH_STARTS.map((value) => ({ value, label: monthStartLabel(value) }))}
+        onClose={() => setMonthOpen(false)}
+        onPick={(v) => {
+          setMonthOpen(false);
+          void save({ monthStart: v as MonthStart });
+        }}
+      />
+      <OptionSheet
+        visible={warnOpen}
+        title={t('settings.redesign.warnAt')}
+        options={WARN_AT_OPTIONS.map((pct) => ({
+          value: String(pct),
+          label: t('settings.redesign.warnAtValue', { pct }),
+        }))}
+        onClose={() => setWarnOpen(false)}
+        onPick={(v) => {
+          setWarnOpen(false);
+          void save({ warnAtPercent: Number(v) as WarnAt });
         }}
       />
     </Card>
@@ -406,6 +464,7 @@ function NotificationsSection() {
   const prefs = { ...DEFAULT_NOTIFICATION_PREFS, ...snapshot?.settings.notificationPrefs };
   const [tips, setTips] = useState(true);
   const [moneyIn, setMoneyIn] = useState(true);
+  const [quietOpen, setQuietOpen] = useState(false);
   const save = async (patch: Partial<typeof prefs>) => {
     if (!snapshot) return;
     await repo.updateSettings({ ...snapshot.settings, notificationPrefs: { ...prefs, ...patch } });
@@ -446,8 +505,22 @@ function NotificationsSection() {
       <PickerRow
         testID="settings-quiet-hours"
         label={t('settings.redesign.quietHours')}
-        value={t('settings.redesign.quietHoursValue')}
-        onPress={() => undefined}
+        value={quietHoursLabel(prefs.quietHoursStart, prefs.quietHoursEnd)}
+        onPress={() => setQuietOpen(true)}
+      />
+      <OptionSheet
+        visible={quietOpen}
+        title={t('settings.redesign.quietHours')}
+        options={QUIET_HOURS.map((row) => ({
+          value: `${row.start}|${row.end}`,
+          label: t(row.labelKey),
+        }))}
+        onClose={() => setQuietOpen(false)}
+        onPick={(v) => {
+          setQuietOpen(false);
+          const [quietHoursStart, quietHoursEnd] = v.split('|');
+          void save({ quietHoursStart, quietHoursEnd });
+        }}
       />
     </Card>
   );
@@ -583,12 +656,37 @@ function ImportExportSection() {
 function CurrenciesSection() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
+  const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const main = snapshot?.settings.currency ?? 'NGN';
+  const preferred = snapshot?.settings.preferredCurrencies?.length ? snapshot.settings.preferredCurrencies : [main];
+  const others = preferred.filter((code) => code !== main);
   const daily = snapshot?.settings.downloadDailyRates ?? true;
+  const savePreferred = (code: string) => {
+    if (!snapshot) return;
+    const next = addPreferredCurrency(preferred.includes(main) ? preferred : [main, ...preferred], code);
+    void repo.updateSettings({ ...snapshot.settings, preferredCurrencies: next }).then(() => toast.show(t('common.saved')));
+  };
   return (
     <View testID="settings-currencies" style={{ gap: sp.lg }}>
       <Card>
-        <PickerRow testID="settings-main-currency" label={t('settings.redesign.mainCurrency')} value={main} onPress={() => undefined} />
+        <PickerRow
+          testID="settings-main-currency"
+          label={t('settings.redesign.mainCurrency')}
+          value={currencyLabel(main)}
+          onPress={() => setCurrencyOpen(true)}
+        />
+        <CurrencySheet
+          visible={currencyOpen}
+          selected={main}
+          testID="settings-main-currency-picker"
+          onClose={() => setCurrencyOpen(false)}
+          onPick={(v) => {
+            setCurrencyOpen(false);
+            if (!snapshot) return;
+            void repo.updateSettings({ ...snapshot.settings, currency: v }).then(() => toast.show(t('common.saved')));
+          }}
+        />
       </Card>
       <View style={{ gap: sp.sm }}>
         <RedesignText variant="helper" tone="textSecondary">
@@ -603,8 +701,13 @@ function CurrenciesSection() {
             paddingVertical: sp.xs,
           }}
         >
-          <RedesignListRow title={t('settings.redesign.usd')} onPress={() => undefined} />
-          <RedesignListRow title={t('settings.redesign.gbp')} onPress={() => undefined} />
+          {others.length ? (
+            others.map((code) => <RedesignListRow key={code} testID={`settings-preferred-${code}`} title={currencyLabel(code)} />)
+          ) : (
+            <RedesignText variant="helper" tone="textSecondary" style={{ paddingHorizontal: sp.md, paddingVertical: sp.sm }}>
+              {t('settings.redesign.noOtherCurrencies')}
+            </RedesignText>
+          )}
         </View>
       </View>
       <RedesignSwitch
@@ -616,7 +719,17 @@ function CurrenciesSection() {
           void repo.updateSettings({ ...snapshot.settings, downloadDailyRates: v }).then(() => toast.show(t('common.saved')));
         }}
       />
-      <RedesignButton testID="settings-add-currency" label={t('settings.redesign.addCurrency')} onPress={() => undefined} fullWidth />
+      <RedesignButton testID="settings-add-currency" label={t('settings.redesign.addCurrency')} onPress={() => setAddOpen(true)} fullWidth />
+      <CurrencySheet
+        visible={addOpen}
+        selected={main}
+        testID="settings-add-currency-picker"
+        onClose={() => setAddOpen(false)}
+        onPick={(code) => {
+          setAddOpen(false);
+          savePreferred(code);
+        }}
+      />
     </View>
   );
 }
@@ -644,10 +757,10 @@ function AdvancedSection() {
   const { snapshot, repo } = useWorkspace();
   const toast = useToast();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [showKobo, setShowKobo] = useState(true);
-  void snapshot;
-  void repo;
+  const reportsStart = snapshot?.settings.reportsStart ?? '1';
 
   return (
     <View testID="settings-advanced" style={{ gap: sp.lg }}>
@@ -661,8 +774,21 @@ function AdvancedSection() {
         <PickerRow
           testID="settings-reports-start"
           label={t('settings.redesign.reportsStart')}
-          value={t('settings.redesign.reportsStartValue')}
-          onPress={() => undefined}
+          value={monthStartLabel(reportsStart)}
+          onPress={() => setReportsOpen(true)}
+        />
+        <OptionSheet
+          visible={reportsOpen}
+          title={t('settings.redesign.reportsStart')}
+          options={MONTH_STARTS.map((value) => ({ value, label: monthStartLabel(value) }))}
+          onClose={() => setReportsOpen(false)}
+          onPick={(v) => {
+            setReportsOpen(false);
+            if (!snapshot) return;
+            void repo
+              .updateSettings({ ...snapshot.settings, reportsStart: v as MonthStart })
+              .then(() => toast.show(t('common.saved')));
+          }}
         />
       </Card>
       <View

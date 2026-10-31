@@ -344,6 +344,8 @@ export type WorkspaceTag = { id: string; name: string };
 export type WorkspaceSettings = {
   budgetStyle: BudgetStyle;
   currency: string;
+  /** Currencies the person added, including the main one. */
+  preferredCurrencies?: string[];
   weekStart: 'monday' | 'sunday' | 'saturday';
   /** Workspace display name (TB-11 Workspace). */
   workspaceName?: string;
@@ -372,6 +374,14 @@ export type WorkspaceSettings = {
   extraCategoryGroups?: string[];
   /** PU-28 — Due soon window in days (3 · 7 · 14 · 30). */
   dueSoonDays?: 3 | 7 | 14 | 30;
+  /** Settings › General date format. */
+  dateFormat?: DateFormat;
+  /** Settings › Budget. 1, 15, or the last day. */
+  monthStart?: '1' | '15' | 'last';
+  /** Settings › Budget warn threshold. */
+  warnAtPercent?: 50 | 75 | 80 | 90 | 100;
+  /** Settings › Advanced. Same day choices as month start. */
+  reportsStart?: '1' | '15' | 'last';
   health?: HealthSettings;
 };
 

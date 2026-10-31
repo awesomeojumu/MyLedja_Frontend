@@ -18,6 +18,7 @@ import {
   RedesignSheet,
   RedesignText,
   RedesignTopBar,
+  RedesignShell,
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { monthOf } from '@/ledger';
@@ -127,7 +128,7 @@ export function RedesignIncomeScreen() {
   }, [snapshot, params.stream]);
 
   return (
-    <SafeAreaView testID="redesign-income" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="redesign-income" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <RedesignTopBar
         title={t('income.title')}
         onBack={() => router.push('/more')}
@@ -269,7 +270,7 @@ export function RedesignIncomeScreen() {
           }}
         />
       ) : null}
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 

@@ -18,6 +18,7 @@ import {
   RedesignSheet,
   RedesignText,
   RedesignTopBar,
+  RedesignShell,
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { t } from '@/i18n';
@@ -154,7 +155,7 @@ export function RedesignDebtsScreen() {
   const freeBy = debtFreeIso(totalOwed, monthlyPace, todayIso);
 
   return (
-    <SafeAreaView testID="redesign-debts" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+    <RedesignShell><SafeAreaView testID="redesign-debts" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
       <RedesignTopBar
         title={t('debts.title')}
         onBack={() => router.push('/more')}
@@ -328,7 +329,7 @@ export function RedesignDebtsScreen() {
           }}
         />
       ) : null}
-    </SafeAreaView>
+    </SafeAreaView></RedesignShell>
   );
 }
 

@@ -21,13 +21,15 @@ import { t, type TextKey } from '@/i18n';
 import { parseAmount, toWire } from '@/money';
 import { ACCOUNT_TYPES, WEEK_STARTS, type AccountType } from './starter';
 import { WelcomeInstitutionBadge } from './WelcomeInstitutionBadge';
+import { CurrencyField, CurrencySheet } from './CurrencyPicker';
+import { addPreferredCurrency, currencyLabel } from './currencies';
 import { fromApiInstitutions, matchInstitution, NG_INSTITUTIONS, type Institution } from './institutions';
 
 const sp = tokens.space;
 const size = tokens.size;
 
 type Step = 'start' | 1 | 2 | 3 | 'manual' | 4 | 5 | 'done';
-type AccountRow = { name: string; type: AccountType; amountText: string; minor: bigint | null };
+type AccountRow = { name: string; type: AccountType; amountText: string; minor: bigint | null; currency: string };
 type Audience = 'solo' | 'household';
 type AccountPath = 'connect' | 'manual' | null;
 type PlanStyle = 'envelope' | 'limits' | 'track';
@@ -132,9 +134,12 @@ export function RedesignWelcomeScreen() {
   const [workspaceName, setWorkspaceName] = useState(t('welcome.step1.default'));
   const [audience, setAudience] = useState<Audience>('solo');
   const [weekStart, setWeekStart] = useState<(typeof WEEK_STARTS)[number]>('monday');
+  const [currency, setCurrency] = useState('NGN');
+  const [preferred, setPreferred] = useState<string[]>(['NGN']);
+  const [addCurrencyOpen, setAddCurrencyOpen] = useState(false);
   const [accountPath, setAccountPath] = useState<AccountPath>(null);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
-  const [draft, setDraft] = useState<AccountRow>({ name: '', type: 'bank', amountText: '', minor: null });
+  const [draft, setDraft] = useState<AccountRow>({ name: '', type: 'bank', amountText: '', minor: null, currency: 'NGN' });
   const [draftError, setDraftError] = useState<string | null>(null);
   const [selectedCats, setSelectedCats] = useState<Set<string>>(
     () => new Set(REDESIGN_CATEGORIES.filter((c) => c.selected).map((c) => c.key)),
@@ -158,6 +163,11 @@ export function RedesignWelcomeScreen() {
       return current;
     });
   }, [accountPath]);
+
+  useEffect(() => {
+    setPreferred((list) => (list.includes(currency) ? list : [currency, ...list]));
+    setDraft((current) => (current.name.trim() ? current : { ...current, currency }));
+  }, [currency]);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,7 +226,7 @@ export function RedesignWelcomeScreen() {
         const budgetStyle = plan === 'envelope' ? 'envelope' : 'tracking';
         const body: SetupBody = {
           workspaceName: skip.includes(1) ? t('welcome.step1.default') : workspaceName.trim() || t('welcome.step1.default'),
-          currency: 'NGN',
+          currency,
           weekStart,
           accounts: skip.includes(3)
             ? []
@@ -227,6 +237,7 @@ export function RedesignWelcomeScreen() {
                   type: a.type,
                   openingBalance: toWire(a.minor ?? 0n),
                   openingDate: new Date().toISOString().slice(0, 10),
+                  currency: a.currency,
                 })),
           categories: skip.includes(4) ? [] : categories,
           budgetStyle,
@@ -244,7 +255,7 @@ export function RedesignWelcomeScreen() {
         setBusy(false);
       }
     },
-    [user, api, sync.store, sync.engine, workspaceName, weekStart, accounts, selectedCats, custom, plan, setUser],
+    [user, api, sync.store, sync.engine, workspaceName, weekStart, currency, accounts, selectedCats, custom, plan, setUser],
   );
 
   const saveDraftAccount = (): boolean => {
@@ -262,7 +273,7 @@ export function RedesignWelcomeScreen() {
     } else {
       setAccounts((all) => [...all, { ...draft, minor: 0n }]);
     }
-    setDraft({ name: '', type: 'bank', amountText: '', minor: null });
+    setDraft({ name: '', type: 'bank', amountText: '', minor: null, currency });
     setDraftError(null);
     return true;
   };
@@ -410,15 +421,7 @@ export function RedesignWelcomeScreen() {
           </RedesignText>
           <RedesignText tone="textSecondary">{t('welcome.redesign.moneyBody')}</RedesignText>
         </View>
-        <View style={{ gap: sp.sm }}>
-          <RedesignText variant="label">{t('welcome.step2.currency')}</RedesignText>
-          <RedesignChoiceCard
-            testID="currency-NGN"
-            title={t('welcome.redesign.currencyNgn')}
-            selected
-            onPress={() => undefined}
-          />
-        </View>
+        <CurrencyField value={currency} onChange={setCurrency} testID="currency-field" />
         <View style={{ gap: sp.sm }}>
           <RedesignText variant="label">{t('welcome.redesign.numberFormat')}</RedesignText>
           <RedesignChoiceCard testID="number-format" title="1,234.56" selected onPress={() => undefined} />
@@ -522,6 +525,36 @@ export function RedesignWelcomeScreen() {
             ))}
           </View>
         </View>
+        <View style={{ gap: sp.sm }}>
+          <RedesignText variant="label">{t('welcome.redesign.preferredCurrencies')}</RedesignText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.sm }}>
+            {preferred.map((code) => (
+              <RedesignChip
+                key={code}
+                testID={`preferred-${code}`}
+                label={currencyLabel(code)}
+                selected={draft.currency === code}
+                onPress={() => setDraft((current) => ({ ...current, currency: code }))}
+              />
+            ))}
+            <RedesignChip
+              testID="add-preferred-currency"
+              label={t('welcome.redesign.addCurrency')}
+              onPress={() => setAddCurrencyOpen(true)}
+            />
+          </View>
+        </View>
+        <CurrencySheet
+          visible={addCurrencyOpen}
+          selected={draft.currency}
+          testID="welcome-add-currency"
+          onClose={() => setAddCurrencyOpen(false)}
+          onPick={(code) => {
+            setPreferred((list) => addPreferredCurrency(list, code));
+            setDraft((current) => ({ ...current, currency: code }));
+            setAddCurrencyOpen(false);
+          }}
+        />
         <RedesignField
           testID="account-opening-0"
           label={t('welcome.redesign.balanceToday')}
