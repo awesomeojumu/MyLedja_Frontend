@@ -53,6 +53,10 @@ describe('Redesign Reports (Figma 5:2297)', () => {
     expect(screen.getByText(t('reports.redesign.netWorth'))).toBeTruthy();
     expect(screen.getByText(t('reports.redesign.spendingByPayee'))).toBeTruthy();
     expect(screen.getByTestId('redesign-reports-your-label')).toHaveTextContent(t('reports.redesign.yourReports'));
+    // Mock seeds demo saved reports so the section is not a dead blank.
+    expect(screen.getByText('Food each month')).toBeTruthy();
+    expect(screen.getByText('Top payees')).toBeTruthy();
+    expect(screen.queryByText(t('reports.redesign.noSaved'))).toBeNull();
     expect(screen.getByTestId('redesign-reports-build')).toBeTruthy();
     expect(screen.getByTestId('redesign-reports-add')).toBeTruthy();
     expect(screen.queryByTestId('redesign-bottom-nav')).toBeNull();

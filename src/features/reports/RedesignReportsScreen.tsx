@@ -15,9 +15,10 @@ import {
   RedesignText,
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { t, type TextKey } from '@/i18n';
 
-import { GALLERY, kindName, newCard } from './helpers';
+import { DEMO_SAVED_REPORTS, GALLERY, kindName, newCard } from './helpers';
 import { useDashboards } from './useDashboards';
 
 const sp = tokens.space;
@@ -86,13 +87,16 @@ function matchesSaved(card: ReportCardModel, savedId: string): boolean {
  */
 export function RedesignReportsScreen() {
   const { snapshot } = useWorkspace();
+  const { source } = useAuth();
   const router = useRouter();
   const params = useGlobalSearchParams<{ addReport?: string }>();
   const { dashboards, ready, save } = useDashboards();
   const [busy, setBusy] = useState(false);
 
   const overview = dashboards[0] ?? null;
-  const saved = snapshot?.savedReports ?? [];
+  const stored = snapshot?.savedReports ?? [];
+  // Mock has no server-saved reports; seed the list so "Your reports" isn't a dead blank.
+  const saved = stored.length > 0 ? stored : source === 'mock' ? DEMO_SAVED_REPORTS : [];
   const adding = params.addReport === '1';
 
   const openAdd = () => router.setParams({ addReport: '1' });
@@ -138,6 +142,8 @@ export function RedesignReportsScreen() {
           savedReportId: report.id,
           title: report.name,
           range: 'this_month',
+          // Keep spec on the card so Mock demo rows work before a real saved_reports row exists.
+          spec: report.spec,
         }),
     );
   };
