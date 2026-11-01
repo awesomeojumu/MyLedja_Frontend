@@ -136,6 +136,23 @@ export function defaultDashboards(newId: () => string): Omit<ReportDashboardMode
   ];
 }
 
+/**
+ * Demo saved builder reports for Mock API source when the workspace has none yet.
+ * Fixed ids so a card opened from "Your reports" still resolves its spec before anything is persisted.
+ */
+export const DEMO_SAVED_REPORTS: SavedReportModel[] = [
+  {
+    id: 'demo-saved-food-month',
+    name: 'Food each month',
+    spec: { show: 'spending', groupBy: 'category', splitBy: 'month', chart: 'bar', filters: {} },
+  },
+  {
+    id: 'demo-saved-top-payees',
+    name: 'Top payees',
+    spec: { show: 'spending', groupBy: 'payee', splitBy: null, chart: 'bar', filters: {} },
+  },
+];
+
 export function kindName(kind: ReportKind): string {
   return t(`reports.kind.${kind}` as TextKey);
 }

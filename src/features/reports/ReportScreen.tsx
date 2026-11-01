@@ -80,7 +80,9 @@ function LegacyReportScreen({ runner }: { runner?: ReportRunner } = {}) {
   const found = id ? cardById(id) : null;
   const card = found?.card ?? null;
   const title = card && snapshot ? cardTitle(card, snapshot.savedReports) : t('reports.title');
-  const savedSpec = card?.savedReportId ? (snapshot?.savedReports.find((r) => r.id === card.savedReportId)?.spec ?? null) : (card?.spec ?? null);
+  const savedSpec = card?.savedReportId
+    ? (snapshot?.savedReports.find((r) => r.id === card.savedReportId)?.spec ?? card.spec ?? null)
+    : (card?.spec ?? null);
 
   const filterCount =
     (txFilters.accountId ? 1 : 0) +
