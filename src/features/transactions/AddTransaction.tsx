@@ -27,7 +27,7 @@ import type { Snapshot, TransactionInput } from '@/data/workspace/repository';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { ruleChangeFor } from '@/features/rules/ruleEngine';
 import { t } from '@/i18n';
-import { formatNaira } from '@/money';
+import { formatNaira, parseAmount } from '@/money';
 
 import { MoneyBackPrompt } from '@/features/debts/MoneyBackPrompt';
 import { suggestMoneyBack, type MoneyBackChoice, type MoneyBackSuggestion } from '@/features/debts/moneyBack';
@@ -66,7 +66,15 @@ const REDESIGN_DOORS: {
 export type AddKind = 'expense' | 'income' | 'transfer';
 const KINDS: AddKind[] = ['expense', 'income', 'transfer'];
 
-type Prefill = { accountId?: string; date?: string; goalName?: string; goalId?: string };
+export type Prefill = {
+  accountId?: string;
+  date?: string;
+  goalName?: string;
+  goalId?: string;
+  amount?: string;
+  payee?: string;
+  categoryId?: string;
+};
 type AddApi = { open: (kind?: AddKind, prefill?: Prefill) => void };
 const Ctx = createContext<AddApi | null>(null);
 
@@ -94,7 +102,16 @@ function writeLastTab(kind: AddKind) {
 /** The global Add transaction popup. Its state lives in the address (`?add=expense`), so a refresh keeps it open (E-16 / PU00-5). */
 export function AddTransactionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const params = useGlobalSearchParams<{ add?: string; account?: string; date?: string; goal?: string; goalId?: string }>();
+  const params = useGlobalSearchParams<{
+    add?: string;
+    account?: string;
+    date?: string;
+    goal?: string;
+    goalId?: string;
+    amount?: string;
+    payee?: string;
+    category?: string;
+  }>();
   const kind = KINDS.includes(params.add as AddKind) ? (params.add as AddKind) : null;
   const open = useCallback(
     (k: AddKind = readLastTab(), prefill: Prefill = {}) => {
@@ -105,12 +122,25 @@ export function AddTransactionProvider({ children }: { children: ReactNode }) {
         date: prefill.date,
         goal: prefill.goalName,
         goalId: prefill.goalId,
+        amount: prefill.amount,
+        payee: prefill.payee,
+        category: prefill.categoryId,
       });
     },
     [router],
   );
   const close = useCallback(
-    () => router.setParams({ add: undefined, account: undefined, date: undefined, goal: undefined, goalId: undefined }),
+    () =>
+      router.setParams({
+        add: undefined,
+        account: undefined,
+        date: undefined,
+        goal: undefined,
+        goalId: undefined,
+        amount: undefined,
+        payee: undefined,
+        category: undefined,
+      }),
     [router],
   );
   const api = useMemo(() => ({ open }), [open]);
@@ -133,10 +163,10 @@ export function AddTransactionProvider({ children }: { children: ReactNode }) {
       {kind ? (
         <AddTransactionSheet
           kind={kind}
-          prefill={{ accountId: params.account, date: params.date, goalName: params.goal, goalId: params.goalId }}
+          prefill={{ accountId: params.account, date: params.date, goalName: params.goal, goalId: params.goalId, amount: params.amount, payee: params.payee, categoryId: params.category }}
           onKind={(k) => {
             writeLastTab(k);
-            open(k, { accountId: params.account, date: params.date, goalName: params.goal, goalId: params.goalId });
+            open(k, { accountId: params.account, date: params.date, goalName: params.goal, goalId: params.goalId, amount: params.amount, payee: params.payee, categoryId: params.category });
           }}
           onClose={close}
         />
@@ -153,10 +183,16 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
   const toast = useToast();
   const [movementDoor, setMovementDoor] = useState<MovementDoor | null>(null);
   const accounts = useMemo(() => (snapshot?.accounts ?? []).filter((a) => !a.archived), [snapshot]);
-  const [amount, setAmount] = useState<{ text: string; minor: bigint | null }>({ text: '', minor: null });
+  const [amount, setAmount] = useState<{ text: string; minor: bigint | null }>(() => {
+    if (prefill.amount) {
+      const parsed = parseAmount(prefill.amount);
+      return { text: prefill.amount, minor: parsed.ok ? parsed.minor : null };
+    }
+    return { text: '', minor: null };
+  });
   const [toAmount, setToAmount] = useState<{ text: string; minor: bigint | null }>({ text: '', minor: null });
-  const [payee, setPayee] = useState('');
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [payee, setPayee] = useState(prefill.payee ?? '');
+  const [categoryId, setCategoryId] = useState<string | null>(prefill.categoryId ?? null);
   const [accountId, setAccountId] = useState<string | null>(prefill.accountId ?? (snapshot ? lastUsedAccount(snapshot) : null));
   const [toId, setToId] = useState<string | null>(null);
   const [date, setDate] = useState(prefill.date ?? today());

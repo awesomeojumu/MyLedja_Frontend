@@ -1,6 +1,7 @@
 import type { Snapshot } from '@/data/workspace/repository';
+import { ACCOUNT_KIND_INFO, type Account } from '@/data/workspace/model';
 import { budgetableIncomeReceived } from '@/features/income/budgetableIncome';
-import { monthsEndingAt, monthSpent, periodTotals } from '@/ledger';
+import { ledgerBalance, monthsEndingAt, monthSpent, periodTotals } from '@/ledger';
 import { t, type TextKey } from '@/i18n';
 import { rowsFor } from '@/features/transactions/helpers';
 
@@ -112,4 +113,61 @@ export const REDESIGN_SAVINGS_GOAL_PCT = 20;
 export function perDayLeft(left: bigint, daysLeft: number | null): bigint | null {
   if (daysLeft == null || daysLeft <= 0) return null;
   return left / BigInt(daysLeft);
+}
+
+/** Liquid cash and bank accounts at a glance. */
+export function liquidAccounts(snapshot: Snapshot): { account: Account; balance: bigint }[] {
+  return snapshot.accounts
+    .filter((a) => !a.archived && ACCOUNT_KIND_INFO[a.type]?.group === 'cashBank')
+    .map((a) => ({
+      account: a,
+      balance: ledgerBalance(a.id, snapshot.events),
+    }))
+    .sort((a, b) => (a.balance === b.balance ? a.account.name.localeCompare(b.account.name) : a.balance > b.balance ? -1 : 1));
+}
+
+/** Urgency Radar: bills and income expected in the next 48 hours (horizon = 2 days). */
+export function comingUp48Hours(snapshot: Snapshot, todayStr: string): ComingUpRow[] {
+  return comingUp(snapshot, todayStr, 2);
+}
+
+/** Today's total spending and transaction count. */
+export function todaySpending(snapshot: Snapshot, todayStr: string): { spent: bigint; count: number } {
+  let spent = 0n;
+  let count = 0;
+  for (const r of rowsFor(snapshot)) {
+    if (
+      r.event.date === todayStr &&
+      r.event.type !== 'opening_balance' &&
+      r.event.type !== 'reversal' &&
+      r.event.type !== 'transfer' &&
+      r.amount < 0n
+    ) {
+      spent += -r.amount;
+      count++;
+    }
+  }
+  return { spent, count };
+}
+
+/** Morning (5:00-11:59), Afternoon (12:00-16:59), Evening (17:00-4:59). */
+export function timeOfDay(date = new Date()): 'morning' | 'afternoon' | 'evening' {
+  const h = date.getHours();
+  if (h >= 5 && h < 12) return 'morning';
+  if (h >= 12 && h < 17) return 'afternoon';
+  return 'evening';
+}
+
+/** Time-aware contextual greeting. */
+export function timeGreeting(name?: string | null, date = new Date()): string {
+  const tod = timeOfDay(date);
+  const firstName = name ? name.trim().split(' ')[0] : '';
+  if (firstName) {
+    if (tod === 'morning') return t('dashboard.redesign.timeGreetingMorning', { name: firstName });
+    if (tod === 'afternoon') return t('dashboard.redesign.timeGreetingAfternoon', { name: firstName });
+    return t('dashboard.redesign.timeGreetingEvening', { name: firstName });
+  }
+  if (tod === 'morning') return t('dashboard.redesign.timeGreetingGenericMorning');
+  if (tod === 'afternoon') return t('dashboard.redesign.timeGreetingGenericAfternoon');
+  return t('dashboard.redesign.timeGreetingGenericEvening');
 }
