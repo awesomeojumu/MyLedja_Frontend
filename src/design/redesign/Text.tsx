@@ -5,7 +5,7 @@ import { redesignLight } from './theme';
 
 export type RedesignTypeStyle = keyof typeof tokens.type;
 
-const TONES = ['text', 'textSecondary', 'textOnPrimary', 'primary', 'danger'] as const;
+export const TONES = ['text', 'textSecondary', 'textOnPrimary', 'primary', 'danger'] as const;
 
 export type RedesignTone = (typeof TONES)[number];
 

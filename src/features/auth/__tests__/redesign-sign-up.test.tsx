@@ -39,7 +39,11 @@ describe('Page 02 redesign Sign up (EXPO_PUBLIC_REDESIGN on)', () => {
 
     await fireEvent.changeText(screen.getByTestId('name'), 'Ama Okafor');
     expect(screen.getByTestId('details-continue')).toBeDisabled();
-    await fireEvent.changeText(screen.getByTestId('email'), 'ama@example.com');
+    await fireEvent.changeText(screen.getByTestId('email'), 'ama@gamil.com');
+    expect(screen.getByTestId('email-typo-suggestion')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('email-typo-suggestion'));
+    expect(screen.getByTestId('email').props.value).toBe('ama@gmail.com');
+    expect(screen.queryByTestId('email-typo-suggestion')).toBeNull();
     expect(screen.getByTestId('details-continue')).not.toBeDisabled();
   });
 

@@ -12,6 +12,7 @@ import { useOnline } from '@/lib/useOnline';
 import { AuthFrame } from './AuthFrame';
 import { AuthStepPanel } from './AuthStepPanel';
 import { useAuth } from './AuthProvider';
+import { detectEmailTypo } from './emailTypo';
 import { GoogleSignInButton } from './GoogleSignInButton';
 import { loadGoogleSignIn, runGoogleSignIn } from './googleSignIn';
 import { checkPassword, EMAIL_PATTERN } from './password';
@@ -197,6 +198,13 @@ function LegacySignUpScreen() {
               keyboardType="email-address"
               error={errors.email}
             />
+            {detectEmailTypo(email) ? (
+              <Button
+                kind="link"
+                label={`Did you mean ${detectEmailTypo(email)!.suggested}?`}
+                onPress={() => setEmail(detectEmailTypo(email)!.suggested)}
+              />
+            ) : null}
             <TextInput
               testID="password"
               label={t('auth.password')}

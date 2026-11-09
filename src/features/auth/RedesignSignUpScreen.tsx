@@ -20,12 +20,14 @@ import { redesignLight as theme, redesignTokens as tokens } from '@/design/redes
 import { t, type TextKey } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { useAuth } from './AuthProvider';
+import { detectEmailTypo } from './emailTypo';
 import { loadGoogleSignIn, runGoogleSignIn } from './googleSignIn';
 import { checkPassword, EMAIL_PATTERN } from './password';
 
 const RESEND_SECONDS = 45;
 const sp = tokens.space;
 const size = tokens.size;
+const radius = tokens.shape;
 
 function GoogleMark({ size: mark = 18 }: { size?: number }) {
   return (
@@ -74,14 +76,44 @@ function BackLink({ onPress }: { onPress: () => void }) {
 }
 
 function PasswordRules({ password }: { password: string }) {
-  const { rules } = checkPassword(password);
+  const { rules, strength } = checkPassword(password);
   const rows: [boolean, TextKey][] = [
     [rules.length, 'signUp.redesign.rule.length'],
     [rules.mixed, 'signUp.redesign.rule.mixed'],
     [rules.common, 'signUp.redesign.rule.common'],
   ];
+
+  const strengthColor =
+    strength === 'strong'
+      ? theme.primary
+      : strength === 'okay'
+        ? '#D97706'
+        : '#DC2626';
+
+  const filledBars = password.length === 0 ? 0 : strength === 'strong' ? 3 : strength === 'okay' ? 2 : 1;
+
   return (
     <View testID="password-rules" style={{ gap: sp.sm }}>
+      {password.length > 0 ? (
+        <View style={{ gap: sp.xs }}>
+          <View style={{ flexDirection: 'row', gap: sp.xs, height: 4 }}>
+            {[1, 2, 3].map((bar) => (
+              <View
+                key={bar}
+                style={{
+                  flex: 1,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: bar <= filledBars ? strengthColor : theme.border,
+                }}
+              />
+            ))}
+          </View>
+          <RedesignText variant="caption" tone="textSecondary" style={{ textAlign: 'right' }}>
+            {strength === 'strong' ? 'Strong password' : strength === 'okay' ? 'Good password' : 'Weak password'}
+          </RedesignText>
+        </View>
+      ) : null}
       {rows.map(([met, key]) => (
         <View key={key} style={{ flexDirection: 'row', gap: sp.sm, alignItems: 'center' }}>
           <View
@@ -184,6 +216,7 @@ export function RedesignSignUpScreen() {
     return () => clearTimeout(id);
   }, [step, resendIn]);
 
+  const typo = detectEmailTypo(email);
   const detailsReady = name.trim().length > 0 && EMAIL_PATTERN.test(email.trim());
   const passwordReady = checkPassword(password).ok;
   const disabled = !online || busy;
@@ -432,6 +465,33 @@ export function RedesignSignUpScreen() {
           error={errors.email}
           onSubmitEditing={goDetailsContinue}
         />
+        {typo ? (
+          <Pressable
+            testID="email-typo-suggestion"
+            onPress={() => {
+              setEmail(typo.suggested);
+              setErrors((e) => ({ ...e, email: undefined }));
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Use ${typo.suggested}`}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: sp.xs,
+              paddingVertical: sp.xs,
+              paddingHorizontal: sp.sm,
+              backgroundColor: theme.primarySoft,
+              borderRadius: radius['radius-sm'],
+              alignSelf: 'flex-start',
+              marginTop: -sp.sm,
+            }}
+          >
+            <RedesignIcon name="zap" size={14} color={theme.primary} />
+            <RedesignText variant="caption" tone="primary">
+              {t('auth.emailTypo', { suggested: typo.suggested })}
+            </RedesignText>
+          </Pressable>
+        ) : null}
         {errors.form ? <RedesignInlineError message={errors.form} /> : null}
         <RedesignButton
           testID="details-continue"
@@ -485,9 +545,46 @@ export function RedesignSignUpScreen() {
         onClose={() => setReading(null)}
         testID="reading-sheet"
       >
-        <RedesignText testID="reading-body">
-          {reading === 'privacy' ? t('signUp.privacyBody') : t('signUp.termsBody')}
-        </RedesignText>
+        <View style={{ gap: sp.md }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: sp.xs,
+              padding: sp.sm,
+              backgroundColor: theme.surfaceMuted,
+              borderRadius: radius['radius-md'],
+            }}
+          >
+            {(reading === 'privacy'
+              ? ['End-to-End Encryption', 'NDPR Compliant', 'Zero Third-Party Selling']
+              : ['Personal Money Tracker', 'Full Data Ownership', 'Delete Anytime']
+            ).map((highlight) => (
+              <View
+                key={highlight}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  paddingHorizontal: sp.sm,
+                  paddingVertical: 2,
+                  backgroundColor: theme.surface,
+                  borderRadius: radius['radius-pill'],
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                }}
+              >
+                <RedesignIcon name="check" size={10} color={theme.primary} />
+                <RedesignText variant="caption" tone="text" style={{ fontWeight: '600' }}>
+                  {highlight}
+                </RedesignText>
+              </View>
+            ))}
+          </View>
+          <RedesignText testID="reading-body">
+            {reading === 'privacy' ? t('signUp.privacyBody') : t('signUp.termsBody')}
+          </RedesignText>
+        </View>
       </RedesignSheet>
     </RedesignAuthFrame>
   );

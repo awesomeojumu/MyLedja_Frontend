@@ -31,7 +31,7 @@ const darkSnapshot: RedesignTheme = { ...dark };
 const LIVE_KEY = '__myledjaRedesignTheme';
 
 function liveTheme(): RedesignTheme {
-  const host = globalThis as Record<string, RedesignTheme | undefined>;
+  const host = globalThis as unknown as Record<string, RedesignTheme | undefined>;
   if (!host[LIVE_KEY]) host[LIVE_KEY] = { ...lightSnapshot };
   return host[LIVE_KEY];
 }

@@ -142,4 +142,38 @@ describe('Page 04 redesign Welcome (EXPO_PUBLIC_REDESIGN on)', () => {
     const setup = calls.find((c) => c.path.endsWith('/setup'))!.body as Record<string, unknown>;
     expect(setup.budgetStyle).toBe('envelope');
   });
+
+  it('quick-selects Nigerian bank and supports smart monthly take-home estimation', async () => {
+    const calls = await renderWelcome();
+    await fireEvent.press(screen.getByTestId('continue')); // space
+    await fireEvent.press(screen.getByTestId('continue')); // money
+    await fireEvent.press(screen.getByTestId('continue')); // accounts choice
+    await fireEvent.press(screen.getByTestId('account-manual'));
+    await fireEvent.press(screen.getByTestId('continue')); // manual step
+
+    // Tap quick bank chip for Kuda
+    expect(screen.getByTestId('quick-bank-kuda')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('quick-bank-kuda'));
+    expect(screen.getByTestId('account-name-0')).toHaveProp('value', 'Kuda');
+    await fireEvent.changeText(screen.getByTestId('account-opening-0'), '50000');
+    await fireEvent.press(screen.getByTestId('continue')); // save account -> categories
+
+    expect(screen.getByTestId('redesign-welcome-categories')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('continue')); // -> budget
+
+    // Enter take-home pay
+    expect(screen.getByTestId('monthly-take-home')).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId('monthly-take-home'), '500000');
+    expect(screen.getByTestId('smart-budget-preview')).toBeTruthy();
+    expect(screen.getByText('Smart 50/30/20 Nigerian Living Cost Split')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('continue'));
+    await screen.findByTestId('welcome-done');
+
+    const setup = calls.find((c) => c.path.endsWith('/setup'))!.body as Record<string, unknown>;
+    expect(setup.monthlyTakeHome).toBe('50000000');
+    expect(setup.accounts).toEqual([
+      expect.objectContaining({ name: 'Kuda', openingBalance: '5000000' }),
+    ]);
+  });
 });

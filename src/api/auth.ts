@@ -30,6 +30,8 @@ export function authApi(client: ApiClient) {
     signIn: (body: SignInBody) => client.request<SignInResponse>('POST', '/v1/auth/sign-in', body, { auth: false }),
     signInWithGoogle: (body: SignInWithGoogleBody) =>
       client.request<SignInResponse>('POST', '/v1/auth/google', body, { auth: false }),
+    signInWithApple: (body: { identityToken: string; email?: string; name?: string; staySignedIn?: boolean }) =>
+      client.request<SignInResponse>('POST', '/v1/auth/apple', body, { auth: false }),
     signUp: (body: SignUpBody) => client.request<CodeSent>('POST', '/v1/auth/sign-up', body, { auth: false }),
     verifyEmail: (body: VerifyEmailBody) =>
       client.request<SessionResponse>('POST', '/v1/auth/verify-email', body, { auth: false }),

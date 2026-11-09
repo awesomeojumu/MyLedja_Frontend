@@ -11,13 +11,16 @@ import {
   RedesignCodeInput,
   RedesignDividerLabel,
   RedesignField,
+  RedesignIcon,
   RedesignInlineError,
   RedesignText,
 } from '@/design/redesign';
-import { redesignTokens as tokens } from '@/design/redesign/theme';
+import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { t } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { useAuth } from './AuthProvider';
+import { isAppleSignInAvailable, runAppleSignIn } from './appleSignIn';
+import { checkBiometrics, promptBiometricAuth } from './biometrics';
 import { loadGoogleSignIn, peekGoogleLinkPending, runGoogleSignIn, takeGoogleLinkPending } from './googleSignIn';
 import { EMAIL_PATTERN } from './password';
 import { passkeyAssertion, passkeysAvailable } from './passkey';
@@ -26,10 +29,11 @@ import { rememberTrustedDevice, trustedDeviceToken } from './trustedDevice';
 type Session = Parameters<ReturnType<typeof useAuth>['completeSignIn']>[0];
 
 const sp = tokens.space;
+const radius = tokens.shape;
 
-function GoogleMark({ size = 18 }: { size?: number }) {
+function GoogleMark({ size: mark = 18 }: { size?: number }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 48 48" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <Svg width={mark} height={mark} viewBox="0 0 48 48" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Path
         fill="#EA4335"
         d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
@@ -50,9 +54,20 @@ function GoogleMark({ size = 18 }: { size?: number }) {
   );
 }
 
+function AppleMark({ size: mark = 18 }: { size?: number }) {
+  return (
+    <Svg width={mark} height={mark} viewBox="0 0 170 170" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Path
+        fill={theme.text}
+        d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.08-7.61-7.8-11.73-14.14-6.42-9.88-11.39-21.2-14.9-33.97-3.52-12.77-5.28-24.81-5.28-36.13 0-14.74 3.73-26.79 11.2-36.13 7.46-9.35 16.74-14.15 27.81-14.41 4.79 0 10.45 1.34 16.97 4.02 6.52 2.68 10.51 4.08 11.96 4.19 1.7 0 5.86-1.56 12.49-4.69 6.63-3.12 12.55-4.41 17.75-3.87 13.62 1.07 24.16 6.3 31.62 15.68-12.06 7.28-17.97 17.51-17.73 30.7.24 10.44 4.25 19.16 12.04 26.15 3.99 3.61 8.44 6.35 13.34 8.21-2.67 7.9-6.08 16.09-10.23 24.58zM119.22 33.64c0-7.39 2.63-14.28 7.89-20.67 5.26-6.39 11.83-10.52 19.71-12.39.24 1.25.36 2.45.36 3.6 0 7.2-2.8 14.17-8.4 20.91-5.6 6.74-12.43 10.74-20.48 11.99-.44-1.12-.66-2.27-.66-3.44z"
+      />
+    </Svg>
+  );
+}
+
 /**
  * Progressive Sign in (Figma Auth Phone 3:278 / 3:336 / 3:398 / 3:460 / 3:493).
- * Email first, then password, then Continue; Google below the divider.
+ * Email first, then password, then Continue; Google, Apple & Biometrics below divider.
  */
 export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => number }) {
   const router = useRouter();
@@ -69,6 +84,9 @@ export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => n
   const [waitUntil, setWaitUntil] = useState<number | null>(null);
   const [, setTick] = useState(0);
   const [showGoogle, setShowGoogle] = useState(false);
+  const [showApple, setShowApple] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [challenge, setChallenge] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [useBackup, setUseBackup] = useState(false);
@@ -84,6 +102,12 @@ export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => n
     let alive = true;
     void loadGoogleSignIn(api).then((g) => {
       if (alive) setShowGoogle(g.enabled);
+    });
+    void isAppleSignInAvailable().then((avail) => {
+      if (alive) setShowApple(avail);
+    });
+    void checkBiometrics().then((b) => {
+      if (alive) setBiometricAvailable(b.available);
     });
     return () => {
       alive = false;
@@ -163,6 +187,30 @@ export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => n
     }
   };
 
+  const unlockBiometrics = async () => {
+    if (!online || busy || secondsLeft > 0) return;
+    setError(null);
+    const success = await promptBiometricAuth(t('signIn.redesign.title'));
+    if (!success) return;
+    if (passkeysAvailable()) {
+      await passkey();
+    } else {
+      setBusy(true);
+      try {
+        if (await client.refresh()) {
+          const me = await api.me();
+          if (me) router.replace(me.setupComplete ? '/' : '/welcome');
+        } else {
+          setError(t('signIn.redesign.wrong'));
+        }
+      } catch {
+        setError(t('errors.network'));
+      } finally {
+        setBusy(false);
+      }
+    }
+  };
+
   const submit = async () => {
     if (!online || busy || secondsLeft > 0) return;
     if (!EMAIL_PATTERN.test(email.trim())) {
@@ -222,6 +270,43 @@ export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => n
       } else if (res.reason === 'network') {
         setError(res.message ?? t('errors.network'));
       }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const apple = async () => {
+    if (!online || busy || secondsLeft > 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await runAppleSignIn(api, {
+        staySignedIn: signedInStay,
+        trustedDeviceToken: await trustedDeviceToken(email),
+      });
+      if (res.ok) {
+        await finishSession(res.session, signedInStay);
+      } else if (res.reason !== 'cancelled') {
+        setError(res.message ?? t('errors.network'));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendMagicLink = async () => {
+    if (!EMAIL_PATTERN.test(email.trim())) {
+      setEmailError(t('errors.emailInvalid'));
+      return;
+    }
+    if (!online || busy || secondsLeft > 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.recover({ email: email.trim() });
+      setMagicLinkSent(true);
+    } catch {
+      setError(t('errors.network'));
     } finally {
       setBusy(false);
     }
@@ -305,10 +390,11 @@ export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => n
             setEmail(v);
             setEmailError(null);
             setPasswordError(null);
+            setMagicLinkSent(false);
           }}
           placeholder={t('signIn.redesign.emailPlaceholder')}
           autoCapitalize="none"
-          autoComplete="email"
+          autoComplete="username"
           textContentType="username"
           keyboardType="email-address"
           error={emailError}
@@ -339,6 +425,37 @@ export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => n
                 accessibilityRole="link"
               />
             </View>
+            <View testID="magic-link-row" style={{ alignItems: 'flex-start', width: '100%' }}>
+              <RedesignButton
+                kind="link"
+                label={t('signIn.redesign.magicLink')}
+                onPress={() => void sendMagicLink()}
+                accessibilityRole="link"
+                testID="magic-link-btn"
+              />
+            </View>
+            {magicLinkSent ? (
+              <View
+                testID="magic-link-sent"
+                style={{
+                  padding: sp.sm,
+                  backgroundColor: theme.primarySoft,
+                  borderRadius: radius['radius-sm'],
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <RedesignText variant="caption" tone="primary" style={{ flex: 1 }}>
+                  {t('signIn.redesign.magicLinkSent')}
+                </RedesignText>
+                <RedesignButton
+                  kind="link"
+                  label={t('signIn.redesign.enterCode')}
+                  onPress={() => router.push({ pathname: '/recover', params: { email: email.trim() } })}
+                />
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -356,10 +473,35 @@ export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => n
         {error === t('signIn.emailNotVerified') ? (
           <RedesignButton kind="link" label={t('signIn.finishSignUp')} onPress={() => router.push('/sign-up')} accessibilityRole="link" />
         ) : null}
+
         {secondsLeft > 0 ? (
-          <RedesignText variant="caption" tone="textSecondary" accessibilityLiveRegion="polite">
-            {t('signIn.waitCountdown', { seconds: secondsLeft })}
-          </RedesignText>
+          <View
+            testID="lockout-banner"
+            style={{
+              padding: sp.md,
+              backgroundColor: theme.surfaceMuted,
+              borderRadius: radius['radius-md'],
+              borderWidth: 1,
+              borderColor: theme.borderStrong,
+              gap: sp.xs,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+              <RedesignIcon name="lock" size={16} color={theme.primary} />
+              <RedesignText variant="caption" tone="primary" style={{ fontWeight: '700' }}>
+                {t('signIn.redesign.lockoutTitle')}
+              </RedesignText>
+            </View>
+            <RedesignText variant="caption" tone="textSecondary" testID="lockout-countdown" accessibilityLiveRegion="polite">
+              {t('signIn.waitCountdown', { seconds: secondsLeft })}
+            </RedesignText>
+            <RedesignButton
+              kind="link"
+              label={t('signIn.redesign.lockoutReset')}
+              onPress={() => router.push('/recover')}
+              accessibilityRole="link"
+            />
+          </View>
         ) : null}
 
         {showContinue ? (
@@ -373,7 +515,21 @@ export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => n
           />
         ) : null}
 
-        {showGoogle || passkeysAvailable() ? <RedesignDividerLabel label={t('auth.or')} /> : null}
+        {showGoogle || showApple || passkeysAvailable() || biometricAvailable ? (
+          <RedesignDividerLabel label={t('auth.or')} />
+        ) : null}
+
+        {biometricAvailable ? (
+          <RedesignButton
+            testID="biometric-unlock"
+            kind="secondary"
+            label={t('signIn.redesign.biometrics')}
+            onPress={() => void unlockBiometrics()}
+            disabled={!online || busy || secondsLeft > 0}
+            fullWidth
+            leading={<RedesignIcon name="lock" size={18} color={theme.primary} />}
+          />
+        ) : null}
 
         {passkeysAvailable() ? (
           <>
@@ -395,6 +551,18 @@ export function RedesignSignInScreen({ now = () => Date.now() }: { now?: () => n
               </View>
             ) : null}
           </>
+        ) : null}
+
+        {showApple ? (
+          <RedesignButton
+            testID="apple-sign-in"
+            kind="secondary"
+            label={t('auth.apple')}
+            onPress={() => void apple()}
+            disabled={disabled}
+            fullWidth
+            leading={<AppleMark />}
+          />
         ) : null}
 
         {showGoogle ? (

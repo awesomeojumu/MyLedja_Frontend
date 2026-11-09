@@ -72,7 +72,7 @@ describe('P04 Welcome', () => {
   it('P04-04 step 2 has naira chosen and asks for the first day of the week', async () => {
     await renderWelcome();
     await fireEvent.press(screen.getByTestId('continue'));
-    expect(screen.getByText(t('welcome.step2.ngn'))).toBeTruthy();
+    expect(screen.getByTestId('currency-selected')).toHaveTextContent('Nigerian naira (NGN)');
     expect(screen.getByTestId('week-monday')).toBeChecked();
   });
 

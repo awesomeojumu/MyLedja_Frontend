@@ -135,11 +135,21 @@ describe('Page 01 redesign Sign in (EXPO_PUBLIC_REDESIGN on)', () => {
       await fireEvent.press(screen.getByTestId('sign-in'));
     }
     expect(await screen.findByText(t('signIn.wait'))).toBeTruthy();
+    expect(screen.getByTestId('lockout-banner')).toBeTruthy();
+    expect(screen.getByText(t('signIn.redesign.lockoutReset'))).toBeTruthy();
     expect(screen.getByTestId('sign-in')).toBeDisabled();
     now += 61_000;
     await act(async () => {
       await new Promise((r) => setTimeout(r, 1100));
     });
     expect(screen.getByTestId('sign-in')).not.toBeDisabled();
+  });
+
+  it('sends 1-tap magic sign-in link on demand', async () => {
+    await renderWithProviders(<SignInScreen />);
+    await fireEvent.changeText(screen.getByTestId('email'), DEMO.email);
+    expect(screen.getByTestId('magic-link-btn')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('magic-link-btn'));
+    expect(await screen.findByTestId('magic-link-sent')).toBeTruthy();
   });
 });

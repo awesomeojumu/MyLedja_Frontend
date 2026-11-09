@@ -76,6 +76,7 @@ describe('Page 03 redesign Recover (EXPO_PUBLIC_REDESIGN on)', () => {
 
     expect(await screen.findByText(t('recover.redesign.doneTitle'))).toBeTruthy();
     expect(screen.getByText(t('recover.redesign.doneBody'))).toBeTruthy();
+    expect(screen.getByTestId('session-revoked-banner')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('to-sign-in'));
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/sign-in'));
   });

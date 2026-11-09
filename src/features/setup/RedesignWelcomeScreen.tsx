@@ -16,7 +16,7 @@ import {
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { successHaptic } from '@/features/budget/haptics';
+import { selectHaptic, successHaptic } from '@/features/budget/haptics';
 import { t, type TextKey } from '@/i18n';
 import { parseAmount, toWire } from '@/money';
 import { ACCOUNT_TYPES, WEEK_STARTS, type AccountType } from './starter';
@@ -27,6 +27,21 @@ import { fromApiInstitutions, matchInstitution, NG_INSTITUTIONS, type Institutio
 
 const sp = tokens.space;
 const size = tokens.size;
+const radius = tokens.shape;
+
+function detectInitialCurrency(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    if (/Lagos|Africa/i.test(tz)) return 'NGN';
+    if (/London|Europe\/London/i.test(tz)) return 'GBP';
+    if (/America|New_York|Chicago|Los_Angeles/i.test(tz)) return 'USD';
+    return 'NGN';
+  } catch {
+    return 'NGN';
+  }
+}
+
+const TOP_NG_BANKS = ['OPay', 'Kuda', 'PalmPay', 'Moniepoint', 'GTBank', 'Zenith', 'Access'];
 
 type Step = 'start' | 1 | 2 | 3 | 'manual' | 4 | 5 | 'done';
 type AccountRow = { name: string; type: AccountType; amountText: string; minor: bigint | null; currency: string };
@@ -134,13 +149,16 @@ export function RedesignWelcomeScreen() {
   const [workspaceName, setWorkspaceName] = useState(t('welcome.step1.default'));
   const [audience, setAudience] = useState<Audience>('solo');
   const [weekStart, setWeekStart] = useState<(typeof WEEK_STARTS)[number]>('monday');
-  const [currency, setCurrency] = useState('NGN');
-  const [preferred, setPreferred] = useState<string[]>(['NGN']);
+  const initialCur = detectInitialCurrency();
+  const [currency, setCurrency] = useState(initialCur);
+  const [preferred, setPreferred] = useState<string[]>([initialCur]);
   const [addCurrencyOpen, setAddCurrencyOpen] = useState(false);
   const [accountPath, setAccountPath] = useState<AccountPath>(null);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
-  const [draft, setDraft] = useState<AccountRow>({ name: '', type: 'bank', amountText: '', minor: null, currency: 'NGN' });
+  const [draft, setDraft] = useState<AccountRow>({ name: '', type: 'bank', amountText: '', minor: null, currency: initialCur });
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [takeHomeText, setTakeHomeText] = useState('');
+  const [takeHomeMinor, setTakeHomeMinor] = useState<bigint | null>(null);
   const [selectedCats, setSelectedCats] = useState<Set<string>>(
     () => new Set(REDESIGN_CATEGORIES.filter((c) => c.selected).map((c) => c.key)),
   );
@@ -165,6 +183,7 @@ export function RedesignWelcomeScreen() {
   }, [accountPath]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPreferred((list) => (list.includes(currency) ? list : [currency, ...list]));
     setDraft((current) => (current.name.trim() ? current : { ...current, currency }));
   }, [currency]);
@@ -241,7 +260,7 @@ export function RedesignWelcomeScreen() {
                 })),
           categories: skip.includes(4) ? [] : categories,
           budgetStyle,
-          monthlyTakeHome: null,
+          monthlyTakeHome: takeHomeMinor != null ? toWire(takeHomeMinor) : null,
           skippedSteps: skip,
         };
         const updated = await api.finishSetup(user.workspaceId, body);
@@ -255,7 +274,7 @@ export function RedesignWelcomeScreen() {
         setBusy(false);
       }
     },
-    [user, api, sync.store, sync.engine, workspaceName, weekStart, currency, accounts, selectedCats, custom, plan, setUser],
+    [user, api, sync.store, sync.engine, workspaceName, weekStart, currency, accounts, selectedCats, custom, plan, takeHomeMinor, setUser],
   );
 
   const saveDraftAccount = (): boolean => {
@@ -465,16 +484,22 @@ export function RedesignWelcomeScreen() {
         <RedesignChoiceCard
           testID="account-connect"
           title={t('welcome.redesign.connectBank')}
-          body={t('welcome.redesign.connectBankBody')}
+          body={`${t('welcome.redesign.connectBankBody')} (Instant sync via Mono)`}
           selected={accountPath === 'connect'}
-          onPress={() => setAccountPath('connect')}
+          onPress={() => {
+            selectHaptic();
+            setAccountPath('connect');
+          }}
         />
         <RedesignChoiceCard
           testID="account-manual"
           title={t('welcome.redesign.addManually')}
           body={t('welcome.redesign.addManuallyBody')}
           selected={accountPath === 'manual'}
-          onPress={() => setAccountPath('manual')}
+          onPress={() => {
+            selectHaptic();
+            setAccountPath('manual');
+          }}
         />
         <Footer
           primary={t('common.continue')}
@@ -501,6 +526,24 @@ export function RedesignWelcomeScreen() {
           <RedesignText tone="textSecondary">{t('welcome.redesign.manualBody')}</RedesignText>
         </View>
         {institution ? <WelcomeInstitutionBadge institution={institution} testID="institution-0" /> : null}
+        <View style={{ gap: sp.xs }}>
+          <RedesignText variant="caption" tone="textSecondary">{t('welcome.redesign.popularBanks')}</RedesignText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.xs }}>
+            {TOP_NG_BANKS.map((bank) => (
+              <RedesignChip
+                key={bank}
+                testID={`quick-bank-${bank.toLowerCase()}`}
+                label={bank}
+                selected={draft.name.toLowerCase().includes(bank.toLowerCase())}
+                onPress={() => {
+                  selectHaptic();
+                  setDraft((d) => ({ ...d, name: bank, type: 'bank' }));
+                  setDraftError(null);
+                }}
+              />
+            ))}
+          </View>
+        </View>
         <RedesignField
           testID="account-name-0"
           label={t('welcome.step3.name')}
@@ -716,6 +759,49 @@ export function RedesignWelcomeScreen() {
           selected={plan === 'track'}
           onPress={() => setPlan('track')}
         />
+        <View style={{ gap: sp.sm }}>
+          <RedesignField
+            testID="monthly-take-home"
+            label={t('welcome.redesign.takeHomeLabel')}
+            value={takeHomeText}
+            onChangeText={(v) => {
+              setTakeHomeText(v);
+              const parsed = v.trim() ? parseAmount(v) : null;
+              setTakeHomeMinor(parsed && parsed.ok ? parsed.minor : null);
+            }}
+            placeholder={t('welcome.redesign.takeHomePlaceholder')}
+            keyboardType="decimal-pad"
+          />
+          {takeHomeMinor && takeHomeMinor > 0n ? (
+            <View
+              testID="smart-budget-preview"
+              style={{
+                padding: sp.md,
+                backgroundColor: theme.surfaceMuted,
+                borderRadius: radius['radius-md'],
+                borderWidth: 1,
+                borderColor: theme.border,
+                gap: sp.xs,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+                <RedesignIcon name="zap" size={14} color={theme.primary} />
+                <RedesignText variant="caption" tone="primary" style={{ fontWeight: '700' }}>
+                  {t('welcome.redesign.smartSplitTitle')}
+                </RedesignText>
+              </View>
+              <RedesignText variant="caption" tone="textSecondary">
+                {t('welcome.redesign.splitNeeds')}
+              </RedesignText>
+              <RedesignText variant="caption" tone="textSecondary">
+                {t('welcome.redesign.splitWants')}
+              </RedesignText>
+              <RedesignText variant="caption" tone="textSecondary">
+                {t('welcome.redesign.splitSavings')}
+              </RedesignText>
+            </View>
+          ) : null}
+        </View>
         {error ? <RedesignInlineError message={error} /> : null}
         <Footer
           primary={t('welcome.redesign.finish')}

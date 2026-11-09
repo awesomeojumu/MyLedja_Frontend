@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ApiError } from '@/api/client';
 import {
   RedesignAuthFrame,
@@ -15,11 +15,13 @@ import { redesignLight as theme, redesignTokens as tokens } from '@/design/redes
 import { t, type TextKey } from '@/i18n';
 import { useOnline } from '@/lib/useOnline';
 import { useAuth } from './AuthProvider';
+import { detectEmailTypo } from './emailTypo';
 import { checkPassword, EMAIL_PATTERN } from './password';
 
 const RESEND_SECONDS = 45;
 const sp = tokens.space;
 const size = tokens.size;
+const radius = tokens.shape;
 
 function BackLink({ onPress, testID = 'recover-back' }: { onPress: () => void; testID?: string }) {
   return (
@@ -45,14 +47,44 @@ function BackLink({ onPress, testID = 'recover-back' }: { onPress: () => void; t
 }
 
 function PasswordRules({ password }: { password: string }) {
-  const { rules } = checkPassword(password);
+  const { rules, strength } = checkPassword(password);
   const rows: [boolean, TextKey][] = [
     [rules.length, 'signUp.redesign.rule.length'],
     [rules.mixed, 'signUp.redesign.rule.mixed'],
     [rules.common, 'signUp.redesign.rule.common'],
   ];
+
+  const strengthColor =
+    strength === 'strong'
+      ? theme.primary
+      : strength === 'okay'
+        ? '#D97706'
+        : '#DC2626';
+
+  const filledBars = password.length === 0 ? 0 : strength === 'strong' ? 3 : strength === 'okay' ? 2 : 1;
+
   return (
     <View testID="password-rules" style={{ gap: sp.sm }}>
+      {password.length > 0 ? (
+        <View style={{ gap: sp.xs }}>
+          <View style={{ flexDirection: 'row', gap: sp.xs, height: 4 }}>
+            {[1, 2, 3].map((bar) => (
+              <View
+                key={bar}
+                style={{
+                  flex: 1,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: bar <= filledBars ? strengthColor : theme.border,
+                }}
+              />
+            ))}
+          </View>
+          <RedesignText variant="caption" tone="textSecondary" style={{ textAlign: 'right' }}>
+            {strength === 'strong' ? 'Strong password' : strength === 'okay' ? 'Good password' : 'Weak password'}
+          </RedesignText>
+        </View>
+      ) : null}
       {rows.map(([met, key]) => (
         <View key={key} style={{ flexDirection: 'row', gap: sp.sm, alignItems: 'center' }}>
           <View
@@ -84,11 +116,14 @@ function PasswordRules({ password }: { password: string }) {
  */
 export function RedesignRecoverScreen({ now = () => Date.now() }: { now?: () => number }) {
   const router = useRouter();
+  const params = useLocalSearchParams<{ email?: string; code?: string }>();
   const { api } = useAuth();
   const online = useOnline();
-  const [step, setStep] = useState<'email' | 'code' | 'password' | 'done'>('email');
-  const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
+  const [step, setStep] = useState<'email' | 'code' | 'password' | 'done'>(() =>
+    params?.code && params.code.length === 6 ? 'password' : 'email',
+  );
+  const [email, setEmail] = useState(() => params?.email ?? '');
+  const [code, setCode] = useState(() => (params?.code && params.code.length === 6 ? params.code : ''));
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Partial<Record<'email' | 'code' | 'password' | 'form', string>>>({});
   const [busy, setBusy] = useState(false);
@@ -98,6 +133,7 @@ export function RedesignRecoverScreen({ now = () => Date.now() }: { now?: () => 
   const [, setTick] = useState(0);
 
   const secondsLeft = waitUntil ? Math.max(0, Math.ceil((waitUntil - now()) / 1000)) : 0;
+  const emailTypo = detectEmailTypo(email);
   const emailReady = EMAIL_PATTERN.test(email.trim());
   const passwordReady = checkPassword(password).ok;
   const disabled = !online || busy || secondsLeft > 0;
@@ -212,6 +248,27 @@ export function RedesignRecoverScreen({ now = () => Date.now() }: { now?: () => 
             {t('recover.redesign.doneTitle')}
           </RedesignText>
           <RedesignText tone="textSecondary">{t('recover.redesign.doneBody')}</RedesignText>
+        </View>
+        <View
+          testID="session-revoked-banner"
+          style={{
+            padding: sp.md,
+            backgroundColor: theme.surfaceMuted,
+            borderRadius: radius['radius-md'],
+            borderWidth: 1,
+            borderColor: theme.border,
+            gap: sp.xs,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+            <RedesignIcon name="check" size={16} color={theme.primary} />
+            <RedesignText variant="caption" tone="primary" style={{ fontWeight: '700' }}>
+              {t('recover.redesign.revokedTitle')}
+            </RedesignText>
+          </View>
+          <RedesignText variant="caption" tone="textSecondary">
+            {t('recover.redesign.revokedBody')}
+          </RedesignText>
         </View>
         <RedesignButton
           testID="to-sign-in"
@@ -358,6 +415,33 @@ export function RedesignRecoverScreen({ now = () => Date.now() }: { now?: () => 
           onSubmitEditing={() => void send()}
           autoFocus
         />
+        {emailTypo ? (
+          <Pressable
+            testID="email-typo-suggestion"
+            onPress={() => {
+              setEmail(emailTypo.suggested);
+              setErrors((e) => ({ ...e, email: undefined }));
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Use ${emailTypo.suggested}`}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: sp.xs,
+              paddingVertical: sp.xs,
+              paddingHorizontal: sp.sm,
+              backgroundColor: theme.primarySoft,
+              borderRadius: radius['radius-sm'],
+              alignSelf: 'flex-start',
+              marginTop: -sp.sm,
+            }}
+          >
+            <RedesignIcon name="zap" size={14} color={theme.primary} />
+            <RedesignText variant="caption" tone="primary">
+              {t('auth.emailTypo', { suggested: emailTypo.suggested })}
+            </RedesignText>
+          </Pressable>
+        ) : null}
         {errors.form ? (
           <View testID="recover-error">
             <RedesignInlineError message={errors.form} />
