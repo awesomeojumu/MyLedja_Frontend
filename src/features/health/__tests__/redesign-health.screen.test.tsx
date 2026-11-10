@@ -142,7 +142,7 @@ describe('Redesign Health (Figma 5:2231)', () => {
     await renderWithProviders(wrap(<RedesignHealthScreen />), { sync });
     expect(await screen.findByTestId('redesign-health-next')).toBeTruthy();
     await act(async () => {
-      fireEvent.press(screen.getByTestId(/redesign-health-advice-/));
+      fireEvent.press(screen.getAllByTestId(/redesign-health-advice-/)[0]!);
     });
     expect(router.push).toHaveBeenCalled();
   });
@@ -152,6 +152,38 @@ describe('Redesign Health (Figma 5:2231)', () => {
     await renderWithProviders(wrap(<RedesignHealthScreen />), { sync });
     expect(await screen.findByTestId('redesign-health-not-ready')).toBeTruthy();
     expect(screen.queryByTestId('redesign-health-score')).toBeNull();
+  });
+
+  it('interactive stress test simulator recalculates runway and score', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<RedesignHealthScreen />), { sync });
+
+    expect(await screen.findByTestId('redesign-health-stress')).toBeTruthy();
+    expect(screen.getByTestId('redesign-stress-runway')).toBeTruthy();
+    expect(screen.getByTestId('redesign-stress-score')).toBeTruthy();
+
+    // Select 50% income drop
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('redesign-stress-drop-50'));
+    });
+
+    // Enter surprise cost of 500,000 NGN
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId('redesign-stress-cost'), '500000');
+    });
+
+    expect(screen.getByTestId('redesign-stress-runway')).toBeTruthy();
+    expect(screen.getByTestId('redesign-stress-score')).toBeTruthy();
+  });
+
+  it('renders 12-month history and factor comparison matrix', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<RedesignHealthScreen />), { sync });
+
+    expect(await screen.findByTestId('redesign-health-compare')).toBeTruthy();
+    expect(screen.getByTestId('redesign-health-compare-saving')).toBeTruthy();
+    expect(screen.getByTestId('redesign-health-compare-runway')).toBeTruthy();
+    expect(screen.getByTestId('redesign-health-compare-bills')).toBeTruthy();
   });
 
   it('back navigates away', async () => {

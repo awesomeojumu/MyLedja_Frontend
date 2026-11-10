@@ -4076,5 +4076,10 @@
   "cashFlow.redesign.simLowestBalance": "Lowest balance after expense: {amount}",
   "cashFlow.redesign.recurringInflow": "Expected income",
   "cashFlow.redesign.recurringOutflow": "Scheduled bills and debt",
-  "cashFlow.redesign.dailyRunRate": "Daily average spending"
+  "cashFlow.redesign.dailyRunRate": "Daily average spending",
+  "health.redesign.checklistTitle": "Health boost checklist",
+  "health.redesign.comparePrevious": "Last month",
+  "health.redesign.compareCurrent": "This month",
+  "health.redesign.compareDelta": "Change",
+  "health.redesign.factorColumn": "Factor"
 }

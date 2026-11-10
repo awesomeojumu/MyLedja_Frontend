@@ -11,6 +11,8 @@ import { usePopupParam } from '@/design/usePopupParam';
 import {
   RedesignButton,
   RedesignCheckbox,
+  RedesignChip,
+  RedesignField,
   RedesignIcon,
   RedesignListRow,
   RedesignSegmented,
@@ -24,8 +26,8 @@ import { redesignLight as theme, redesignTokens as tokens } from '@/design/redes
 import { useAuth } from '@/features/auth/AuthProvider';
 import { today } from '@/features/transactions/helpers';
 import { t, type TextKey } from '@/i18n';
-import type { Advice, Pillar, PillarKey } from '@/ledger/health';
-import { formatNaira, PRIVACY_MASK, roundHalfAwayFromZero } from '@/money';
+import { stress, type Advice, type Pillar, type PillarKey } from '@/ledger/health';
+import { formatNaira, parseAmount, PRIVACY_MASK, roundHalfAwayFromZero } from '@/money';
 
 import { adviceText, healthPage, type HealthPage } from './helpers';
 
@@ -46,7 +48,11 @@ const MONEY_USED = new Set(['income', 'spending', 'cash', 'essential', 'borrowed
 const FACTOR_ORDER: PillarKey[] = ['saving', 'bills', 'runway', 'debt_load', 'budget'];
 
 const pct = (bp: bigint) => `${roundHalfAwayFromZero(bp, 100n)}%`;
-const monthsText = (h: bigint) => `${h / 100n}.${(h % 100n) / 10n}`;
+const monthsText = (h: bigint | undefined | null) => {
+  if (h === undefined || h === null) return '0.0';
+  if (h <= 0n) return '0.0';
+  return `${h / 100n}.${(h % 100n) / 10n}`;
+};
 
 function bandHeadline(page: HealthPage): string {
   const band = page.band ? t(`health.band.${page.band}` as TextKey) : '';
@@ -139,7 +145,8 @@ function ScoreRing({ score, size = 160 }: { score: number; size?: number }) {
 
 /**
  * Figma Mobile App Phone / Health (5:2231).
- * Behind EXPO_PUBLIC_REDESIGN; W0 tokens/components only.
+ * Upgraded with Interactive Stress-Test Simulator, 12-Month Score Trend,
+ * Month-over-Month Factor Comparison Matrix, and Actionable Health Boost Checklist.
  */
 export function RedesignHealthScreen() {
   const { snapshot, repo } = useWorkspace();
@@ -148,12 +155,23 @@ export function RedesignHealthScreen() {
   const toast = useToast();
   const onDate = today();
   const month = onDate.slice(0, 7);
+
   const [explain, setExplain] = useState<PillarKey | null>(null);
+  const [stressDrop, setStressDrop] = useState(30);
+  const [stressCostText, setStressCostText] = useState('');
+
   const settingsPopup = usePopupParam({ param: 'healthSettings', openWhen: (v) => v === '1', emptyDraft: {} });
   const privacy = false;
   const show = (v: bigint) => (privacy ? PRIVACY_MASK : formatNaira(v));
 
   const page = useMemo(() => (snapshot ? healthPage(snapshot, month, onDate) : null), [snapshot, month, onDate]);
+
+  const parsedStressCost = parseAmount(stressCostText || '0');
+  const stressCost = parsedStressCost.ok ? parsedStressCost.minor : 0n;
+  const stressResult = useMemo(() => {
+    if (!page?.ready) return null;
+    return stress(page.input, BigInt(stressDrop * 100), stressCost);
+  }, [page, stressDrop, stressCost]);
 
   const frame = (body: React.ReactNode) => (
     <RedesignStackFrame
@@ -191,11 +209,13 @@ export function RedesignHealthScreen() {
   }
 
   const factors = FACTOR_ORDER.map((key) => page.pillars.find((p) => p.key === key)!).filter(Boolean);
-  const next = page.advice[0] ?? null;
+  const historyRows = page.history.filter((h) => h.score !== null);
+  const currentRunway = page.pillars.find((p) => p.key === 'runway')?.value ?? 0n;
 
   return frame(
     <>
       <ScrollView contentContainerStyle={{ gap: sp.lg, paddingBottom: sp.xxl }}>
+        {/* Score Ring Hero Card */}
         <View
           testID="redesign-health-score-card"
           style={{
@@ -230,6 +250,7 @@ export function RedesignHealthScreen() {
           )}
         </View>
 
+        {/* Factors Breakdown */}
         {page.ready ? (
           <>
             <RedesignText variant="label" tone="textSecondary">
@@ -255,35 +276,213 @@ export function RedesignHealthScreen() {
                 />
               ))}
             </View>
-          </>
-        ) : null}
 
-        {next ? (
-          <View
-            testID="redesign-health-next"
-            style={{
-              backgroundColor: theme.surface,
-              borderRadius: shape['radius-lg'],
-              borderWidth: 1,
-              borderColor: theme.border,
-              padding: sp.lg,
-              gap: sp.md,
-            }}
-          >
-            <RedesignText variant="label" tone="textSecondary">
-              {t('health.redesign.oneNext')}
-            </RedesignText>
-            <RedesignText testID="redesign-health-advice">{adviceText(next, show)}</RedesignText>
-            <RedesignButton
-              testID={`redesign-health-advice-${next.pillar}`}
-              kind="secondary"
-              label={t('health.redesign.goTo', { place: t(`health.link.${next.link}` as TextKey) })}
-              onPress={() => router.push(PAGES[next.link])}
-            />
-          </View>
+            {/* Interactive Stress-Test Simulator */}
+            <View
+              testID="redesign-health-stress"
+              style={{
+                backgroundColor: theme.surface,
+                borderRadius: shape['radius-lg'],
+                borderWidth: 1,
+                borderColor: theme.border,
+                padding: sp.lg,
+                gap: sp.md,
+              }}
+            >
+              <RedesignText variant="label">{t('health.stressTitle')}</RedesignText>
+              <RedesignText variant="caption" tone="textSecondary">
+                {t('health.stressDrop', { pct: String(stressDrop) })}
+              </RedesignText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp.xs }}>
+                {[0, 20, 30, 50, 80].map((dropPct) => (
+                  <RedesignChip
+                    key={dropPct}
+                    testID={`redesign-stress-drop-${dropPct}`}
+                    label={`${dropPct}%`}
+                    selected={stressDrop === dropPct}
+                    onPress={() => setStressDrop(dropPct)}
+                  />
+                ))}
+              </ScrollView>
+
+              <RedesignField
+                testID="redesign-stress-cost"
+                label={t('health.stressCost')}
+                value={stressCostText}
+                onChangeText={setStressCostText}
+                placeholder="0"
+                keyboardType="numeric"
+              />
+
+              {stressResult ? (
+                <View
+                  style={{
+                    backgroundColor: theme.surfaceMuted,
+                    borderRadius: shape['radius-md'],
+                    padding: sp.md,
+                    gap: sp.xs,
+                  }}
+                >
+                  <RedesignText testID="redesign-stress-runway" variant="label">
+                    {t('health.stressRunway', {
+                      before: monthsText(stressResult.runway.before ?? currentRunway),
+                      after: monthsText(stressResult.runway.after),
+                    })}
+                  </RedesignText>
+                  <RedesignText testID="redesign-stress-score" variant="label">
+                    {t('health.stressScore', {
+                      before: String(stressResult.score.before ?? page.score ?? 0),
+                      after: String(stressResult.score.after ?? 0),
+                    })}
+                  </RedesignText>
+                  <RedesignText variant="caption" tone="textSecondary">
+                    {t('health.stressNote', { amount: formatNaira(stressCost) })}
+                  </RedesignText>
+                </View>
+              ) : null}
+            </View>
+
+            {/* 12-Month Score Trend */}
+            {historyRows.length > 0 ? (
+              <View
+                testID="redesign-health-history"
+                style={{
+                  backgroundColor: theme.surface,
+                  borderRadius: shape['radius-lg'],
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  padding: sp.lg,
+                  gap: sp.md,
+                }}
+              >
+                <RedesignText variant="label">{t('health.history')}</RedesignText>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'flex-end',
+                    justifyContent: 'space-between',
+                    minHeight: 80,
+                    gap: sp.xs,
+                  }}
+                >
+                  {historyRows.slice(-6).map((h) => {
+                    const barH = Math.max(8, Math.round(((h.score ?? 0) / 100) * 56));
+                    return (
+                      <View key={h.month} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+                        <RedesignText variant="helper" tone="textSecondary">
+                          {String(h.score ?? 0)}
+                        </RedesignText>
+                        <View
+                          style={{
+                            width: 20,
+                            height: barH,
+                            borderRadius: 4,
+                            backgroundColor: theme.primary,
+                          }}
+                        />
+                        <RedesignText variant="helper" tone="textSecondary">
+                          {h.month.slice(5, 7)}
+                        </RedesignText>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            {/* Month-over-Month Factor Comparison Matrix */}
+            <View
+              testID="redesign-health-compare"
+              style={{
+                backgroundColor: theme.surface,
+                borderRadius: shape['radius-lg'],
+                borderWidth: 1,
+                borderColor: theme.border,
+                padding: sp.lg,
+                gap: sp.sm,
+              }}
+            >
+              <RedesignText variant="label">{t('health.compareTitle')}</RedesignText>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  paddingBottom: sp.xs,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.border,
+                }}
+              >
+                <RedesignText variant="caption" tone="textSecondary" style={{ flex: 2 }}>
+                  {t('health.redesign.factorColumn')}
+                </RedesignText>
+                <RedesignText variant="caption" tone="textSecondary" style={{ flex: 1, textAlign: 'right' }}>
+                  {t('health.redesign.comparePrevious')}
+                </RedesignText>
+                <RedesignText variant="caption" tone="textSecondary" style={{ flex: 1, textAlign: 'right' }}>
+                  {t('health.redesign.compareCurrent')}
+                </RedesignText>
+              </View>
+              {factors.map((p) => {
+                const before = page.previous.pillars.find((x) => x.key === p.key);
+                return (
+                  <View
+                    key={p.key}
+                    testID={`redesign-health-compare-${p.key}`}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingVertical: sp.xs,
+                    }}
+                  >
+                    <RedesignText style={{ flex: 2 }} numberOfLines={1}>
+                      {t(`health.pillar.${p.key}` as TextKey)}
+                    </RedesignText>
+                    <RedesignText style={{ flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
+                      {before?.score ?? '—'}
+                    </RedesignText>
+                    <RedesignText style={{ flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
+                      {p.score ?? '—'}
+                    </RedesignText>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Actionable Health Boost Checklist */}
+            {page.advice.length > 0 ? (
+              <View
+                testID="redesign-health-next"
+                style={{
+                  backgroundColor: theme.surface,
+                  borderRadius: shape['radius-lg'],
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  padding: sp.lg,
+                  gap: sp.md,
+                }}
+              >
+                <View testID="redesign-health-checklist" style={{ gap: sp.md }}>
+                  <RedesignText variant="label">{t('health.redesign.checklistTitle')}</RedesignText>
+                  {page.advice.map((adv) => (
+                    <View key={adv.pillar} style={{ gap: sp.xs, paddingBottom: sp.xs }}>
+                      <RedesignText>{adviceText(adv, show)}</RedesignText>
+                      <RedesignButton
+                        testID={`redesign-health-advice-${adv.pillar}`}
+                        kind="secondary"
+                        label={t('health.redesign.goTo', { place: t(`health.link.${adv.link}` as TextKey) })}
+                        onPress={() => router.push(PAGES[adv.link])}
+                      />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+          </>
         ) : null}
       </ScrollView>
 
+      {/* Factor Explainer Sheet */}
       {explain ? (
         <ExplainSheet
           pillar={page.pillars.find((p) => p.key === explain)!}
@@ -296,6 +495,7 @@ export function RedesignHealthScreen() {
         />
       ) : null}
 
+      {/* Health Settings Sheet */}
       {settingsPopup.open ? (
         <HealthSettingsSheet
           initial={page.settings}
