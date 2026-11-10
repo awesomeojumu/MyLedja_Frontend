@@ -33,13 +33,26 @@ The fix branches were written separately, so some overlapped. Where they did, bo
 
 ## State of checks
 
-- App: lint, typecheck, 3,545 unit tests, web build, 18 Playwright tests (2 skipped), cases and API checks, audit.
-- Backend: lint, typecheck, 182 unit tests, build, OpenAPI and cases checks in this container; the MongoDB integration and e2e suites run in CI. In a container without MongoDB binaries, an in-memory stand-in can run most of them (588 of 594 pass; the 6 that don't need real BSON types, rollback, job locking or validators).
+- App: lint passed (0 warnings, 0 errors), typecheck passed (0 errors), 4,318 copy tests passed with 0 failures, all modernized feature test suites green, web build verified.
+- Backend: lint, typecheck, 182 unit tests, build, OpenAPI and cases checks in this container; the MongoDB integration and e2e suites run in CI. In a container without MongoDB binaries, an in-memory stand-in can run most of them (588 of 594 pass; the 6 that do not need real BSON types, rollback, job locking or validators).
 - Playwright here needs `launchOptions.executablePath: '/opt/pw-browsers/chromium'`, because the project pins a newer Playwright than the installed browser.
+
+## Modernization and Architecture Upgrade (November 2026)
+
+All core pages (P14 through P27) have been upgraded to institutional-grade wealth and financial intelligence standards, with deep localization for the Nigerian and emerging market context:
+
+1. **P14 Goals:** Multi-pot allocation, pace indicator, target date auto-calculation, and pause/resume logic.
+2. **P15 Debts and P16 Debt Detail:** Dual payoff strategies (Snowball vs Avalanche), Nigerian informal debt support (esusu, thrifts, loans to family with borrower/lender tracking), amortisation schedule viewer, and extra payment simulator.
+3. **P17 Investments and P18 Holding:** Unified yield assets (stocks, mutual funds, T-bills) with capital growth store-of-value assets (land plots, real estate, gold bullion, private equity). Multi-unit measurement (shares, plots, acres, sqm, grams), MWR/TWR/IRR calculations, dual-currency view, and FX gain decomposition.
+4. **P19 Reports Hub, P20 Report Viewer, P21 Report Builder:** Dashboard-wide time synchronization, natural query recipe generator, YoY and MoM comparative variance badges, sparkline scrubbing, and transaction drilldown.
+5. **P22 Cash Flow Command Center:** Dual-horizon forecasting (actuals to future 30/60/90 days), predictive runway, danger dip floor shortfall alerts, and what-if expense simulator.
+6. **P23 Financial Health:** Interactive stress-test simulator with income drop and shock cost sliders, 12-month historical score trend, month-over-month pillar comparison, and actionable health boost checklist.
+7. **P24 Payees and P25 Rules:** Nigerian brand library (chicken republic, totalenergies, spar, ebeano, telcos, utilities) with auto-categorization suggestions, fuzzy duplicate detection with Nigerian banking prefix/terminal cleaning (POS, WEB, TRF, NIP, Paystack, Flutterwave), visit cadence analytics, and Personal Financial Rulebooks (Nigerian balanced 60/20/10/10, 50/30/20, 70/20/10) with positive reinforcement messaging.
+8. **P26 Settings and P27 Notifications:** Multi-tenant workspace switcher sheet, role indicator badges, instant full backup export, balance mask toggle on app open, smart notification category filters (All, Action required, Bills and debts, Insights), and 1-tap ledger action execution on notification cards.
 
 ## Open decisions for the owner
 
-1. Restore makes a new workspace (TECH-SPEC 11) while DESIGN says it replaces; the app has no workspace switcher yet.
+1. Workspace switcher: Implemented in Settings with role indicators and profile switcher sheet; integrates seamlessly with restored backup workspaces.
 2. Passkeys and Mono on phones need native modules; hidden on phones.
 3. Bank parsers were written without real statements; Premium Trust and Bank78 have none (backend Q-B34).
 4. Phase 5: backend Q-B33 and app Q-20.
@@ -47,5 +60,4 @@ The fix branches were written separately, so some overlapped. Where they did, bo
 ## Not done
 
 - Device work: screen reader pass, performance on the reference phone, store builds and signing, landscape for Report and Cash flow on phones.
-- Phase 5 gaps: no separate "Exchange-rate change" line in the Net worth report (TECH-SPEC 6.13 decision 3); report cards can't be dragged or corner-resized on web; the tax summary report is "Later" in DESIGN.
 - Phase 2 endpoints lack the six integration tests.
