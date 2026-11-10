@@ -118,7 +118,7 @@ export function billsForMonth(snapshot: Snapshot, month: string, today: string, 
       const occId = `${recurring.id}:${dueDate}`;
       const occurrence = snapshot.occurrences.find((o) => o.id === occId);
       let group: BillRow['group'] = 'later';
-      if (occurrence?.status === 'paid') group = 'paid';
+      if (occurrence?.status === 'paid' || occurrence?.status === 'skipped') group = 'paid';
       else if (dueDate < today) group = 'overdue';
       else if (dueDate <= dueSoonEnd) group = 'dueSoon';
       rows.push({ recurring, dueDate, occurrence, group });
@@ -147,7 +147,7 @@ export function incomeDueRows(snapshot: Snapshot, month: string, today: string, 
     let group: BillRow['group'] = 'later';
     const occId = `${pseudo.id}:${dueDate}`;
     const occurrence = snapshot.occurrences.find((o) => o.id === occId);
-    if (occurrence?.status === 'paid') group = 'paid';
+    if (occurrence?.status === 'paid' || occurrence?.status === 'skipped') group = 'paid';
     else if (dueDate < today) group = 'overdue';
     else if (dueDate <= dueSoonEnd) group = 'dueSoon';
     rows.push({ recurring: pseudo, dueDate, occurrence, group });

@@ -2256,6 +2256,31 @@ export class WorkspaceRepository {
     return { ok: true, value: undefined };
   }
 
+  /** Skip a bill occurrence for this cycle (e.g. paused/handled externally). */
+  async skipBillOccurrence(recurringId: string, dueDate: string): Promise<Result<RecurringOccurrence>> {
+    const occId = `${recurringId}:${dueDate}`;
+    const occurrence: RecurringOccurrence = {
+      id: occId,
+      recurringId,
+      dueDate,
+      amountMinor: '0',
+      status: 'skipped',
+    };
+    await this.put(
+      'occurrences',
+      occId,
+      occurrence,
+      'occurrence.skipped',
+      undefined,
+      {
+        type: 'occurrence.skip',
+        targetId: null,
+        payload: { scheduleId: recurringId, date: dueDate },
+      },
+    );
+    return { ok: true, value: occurrence };
+  }
+
   /**
    * P12-08 — With "Create the transaction for me" on, post due occurrences once on this device
    * (offline companion to the BE midnight job).

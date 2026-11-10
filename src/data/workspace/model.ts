@@ -527,7 +527,7 @@ export type RecurringOccurrence = {
   recurringId: string;
   dueDate: string;
   amountMinor: string;
-  status: 'upcoming' | 'paid' | 'missed';
+  status: 'upcoming' | 'paid' | 'missed' | 'skipped';
   eventId?: string;
 };
 
