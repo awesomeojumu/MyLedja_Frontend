@@ -9,7 +9,10 @@ import {
   RedesignButton,
   RedesignChip,
   RedesignEmpty,
+  RedesignField,
+  RedesignIcon,
   RedesignProgress,
+  RedesignSheet,
   RedesignSkeleton,
   RedesignStackFrame,
   RedesignText,
@@ -18,8 +21,9 @@ import { redesignLight as theme, redesignTokens as tokens } from '@/design/redes
 import { rangeFor } from '@/features/reports/runner';
 import { today } from '@/features/transactions/helpers';
 import { t, type TextKey } from '@/i18n';
-import { formatNaira, PRIVACY_MASK } from '@/money';
+import { formatNaira, parseAmount, PRIVACY_MASK } from '@/money';
 
+import { calculateCashFlowForecast } from './forecast';
 import { cashFlowPage, drillHref, percentText, type FlowGroup } from './helpers';
 
 const sp = tokens.space;
@@ -57,13 +61,20 @@ function safeNum(v: bigint): number {
 
 /**
  * Figma Mobile App Phone / Cash flow (5:2532).
- * Behind EXPO_PUBLIC_REDESIGN; W0 tokens/components only.
+ * Upgraded with Dual Horizon (Actuals vs Forward Forecast), Danger Dip Shortfall Alert,
+ * and Interactive Scenario & What-If Stress Tester ("Can I Afford This?").
  */
 export function RedesignCashFlowScreen() {
   const { snapshot } = useWorkspace();
   const router = useRouter();
-  const params = useGlobalSearchParams<{ range?: string; view?: string }>();
+  const params = useGlobalSearchParams<{ range?: string; view?: string; mode?: string }>();
   const onDate = today();
+
+  const [mode, setMode] = useState<'actuals' | 'forecast'>((params.mode as 'actuals' | 'forecast') || 'actuals');
+  const [forecastHorizon, setForecastHorizon] = useState<30 | 60 | 90>(30);
+  const [simOpen, setSimOpen] = useState(false);
+  const [simExpenseText, setSimExpenseText] = useState('');
+  const [simDelayDays, setSimDelayDays] = useState(0);
 
   const preset = (RANGE_CHIPS.some((c) => c.key === params.range) ? params.range : 'this_month') as RangePreset;
   const tableView = params.view === 'table';
@@ -75,6 +86,15 @@ export function RedesignCashFlowScreen() {
     () => (snapshot ? cashFlowPage(snapshot, { ...bounds, includeTransfers: false }) : null),
     [snapshot, bounds],
   );
+
+  const forecast = useMemo(() => {
+    if (!snapshot) return null;
+    const expenseParsed = parseAmount(simExpenseText);
+    return calculateCashFlowForecast(snapshot, onDate, forecastHorizon, {
+      expenseMinor: expenseParsed.ok ? expenseParsed.minor : 0n,
+      paydayDelayDays: simDelayDays,
+    });
+  }, [snapshot, onDate, forecastHorizon, simExpenseText, simDelayDays]);
 
   const setPreset = (key: RangePreset) => router.setParams({ range: key });
   const toggleTable = () => router.setParams({ view: tableView ? undefined : 'table' });
@@ -117,9 +137,24 @@ export function RedesignCashFlowScreen() {
   const see = (categoryId?: string) =>
     router.push(drillHref({ ...bounds, ...(categoryId ? { categoryId } : {}) }));
 
-  if (data.bands.length === 0) {
+  if (data.bands.length === 0 && mode === 'actuals') {
     return frame(
       <View testID="redesign-cashflow-empty" style={{ gap: sp.lg }}>
+        {/* Mode Selector */}
+        <View style={{ flexDirection: 'row', gap: sp.sm }}>
+          <RedesignChip
+            testID="redesign-cashflow-mode-actuals"
+            label={t('cashFlow.redesign.modeActuals')}
+            selected={mode === 'actuals'}
+            onPress={() => setMode('actuals')}
+          />
+          <RedesignChip
+            testID="redesign-cashflow-mode-forecast"
+            label={t('cashFlow.redesign.modeForecast')}
+            selected={(mode as string) === 'forecast'}
+            onPress={() => setMode('forecast')}
+          />
+        </View>
         <ChipRow preset={preset} onSelect={setPreset} />
         <RedesignEmpty
           title={t('cashFlow.emptyTitle')}
@@ -133,89 +168,277 @@ export function RedesignCashFlowScreen() {
 
   return frame(
     <ScrollView contentContainerStyle={{ gap: sp.lg, paddingBottom: sp.xxl }}>
-      <ChipRow preset={preset} onSelect={setPreset} />
-
-      <View
-        testID="redesign-cashflow-net"
-        style={{
-          backgroundColor: theme.surface,
-          borderRadius: shape['radius-lg'],
-          borderWidth: 1,
-          borderColor: theme.border,
-          padding: sp.lg,
-          gap: sp.sm,
-        }}
-      >
-        <RedesignText variant="label" tone="textSecondary">
-          {netTitle}
-        </RedesignText>
-        <RedesignAmount
-          testID="redesign-cashflow-left"
-          text={formatNaira(left < 0n ? -left : left)}
-          hidden={privacy}
-          sign={left < 0n ? '−' : '+'}
-          sizeVariant="display"
+      {/* Mode Selector Chips */}
+      <View style={{ flexDirection: 'row', gap: sp.sm }}>
+        <RedesignChip
+          testID="redesign-cashflow-mode-actuals"
+          label={t('cashFlow.redesign.modeActuals')}
+          selected={mode === 'actuals'}
+          onPress={() => setMode('actuals')}
         />
-        <RedesignText tone="textSecondary">{t('cashFlow.redesign.moneyInMinusOut')}</RedesignText>
-        <View
-          testID="redesign-cashflow-in"
-          style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}
-        >
-          <RedesignText>{t('cashFlow.redesign.moneyIn')}</RedesignText>
-          <RedesignText style={{ fontVariant: ['tabular-nums'] }}>{show(inTotal, true)}</RedesignText>
-        </View>
-        <View
-          testID="redesign-cashflow-out"
-          style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}
-        >
-          <RedesignText>{t('cashFlow.redesign.moneyOut')}</RedesignText>
-          <RedesignText style={{ fontVariant: ['tabular-nums'] }}>
-            {privacy ? PRIVACY_MASK : `−${formatNaira(outTotal)}`}
-          </RedesignText>
-        </View>
+        <RedesignChip
+          testID="redesign-cashflow-mode-forecast"
+          label={t('cashFlow.redesign.modeForecast')}
+          selected={mode === 'forecast'}
+          onPress={() => setMode('forecast')}
+        />
       </View>
 
-      {tableView ? (
-        <TableCard groups={sinks} show={show} onCategory={see} />
-      ) : (
+      {mode === 'actuals' ? (
         <>
-          <BarSection
-            testID="redesign-cashflow-from"
-            title={t('cashFlow.redesign.whereItCameFrom')}
-            items={sources.map((b) => ({
-              key: b.key,
-              label: b.label,
-              amount: b.amount,
-              pct: sharePct(b.amount, inTotal),
-              categoryId: b.categoryId ?? undefined,
-            }))}
-            max={maxIn}
-            show={show}
-            onPress={see}
-          />
-          <BarSection
-            testID="redesign-cashflow-went"
-            title={t('cashFlow.whereItWent')}
-            items={sinks.map((g) => ({
-              key: g.key,
-              label: g.label,
-              amount: g.amount,
-              pct: sharePct(g.amount, outTotal),
-              categoryId: g.categories[0]?.categoryId,
-            }))}
-            max={maxOut}
-            show={show}
-            onPress={see}
+          <ChipRow preset={preset} onSelect={setPreset} />
+
+          <View
+            testID="redesign-cashflow-net"
+            style={{
+              backgroundColor: theme.surface,
+              borderRadius: shape['radius-lg'],
+              borderWidth: 1,
+              borderColor: theme.border,
+              padding: sp.lg,
+              gap: sp.sm,
+            }}
+          >
+            <RedesignText variant="label" tone="textSecondary">
+              {netTitle}
+            </RedesignText>
+            <RedesignAmount
+              testID="redesign-cashflow-left"
+              text={formatNaira(left < 0n ? -left : left)}
+              hidden={privacy}
+              sign={left < 0n ? '−' : '+'}
+              sizeVariant="display"
+            />
+            <RedesignText tone="textSecondary">{t('cashFlow.redesign.moneyInMinusOut')}</RedesignText>
+            <View
+              testID="redesign-cashflow-in"
+              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}
+            >
+              <RedesignText>{t('cashFlow.redesign.moneyIn')}</RedesignText>
+              <RedesignText style={{ fontVariant: ['tabular-nums'] }}>{show(inTotal, true)}</RedesignText>
+            </View>
+            <View
+              testID="redesign-cashflow-out"
+              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}
+            >
+              <RedesignText>{t('cashFlow.redesign.moneyOut')}</RedesignText>
+              <RedesignText style={{ fontVariant: ['tabular-nums'] }}>
+                {privacy ? PRIVACY_MASK : `−${formatNaira(outTotal)}`}
+              </RedesignText>
+            </View>
+          </View>
+
+          {tableView ? (
+            <TableCard groups={sinks} show={show} onCategory={see} />
+          ) : (
+            <>
+              <BarSection
+                testID="redesign-cashflow-from"
+                title={t('cashFlow.redesign.whereItCameFrom')}
+                items={sources.map((b) => ({
+                  key: b.key,
+                  label: b.label,
+                  amount: b.amount,
+                  pct: sharePct(b.amount, inTotal),
+                  categoryId: b.categoryId ?? undefined,
+                }))}
+                max={maxIn}
+                show={show}
+                onPress={see}
+              />
+              <BarSection
+                testID="redesign-cashflow-went"
+                title={t('cashFlow.whereItWent')}
+                items={sinks.map((g) => ({
+                  key: g.key,
+                  label: g.label,
+                  amount: g.amount,
+                  pct: sharePct(g.amount, outTotal),
+                  categoryId: g.categories[0]?.categoryId,
+                }))}
+                max={maxOut}
+                show={show}
+                onPress={see}
+              />
+            </>
+          )}
+
+          <RedesignButton
+            testID="redesign-cashflow-view-table"
+            kind="link"
+            label={tableView ? t('cashFlow.redesign.viewAsBars') : t('cashFlow.redesign.viewAsTable')}
+            onPress={toggleTable}
           />
         </>
+      ) : (
+        /* Forecast Mode */
+        forecast && (
+          <>
+            {/* Forecast Horizon Selector */}
+            <View style={{ gap: sp.xs }}>
+              <RedesignText variant="caption" tone="textSecondary">
+                {t('cashFlow.redesign.forecastHorizon')}
+              </RedesignText>
+              <View style={{ flexDirection: 'row', gap: sp.sm }}>
+                <RedesignChip
+                  testID="redesign-forecast-horizon-30"
+                  label={t('cashFlow.redesign.forecast30')}
+                  selected={forecastHorizon === 30}
+                  onPress={() => setForecastHorizon(30)}
+                />
+                <RedesignChip
+                  testID="redesign-forecast-horizon-60"
+                  label={t('cashFlow.redesign.forecast60')}
+                  selected={forecastHorizon === 60}
+                  onPress={() => setForecastHorizon(60)}
+                />
+                <RedesignChip
+                  testID="redesign-forecast-horizon-90"
+                  label={t('cashFlow.redesign.forecast90')}
+                  selected={forecastHorizon === 90}
+                  onPress={() => setForecastHorizon(90)}
+                />
+              </View>
+            </View>
+
+            {/* Shortfall / Danger Dip Alert Card */}
+            <View
+              testID="redesign-forecast-danger-alert"
+              style={{
+                backgroundColor: theme.surface,
+                borderRadius: shape['radius-lg'],
+                borderWidth: 1,
+                borderColor: theme.border,
+                padding: sp.lg,
+                gap: sp.xs,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+                <RedesignIcon name="alert" size={18} color={theme.primary} />
+                <RedesignText variant="label">
+                  {forecast.hasDangerDip ? t('cashFlow.redesign.dangerDipAlert') : t('cashFlow.redesign.safetyFloorSafe')}
+                </RedesignText>
+              </View>
+              {forecast.hasDangerDip ? (
+                <RedesignText variant="caption" tone="textSecondary">
+                  {t('cashFlow.redesign.dangerDipDesc', {
+                    amount: formatNaira(forecast.minBalance),
+                    date: forecast.minBalanceDate,
+                  })}
+                </RedesignText>
+              ) : null}
+            </View>
+
+            {/* Forecast Summary Card */}
+            <View
+              testID="redesign-forecast-summary"
+              style={{
+                backgroundColor: theme.surface,
+                borderRadius: shape['radius-lg'],
+                borderWidth: 1,
+                borderColor: theme.border,
+                padding: sp.lg,
+                gap: sp.sm,
+              }}
+            >
+              <RedesignText variant="label" tone="textSecondary">
+                {t('cashFlow.redesign.projectedMinBalance')}
+              </RedesignText>
+              <RedesignAmount
+                testID="redesign-forecast-min-balance"
+                text={formatNaira(forecast.minBalance < 0n ? -forecast.minBalance : forecast.minBalance)}
+                sign={forecast.minBalance < 0n ? '−' : '+'}
+                sizeVariant="display"
+              />
+              <View style={{ gap: sp.xs, marginTop: sp.xs }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}>
+                  <RedesignText tone="textSecondary">{t('cashFlow.redesign.recurringInflow')}</RedesignText>
+                  <RedesignText testID="redesign-forecast-inflows" style={{ fontVariant: ['tabular-nums'] }}>
+                    {formatNaira(forecast.totalProjectedInflow)}
+                  </RedesignText>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}>
+                  <RedesignText tone="textSecondary">{t('cashFlow.redesign.recurringOutflow')}</RedesignText>
+                  <RedesignText testID="redesign-forecast-outflows" style={{ fontVariant: ['tabular-nums'] }}>
+                    {formatNaira(forecast.totalProjectedOutflow)}
+                  </RedesignText>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}>
+                  <RedesignText tone="textSecondary">{t('cashFlow.redesign.dailyRunRate')}</RedesignText>
+                  <RedesignText style={{ fontVariant: ['tabular-nums'] }}>
+                    {formatNaira(forecast.dailyRunRate)}
+                  </RedesignText>
+                </View>
+              </View>
+            </View>
+
+            {/* What-If Scenario Stress Tester Trigger */}
+            <RedesignButton
+              testID="redesign-open-simulator"
+              kind="secondary"
+              label={t('cashFlow.redesign.simulatorTitle')}
+              onPress={() => setSimOpen(true)}
+              fullWidth
+            />
+          </>
+        )
       )}
 
-      <RedesignButton
-        testID="redesign-cashflow-view-table"
-        kind="link"
-        label={tableView ? t('cashFlow.redesign.viewAsBars') : t('cashFlow.redesign.viewAsTable')}
-        onPress={toggleTable}
-      />
+      {/* Scenario What-If Stress Tester Sheet */}
+      {simOpen && forecast ? (
+        <RedesignSheet
+          testID="redesign-simulator-sheet"
+          visible
+          title={t('cashFlow.redesign.simulatorTitle')}
+          onClose={() => setSimOpen(false)}
+        >
+          <View style={{ gap: sp.md, paddingVertical: sp.xs }}>
+            <RedesignField
+              testID="redesign-sim-amount"
+              label={t('cashFlow.redesign.expenseAmount')}
+              value={simExpenseText}
+              onChangeText={setSimExpenseText}
+              placeholder="0"
+              keyboardType="numeric"
+            />
+
+            <View style={{ gap: sp.xs }}>
+              <RedesignText variant="caption" tone="textSecondary">
+                {t('cashFlow.redesign.simulateDelay')}
+              </RedesignText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.xs }}>
+                {[0, 7, 14, 30].map((d) => (
+                  <RedesignChip
+                    key={d}
+                    testID={`redesign-sim-delay-${d}`}
+                    label={t('cashFlow.redesign.delayDays', { days: d })}
+                    selected={simDelayDays === d}
+                    onPress={() => setSimDelayDays(d)}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <View
+              style={{
+                padding: sp.md,
+                backgroundColor: theme.surface,
+                borderRadius: shape['radius-md'],
+                borderWidth: 1,
+                borderColor: theme.border,
+                gap: sp.xs,
+              }}
+            >
+              <RedesignText testID="redesign-sim-lowest-balance" variant="label">
+                {t('cashFlow.redesign.simLowestBalance', { amount: formatNaira(forecast.minBalance) })}
+              </RedesignText>
+              <RedesignText testID="redesign-sim-buffer-days" variant="caption" tone="textSecondary">
+                {t('cashFlow.redesign.simRunwayImpact', { days: forecast.bufferDays })}
+              </RedesignText>
+            </View>
+          </View>
+        </RedesignSheet>
+      ) : null}
     </ScrollView>,
   );
 }

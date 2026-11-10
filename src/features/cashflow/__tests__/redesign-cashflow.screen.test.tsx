@@ -97,6 +97,38 @@ describe('Redesign Cash flow (Figma 5:2532)', () => {
     expect(router.push).toHaveBeenCalledWith(expect.stringMatching(/\/transactions\?/));
   });
 
+  it('switches to forecast mode, adjusts horizon, and runs what-if simulator', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<RedesignCashFlowScreen />), { sync });
+
+    expect(await screen.findByTestId('redesign-cashflow-mode-forecast')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('redesign-cashflow-mode-forecast'));
+    });
+
+    expect(await screen.findByTestId('redesign-forecast-horizon-30')).toBeTruthy();
+    expect(screen.getByTestId('redesign-forecast-horizon-60')).toBeTruthy();
+    expect(screen.getByTestId('redesign-forecast-danger-alert')).toBeTruthy();
+    expect(screen.getByTestId('redesign-forecast-summary')).toBeTruthy();
+    expect(screen.getByTestId('redesign-open-simulator')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('redesign-open-simulator'));
+    });
+
+    expect(await screen.findByTestId('redesign-simulator-sheet')).toBeTruthy();
+    expect(screen.getByTestId('redesign-sim-amount')).toBeTruthy();
+    expect(screen.getByTestId('redesign-sim-delay-7')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId('redesign-sim-amount'), '200000');
+      fireEvent.press(screen.getByTestId('redesign-sim-delay-7'));
+    });
+
+    expect(screen.getByTestId('redesign-sim-lowest-balance')).toBeTruthy();
+    expect(screen.getByTestId('redesign-sim-buffer-days')).toBeTruthy();
+  });
+
   it('range chip switches period label for last month', async () => {
     const { sync } = await seeded({ months: ['09', '10'] });
     setParams({ range: 'last_month' });
