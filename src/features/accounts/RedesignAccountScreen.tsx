@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,14 +8,17 @@ import { aiApi, type BankLink, type ServerImport } from '@/api/ai';
 import { ApiError } from '@/api/client';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useOnline } from '@/lib/useOnline';
+import { useToast } from '@/design/components';
 import { useDesign } from '@/design/ThemeProvider';
 import { useSizeClass } from '@/design/size';
 import { useTabParam } from '@/design/useTabParam';
 import {
   RedesignAmount,
   RedesignButton,
+  RedesignChip,
   RedesignDialog,
   RedesignEmpty,
+  RedesignField,
   RedesignIcon,
   RedesignListRow,
   RedesignSegmented,
@@ -30,7 +34,9 @@ import { AppFrame } from '@/features/frame/AppFrame';
 import { DividendSheet, HoldingSheet, TradeSheet } from '@/features/investments/investmentSheets';
 import { portfolioFigures } from '@/features/investments/helpers';
 import { TransactionPanel } from '@/features/transactions/TransactionPanel';
+import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
 import { today } from '@/features/transactions/helpers';
+import { addDays, billsForMonth } from '@/features/plan/recurrence';
 import { t } from '@/i18n';
 import { formatNaira, PRIVACY_MASK } from '@/money';
 import { ledgerBalance } from '@/ledger';
@@ -38,7 +44,7 @@ import { ledgerBalance } from '@/ledger';
 import { classifyDroppedFile, statementCsv } from './AccountImportSheet';
 import { RedesignImportSheet } from './RedesignImportSheet';
 import { ArchiveSheet, EditAccountSheet, UpdateValueSheet } from './accountSheets';
-import { clearedSplit, hasHoldingsTab, hasValueTab, register, type RegisterRow } from './helpers';
+import { clearedSplit, groupRegisterByDay, hasHoldingsTab, hasValueTab, register, type RegisterRow } from './helpers';
 
 const sp = tokens.space;
 
@@ -80,6 +86,38 @@ function balanceCaption(account: Account, link?: BankLink): string {
     return t('redesign.account.captionManual', { kind, date: monthLong(account.openedAt) });
   }
   return t('redesign.account.captionManualShort', { kind });
+}
+
+function BalanceSparkline({ values }: { values: number[] }) {
+  const w = 324;
+  const h = 48;
+  if (values.length < 2) {
+    return (
+      <View testID="account-balance-sparkline" style={{ height: h, justifyContent: 'center' }}>
+        <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`}>
+          <Path d={`M0 ${h / 2} L${w} ${h / 2}`} stroke={theme.primary} strokeWidth={2} fill="none" strokeDasharray="4 4" />
+        </Svg>
+      </View>
+    );
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * w;
+    const y = h - ((v - min) / span) * (h - 8) - 4;
+    return [x, y] as const;
+  });
+  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]!.toFixed(1)} ${p[1]!.toFixed(1)}`).join(' ');
+  const area = `${line} L${w} ${h} L0 ${h} Z`;
+  return (
+    <View testID="account-balance-sparkline">
+      <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`}>
+        <Path d={area} fill={theme.primarySoft} />
+        <Path d={line} stroke={theme.primary} strokeWidth={2} fill="none" />
+      </Svg>
+    </View>
+  );
 }
 
 function DetailChrome({
@@ -130,6 +168,8 @@ function DetailChrome({
 export function RedesignAccountScreen({ embedded, accountId }: { embedded?: boolean; accountId?: string } = {}) {
   const { snapshot, repo } = useWorkspace();
   const { engine } = useSync();
+  const toast = useToast();
+  const addTx = useOptionalAddTransaction();
   const params = useGlobalSearchParams<{
     id?: string;
     tx?: string;
@@ -154,6 +194,9 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
   const [pending, setPending] = useState<ServerImport[]>([]);
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [bankLinks, setBankLinks] = useState<BankLink[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterChip, setFilterChip] = useState<'all' | 'cleared' | 'uncleared' | 'inflow' | 'outflow'>('all');
+
   const { client, user } = useAuth();
   const online = useOnline();
   const bank = useMemo(() => aiApi(client), [client]);
@@ -200,7 +243,7 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
   const rows = useMemo(() => (snapshot && account ? register(snapshot, account.id) : []), [snapshot, account]);
   const balance = snapshot && account ? ledgerBalance(account.id, snapshot.events) : 0n;
   const owes = account ? ACCOUNT_KIND_INFO[account.type].ledger === 'liability' : false;
-  const sign = (v: bigint) => (owes ? -v : v);
+  const sign = useCallback((v: bigint) => (owes ? -v : v), [owes]);
   const accountLink = account ? bankLinks.find((l) => l.accountId === account.id && l.status !== 'disconnected') : undefined;
   const holdingRows = snapshot && account && hasHoldingsTab(account.type) ? portfolioFigures(snapshot, account.id) : [];
   const split = clearedSplit(rows);
@@ -231,6 +274,15 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
   };
   const goBack = () => router.push('/accounts');
 
+  const openAddTx = () => {
+    if (!account) return;
+    if (addTx) {
+      addTx.open('expense', { accountId: account.id, date: today() });
+    } else {
+      router.push({ pathname: '/transactions', params: { new: 'expense', accountId: account.id } });
+    }
+  };
+
   const syncNow = async () => {
     setSyncing(true);
     try {
@@ -248,7 +300,94 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
     }
   };
 
+  const toggleCleared = (r: RegisterRow) => {
+    const toggled = !r.event.cleared;
+    void repo.setEventMeta(r.event.id, { cleared: toggled });
+    toast.show(t('redesign.account.clearedUpdated'), () => {
+      void repo.setEventMeta(r.event.id, { cleared: !toggled });
+    });
+  };
+
   const money = (minor: bigint) => (privacy ? PRIVACY_MASK : formatNaira(minor));
+
+  const latestReconcile = useMemo(() => {
+    if (!snapshot || !account) return null;
+    const list = snapshot.reconciles.filter((r) => r.accountId === account.id);
+    if (list.length === 0) return null;
+    return [...list].sort((a, b) => b.statementDate.localeCompare(a.statementDate))[0] ?? null;
+  }, [snapshot, account]);
+
+  const isReconcileOverdue = useMemo(() => {
+    if (!account) return false;
+    if (!latestReconcile) return rows.length > 0;
+    const diffDays = (new Date(today()).getTime() - new Date(latestReconcile.statementDate).getTime()) / (1000 * 3600 * 24);
+    return diffDays > 30;
+  }, [account, latestReconcile, rows.length]);
+
+  const unclearedCount = useMemo(() => rows.filter((r) => !r.event.cleared).length, [rows]);
+
+  const thirtyDaysAgo = useMemo(() => addDays(today(), -30), []);
+
+  const cashflowStats = useMemo(() => {
+    const recent = rows.filter((r) => r.event.date >= thirtyDaysAgo);
+    let inflow = 0n;
+    let outflow = 0n;
+    for (const r of recent) {
+      const s = sign(r.line);
+      if (s > 0n) inflow += s;
+      else if (s < 0n) outflow += -s;
+    }
+    const net = inflow - outflow;
+    const sparklineValues = [...recent].reverse().map((r) => Number(sign(r.running) / 100n));
+    if (sparklineValues.length < 2) {
+      const cur = Number(sign(balance) / 100n);
+      sparklineValues.unshift(cur);
+      if (sparklineValues.length < 2) sparklineValues.push(cur);
+    }
+    return { inflow, outflow, net, sparklineValues };
+  }, [rows, thirtyDaysAgo, balance, sign]);
+
+  const upcomingBills = useMemo(() => {
+    if (!snapshot || !account) return [];
+    const currentMonth = today().slice(0, 7);
+    return billsForMonth(snapshot, currentMonth, today(), 7).filter(
+      (b) => b.recurring.accountId === account.id && b.group !== 'paid' && b.dueDate >= today(),
+    );
+  }, [snapshot, account]);
+
+  const upcomingTotalMinor = useMemo(() => {
+    return upcomingBills.reduce((s, b) => s + BigInt(b.recurring.amountMinor), 0n);
+  }, [upcomingBills]);
+
+  const isBalanceInsufficient = useMemo(() => {
+    if (!account || upcomingBills.length === 0) return false;
+    return sign(balance) < upcomingTotalMinor;
+  }, [account, upcomingBills.length, balance, upcomingTotalMinor, sign]);
+
+  const filteredRows = useMemo(() => {
+    let list = rows;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (r) =>
+          r.title.toLowerCase().includes(q) ||
+          (r.category && r.category.toLowerCase().includes(q)) ||
+          (r.event.notes && r.event.notes.toLowerCase().includes(q)),
+      );
+    }
+    if (filterChip === 'cleared') {
+      list = list.filter((r) => r.event.cleared);
+    } else if (filterChip === 'uncleared') {
+      list = list.filter((r) => !r.event.cleared);
+    } else if (filterChip === 'inflow') {
+      list = list.filter((r) => sign(r.line) > 0n);
+    } else if (filterChip === 'outflow') {
+      list = list.filter((r) => sign(r.line) < 0n);
+    }
+    return list;
+  }, [rows, searchQuery, filterChip, sign]);
+
+  const dayGroups = useMemo(() => groupRegisterByDay(filteredRows), [filteredRows]);
 
   const moreTrailing = (
     <Pressable
@@ -278,30 +417,150 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
         backgroundColor: theme.surface,
         borderRadius: tokens.shape['radius-lg'],
         padding: sp.lg,
-        gap: sp.sm,
+        gap: sp.md,
       }}
     >
-      <RedesignText variant="helper" tone="textSecondary">
-        {t('redesign.account.balance')}
-      </RedesignText>
-      <RedesignAmount testID="account-balance" text={money(sign(balance))} sizeVariant="display" />
-      <RedesignText variant="helper" tone="textSecondary" testID="account-balance-caption">
-        {balanceCaption(account, accountLink)}
-      </RedesignText>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ gap: sp.xs, flex: 1 }}>
+          <RedesignText variant="helper" tone="textSecondary">
+            {t('redesign.account.workingBalance')}
+          </RedesignText>
+          <RedesignAmount testID="account-balance" text={money(sign(balance))} sizeVariant="display" />
+        </View>
+
+        <View testID="account-sync-indicator" style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: accountLink ? theme.primary : theme.textSecondary,
+            }}
+          />
+          <Pressable
+            testID="account-sync-button"
+            accessibilityRole="button"
+            accessibilityLabel={t('redesign.account.syncNow')}
+            disabled={syncing}
+            onPress={() => void syncNow()}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 6 }}
+          >
+            <RedesignIcon name="refresh" size={14} color={syncing ? theme.textSecondary : theme.primary} />
+            <RedesignText variant="helper" tone={syncing ? 'textSecondary' : 'primary'}>
+              {t('redesign.account.syncNow')}
+            </RedesignText>
+          </Pressable>
+        </View>
+      </View>
+
+      <View
+        testID="account-cleared-split"
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: theme.surfaceMuted,
+          borderRadius: tokens.shape['radius-md'],
+          paddingHorizontal: sp.md,
+          paddingVertical: sp.xs,
+          alignSelf: 'flex-start',
+          gap: sp.sm,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <RedesignText variant="helper" tone="textSecondary">
+            {t('redesign.account.cleared')}
+          </RedesignText>
+          <RedesignText testID="account-cleared-amount" variant="helper" style={{ fontWeight: '600', fontVariant: ['tabular-nums'] }}>
+            {money(sign(split.cleared))}
+          </RedesignText>
+        </View>
+        <RedesignText variant="helper" tone="textSecondary">
+          ·
+        </RedesignText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <RedesignText variant="helper" tone="textSecondary">
+            {t('redesign.account.uncleared')}
+          </RedesignText>
+          <RedesignText
+            testID="account-uncleared-amount"
+            variant="helper"
+            tone={split.notCleared !== 0n ? 'primary' : 'textSecondary'}
+            style={{ fontWeight: '600', fontVariant: ['tabular-nums'] }}
+          >
+            {money(sign(split.notCleared))}
+          </RedesignText>
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: sp.xs }}>
+        <RedesignText variant="helper" tone="textSecondary" testID="account-last-reconciled">
+          {latestReconcile
+            ? t('redesign.account.lastReconciled', { date: monthLong(latestReconcile.statementDate) })
+            : t('redesign.account.neverReconciled')}
+        </RedesignText>
+        <RedesignText variant="helper" tone="textSecondary" testID="account-balance-caption">
+          {balanceCaption(account, accountLink)}
+        </RedesignText>
+        {isReconcileOverdue ? (
+          <View
+            testID="account-reconcile-aging-warning"
+            style={{
+              backgroundColor: theme.primarySoft,
+              paddingHorizontal: sp.sm,
+              paddingVertical: 2,
+              borderRadius: tokens.shape['radius-sm'],
+            }}
+          >
+            <RedesignText variant="helper" tone="primary">
+              {t('redesign.account.reconcileOverdue')}
+            </RedesignText>
+          </View>
+        ) : null}
+      </View>
+
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.sm, marginTop: sp.xs }}>
-        <View style={{ flex: phone ? 1 : undefined, minWidth: phone ? 0 : 140 }}>
+        <View style={{ flex: phone ? 1 : undefined, minWidth: phone ? 0 : 130, position: 'relative' }}>
           <RedesignButton
             testID="account-reconcile"
-            kind="secondary"
+            kind="primary"
             label={t('redesign.account.reconcile')}
             onPress={() => router.push(`/accounts/${account.id}/reconcile`)}
             fullWidth={phone}
           />
+          {unclearedCount > 0 ? (
+            <View
+              testID="account-uncleared-badge"
+              style={{
+                position: 'absolute',
+                top: -6,
+                right: -6,
+                backgroundColor: theme.primary,
+                borderRadius: 10,
+                paddingHorizontal: 6,
+                paddingVertical: 1,
+                borderWidth: 2,
+                borderColor: theme.surface,
+              }}
+            >
+              <RedesignText variant="helper" tone="textOnPrimary" style={{ fontWeight: '700', fontSize: 10 }}>
+                {unclearedCount}
+              </RedesignText>
+            </View>
+          ) : null}
         </View>
-        <View style={{ flex: phone ? 1 : undefined, minWidth: phone ? 0 : 140 }}>
+        <View style={{ flex: phone ? 1 : undefined, minWidth: phone ? 0 : 130 }}>
+          <RedesignButton
+            testID="account-add-tx"
+            kind="secondary"
+            label={t('redesign.account.addTx')}
+            onPress={openAddTx}
+            fullWidth={phone}
+          />
+        </View>
+        <View style={{ flex: phone ? 1 : undefined, minWidth: phone ? 0 : 120 }}>
           <RedesignButton
             testID="account-import"
-            kind="secondary"
+            kind="soft"
             label={t('redesign.account.import')}
             onPress={openImport}
             fullWidth={phone}
@@ -316,6 +575,148 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
     <RedesignSkeleton height={160} />
   );
 
+  const cashflowCard = account ? (
+    <View
+      testID="account-cashflow-card"
+      style={{
+        backgroundColor: theme.surface,
+        borderRadius: tokens.shape['radius-lg'],
+        padding: sp.lg,
+        gap: sp.md,
+      }}
+    >
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <RedesignText variant="label">{t('redesign.account.cashflowTitle')}</RedesignText>
+        <RedesignText
+          testID="account-net-change"
+          variant="label"
+          tone={cashflowStats.net >= 0n ? 'primary' : 'textSecondary'}
+          style={{ fontVariant: ['tabular-nums'] }}
+        >
+          {privacy ? PRIVACY_MASK : formatNaira(cashflowStats.net, { signed: true })}
+        </RedesignText>
+      </View>
+
+      <BalanceSparkline values={cashflowStats.sparklineValues} />
+
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderColor: theme.border, paddingTop: sp.sm }}>
+        <View style={{ gap: 2 }}>
+          <RedesignText variant="helper" tone="textSecondary">
+            {t('redesign.account.inflowTotal')}
+          </RedesignText>
+          <RedesignText testID="account-inflow-total" variant="label" tone="primary" style={{ fontVariant: ['tabular-nums'] }}>
+            {money(cashflowStats.inflow)}
+          </RedesignText>
+        </View>
+        <View style={{ gap: 2, alignItems: 'flex-end' }}>
+          <RedesignText variant="helper" tone="textSecondary">
+            {t('redesign.account.outflowTotal')}
+          </RedesignText>
+          <RedesignText testID="account-outflow-total" variant="label" style={{ fontVariant: ['tabular-nums'] }}>
+            {money(cashflowStats.outflow)}
+          </RedesignText>
+        </View>
+      </View>
+    </View>
+  ) : null;
+
+  const upcomingCard =
+    upcomingBills.length > 0 ? (
+      <View
+        testID="account-upcoming-bills"
+        style={{
+          backgroundColor: theme.surface,
+          borderRadius: tokens.shape['radius-lg'],
+          padding: sp.lg,
+          gap: sp.sm,
+        }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <RedesignText variant="label">{t('redesign.account.upcomingTitle')}</RedesignText>
+          <RedesignText variant="helper" tone="textSecondary">
+            {shortDate(upcomingBills[0]!.dueDate)}
+          </RedesignText>
+        </View>
+        {isBalanceInsufficient ? (
+          <View
+            testID="account-upcoming-warning"
+            style={{
+              backgroundColor: theme.primarySoft,
+              borderRadius: tokens.shape['radius-sm'],
+              padding: sp.sm,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: sp.xs,
+            }}
+          >
+            <RedesignIcon name="alert" size={16} color={theme.primary} />
+            <RedesignText variant="helper" tone="primary" style={{ flex: 1 }}>
+              {t('redesign.account.upcomingWarning')}
+            </RedesignText>
+          </View>
+        ) : null}
+        <View style={{ gap: sp.xs }}>
+          {upcomingBills.slice(0, 3).map((b) => (
+            <View
+              key={`${b.recurring.id}-${b.dueDate}`}
+              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+            >
+              <RedesignText numberOfLines={1} style={{ flex: 1 }}>
+                {b.recurring.name}
+              </RedesignText>
+              <RedesignText style={{ fontVariant: ['tabular-nums'] }}>
+                {money(BigInt(b.recurring.amountMinor))}
+              </RedesignText>
+            </View>
+          ))}
+        </View>
+      </View>
+    ) : null;
+
+  const searchAndFilters = (
+    <View style={{ gap: sp.sm }}>
+      <RedesignField
+        testID="account-tx-search"
+        label={t('redesign.account.searchTx')}
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholder={t('redesign.account.searchTx')}
+      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp.xs }}>
+        <RedesignChip
+          testID="account-filter-all"
+          label={t('redesign.account.filterAll')}
+          selected={filterChip === 'all'}
+          onPress={() => setFilterChip('all')}
+        />
+        <RedesignChip
+          testID="account-filter-cleared"
+          label={t('redesign.account.filterCleared')}
+          selected={filterChip === 'cleared'}
+          onPress={() => setFilterChip('cleared')}
+        />
+        <RedesignChip
+          testID="account-filter-uncleared"
+          label={t('redesign.account.filterUncleared')}
+          selected={filterChip === 'uncleared'}
+          onPress={() => setFilterChip('uncleared')}
+        />
+        <RedesignChip
+          testID="account-filter-inflow"
+          label={t('redesign.account.filterInflow')}
+          selected={filterChip === 'inflow'}
+          onPress={() => setFilterChip('inflow')}
+        />
+        <RedesignChip
+          testID="account-filter-outflow"
+          label={t('redesign.account.filterOutflow')}
+          selected={filterChip === 'outflow'}
+          onPress={() => setFilterChip('outflow')}
+        />
+      </ScrollView>
+    </View>
+  );
+
   const registerList = (
     <View style={{ gap: sp.sm }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: sp.xs }}>
@@ -324,7 +725,7 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
           {t('redesign.account.balanceAfter')}
         </RedesignText>
       </View>
-      {rows.length === 0 ? (
+      {filteredRows.length === 0 ? (
         <RedesignEmpty
           title={t('redesign.account.emptyTitle')}
           body={t('redesign.account.emptyBody')}
@@ -332,9 +733,51 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
           onAction={openImport}
         />
       ) : (
-        <View style={{ backgroundColor: theme.surface, borderRadius: tokens.shape['radius-lg'], overflow: 'hidden' }}>
-          {rows.map((r) => (
-            <RegisterRowLine key={r.event.id} row={r} sign={sign} privacy={privacy} onOpen={() => router.setParams({ tx: r.event.id })} />
+        <View style={{ gap: sp.md }}>
+          {dayGroups.map((group) => (
+            <View
+              key={group.day}
+              style={{
+                backgroundColor: theme.surface,
+                borderRadius: tokens.shape['radius-lg'],
+                overflow: 'hidden',
+              }}
+            >
+              <View
+                testID={`day-header-${group.day}`}
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingHorizontal: sp.md,
+                  paddingVertical: sp.xs,
+                  backgroundColor: theme.surfaceMuted,
+                  borderBottomWidth: 1,
+                  borderColor: theme.border,
+                }}
+              >
+                <RedesignText variant="helper" style={{ fontWeight: '600' }}>
+                  {shortDate(group.day)}
+                </RedesignText>
+                <RedesignText
+                  variant="helper"
+                  tone={group.net > 0n ? 'primary' : 'textSecondary'}
+                  style={{ fontVariant: ['tabular-nums'], fontWeight: '600' }}
+                >
+                  {privacy ? PRIVACY_MASK : formatNaira(sign(group.net), { signed: true })}
+                </RedesignText>
+              </View>
+              {group.rows.map((r) => (
+                <RegisterRowLine
+                  key={r.event.id}
+                  row={r}
+                  sign={sign}
+                  privacy={privacy}
+                  onOpen={() => router.setParams({ tx: r.event.id })}
+                  onToggleCleared={() => toggleCleared(r)}
+                />
+              ))}
+            </View>
           ))}
         </View>
       )}
@@ -347,6 +790,7 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
         <View
           style={{
             flexDirection: 'row',
+            alignItems: 'center',
             paddingHorizontal: sp.lg,
             paddingVertical: sp.md,
             borderBottomWidth: 1,
@@ -354,6 +798,9 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
             gap: sp.md,
           }}
         >
+          <RedesignText variant="helper" tone="textSecondary" style={{ width: 32 }}>
+            {t('redesign.account.cleared')}
+          </RedesignText>
           <RedesignText variant="helper" tone="textSecondary" style={{ width: 72 }}>
             {t('redesign.account.colDate')}
           </RedesignText>
@@ -370,7 +817,7 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
             {t('redesign.account.colBalance')}
           </RedesignText>
         </View>
-        {rows.map((r) => (
+        {filteredRows.map((r) => (
           <Pressable
             key={r.event.id}
             testID={`reg-${r.event.id}`}
@@ -387,6 +834,27 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
               minHeight: tokens.size['list-row'],
             }}
           >
+            <Pressable
+              testID={`account-toggle-cleared-${r.event.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={t('redesign.account.toggleCleared')}
+              onPress={(e) => {
+                e.stopPropagation();
+                toggleCleared(r);
+              }}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: r.event.cleared ? theme.primarySoft : 'transparent',
+                borderWidth: 1,
+                borderColor: r.event.cleared ? theme.primary : theme.border,
+              }}
+            >
+              {r.event.cleared ? <RedesignIcon name="check" size={14} color={theme.primary} /> : null}
+            </Pressable>
             <RedesignText variant="helper" style={{ width: 72 }}>
               {r.event.date === today()
                 ? t('date.today')
@@ -461,6 +929,8 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
         </View>
       ))}
       {balanceCard}
+      {cashflowCard}
+      {upcomingCard}
       {showSegmented ? (
         <RedesignSegmented
           testID="account-tabs"
@@ -472,7 +942,12 @@ export function RedesignAccountScreen({ embedded, accountId }: { embedded?: bool
           onChange={(v) => setTab(v as Tab)}
         />
       ) : null}
-      {tab === 'transactions' || !showSegmented ? (phone || embedded ? registerList : webTable ?? registerList) : null}
+      {tab === 'transactions' || !showSegmented ? (
+        <View style={{ gap: sp.md }}>
+          {searchAndFilters}
+          {phone || embedded ? registerList : webTable ?? registerList}
+        </View>
+      ) : null}
       {tab === 'holdings' && showSegmented ? (
         <View testID="holdings-tab" style={{ gap: sp.md }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.sm }}>
@@ -704,15 +1179,40 @@ function RegisterRowLine({
   sign,
   privacy,
   onOpen,
+  onToggleCleared,
 }: {
   row: RegisterRow;
   sign: (v: bigint) => bigint;
   privacy: boolean;
   onOpen: () => void;
+  onToggleCleared?: () => void;
 }) {
   const line = privacy ? PRIVACY_MASK : formatNaira(sign(row.line), { signed: true });
   const running = privacy ? PRIVACY_MASK : formatNaira(sign(row.running));
-  const subtitle = `${line}, ${shortDate(row.event.date)}`;
+  const subtitle = `${line} · ${shortDate(row.event.date)}`;
+  const clearedAction = (
+    <Pressable
+      testID={`account-toggle-cleared-${row.event.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={t('redesign.account.toggleCleared')}
+      onPress={(e) => {
+        e.stopPropagation();
+        onToggleCleared?.();
+      }}
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: row.event.cleared ? theme.primarySoft : theme.surfaceMuted,
+        borderWidth: 1,
+        borderColor: row.event.cleared ? theme.primary : theme.border,
+      }}
+    >
+      {row.event.cleared ? <RedesignIcon name="check" size={16} color={theme.primary} /> : null}
+    </Pressable>
+  );
   return (
     <RedesignListRow
       testID={`reg-${row.event.id}`}
@@ -720,6 +1220,8 @@ function RegisterRowLine({
       subtitle={subtitle}
       trailing={running}
       onPress={onOpen}
+      showChevron={false}
+      trailingAction={clearedAction}
     />
   );
 }
