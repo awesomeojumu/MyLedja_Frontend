@@ -209,6 +209,7 @@ describe('Page 14 redesign Goals (EXPO_PUBLIC_REDESIGN on)', () => {
       { sync },
     );
 
+    if (!behindGoal.ok) throw new Error('Failed to create behindGoal');
     await fireEvent.press(screen.getByTestId(`goals-row-${behindGoal.value.id}`));
     await setParams({ goal: behindGoal.value.id });
 

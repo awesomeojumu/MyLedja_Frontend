@@ -105,3 +105,158 @@ export function debtClosedDate(debtId: string, snapshot: Snapshot): string | und
     .sort((a, b) => b.date.localeCompare(a.date));
   return events[0]?.date;
 }
+
+export type StrategyResult = {
+  totalMonths: number;
+  totalInterest: bigint;
+  firstVictoryDays: number;
+};
+
+export type StrategyComparison = {
+  snowball: StrategyResult;
+  avalanche: StrategyResult;
+  interestSaved: bigint;
+  monthsEarlier: number;
+  snowballFirstVictoryDays: number;
+};
+
+export function simulatePayoffStrategy(
+  rows: DebtRow[],
+  order: 'smallest' | 'interest',
+  extraMonthly: bigint = 0n,
+): StrategyResult {
+  const active = rows.filter((r) => r.balance > 0n);
+  if (active.length === 0) {
+    return { totalMonths: 0, totalInterest: 0n, firstVictoryDays: 0 };
+  }
+
+  type SimDebt = {
+    id: string;
+    balance: bigint;
+    minPayment: bigint;
+    monthlyRatePct: number;
+    fixedInterest: bigint;
+  };
+
+  const debts: SimDebt[] = active.map((r) => {
+    const scheduled = r.debt.scheduleAmountMinor ? BigInt(r.debt.scheduleAmountMinor) : 0n;
+    const minPayment = scheduled > 0n ? scheduled : r.balance > 2_000_000n ? r.balance / 20n : r.balance;
+    let monthlyRatePct = 0;
+    let fixedInterest = 0n;
+    if (r.debt.interest?.kind === 'percent_month') {
+      monthlyRatePct = r.debt.interest.percent;
+    } else if (r.debt.interest?.kind === 'fixed') {
+      fixedInterest = BigInt(r.debt.interest.amountMinor);
+    }
+    return {
+      id: r.debt.id,
+      balance: r.balance,
+      minPayment: minPayment > 0n ? minPayment : 100_000n,
+      monthlyRatePct,
+      fixedInterest,
+    };
+  });
+
+  if (order === 'smallest') {
+    debts.sort((a, b) => (a.balance === b.balance ? 0 : a.balance < b.balance ? -1 : 1));
+  } else {
+    debts.sort((a, b) => {
+      if (b.monthlyRatePct !== a.monthlyRatePct) return b.monthlyRatePct - a.monthlyRatePct;
+      return a.balance === b.balance ? 0 : a.balance < b.balance ? -1 : 1;
+    });
+  }
+
+  let totalInterest = 0n;
+  let months = 0;
+  let firstVictoryDays = 0;
+  const initialCount = debts.length;
+  const totalBudget = debts.reduce((s, d) => s + d.minPayment, 0n) + (extraMonthly > 0n ? extraMonthly : 0n);
+
+  while (debts.some((d) => d.balance > 0n) && months < 360) {
+    months += 1;
+    let availableForMonth = totalBudget;
+
+    for (const d of debts) {
+      if (d.balance <= 0n) continue;
+      let monthInt = 0n;
+      if (d.monthlyRatePct > 0) {
+        monthInt = (d.balance * BigInt(Math.round(d.monthlyRatePct * 100))) / 10_000n;
+      } else if (d.fixedInterest > 0n) {
+        monthInt = d.fixedInterest;
+      }
+      d.balance += monthInt;
+      totalInterest += monthInt;
+    }
+
+    for (const d of debts) {
+      if (d.balance <= 0n) continue;
+      const payment = d.balance < d.minPayment ? d.balance : d.minPayment;
+      const actual = availableForMonth < payment ? availableForMonth : payment;
+      d.balance -= actual;
+      availableForMonth -= actual;
+      if (d.balance === 0n && firstVictoryDays === 0 && debts.filter((x) => x.balance === 0n).length === 1) {
+        firstVictoryDays = months * 30;
+      }
+    }
+
+    for (const d of debts) {
+      if (availableForMonth <= 0n) break;
+      if (d.balance <= 0n) continue;
+      const pay = availableForMonth < d.balance ? availableForMonth : d.balance;
+      d.balance -= pay;
+      availableForMonth -= pay;
+      if (d.balance === 0n && firstVictoryDays === 0 && debts.filter((x) => x.balance === 0n).length === 1) {
+        firstVictoryDays = months * 30;
+      }
+    }
+  }
+
+  if (firstVictoryDays === 0 && initialCount > 0) {
+    firstVictoryDays = months * 30;
+  }
+
+  return { totalMonths: months, totalInterest, firstVictoryDays };
+}
+
+export function comparePayoffStrategies(
+  rows: DebtRow[],
+  extraMonthly: bigint = 0n,
+): StrategyComparison | null {
+  const active = rows.filter((r) => r.balance > 0n);
+  if (active.length === 0) return null;
+
+  const snowball = simulatePayoffStrategy(active, 'smallest', extraMonthly);
+  const avalanche = simulatePayoffStrategy(active, 'interest', extraMonthly);
+
+  const interestSaved =
+    snowball.totalInterest > avalanche.totalInterest ? snowball.totalInterest - avalanche.totalInterest : 0n;
+  const monthsEarlier =
+    snowball.totalMonths > avalanche.totalMonths ? snowball.totalMonths - avalanche.totalMonths : 0;
+
+  return {
+    snowball,
+    avalanche,
+    interestSaved,
+    monthsEarlier,
+    snowballFirstVictoryDays: Math.max(30, snowball.firstVictoryDays),
+  };
+}
+
+export function calculateRealApr(
+  monthlyPct: number,
+  principalMinor: bigint,
+  tenorMonths = 6,
+): { annualAprPct: number; totalInterestMinor: bigint } {
+  const annualAprPct = Math.round(monthlyPct * 12 * 10) / 10;
+  const totalInterestMinor =
+    (principalMinor * BigInt(Math.round(monthlyPct * 100)) * BigInt(tenorMonths)) / 10_000n;
+  return { annualAprPct, totalInterestMinor };
+}
+
+export function calculateCashFlowFreed(row: DebtRow): bigint {
+  if (row.debt.scheduleAmountMinor) {
+    const s = BigInt(row.debt.scheduleAmountMinor);
+    if (s > 0n) return s;
+  }
+  return row.balance > 2_000_000n ? row.balance / 20n : row.balance;
+}
