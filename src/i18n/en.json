@@ -3805,5 +3805,15 @@
   "plan.redesign.quickSnooze": "Snooze",
   "plan.redesign.quickSkip": "Skip",
   "plan.redesign.snoozed": "Bill snoozed for 3 days",
-  "plan.redesign.skipped": "Bill skipped for this cycle"
+  "plan.redesign.skipped": "Bill skipped for this cycle",
+  "income.redesign.prevMonth": "Previous month",
+  "income.redesign.nextMonth": "Next month",
+  "income.redesign.paydayIn": "Expected in {days} days",
+  "income.redesign.paydayToday": "Expected today",
+  "income.redesign.paydayTomorrow": "Expected tomorrow",
+  "income.redesign.paydayBillsWarning": "{count} bills due before payday",
+  "income.redesign.multiCurrency": "Multi-currency stream",
+  "income.redesign.taxClassTitle": "Tax classification",
+  "income.redesign.pensionChip": "Pension (8%)",
+  "income.redesign.nhfChip": "NHF (2.5%)"
 }
