@@ -384,25 +384,32 @@ export function RedesignListRow({
   subtitle,
   trailing,
   onPress,
+  onLongPress,
   icon,
   testID,
   showChevron,
+  badge,
+  trailingAction,
 }: {
   title: string;
   subtitle?: string;
   trailing?: string;
   onPress?: () => void;
+  onLongPress?: () => void;
   icon?: RedesignIconName;
   testID?: string;
   /** Defaults to true when onPress is set. Set false for amount-trailing rows (Figma Bills). */
   showChevron?: boolean;
+  badge?: ReactNode;
+  trailingAction?: ReactNode;
 }) {
-  const chevron = showChevron ?? !!onPress;
+  const chevron = (showChevron ?? !!onPress) && !trailingAction;
   return (
     <Pressable
       testID={testID}
       accessibilityRole={onPress ? 'button' : undefined}
       onPress={onPress}
+      onLongPress={onLongPress}
       style={{
         minHeight: size['list-row'],
         flexDirection: 'row',
@@ -430,7 +437,12 @@ export function RedesignListRow({
         )}
       </View>
       <View style={{ flex: 1, gap: 2 }}>
-        <RedesignText numberOfLines={1}>{title}</RedesignText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+          <RedesignText numberOfLines={1} style={{ flexShrink: 1 }}>
+            {title}
+          </RedesignText>
+          {badge}
+        </View>
         {subtitle ? (
           <RedesignText variant="helper" tone="textSecondary" numberOfLines={1}>
             {subtitle}
@@ -442,7 +454,7 @@ export function RedesignListRow({
           {trailing}
         </RedesignText>
       ) : null}
-      {chevron ? <RedesignIcon name="chevron-right" size={size['icon-md']} color={theme.textSecondary} /> : null}
+      {trailingAction ?? (chevron ? <RedesignIcon name="chevron-right" size={size['icon-md']} color={theme.textSecondary} /> : null)}
     </Pressable>
   );
 }

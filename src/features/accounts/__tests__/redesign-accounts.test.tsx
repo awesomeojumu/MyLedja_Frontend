@@ -101,6 +101,70 @@ describe('Page 08 redesign Accounts', () => {
     expect(screen.getByText(t('redesign.connect.continueToBank', { bank: 'GTBank' }))).toBeTruthy();
   });
 
+  it('renders assets vs debts ratio bar and see portfolio link', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<AccountsScreen />), { sync });
+    expect(await screen.findByTestId('net-worth-ratio-bar')).toBeTruthy();
+    expect(screen.getByTestId('net-worth-ratio-assets')).toBeTruthy();
+    expect(screen.getByTestId('net-worth-ratio-debts')).toBeTruthy();
+    expect(screen.getByTestId('investments-see-portfolio')).toBeTruthy();
+  });
+
+  it('toggles discreet privacy mode across all account cards', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<AccountsScreen />), { sync });
+    expect(await screen.findByTestId('accounts-privacy-toggle')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('accounts-privacy-toggle'));
+    expect(screen.getByTestId('net-worth')).toBeTruthy();
+  });
+
+  it('filters accounts via search input and category chips', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<AccountsScreen />), { sync });
+    expect(await screen.findByTestId('accounts-search')).toBeTruthy();
+    expect(screen.getByTestId('accounts-filter-all')).toBeTruthy();
+    expect(screen.getByTestId('accounts-filter-cash')).toBeTruthy();
+
+    // Type into search
+    await fireEvent.changeText(screen.getByTestId('accounts-search'), 'Piggy');
+    expect(screen.getByText('PiggyVest')).toBeTruthy();
+    expect(screen.queryByText('Car loan')).toBeNull();
+
+    // Reset search and use filter chip
+    await fireEvent.changeText(screen.getByTestId('accounts-search'), '');
+    await fireEvent.press(screen.getByTestId('accounts-filter-cash'));
+    expect(screen.getByText('GTBank Current')).toBeTruthy();
+    expect(screen.queryByText('Car loan')).toBeNull();
+  });
+
+  it('toggles reorder mode and triggers sync all', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<AccountsScreen />), { sync });
+    expect(await screen.findByTestId('accounts-reorder-toggle')).toBeTruthy();
+    expect(screen.getByTestId('accounts-sync-all')).toBeTruthy();
+
+    // Reorder mode
+    await fireEvent.press(screen.getByTestId('accounts-reorder-toggle'));
+    expect(screen.getByText(t('redesign.accounts.reorderDone'))).toBeTruthy();
+
+    // Sync all
+    await fireEvent.press(screen.getByTestId('accounts-sync-all'));
+  });
+
+  it('opens account action bottom sheet on long press', async () => {
+    const { sync, repo } = await seeded();
+    const s = await repo.load();
+    const gt = s.accounts.find((a) => a.name === 'GTBank Current')!;
+    await renderWithProviders(wrap(<AccountsScreen />), { sync });
+    const row = await screen.findByTestId(`account-${gt.id}`);
+    await fireEvent(row, 'longPress');
+    expect(await screen.findByTestId('account-action-sheet')).toBeTruthy();
+    expect(screen.getByTestId('account-action-add-tx')).toBeTruthy();
+    expect(screen.getByTestId('account-action-transfer')).toBeTruthy();
+    expect(screen.getByTestId('account-action-reconcile')).toBeTruthy();
+    expect(screen.getByTestId('account-action-edit')).toBeTruthy();
+  });
+
   it('shows empty state copy from Figma', async () => {
     const sync = memorySync();
     const repo = new WorkspaceRepository(sync.store, sync.engine, 'ws-personal');
