@@ -94,4 +94,18 @@ describe('Redesign Reports (Figma 5:2297)', () => {
     expect(await screen.findByTestId(`redesign-reports-saved-${saved.id}`)).toBeTruthy();
     expect(screen.getByText('Food each month')).toBeTruthy();
   });
+
+  it('renders time horizon chips, template selectors, and executive export button', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<RedesignReportsScreen />), { sync });
+    expect(await screen.findByTestId('redesign-reports-date-this_month')).toBeTruthy();
+    expect(screen.getByTestId('redesign-reports-date-last_month')).toBeTruthy();
+    expect(screen.getByTestId('redesign-template-executive')).toBeTruthy();
+    expect(screen.getByTestId('redesign-template-debt')).toBeTruthy();
+    expect(screen.getByTestId('redesign-template-tax')).toBeTruthy();
+    expect(screen.getByTestId('redesign-reports-export-pdf')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('redesign-template-debt'));
+    fireEvent.press(screen.getByTestId('redesign-reports-date-last_month'));
+  });
 });

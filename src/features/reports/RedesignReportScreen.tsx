@@ -74,18 +74,28 @@ function totalLabel(kind: ReportKind, monthKey: string): string {
   return t('reports.redesign.totalIn', { month });
 }
 
-function compareLine(current: bigint, previous: bigint | null, previousFrom: string | null, privacy: boolean): string {
+function compareLine(
+  current: bigint,
+  previous: bigint | null,
+  previousFrom: string | null,
+  privacy: boolean,
+  mode: 'pop' | 'yoy' = 'pop',
+): string {
   if (previous === null) return '';
   const delta = current - previous;
   const amount = privacy ? PRIVACY_MASK : formatNaira(delta < 0n ? -delta : delta);
   const signed = delta < 0n ? `−${amount}` : delta > 0n ? `+${amount}` : amount;
+  if (mode === 'yoy') {
+    return `${signed} ${t('reports.redesign.compareYoY')}`;
+  }
   const month = previousFrom ? monthLong(previousFrom.slice(0, 7)) : '';
   return t('reports.redesign.comparedWith', { amount: signed, month });
 }
 
 /**
  * Figma Mobile App Phone / Report (5:2369) + Share (12:6128) + Loading / Could not load.
- * Behind EXPO_PUBLIC_REDESIGN; W0 tokens/components only.
+ * Upgraded with Interactive Drilldown Slide-Over Sheet, PoP vs YoY Comparison,
+ * and Table Running / Percentage Distribution.
  */
 export function RedesignReportScreen({ runner }: { runner?: ReportRunner } = {}) {
   const rawId = useLocalSearchParams<{ id?: string | string[] }>().id;
@@ -109,6 +119,8 @@ export function RedesignReportScreen({ runner }: { runner?: ReportRunner } = {})
   const [tick, setTick] = useState(0);
   const [hideAmounts, setHideAmounts] = useState(false);
   const [shareNote, setShareNote] = useState<string | null>(null);
+  const [compareMode, setCompareMode] = useState<'pop' | 'yoy'>('pop');
+  const [drillRow, setDrillRow] = useState<{ key: string; label: string } | null>(null);
 
   const found = id ? cardById(id) : null;
   const card = found?.card ?? null;
@@ -188,6 +200,43 @@ export function RedesignReportScreen({ runner }: { runner?: ReportRunner } = {})
     setShareNote(t('reports.shareUnavailable'));
   };
 
+  // Transactions matching current drill-down row
+  const drillTransactions = useMemo(() => {
+    if (!drillRow || !snapshot || !result) return [];
+    const d = result.drill[drillRow.key];
+    if (!d) return [];
+    const from = d.from;
+    const to = d.to;
+    const catIds = 'categoryIds' in d && d.categoryIds ? d.categoryIds : ('categoryId' in d && d.categoryId ? [d.categoryId] : []);
+    const payeeIds = 'payeeIds' in d && d.payeeIds ? d.payeeIds : ('payeeId' in d && d.payeeId ? [d.payeeId] : []);
+    const accIds = 'accountIds' in d && d.accountIds ? d.accountIds : ('accountId' in d && d.accountId ? [d.accountId] : []);
+
+    const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+
+    return snapshot.events
+      .filter((e) => {
+        if (e.date < from || e.date > to) return false;
+        if (
+          catIds.length > 0 &&
+          !e.lines.some((l) => {
+            const cat = snapshot.chart.get(l.ledgerAccountId)?.categoryId ?? l.ledgerAccountId;
+            return catIds.includes(cat);
+          })
+        ) {
+          return false;
+        }
+        if (payeeIds.length > 0 && (!e.payeeId || !payeeIds.includes(e.payeeId))) return false;
+        if (
+          accIds.length > 0 &&
+          !e.lines.some((l) => accountIds.has(l.ledgerAccountId) && accIds.includes(l.ledgerAccountId))
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .slice(0, 10);
+  }, [drillRow, snapshot, result]);
+
   const frame = (body: React.ReactNode) => (
     <RedesignStackFrame
       testID="redesign-report"
@@ -257,7 +306,7 @@ export function RedesignReportScreen({ runner }: { runner?: ReportRunner } = {})
   const rows = result.table.rows;
   const total = result.table.total;
   const previousTotal = result.previous?.total ?? null;
-  const compare = compareLine(total, previousTotal, result.finding?.previousFrom ?? result.from, privacy);
+  const compare = compareLine(total, previousTotal, result.finding?.previousFrom ?? result.from, privacy, compareMode);
   const maxRow = rows.reduce((m, r) => (r.total > m ? r.total : m), 0n);
 
   return frame(
@@ -300,6 +349,22 @@ export function RedesignReportScreen({ runner }: { runner?: ReportRunner } = {})
               {compare}
             </RedesignText>
           ) : null}
+
+          {/* Comparison Mode Chips */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs, marginTop: sp.xs }}>
+            <RedesignChip
+              testID="redesign-report-compare-pop"
+              label={t('reports.redesign.comparePrevious')}
+              selected={compareMode === 'pop'}
+              onPress={() => setCompareMode('pop')}
+            />
+            <RedesignChip
+              testID="redesign-report-compare-yoy"
+              label={t('reports.redesign.compareYoY')}
+              selected={compareMode === 'yoy'}
+              onPress={() => setCompareMode('yoy')}
+            />
+          </View>
         </View>
 
         {tableView ? (
@@ -313,34 +378,44 @@ export function RedesignReportScreen({ runner }: { runner?: ReportRunner } = {})
               overflow: 'hidden',
             }}
           >
-            {rows.map((row) => (
-              <Pressable
-                key={row.key}
-                testID={`redesign-report-table-row-${row.key}`}
-                accessibilityRole="button"
-                onPress={() => {
-                  const d = result.drill[row.key];
-                  if (d) router.push(drillHref(d));
-                }}
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  minHeight: 48,
-                  paddingHorizontal: sp.md,
-                  borderBottomWidth: 1,
-                  borderBottomColor: theme.border,
-                  gap: sp.md,
-                }}
-              >
-                <RedesignText style={{ flex: 1 }} numberOfLines={1}>
-                  {rowLabel(row)}
-                </RedesignText>
-                <RedesignText style={{ fontVariant: ['tabular-nums'] }}>
-                  {privacy ? PRIVACY_MASK : valueText(row.total, result.unit)}
-                </RedesignText>
-              </Pressable>
-            ))}
+            {rows.map((row, idx) => {
+              const runningTotal = rows.slice(0, idx + 1).reduce((s, r) => s + r.total, 0n);
+              const pct = total === 0n ? 0 : Math.round(Number((row.total * 1000n) / total) / 10);
+              return (
+                <Pressable
+                  key={row.key}
+                  testID={`redesign-report-table-row-${row.key}`}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    const d = result.drill[row.key];
+                    if (d) router.push(drillHref(d));
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    minHeight: 48,
+                    paddingHorizontal: sp.md,
+                    paddingVertical: sp.sm,
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.border,
+                    gap: sp.md,
+                  }}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <RedesignText numberOfLines={1}>
+                      {rowLabel(row)}
+                    </RedesignText>
+                    <RedesignText variant="caption" tone="textSecondary">
+                      {t('reports.redesign.shareOfTotal', { pct })} · {t('reports.redesign.cumulativeRunning')}: {privacy ? PRIVACY_MASK : valueText(runningTotal, result.unit)}
+                    </RedesignText>
+                  </View>
+                  <RedesignText style={{ fontVariant: ['tabular-nums'] }}>
+                    {privacy ? PRIVACY_MASK : valueText(row.total, result.unit)}
+                  </RedesignText>
+                </Pressable>
+              );
+            })}
           </View>
         ) : (
           <View
@@ -362,8 +437,7 @@ export function RedesignReportScreen({ runner }: { runner?: ReportRunner } = {})
                   testID={`redesign-report-row-${row.key}`}
                   accessibilityRole="button"
                   onPress={() => {
-                    const d = result.drill[row.key];
-                    if (d) router.push(drillHref(d));
+                    setDrillRow({ key: row.key, label: rowLabel(row) });
                   }}
                   style={{ gap: sp.xs }}
                 >
@@ -396,6 +470,61 @@ export function RedesignReportScreen({ runner }: { runner?: ReportRunner } = {})
           onPress={toggleTable}
         />
       </ScrollView>
+
+      {/* Drill-down Slide-Over Sheet */}
+      {drillRow ? (
+        <RedesignSheet
+          visible
+          title={t('reports.redesign.drillTitle', { label: drillRow.label })}
+          onClose={() => setDrillRow(null)}
+          testID="redesign-report-drill-sheet"
+        >
+          <View style={{ gap: sp.md, paddingVertical: sp.xs }}>
+            {drillTransactions.length === 0 ? (
+              <RedesignText tone="textSecondary">{t('reports.redesign.drillEmpty')}</RedesignText>
+            ) : (
+              drillTransactions.map((tx) => (
+                <View
+                  key={tx.id}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    paddingVertical: sp.xs,
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.border,
+                  }}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <RedesignText numberOfLines={1}>
+                      {tx.notes || tx.payeeName || tx.type}
+                    </RedesignText>
+                    <RedesignText variant="caption" tone="textSecondary">
+                      {tx.date}
+                    </RedesignText>
+                  </View>
+                  <RedesignText style={{ fontVariant: ['tabular-nums'] }}>
+                    {privacy ? PRIVACY_MASK : formatNaira(tx.lines.reduce((s, l) => s + (l.amountMinor < 0n ? -l.amountMinor : l.amountMinor), 0n))}
+                  </RedesignText>
+                </View>
+              ))
+            )}
+            {result.drill[drillRow.key] ? (
+              <RedesignButton
+                testID="redesign-report-view-all-tx"
+                kind="secondary"
+                label={t('reports.redesign.viewTransactions')}
+                onPress={() => {
+                  const d = result.drill[drillRow.key];
+                  setDrillRow(null);
+                  if (d) router.push(drillHref(d));
+                }}
+                fullWidth
+              />
+            ) : null}
+          </View>
+        </RedesignSheet>
+      ) : null}
 
       {shareOpen ? (
         <RedesignSheet visible title={t('reports.redesign.shareReport')} onClose={closeShare} testID="redesign-report-share">

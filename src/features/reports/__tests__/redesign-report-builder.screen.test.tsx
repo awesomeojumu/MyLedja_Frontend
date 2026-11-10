@@ -70,6 +70,27 @@ describe('Redesign Report builder (Figma 5:2436)', () => {
     expect(screen.queryByTestId('redesign-bottom-nav')).toBeNull();
   });
 
+  it('renders question starters, advanced filters, and chart recommendations', async () => {
+    const { sync } = await seeded();
+    await renderWithProviders(wrap(<RedesignReportBuilderScreen />), { sync });
+    expect(await screen.findByTestId('redesign-builder-recipes')).toBeTruthy();
+    expect(screen.getByTestId('redesign-recipe-top-payees')).toBeTruthy();
+    expect(screen.getByTestId('redesign-recipe-transport-trend')).toBeTruthy();
+    expect(screen.getByTestId('redesign-builder-min-amount')).toBeTruthy();
+    expect(screen.getByTestId('redesign-builder-exclude-transfers')).toBeTruthy();
+    expect(screen.getByTestId('redesign-builder-chart-rec')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('redesign-recipe-top-payees'));
+    });
+    expect(screen.getByTestId('redesign-builder-name')).toHaveProp('value', t('reports.redesign.recipeTopPayees'));
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId('redesign-builder-min-amount'), '50000');
+    });
+    expect(screen.getByTestId('redesign-builder-min-amount')).toHaveProp('value', '50000');
+  });
+
   it('requires a name before save', async () => {
     const { sync } = await seeded();
     await renderWithProviders(wrap(<RedesignReportBuilderScreen />), { sync });

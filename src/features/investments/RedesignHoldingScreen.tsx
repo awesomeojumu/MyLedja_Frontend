@@ -468,13 +468,13 @@ export function RedesignHoldingScreen() {
                   }}
                 >
                   <RedesignText variant="caption" tone="textSecondary" style={{ flex: 1.2 }}>
-                    Date
+                    {t('investments.redesign.date')}
                   </RedesignText>
                   <RedesignText variant="caption" tone="textSecondary" style={{ flex: 1, textAlign: 'right' }}>
-                    Units
+                    {t('investments.units')}
                   </RedesignText>
                   <RedesignText variant="caption" tone="textSecondary" style={{ flex: 1.2, textAlign: 'right' }}>
-                    Cost
+                    {t('investments.cost')}
                   </RedesignText>
                 </View>
                 {lots.map((lot) => {

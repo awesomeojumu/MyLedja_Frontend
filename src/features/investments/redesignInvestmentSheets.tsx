@@ -190,7 +190,7 @@ export function RedesignAddInvestmentSheet({
               label={t('investments.redesign.location')}
               value={draft.location ?? ''}
               onChangeText={(location) => setDraft((d) => ({ ...d, location }))}
-              placeholder="e.g. Epe Corridor, Lagos"
+              placeholder={t('investments.redesign.locationPlaceholder')}
             />
             <View style={{ gap: sp.xs }}>
               <RedesignText variant="caption" tone="textSecondary">
@@ -641,7 +641,7 @@ export function RedesignAddCostSheet({
           label={t('investments.redesign.notes')}
           value={notes}
           onChangeText={setNotes}
-          placeholder="e.g. Survey contractor fee, perimeter wire"
+          placeholder={t('investments.redesign.notesPlaceholder')}
         />
       </RedesignSheet>
 
@@ -820,7 +820,7 @@ export function RedesignWriteOffSheet({
         label={t('investments.redesign.notes')}
         value={notes}
         onChangeText={setNotes}
-        placeholder="What happened and key lessons learned"
+        placeholder={t('investments.redesign.writeOffNotesPlaceholder')}
       />
     </RedesignSheet>
   );
@@ -882,7 +882,7 @@ export function RedesignBatchValuationSheet({
             <View key={holding.id} style={{ gap: sp.xs }}>
               <RedesignText variant="label">{holding.name}</RedesignText>
               <RedesignText variant="caption" tone="textSecondary">
-                Current: {formatNaira(currentValue)}
+                {t('investments.redesign.currentVal', { amount: formatNaira(currentValue) })}
               </RedesignText>
               <RedesignField
                 testID={`redesign-batch-val-${holding.id}`}

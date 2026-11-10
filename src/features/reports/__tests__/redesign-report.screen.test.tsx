@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen } from '@testing-library/react-native';
 
 import type { ReportResultWire, RunReportBody } from '@/api/reports';
 import { WorkspaceRepository } from '@/data/workspace/repository';
@@ -105,7 +105,37 @@ describe('Redesign Report (Figma 5:2369 / 12:6128)', () => {
       { sync },
     );
     expect(await screen.findByTestId('redesign-report-table')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('redesign-report-table-row-fuel'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('redesign-report-table-row-fuel'));
+    });
+    expect(router.push).toHaveBeenCalledWith(expect.stringMatching(/\/transactions\?/));
+  });
+
+  it('toggles PoP and YoY comparison chips and opens breakdown drill sheet', async () => {
+    const { sync, card } = await seeded();
+    setParams({ id: card.id });
+    await renderWithProviders(
+      wrap(<RedesignReportScreen runner={async (_ws, body) => wireFor(body)} />),
+      { sync },
+    );
+    expect(await screen.findByTestId('redesign-report-total')).toBeTruthy();
+    expect(screen.getByTestId('redesign-report-compare-pop')).toBeTruthy();
+    expect(screen.getByTestId('redesign-report-compare-yoy')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('redesign-report-compare-yoy'));
+    });
+    expect(screen.getByTestId('redesign-report-row-fuel')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('redesign-report-row-fuel'));
+    });
+    expect(await screen.findByTestId('redesign-report-drill-sheet')).toBeTruthy();
+    expect(screen.getByTestId('redesign-report-view-all-tx')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('redesign-report-view-all-tx'));
+    });
     expect(router.push).toHaveBeenCalledWith(expect.stringMatching(/\/transactions\?/));
   });
 

@@ -15,6 +15,7 @@ import {
   RedesignSheet,
   RedesignSkeleton,
   RedesignStackFrame,
+  RedesignSwitch,
   RedesignText,
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
@@ -38,6 +39,45 @@ const PERIODS: { key: PeriodKey; labelKey: TextKey }[] = [
   { key: '6m', labelKey: 'reports.redesign.period6Months' },
   { key: '1y', labelKey: 'reports.redesign.period1Year' },
   { key: 'custom', labelKey: 'reports.redesign.periodCustom' },
+];
+
+const RECIPES: {
+  key: string;
+  nameKey: TextKey;
+  spec: Partial<BuilderSpecModel>;
+  period: PeriodKey;
+  minAmount?: string;
+  excludeTransfers?: boolean;
+}[] = [
+  {
+    key: 'top-payees',
+    nameKey: 'reports.redesign.recipeTopPayees',
+    spec: { show: 'spending', groupBy: 'payee' },
+    period: '6m',
+    minAmount: '50000',
+    excludeTransfers: true,
+  },
+  {
+    key: 'transport-trend',
+    nameKey: 'reports.redesign.recipeTransportTrend',
+    spec: { show: 'spending', groupBy: 'month' },
+    period: '6m',
+    excludeTransfers: true,
+  },
+  {
+    key: 'investment-split',
+    nameKey: 'reports.redesign.recipeInvestmentSplit',
+    spec: { show: 'spending', groupBy: 'category' },
+    period: '6m',
+    excludeTransfers: true,
+  },
+  {
+    key: 'income-steadiness',
+    nameKey: 'reports.redesign.recipeIncomeSteadiness',
+    spec: { show: 'income', groupBy: 'month' },
+    period: '1y',
+    excludeTransfers: true,
+  },
 ];
 
 function periodRange(period: PeriodKey, onDate: string, custom: { from: string; to: string }): { from: string; to: string } {
@@ -64,7 +104,8 @@ function shortBarLabel(key: string): string {
 
 /**
  * Figma Mobile App Phone / Report builder (5:2436).
- * Behind EXPO_PUBLIC_REDESIGN; W0 tokens/components only.
+ * Upgraded with Natural Query Starter Recipes, Advanced Filters
+ * (Min Amount, Exclude Transfers), Dynamic Chart Recommendation, and Preview.
  */
 export function RedesignReportBuilderScreen() {
   const params = useGlobalSearchParams<{ from?: string; to?: string; dashboard?: string; card?: string }>();
@@ -94,6 +135,8 @@ export function RedesignReportBuilderScreen() {
   const [pick, setPick] = useState<'show' | 'group' | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [minAmount, setMinAmount] = useState('');
+  const [excludeTransfers, setExcludeTransfers] = useState(false);
 
   const s = edited ?? initial;
   const range = periodRange(period, onDate, customRange);
@@ -102,6 +145,22 @@ export function RedesignReportBuilderScreen() {
     setDirty(true);
     setEdited({ ...s, ...patch });
   };
+
+  const applyRecipe = (r: (typeof RECIPES)[number]) => {
+    setDirty(true);
+    setName(t(r.nameKey));
+    set(r.spec);
+    setPeriod(r.period);
+    if (r.minAmount !== undefined) setMinAmount(r.minAmount);
+    if (r.excludeTransfers !== undefined) setExcludeTransfers(r.excludeTransfers);
+  };
+
+  const chartRec = useMemo(() => {
+    if (s.groupBy === 'month') return 'Bar / Trend';
+    if (s.groupBy === 'category' || s.groupBy === 'payee') return 'Breakdown / Donut';
+    if (s.groupBy === 'account') return 'Balance Bars';
+    return 'Bar';
+  }, [s.groupBy]);
 
   const preview = useMemo(() => {
     if (!snapshot) return null;
@@ -182,6 +241,24 @@ export function RedesignReportBuilderScreen() {
   return (
     <RedesignStackFrame testID="redesign-builder" title={t('reports.redesign.buildTitle')} onBack={back}>
       <ScrollView contentContainerStyle={{ gap: sp.lg, paddingBottom: sp.xxl }}>
+        {/* Natural Query Starters / Recipes */}
+        <View testID="redesign-builder-recipes" style={{ gap: sp.xs }}>
+          <RedesignText variant="caption" tone="textSecondary">
+            {t('reports.redesign.recipesTitle')}
+          </RedesignText>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp.xs }}>
+            {RECIPES.map((r) => (
+              <RedesignChip
+                key={r.key}
+                testID={`redesign-recipe-${r.key}`}
+                label={t(r.nameKey)}
+                selected={name === t(r.nameKey)}
+                onPress={() => applyRecipe(r)}
+              />
+            ))}
+          </ScrollView>
+        </View>
+
         <RedesignField
           testID="redesign-builder-name"
           label={t('reports.redesign.reportName')}
@@ -212,6 +289,23 @@ export function RedesignReportBuilderScreen() {
           onPress={() => setPick('group')}
           trailing={<RedesignIcon name="chevron-down" size={24} color={theme.textSecondary} />}
         />
+
+        {/* Dynamic Chart Recommendation Hint */}
+        <View
+          testID="redesign-builder-chart-rec"
+          style={{
+            paddingHorizontal: sp.md,
+            paddingVertical: sp.xs,
+            backgroundColor: theme.surface,
+            borderRadius: shape['radius-md'],
+            borderWidth: 1,
+            borderColor: theme.border,
+          }}
+        >
+          <RedesignText variant="caption" tone="textSecondary">
+            {t('reports.redesign.chartRecommendation', { chart: chartRec })}
+          </RedesignText>
+        </View>
 
         <RedesignText variant="label" tone="textSecondary">
           {t('reports.redesign.period')}
@@ -253,6 +347,29 @@ export function RedesignReportBuilderScreen() {
             />
           </View>
         ) : null}
+
+        {/* Advanced Filters */}
+        <RedesignField
+          testID="redesign-builder-min-amount"
+          label={t('reports.redesign.minAmountLabel')}
+          value={minAmount}
+          onChangeText={(v) => {
+            setDirty(true);
+            setMinAmount(v);
+          }}
+          placeholder="0"
+          keyboardType="numeric"
+        />
+
+        <RedesignSwitch
+          testID="redesign-builder-exclude-transfers"
+          label={t('reports.redesign.excludeTransfers')}
+          value={excludeTransfers}
+          onChange={(val) => {
+            setDirty(true);
+            setExcludeTransfers(val);
+          }}
+        />
 
         {groups.length ? (
           <>

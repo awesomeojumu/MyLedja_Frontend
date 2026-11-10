@@ -1,12 +1,13 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { v7 as uuidv7 } from 'uuid';
 
-import type { BuilderSpecModel, ReportCardModel, ReportKind, SavedReportModel } from '@/data/workspace/model';
+import type { BuilderSpecModel, RangePreset, ReportCardModel, ReportKind, SavedReportModel } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import {
   RedesignButton,
+  RedesignChip,
   RedesignIcon,
   RedesignListRow,
   RedesignSheet,
@@ -16,6 +17,7 @@ import {
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { t, type TextKey } from '@/i18n';
+import { formatNaira } from '@/money';
 
 import { GALLERY, kindName, newCard } from './helpers';
 import { useDashboards } from './useDashboards';
@@ -69,6 +71,13 @@ const FEATURED: FeaturedEntry[] = [
   },
 ];
 
+const DATE_PRESETS: { key: RangePreset; labelKey: TextKey }[] = [
+  { key: 'this_month', labelKey: 'reports.redesign.chipThisMonth' },
+  { key: 'last_month', labelKey: 'reports.redesign.chipLastMonth' },
+  { key: 'last_3_months', labelKey: 'reports.redesign.chip3Months' },
+  { key: 'this_year', labelKey: 'reports.redesign.chipThisYear' },
+];
+
 function matchesFeatured(card: ReportCardModel, entry: FeaturedEntry): boolean {
   if (entry.key === 'spending_by_payee') {
     return card.kind === 'custom' && (card.title === entry.title || card.spec?.groupBy === 'payee');
@@ -80,16 +89,21 @@ function matchesSaved(card: ReportCardModel, savedId: string): boolean {
   return card.kind === 'custom' && card.savedReportId === savedId;
 }
 
+type TemplateKey = 'executive' | 'debt' | 'tax';
+
 /**
  * Figma Mobile App Phone / Reports (5:2297).
- * Behind EXPO_PUBLIC_REDESIGN; W0 tokens/components only.
+ * Upgraded with Global Time Horizon Sync, Financial Anomaly Insights,
+ * Pre-built Dashboard Templates, and Executive Export.
  */
 export function RedesignReportsScreen() {
   const { snapshot } = useWorkspace();
   const router = useRouter();
-  const params = useGlobalSearchParams<{ addReport?: string }>();
+  const params = useGlobalSearchParams<{ addReport?: string; range?: string }>();
   const { dashboards, ready, save } = useDashboards();
   const [busy, setBusy] = useState(false);
+  const [selectedRange, setSelectedRange] = useState<RangePreset>((params.range as RangePreset) || 'this_month');
+  const [activeTemplate, setActiveTemplate] = useState<TemplateKey>('executive');
 
   const overview = dashboards[0] ?? null;
   const saved = snapshot?.savedReports ?? [];
@@ -98,24 +112,46 @@ export function RedesignReportsScreen() {
   const openAdd = () => router.setParams({ addReport: '1' });
   const closeAdd = () => router.setParams({ addReport: undefined });
 
+  // Compute financial anomaly insights from recent events
+  const anomaly = useMemo(() => {
+    if (!snapshot || snapshot.events.length === 0) return null;
+    const now = new Date();
+    const thisMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const thisMonthEvents = snapshot.events.filter((e) => e.date.startsWith(thisMonthPrefix) && e.status === 'posted');
+    const spentThisMonth = thisMonthEvents
+      .filter((e) => e.type === 'expense')
+      .reduce((s, e) => s + e.lines.filter((l) => l.amountMinor < 0n).reduce((sum, l) => sum + -l.amountMinor, 0n), 0n);
+
+    if (spentThisMonth > 0n) {
+      return {
+        text: t('reports.redesign.comparedWith', {
+          amount: formatNaira(spentThisMonth),
+          month: t(`date.monthLong.${now.getMonth() + 1}` as TextKey),
+        }),
+      };
+    }
+    return null;
+  }, [snapshot]);
+
   const ensureAndOpen = useCallback(
     async (find: (card: ReportCardModel) => boolean, make: () => ReportCardModel) => {
       if (!overview || busy) return;
       const existing = overview.cards.find(find);
       if (existing) {
-        router.push(`/reports/view/${existing.id}`);
+        router.push(`/reports/view/${existing.id}?range=${selectedRange}`);
         return;
       }
       setBusy(true);
       try {
         const card = make();
+        card.range = selectedRange;
         await save(overview.id, { cards: [...overview.cards, card] });
-        router.push(`/reports/view/${card.id}`);
+        router.push(`/reports/view/${card.id}?range=${selectedRange}`);
       } finally {
         setBusy(false);
       }
     },
-    [overview, busy, save, router],
+    [overview, busy, save, router, selectedRange],
   );
 
   const openFeatured = (entry: FeaturedEntry) => {
@@ -123,7 +159,7 @@ export function RedesignReportsScreen() {
       (c) => matchesFeatured(c, entry),
       () =>
         newCard(uuidv7(), entry.kind, overview?.cards.length ?? 0, {
-          range: entry.range,
+          range: selectedRange,
           title: entry.title ?? null,
           spec: entry.spec ?? null,
         }),
@@ -137,7 +173,7 @@ export function RedesignReportsScreen() {
         newCard(uuidv7(), 'custom', overview?.cards.length ?? 0, {
           savedReportId: report.id,
           title: report.name,
-          range: 'this_month',
+          range: selectedRange,
         }),
     );
   };
@@ -158,6 +194,12 @@ export function RedesignReportsScreen() {
       (c) => c.kind === kind && !c.savedReportId,
       () => newCard(uuidv7(), kind, overview?.cards.length ?? 0),
     );
+  };
+
+  const onExportExecutivePdf = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.print();
+    }
   };
 
   return (
@@ -187,6 +229,75 @@ export function RedesignReportsScreen() {
           <RedesignSkeleton height={220} testID="redesign-reports-skeleton" />
         ) : (
           <>
+            {/* Global Time Horizon Selector */}
+            <View style={{ gap: sp.xs }}>
+              <RedesignText variant="caption" tone="textSecondary">
+                {t('reports.redesign.timeHorizon')}
+              </RedesignText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp.sm }}>
+                {DATE_PRESETS.map((p) => (
+                  <RedesignChip
+                    key={p.key}
+                    testID={`redesign-reports-date-${p.key}`}
+                    label={t(p.labelKey)}
+                    selected={selectedRange === p.key}
+                    onPress={() => setSelectedRange(p.key)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Financial Anomaly Insights Card */}
+            {anomaly ? (
+              <View
+                testID="redesign-reports-anomaly"
+                style={{
+                  backgroundColor: theme.surface,
+                  borderRadius: shape['radius-lg'],
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  padding: sp.md,
+                  gap: sp.xs,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+                  <RedesignIcon name="trending-up" size={16} color={theme.primary} />
+                  <RedesignText variant="label">{t('reports.redesign.anomalyTitle')}</RedesignText>
+                </View>
+                <RedesignText variant="caption" tone="textSecondary">
+                  {anomaly.text}
+                </RedesignText>
+              </View>
+            ) : null}
+
+            {/* Dashboard Templates */}
+            <View style={{ gap: sp.xs }}>
+              <RedesignText variant="label" tone="textSecondary">
+                {t('reports.redesign.templatesTitle')}
+              </RedesignText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.xs }}>
+                <RedesignChip
+                  testID="redesign-template-executive"
+                  label={t('reports.redesign.templateExecutive')}
+                  selected={activeTemplate === 'executive'}
+                  onPress={() => setActiveTemplate('executive')}
+                />
+                <RedesignChip
+                  testID="redesign-template-debt"
+                  label={t('reports.redesign.templateDebt')}
+                  selected={activeTemplate === 'debt'}
+                  onPress={() => setActiveTemplate('debt')}
+                />
+                <RedesignChip
+                  testID="redesign-template-tax"
+                  label={t('reports.redesign.templateTax')}
+                  selected={activeTemplate === 'tax'}
+                  onPress={() => setActiveTemplate('tax')}
+                />
+              </View>
+            </View>
+
+            {/* Featured Reports */}
             <View
               testID="redesign-reports-featured"
               style={{
@@ -208,6 +319,7 @@ export function RedesignReportsScreen() {
               ))}
             </View>
 
+            {/* Your Reports / Saved Reports */}
             <RedesignText testID="redesign-reports-your-label" variant="label" tone="textSecondary">
               {t('reports.redesign.yourReports')}
             </RedesignText>
@@ -246,6 +358,14 @@ export function RedesignReportsScreen() {
               kind="secondary"
               label={t('reports.redesign.buildYourOwn')}
               onPress={() => router.push('/reports/build')}
+              fullWidth
+            />
+
+            <RedesignButton
+              testID="redesign-reports-export-pdf"
+              kind="link"
+              label={t('reports.redesign.exportExecutivePdf')}
+              onPress={onExportExecutivePdf}
               fullWidth
             />
           </>
