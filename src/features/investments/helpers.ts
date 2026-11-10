@@ -3,7 +3,18 @@ import type { Snapshot } from '@/data/workspace/repository';
 import { costOfPurchase, ledgerBalance } from '@/ledger';
 import { formatNaira } from '@/money';
 
-export const HOLDING_TYPES: HoldingType[] = ['stock', 'fund', 'pension', 'crypto', 'fixedDeposit', 'other'];
+export const HOLDING_TYPES: HoldingType[] = [
+  'stock',
+  'fund',
+  'pension',
+  'crypto',
+  'fixedDeposit',
+  'land',
+  'realEstate',
+  'preciousMetals',
+  'privateEquity',
+  'other',
+];
 
 export type HoldingFigures = {
   holding: Holding;
@@ -18,16 +29,30 @@ export type HoldingFigures = {
   value: bigint;
   gain: bigint;
   gainPct: number | null;
+  cagr: number | null;
+  duration: string;
+  breakEvenPct: number | null;
+  isWrittenOff?: boolean;
 };
 
 export type PortfolioSummary = {
   figures: HoldingFigures[];
+  yieldAssets: HoldingFigures[];
+  growthAssets: HoldingFigures[];
+  archivedAssets: HoldingFigures[];
   totalValue: bigint;
   totalCost: bigint;
   unrealised: bigint;
   realised: bigint;
   dividends: bigint;
   gainPct: number | null;
+  writtenOffLossTotal: bigint;
+  portfolioDrag: number;
+  liquidity: {
+    liquid: { value: bigint; pct: number };
+    semiLiquid: { value: bigint; pct: number };
+    illiquid: { value: bigint; pct: number };
+  };
   series: { date: string; value: bigint }[];
   byType: { key: string; value: bigint }[];
   byAccount: { key: string; label: string; value: bigint }[];
@@ -59,7 +84,11 @@ export function holdingUnits(snapshot: Snapshot, holdingId: string): number {
 }
 
 export function holdingCost(snapshot: Snapshot, holding: Holding): bigint {
-  return ledgerBalance(holding.ledgerAccountId, snapshot.events);
+  const bal = ledgerBalance(holding.ledgerAccountId, snapshot.events);
+  if (bal > 0n) return bal;
+  const lots = lotsFor(snapshot, holding.id);
+  const fromLots = lots.reduce((s, l) => s + BigInt(l.costMinor), 0n);
+  return fromLots > 0n ? fromLots : bal;
 }
 
 /** FIFO cost for selling `units` (TECH-SPEC 6.8). */
@@ -112,6 +141,92 @@ export function defaultCashAccountId(snapshot: Snapshot, holdingId?: string): st
   return [...cashIds][0] ?? '';
 }
 
+
+export function isYieldAsset(type: HoldingType): boolean {
+  return type === 'stock' || type === 'fund' || type === 'fixedDeposit' || type === 'pension';
+}
+
+export function isGrowthAsset(type: HoldingType): boolean {
+  return !isYieldAsset(type);
+}
+
+export function calculateCAGR(
+  currentValue: bigint,
+  costBasis: bigint,
+  firstDate: string | null,
+  currentDate: string,
+): number | null {
+  if (!firstDate || costBasis <= 0n || currentValue <= 0n) return null;
+  const d1 = new Date(firstDate).getTime();
+  const d2 = new Date(currentDate).getTime();
+  const days = (d2 - d1) / (1000 * 60 * 60 * 24);
+  const years = days / 365.25;
+  if (years < 0.25) return null; // Under 3 months
+  const ratio = Number(currentValue) / Number(costBasis);
+  const cagr = Math.pow(ratio, 1 / years) - 1;
+  return Number.isFinite(cagr) ? Math.round(cagr * 1000) / 10 : null;
+}
+
+export function holdingDuration(firstDate: string | null, currentDate: string): string {
+  if (!firstDate) return '';
+  const d1 = new Date(firstDate).getTime();
+  const d2 = new Date(currentDate).getTime();
+  const days = Math.max(0, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)));
+  if (days < 30) return `${days}d`;
+  const totalMonths = Math.floor(days / 30.4375);
+  const years = Math.floor(totalMonths / 12);
+  const months = totalMonths % 12;
+  if (years === 0) return `${months}m`;
+  if (months === 0) return `${years}y`;
+  return `${years}y ${months}m`;
+}
+
+export function portfolioLiquidityTiers(
+  snapshot: Snapshot,
+  figures: HoldingFigures[],
+): {
+  liquid: { value: bigint; pct: number };
+  semiLiquid: { value: bigint; pct: number };
+  illiquid: { value: bigint; pct: number };
+} {
+  // Cash accounts are liquid
+  let liquid = snapshot.accounts
+    .filter((a) => !a.archived && ['bank', 'savings', 'cash', 'wallet'].includes(a.type))
+    .reduce((s, a) => s + ledgerBalance(a.id, snapshot.events), 0n);
+  if (liquid < 0n) liquid = 0n;
+
+  let semiLiquid = 0n;
+  let illiquid = 0n;
+
+  for (const f of figures) {
+    if (f.holding.isWrittenOff) continue;
+    const t = f.holding.type;
+    if (t === 'stock' || t === 'fund' || t === 'crypto') {
+      semiLiquid += f.value;
+    } else {
+      illiquid += f.value;
+    }
+  }
+
+  const total = liquid + semiLiquid + illiquid;
+  if (total === 0n) {
+    return {
+      liquid: { value: 0n, pct: 0 },
+      semiLiquid: { value: 0n, pct: 0 },
+      illiquid: { value: 0n, pct: 0 },
+    };
+  }
+  const liquidPct = Math.round(Number((liquid * 10000n) / total) / 100);
+  const semiLiquidPct = Math.round(Number((semiLiquid * 10000n) / total) / 100);
+  const illiquidPct = 100 - liquidPct - semiLiquidPct;
+
+  return {
+    liquid: { value: liquid, pct: liquidPct },
+    semiLiquid: { value: semiLiquid, pct: semiLiquidPct },
+    illiquid: { value: illiquid, pct: illiquidPct },
+  };
+}
+
 export function holdingFigures(snapshot: Snapshot, holding: Holding, onDate?: string): HoldingFigures {
   const units = holdingUnits(snapshot, holding.id);
   const cost = holdingCost(snapshot, holding);
@@ -120,10 +235,55 @@ export function holdingFigures(snapshot: Snapshot, holding: Holding, onDate?: st
   const stalePrice = price === null;
   const priceDate = px?.date ?? null;
   const staleSince = stalePrice ? staleSinceDate(snapshot, holding.id, priceDate, onDate) : null;
+  const firstDate = firstHoldingDate(snapshot, holding.id);
+  const today = onDate ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(new Date());
+
+  if (holding.isWrittenOff) {
+    const salvage = holding.writeOffSalvageMinor ? BigInt(holding.writeOffSalvageMinor) : 0n;
+    const value = salvage;
+    const gain = value - cost;
+    const gainPct = cost === 0n ? null : Number((gain * 10000n) / cost) / 100;
+    return {
+      holding,
+      units,
+      cost,
+      price: null,
+      priceDate: holding.writeOffDate ?? priceDate,
+      stalePrice: false,
+      staleSince: null,
+      value,
+      gain,
+      gainPct,
+      cagr: null,
+      duration: holdingDuration(firstDate, holding.writeOffDate ?? today),
+      breakEvenPct: -100,
+      isWrittenOff: true,
+    };
+  }
+
   const value = price !== null ? costOfPurchase(String(units), price, 0n) : cost;
   const gain = value - cost;
   const gainPct = cost === 0n ? null : Number((gain * 10000n) / cost) / 100;
-  return { holding, units, cost, price, priceDate, stalePrice, staleSince, value, gain, gainPct };
+  const cagr = calculateCAGR(value, cost, firstDate, today);
+  const duration = holdingDuration(firstDate, today);
+  const breakEvenPct = gainPct;
+
+  return {
+    holding,
+    units,
+    cost,
+    price,
+    priceDate,
+    stalePrice,
+    staleSince,
+    value,
+    gain,
+    gainPct,
+    cagr,
+    duration,
+    breakEvenPct,
+    isWrittenOff: false,
+  };
 }
 
 export function portfolioFigures(snapshot: Snapshot, accountId?: string): HoldingFigures[] {
@@ -133,18 +293,19 @@ export function portfolioFigures(snapshot: Snapshot, accountId?: string): Holdin
     .sort((a, b) => (a.value === b.value ? a.holding.name.localeCompare(b.holding.name) : a.value > b.value ? -1 : 1));
 }
 
-export function rangeStart(range: '1M' | '3M' | '1Y' | 'All', today: string): string | null {
+export function rangeStart(range: Range, today: string): string | null {
   if (range === 'All') return null;
   const [y, m, d] = today.split('-').map(Number) as [number, number, number];
   const dt = new Date(Date.UTC(y, m - 1, d));
   if (range === '1M') dt.setUTCMonth(dt.getUTCMonth() - 1);
   if (range === '3M') dt.setUTCMonth(dt.getUTCMonth() - 3);
+  if (range === '6M') dt.setUTCMonth(dt.getUTCMonth() - 6);
   if (range === '1Y') dt.setUTCFullYear(dt.getUTCFullYear() - 1);
   return dt.toISOString().slice(0, 10);
 }
 
-export type Range = '1M' | '3M' | '1Y' | 'All';
-export const RANGES: Range[] = ['1M', '3M', '1Y', 'All'];
+export type Range = '1M' | '3M' | '6M' | '1Y' | 'All';
+export const RANGES: Range[] = ['1M', '3M', '6M', '1Y', 'All'];
 
 function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
@@ -167,7 +328,7 @@ function addMonths(month: string, n: number): string {
 export function seriesDates(range: Range, today: string, first: string | null): string[] {
   const start = rangeStart(range, today) ?? (first && first < today ? first : today);
   const out: string[] = [];
-  if (range === '1M' || range === '3M') {
+  if (range === '1M' || range === '3M' || range === '6M') {
     for (let d = today; d >= start; d = addDays(d, -7)) out.unshift(d);
     return out.length ? out : [today];
   }
@@ -209,15 +370,32 @@ function dividendsInRange(snapshot: Snapshot, start: string | null): bigint {
 }
 
 /** Portfolio card + charts for Page 17 (DESIGN / TB08-1). */
-export function portfolioSummary(snapshot: Snapshot, range: '1M' | '3M' | '1Y' | 'All', today: string): PortfolioSummary {
-  const figures = portfolioFigures(snapshot);
+export function portfolioSummary(snapshot: Snapshot, range: Range, today: string): PortfolioSummary {
+  const allFigures = portfolioFigures(snapshot);
+  const activeFigures = allFigures.filter((f) => !f.holding.archived && !f.holding.isWrittenOff);
+  const archivedAssets = allFigures.filter((f) => f.holding.archived || f.holding.isWrittenOff);
+
+  const yieldAssets = activeFigures.filter((f) => isYieldAsset(f.holding.type));
+  const growthAssets = activeFigures.filter((f) => isGrowthAsset(f.holding.type));
+
   const start = rangeStart(range, today);
-  const totalValue = figures.reduce((s, f) => s + f.value, 0n);
-  const totalCost = figures.reduce((s, f) => s + f.cost, 0n);
+  const totalValue = activeFigures.reduce((s, f) => s + f.value, 0n);
+  const totalCost = activeFigures.reduce((s, f) => s + f.cost, 0n);
   const unrealised = totalValue - totalCost;
   const realised = realisedInRange(snapshot, start);
   const dividends = dividendsInRange(snapshot, start);
   const gainPct = totalCost === 0n ? null : Number((unrealised * 10000n) / totalCost) / 100;
+
+  let writtenOffLossTotal = 0n;
+  for (const a of archivedAssets) {
+    if (a.holding.isWrittenOff) {
+      writtenOffLossTotal += a.cost - a.value;
+    }
+  }
+  const peakCapital = totalCost + writtenOffLossTotal;
+  const portfolioDrag = peakCapital > 0n ? Math.round(Number((writtenOffLossTotal * 10000n) / peakCapital) / 100) : 0;
+
+  const liquidity = portfolioLiquidityTiers(snapshot, activeFigures);
 
   const firstTrade =
     snapshot.events
@@ -227,12 +405,14 @@ export function portfolioSummary(snapshot: Snapshot, range: '1M' | '3M' | '1Y' |
   const dates = seriesDates(range, today, firstTrade);
   const series = dates.map((date) => ({
     date,
-    value: snapshot.holdings.reduce((s, h) => s + holdingFigures(snapshot, h, date).value, 0n),
+    value: snapshot.holdings
+      .filter((h) => !h.archived && !h.isWrittenOff)
+      .reduce((s, h) => s + holdingFigures(snapshot, h, date).value, 0n),
   }));
 
   const byTypeMap = new Map<string, bigint>();
   const byAccountMap = new Map<string, bigint>();
-  for (const f of figures) {
+  for (const f of activeFigures) {
     byTypeMap.set(f.holding.type, (byTypeMap.get(f.holding.type) ?? 0n) + f.value);
     byAccountMap.set(f.holding.accountId, (byAccountMap.get(f.holding.accountId) ?? 0n) + f.value);
   }
@@ -247,7 +427,24 @@ export function portfolioSummary(snapshot: Snapshot, range: '1M' | '3M' | '1Y' |
     }))
     .sort((a, b) => (a.value === b.value ? a.label.localeCompare(b.label) : a.value > b.value ? -1 : 1));
 
-  return { figures, totalValue, totalCost, unrealised, realised, dividends, gainPct, series, byType, byAccount };
+  return {
+    figures: activeFigures,
+    yieldAssets,
+    growthAssets,
+    archivedAssets,
+    totalValue,
+    totalCost,
+    unrealised,
+    realised,
+    dividends,
+    gainPct,
+    writtenOffLossTotal,
+    portfolioDrag,
+    liquidity,
+    series,
+    byType,
+    byAccount,
+  };
 }
 
 /** Format a signed gain with +/− (DESIGN D7). */

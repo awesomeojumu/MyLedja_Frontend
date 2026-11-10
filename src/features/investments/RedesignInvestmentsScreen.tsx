@@ -1,5 +1,5 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { useDesign } from '@/design/ThemeProvider';
@@ -20,8 +20,16 @@ import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 import { formatNaira, PRIVACY_MASK } from '@/money';
 
-import { formatGain, portfolioSummary, type Range } from './helpers';
-import { RedesignAddInvestmentSheet } from './redesignInvestmentSheets';
+import {
+  formatGain,
+  portfolioSummary,
+  type HoldingFigures,
+  type Range,
+} from './helpers';
+import {
+  RedesignAddInvestmentSheet,
+  RedesignBatchValuationSheet,
+} from './redesignInvestmentSheets';
 
 const sp = tokens.space;
 const shape = tokens.shape;
@@ -34,17 +42,24 @@ function typeLabel(type: string): string {
   return t(`investments.redesign.type.${type}` as 'investments.redesign.type.fund');
 }
 
+type CategoryTab = 'all' | 'yield' | 'growth' | 'archived';
+
 /**
- * Figma Mobile App Phone / Investments (5:1989) + Empty (13:6330).
- * Behind EXPO_PUBLIC_REDESIGN; W0 tokens/components only.
+ * Figma Mobile App Phone / Investments (5:1989) + Empty (13:6330)
+ * Upgraded with Dual Asset Architecture (Cash flow / Yield vs Capital growth / Land),
+ * Liquidity Tiers, Currency Toggle (NGN / USD), and Batch Valuations.
  */
 export function RedesignInvestmentsScreen() {
   const { snapshot } = useWorkspace();
   const router = useRouter();
   const { privacy } = useDesign();
-  const params = useGlobalSearchParams<{ range?: string; holding?: string; view?: string }>();
+  const params = useGlobalSearchParams<{ range?: string; holding?: string; view?: string; tab?: string }>();
   const range = ((params.range as Range) || '1Y') as Range;
   const tableView = params.view === 'table';
+  const [activeTab, setActiveTab] = useState<CategoryTab>((params.tab as CategoryTab) || 'all');
+  const [currency, setCurrency] = useState<'NGN' | 'USD'>('NGN');
+  const [batchOpen, setBatchOpen] = useState(false);
+
   const addOpen = params.holding === 'new';
   const openAdd = () => router.setParams({ holding: 'new' });
   const closeAdd = () => router.setParams({ holding: undefined });
@@ -60,7 +75,22 @@ export function RedesignInvestmentsScreen() {
     return t('investments.redesign.sinceStarted', { gain: body });
   }, [summary]);
 
-  const empty = !!summary && summary.figures.length === 0;
+  const empty = !!summary && summary.figures.length === 0 && summary.archivedAssets.length === 0;
+
+  // Filter figures based on active tab
+  const displayedFigures = useMemo<HoldingFigures[]>(() => {
+    if (!summary) return [];
+    if (activeTab === 'yield') return summary.yieldAssets;
+    if (activeTab === 'growth') return summary.growthAssets;
+    if (activeTab === 'archived') return summary.archivedAssets;
+    return summary.figures;
+  }, [summary, activeTab]);
+
+  // Annual passive income from yield assets
+  const annualPassiveIncome = useMemo(() => {
+    if (!summary) return 0n;
+    return summary.dividends > 0n ? summary.dividends : 0n;
+  }, [summary]);
 
   return (
     <RedesignStackFrame
@@ -71,20 +101,36 @@ export function RedesignInvestmentsScreen() {
         empty ? (
           <View style={{ width: tokens.density.touch.minTarget }} />
         ) : (
-          <Pressable
-            testID="redesign-investments-add"
-            accessibilityRole="button"
-            accessibilityLabel={t('investments.redesign.addAction')}
-            onPress={openAdd}
-            style={{
-              width: tokens.density.touch.minTarget,
-              height: tokens.density.touch.minTarget,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <RedesignIcon name="plus" size={24} color={theme.text} />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Pressable
+              testID="redesign-investments-batch-val"
+              accessibilityRole="button"
+              accessibilityLabel={t('investments.redesign.updateValuations')}
+              onPress={() => setBatchOpen(true)}
+              style={{
+                width: tokens.density.touch.minTarget,
+                height: tokens.density.touch.minTarget,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <RedesignIcon name="refresh" size={20} color={theme.text} />
+            </Pressable>
+            <Pressable
+              testID="redesign-investments-add"
+              accessibilityRole="button"
+              accessibilityLabel={t('investments.redesign.addAction')}
+              onPress={openAdd}
+              style={{
+                width: tokens.density.touch.minTarget,
+                height: tokens.density.touch.minTarget,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <RedesignIcon name="plus" size={24} color={theme.text} />
+            </Pressable>
+          </View>
         )
       }
     >
@@ -95,6 +141,7 @@ export function RedesignInvestmentsScreen() {
           <EmptyInvestments onAdd={openAdd} />
         ) : (
           <>
+            {/* Portfolio Summary Card */}
             <View
               testID="redesign-investments-summary"
               style={{
@@ -106,23 +153,44 @@ export function RedesignInvestmentsScreen() {
                 gap: sp.md,
               }}
             >
-              <RedesignText variant="label" tone="textSecondary">
-                {t('investments.redesign.worthToday')}
-              </RedesignText>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <RedesignText variant="label" tone="textSecondary">
+                  {t('investments.redesign.worthToday')}
+                </RedesignText>
+                <Pressable
+                  testID="redesign-currency-toggle"
+                  accessibilityRole="button"
+                  onPress={() => setCurrency((c) => (c === 'NGN' ? 'USD' : 'NGN'))}
+                  style={{
+                    paddingHorizontal: sp.sm,
+                    paddingVertical: sp.xs,
+                    borderRadius: shape['radius-sm'],
+                    backgroundColor: theme.surfaceMuted,
+                  }}
+                >
+                  <RedesignText variant="caption">
+                    {t('investments.redesign.currencyToggle', { currency })}
+                  </RedesignText>
+                </Pressable>
+              </View>
+
               <RedesignAmount
                 testID="redesign-portfolio-value"
                 text={formatNaira(summary.totalValue)}
                 hidden={privacy}
                 sizeVariant="display"
               />
+
               <RedesignText testID="redesign-portfolio-gain" tone="textSecondary">
                 {privacy ? PRIVACY_MASK : gainLine}
               </RedesignText>
+
+              {/* Time Range Chips */}
               <View
                 testID="redesign-investments-range"
                 style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.sm }}
               >
-                {(['1M', '3M', '1Y', 'All'] as Range[]).map((key) => (
+                {(['1M', '3M', '6M', '1Y', 'All'] as Range[]).map((key) => (
                   <RedesignChip
                     key={key}
                     testID={`redesign-range-${key}`}
@@ -132,12 +200,14 @@ export function RedesignInvestmentsScreen() {
                   />
                 ))}
               </View>
+
               {summary.series.length > 1 ? (
                 <RedesignLineChart
                   testID="redesign-investments-value-line"
                   points={summary.series.map((p) => ({ value: p.value }))}
                 />
               ) : null}
+
               <RedesignButton
                 testID="redesign-view-as-table"
                 kind="link"
@@ -145,6 +215,131 @@ export function RedesignInvestmentsScreen() {
                 onPress={() => router.setParams({ view: tableView ? undefined : 'table' })}
               />
             </View>
+
+            {/* Liquidity Profile Bar */}
+            <View
+              testID="redesign-liquidity-bar"
+              style={{
+                backgroundColor: theme.surface,
+                borderRadius: shape['radius-lg'],
+                borderWidth: 1,
+                borderColor: theme.border,
+                padding: sp.md,
+                gap: sp.sm,
+              }}
+            >
+              <RedesignText variant="caption" tone="textSecondary">
+                {t('investments.redesign.liquidityTitle')}
+              </RedesignText>
+              <View
+                style={{
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: theme.surfaceMuted,
+                  flexDirection: 'row',
+                  overflow: 'hidden',
+                }}
+              >
+                <View
+                  style={{
+                    flex: summary.liquidity.liquid.pct || 1,
+                    backgroundColor: theme.primary,
+                  }}
+                />
+                <View
+                  style={{
+                    flex: summary.liquidity.semiLiquid.pct || 1,
+                    backgroundColor: theme.progressFill,
+                  }}
+                />
+                <View
+                  style={{
+                    flex: summary.liquidity.illiquid.pct || 1,
+                    backgroundColor: theme.textSecondary,
+                  }}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: sp.xs }}>
+                <RedesignText variant="helper" tone="textSecondary">
+                  {t('investments.redesign.liquidityLiquid', { pct: summary.liquidity.liquid.pct })}
+                </RedesignText>
+                <RedesignText variant="helper" tone="textSecondary">
+                  {t('investments.redesign.liquiditySemiLiquid', { pct: summary.liquidity.semiLiquid.pct })}
+                </RedesignText>
+                <RedesignText variant="helper" tone="textSecondary">
+                  {t('investments.redesign.liquidityIlliquid', { pct: summary.liquidity.illiquid.pct })}
+                </RedesignText>
+              </View>
+            </View>
+
+            {/* Category Bifurcation Tabs */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.xs }}>
+              <RedesignChip
+                testID="redesign-category-all"
+                label={`${t('investments.redesign.categoryAll')} (${summary.figures.length})`}
+                selected={activeTab === 'all'}
+                onPress={() => setActiveTab('all')}
+              />
+              <RedesignChip
+                testID="redesign-category-yield"
+                label={`${t('investments.redesign.categoryYield')} (${summary.yieldAssets.length})`}
+                selected={activeTab === 'yield'}
+                onPress={() => setActiveTab('yield')}
+              />
+              <RedesignChip
+                testID="redesign-category-growth"
+                label={`${t('investments.redesign.categoryGrowth')} (${summary.growthAssets.length})`}
+                selected={activeTab === 'growth'}
+                onPress={() => setActiveTab('growth')}
+              />
+              {summary.archivedAssets.length > 0 ? (
+                <RedesignChip
+                  testID="redesign-category-archived"
+                  label={`${t('investments.redesign.categoryArchived')} (${summary.archivedAssets.length})`}
+                  selected={activeTab === 'archived'}
+                  onPress={() => setActiveTab('archived')}
+                />
+              ) : null}
+            </View>
+
+            {/* Special Callouts per tab */}
+            {activeTab === 'yield' && annualPassiveIncome > 0n ? (
+              <View
+                testID="redesign-passive-income-card"
+                style={{
+                  backgroundColor: theme.surface,
+                  borderRadius: shape['radius-md'],
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  padding: sp.md,
+                }}
+              >
+                <RedesignText variant="label">
+                  {t('investments.redesign.annualPassiveIncome', { amount: formatNaira(annualPassiveIncome) })}
+                </RedesignText>
+              </View>
+            ) : null}
+
+            {activeTab === 'archived' && summary.portfolioDrag > 0 ? (
+              <View
+                testID="redesign-portfolio-drag-card"
+                style={{
+                  backgroundColor: theme.surface,
+                  borderRadius: shape['radius-md'],
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  padding: sp.md,
+                  gap: sp.xs,
+                }}
+              >
+                <RedesignText variant="label">
+                  {t('investments.redesign.portfolioDrag', { drag: summary.portfolioDrag })}
+                </RedesignText>
+                <RedesignText variant="caption" tone="textSecondary">
+                  {t('investments.redesign.writtenOffLosses', { amount: formatNaira(summary.writtenOffLossTotal) })}
+                </RedesignText>
+              </View>
+            ) : null}
 
             <RedesignText variant="label" tone="textSecondary">
               {t('investments.redesign.holdings')}
@@ -181,7 +376,7 @@ export function RedesignInvestmentsScreen() {
                     {t('investments.gain')}
                   </RedesignText>
                 </View>
-                {summary.figures.map((f) => (
+                {displayedFigures.map((f) => (
                   <Pressable
                     key={f.holding.id}
                     testID={`redesign-holding-row-${f.holding.id}`}
@@ -198,9 +393,14 @@ export function RedesignInvestmentsScreen() {
                       minHeight: tokens.size['list-row'],
                     }}
                   >
-                    <RedesignText style={{ flex: 1.4 }} numberOfLines={1}>
-                      {f.holding.name}
-                    </RedesignText>
+                    <View style={{ flex: 1.4 }}>
+                      <RedesignText numberOfLines={1}>{f.holding.name}</RedesignText>
+                      {f.holding.location ? (
+                        <RedesignText variant="helper" tone="textSecondary" numberOfLines={1}>
+                          {f.holding.location}
+                        </RedesignText>
+                      ) : null}
+                    </View>
                     <RedesignText
                       variant="label"
                       style={{ flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] }}
@@ -230,9 +430,11 @@ export function RedesignInvestmentsScreen() {
                   overflow: 'hidden',
                 }}
               >
-                {summary.figures.map((f) => {
+                {displayedFigures.map((f) => {
                   const gain = formatGain(f.gain, null);
-                  const subtitle = `${typeLabel(f.holding.type)}, ${privacy ? PRIVACY_MASK : gain}`;
+                  const extra = f.cagr !== null ? ` · ${f.cagr}% p.a.` : '';
+                  const location = f.holding.location ? `${f.holding.location} · ` : '';
+                  const subtitle = `${location}${typeLabel(f.holding.type)}, ${privacy ? PRIVACY_MASK : gain}${extra}`;
                   return (
                     <RedesignListRow
                       key={f.holding.id}
@@ -260,6 +462,13 @@ export function RedesignInvestmentsScreen() {
           onCreated={(h) => {
             router.push(`/investments/${h.id}`);
           }}
+        />
+      ) : null}
+
+      {batchOpen && summary ? (
+        <RedesignBatchValuationSheet
+          holdings={summary.figures.map((f) => ({ holding: f.holding, currentValue: f.value }))}
+          onClose={() => setBatchOpen(false)}
         />
       ) : null}
     </RedesignStackFrame>

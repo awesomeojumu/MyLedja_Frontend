@@ -97,6 +97,7 @@ import {
   type HoldingLot,
   type HoldingPrice,
   type HoldingType,
+  type HoldingUnitType,
   type HealthSettings,
   type ReportCardModel,
   type ReportDashboardModel,
@@ -2915,6 +2916,9 @@ export class WorkspaceRepository {
     accountId: string;
     currency?: string;
     currentPriceMinor?: bigint;
+    unitType?: HoldingUnitType;
+    location?: string;
+    titleStatus?: string;
   }): Promise<Result<Holding>> {
     const snapshot = await this.load();
     const parent = snapshot.accounts.find((a) => a.id === input.accountId && a.type === 'investment' && !a.archived);
@@ -2930,6 +2934,9 @@ export class WorkspaceRepository {
       accountId: parent.id,
       currency: input.currency ?? parent.currency,
       ledgerAccountId: id,
+      unitType: input.unitType,
+      location: input.location,
+      titleStatus: input.titleStatus,
     };
     const { id: _id, ...data } = holding;
     const priceDate = todayInLagos();
@@ -2970,6 +2977,10 @@ export class WorkspaceRepository {
     valueMinor: bigint;
     currency?: string;
     countInBudget?: boolean;
+    unitType?: HoldingUnitType;
+    units?: string;
+    location?: string;
+    titleStatus?: string;
   }): Promise<Result<Holding>> {
     if (input.costMinor < 0n || input.valueMinor < 0n) return { ok: false, error: 'not_positive' };
     if (input.costMinor === 0n && input.valueMinor === 0n) return { ok: false, error: 'not_positive' };
@@ -2979,6 +2990,9 @@ export class WorkspaceRepository {
       accountId: input.accountId,
       currency: input.currency,
       currentPriceMinor: input.valueMinor > 0n ? input.valueMinor : undefined,
+      unitType: input.unitType,
+      location: input.location,
+      titleStatus: input.titleStatus,
     });
     if (!created.ok) return created;
     const holding = created.value;
@@ -2991,7 +3005,7 @@ export class WorkspaceRepository {
       {
         holdingId: holding.id,
         date,
-        units: '1',
+        units: input.units || '1',
         soldUnits: '0',
         costMinor: cost.toString(),
         pricePerUnitMinor: cost.toString(),
@@ -3045,6 +3059,129 @@ export class WorkspaceRepository {
       targetId: id,
       payload: {},
     });
+    return { ok: true, value: undefined };
+  }
+
+  /**
+   * Capitalized improvement for an asset (e.g. fencing, survey, title regularization).
+   * Moves money from cash to holding asset account, capitalizing the cost.
+   */
+  async addCapitalImprovement(
+    holdingId: string,
+    input: {
+      amountMinor: bigint;
+      date: string;
+      category?: string;
+      note?: string;
+      cashAccountId: string;
+    },
+  ): Promise<Result<TxEvent>> {
+    const snapshot = await this.load();
+    const holding = snapshot.holdings.find((h) => h.id === holdingId);
+    if (!holding) return { ok: false, error: 'unknown_account' };
+    if (input.amountMinor <= 0n) return { ok: false, error: 'not_positive' };
+
+    const chart = this.chartFor(
+      snapshot.accounts,
+      snapshot.categories,
+      snapshot.debts,
+      snapshot.holdings,
+      snapshot.settings.currency,
+    );
+    const built = buildInvestmentBuy(chart, {
+      holdingAccountId: holding.ledgerAccountId,
+      cashAccountId: input.cashAccountId,
+      units: '1',
+      pricePerUnit: input.amountMinor,
+      fees: 0n,
+    });
+    if (!built.ok) return built;
+    const lines = built.value;
+
+    const note = input.note || input.category || 'Capital improvement';
+    const posted = await this.postEvent(
+      chart,
+      snapshot.events,
+      {
+        type: 'investment_buy',
+        date: input.date,
+        lines,
+        holdingId: holding.id,
+        investmentUnits: '1',
+        investmentPriceMinor: input.amountMinor.toString(),
+        investmentFeesMinor: '0',
+      },
+      {
+        type: 'transaction.create',
+        payload: {
+          type: 'investment_buy',
+          holdingId: holding.id,
+          accountId: input.cashAccountId,
+          units: '1',
+          price: input.amountMinor.toString(),
+          fees: '0',
+          date: input.date,
+          note,
+        },
+      },
+    );
+    if (!posted.ok) return posted;
+
+    await this.put(
+      'lots',
+      this.newId(),
+      {
+        holdingId: holding.id,
+        date: input.date,
+        units: '1',
+        soldUnits: '0',
+        costMinor: input.amountMinor.toString(),
+        pricePerUnitMinor: input.amountMinor.toString(),
+        feesMinor: '0',
+        buyEventId: posted.value.id,
+      } satisfies Omit<HoldingLot, 'id'>,
+      'lot.create',
+      undefined,
+      null,
+    );
+
+    return posted;
+  }
+
+  /**
+   * Disaster / impairment / write-off: clears or writes down the holding,
+   * tracking the loss without distorting ordinary living expenses.
+   */
+  async writeOffHolding(
+    holdingId: string,
+    input: {
+      kind: 'full' | 'partial';
+      amountMinor: bigint;
+      salvageMinor?: bigint;
+      salvageAccountId?: string;
+      date: string;
+      reason: string;
+      notes?: string;
+    },
+  ): Promise<Result> {
+    const snapshot = await this.load();
+    const holding = snapshot.holdings.find((h) => h.id === holdingId);
+    if (!holding) return { ok: false, error: 'unknown_account' };
+
+    const updatedHolding: Holding = {
+      ...holding,
+      isWrittenOff: input.kind === 'full',
+      writeOffDate: input.date,
+      writeOffReason: input.reason,
+      writeOffAmountMinor: input.amountMinor.toString(),
+      writeOffSalvageMinor: (input.salvageMinor ?? 0n).toString(),
+      writeOffNotes: input.notes,
+    };
+    await this.updateHolding(updatedHolding);
+
+    const remainingVal = input.salvageMinor && input.salvageMinor > 0n ? input.salvageMinor : 0n;
+    await this.savePrices([{ holdingId: holding.id, priceMinor: remainingVal }], input.date);
+
     return { ok: true, value: undefined };
   }
 

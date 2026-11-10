@@ -461,6 +461,13 @@ const HOLDING_TYPE_FROM: Record<string, HoldingType> = {
   crypto: 'crypto',
   fixed_deposit: 'fixedDeposit',
   fixedDeposit: 'fixedDeposit',
+  land: 'land',
+  real_estate: 'realEstate',
+  realEstate: 'realEstate',
+  precious_metals: 'preciousMetals',
+  preciousMetals: 'preciousMetals',
+  private_equity: 'privateEquity',
+  privateEquity: 'privateEquity',
   other: 'other',
 };
 
@@ -470,6 +477,10 @@ const HOLDING_TYPE_TO: Record<HoldingType, string> = {
   pension: 'pension',
   crypto: 'crypto',
   fixedDeposit: 'fixed_deposit',
+  land: 'land',
+  realEstate: 'real_estate',
+  preciousMetals: 'precious_metals',
+  privateEquity: 'private_equity',
   other: 'other',
 };
 

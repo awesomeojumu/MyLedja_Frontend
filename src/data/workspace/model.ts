@@ -184,8 +184,29 @@ export type ExchangeRateEntry = {
 };
 
 /** Phase 5 investments (TECH-SPEC 6.8 / PU-37…40). */
-export const HOLDING_TYPES = ['stock', 'fund', 'pension', 'crypto', 'fixedDeposit', 'other'] as const;
+export const HOLDING_TYPES = [
+  'stock',
+  'fund',
+  'pension',
+  'crypto',
+  'fixedDeposit',
+  'land',
+  'realEstate',
+  'preciousMetals',
+  'privateEquity',
+  'other',
+] as const;
 export type HoldingType = (typeof HOLDING_TYPES)[number];
+
+export type HoldingUnitType =
+  | 'shares'
+  | 'plots'
+  | 'acres'
+  | 'sqm'
+  | 'grams'
+  | 'ounces'
+  | 'lumpSum'
+  | 'units';
 
 export type Holding = {
   id: string;
@@ -197,6 +218,16 @@ export type Holding = {
   currency: string;
   /** Ledger asset for this holding's cost basis. */
   ledgerAccountId: string;
+  unitType?: HoldingUnitType;
+  location?: string;
+  titleStatus?: string;
+  archived?: boolean;
+  isWrittenOff?: boolean;
+  writeOffDate?: string;
+  writeOffReason?: string;
+  writeOffAmountMinor?: string;
+  writeOffSalvageMinor?: string;
+  writeOffNotes?: string;
 };
 
 export type HoldingLot = {
