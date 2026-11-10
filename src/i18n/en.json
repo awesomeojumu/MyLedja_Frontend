@@ -3815,5 +3815,19 @@
   "income.redesign.multiCurrency": "Multi-currency stream",
   "income.redesign.taxClassTitle": "Tax classification",
   "income.redesign.pensionChip": "Pension (8%)",
-  "income.redesign.nhfChip": "NHF (2.5%)"
+  "income.redesign.nhfChip": "NHF (2.5%)",
+  "goals.redesign.catchUpAdd": "Add +{amount}/mo to finish on time",
+  "goals.redesign.catchUpExtend": "Extend target by {months} months",
+  "goals.redesign.accountEarmark": "{account}: {earmarked} earmarked · {available} unallocated",
+  "goals.redesign.overEarmarkWarning": "Earmarked funds exceed available balance in {account}.",
+  "goals.redesign.reachedTitle": "Goal reached",
+  "goals.redesign.reachedStats": "You saved {saved} across {months} months.",
+  "goals.redesign.paydayPreset28": "Salary day (28th)",
+  "goals.redesign.paydayPreset1st": "1st of month",
+  "goals.redesign.paydayPresetWeekly": "Weekly",
+  "goals.redesign.modeByDate": "By target date",
+  "goals.redesign.modeByPace": "By monthly budget",
+  "goals.redesign.paceHint": "Reaches target by {when} at this pace.",
+  "goals.redesign.monthlyBudgetLabel": "Monthly contribution",
+  "goals.redesign.nextMilestone": "Next milestone: {milestone}% ({amount} to go)"
 }

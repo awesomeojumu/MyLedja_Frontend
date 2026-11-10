@@ -60,12 +60,24 @@ export function goalCards(snapshot: Snapshot, today: string): GoalCard[] {
   });
 }
 
-export function activeGoals(cards: GoalCard[]) {
+export function activeGoals(cards: GoalCard[], today?: string) {
   return cards
     .filter((c) => c.goal.status === 'active' || c.goal.status === 'paused')
     .sort((a, b) => {
-      const aBehind = a.goal.targetDate && a.saved < a.target ? 0 : 1;
-      const bBehind = b.goal.targetDate && b.saved < b.target ? 0 : 1;
+      const aBehind = today
+        ? goalStatusKind(a, today) === 'behind'
+          ? 0
+          : 1
+        : a.goal.targetDate && a.saved < a.target
+          ? 0
+          : 1;
+      const bBehind = today
+        ? goalStatusKind(b, today) === 'behind'
+          ? 0
+          : 1
+        : b.goal.targetDate && b.saved < b.target
+          ? 0
+          : 1;
       if (aBehind !== bBehind) return aBehind - bBehind;
       return (a.goal.targetDate ?? '9999').localeCompare(b.goal.targetDate ?? '9999');
     });
