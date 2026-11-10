@@ -259,4 +259,144 @@ export function summaryByType(snapshot: Snapshot, month: string) {
   return byType;
 }
 
+export function daysInMonth(month: string): number {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  return new Date(y, m, 0).getDate();
+}
+
+export function dayOfMonth(dateString: string): number {
+  return Number(dateString.slice(8, 10));
+}
+
+export function categoryPace(
+  row: BudgetRow,
+  month: string,
+  asOfDate: string,
+): 'onTrack' | 'fast' | 'over' | null {
+  const plan = row.carried + row.assigned;
+  if (plan <= 0n) return null;
+  if (row.activity > plan) return 'over';
+  const currentMonth = monthOf(asOfDate);
+  if (month !== currentMonth) return null;
+  const totalDays = daysInMonth(month);
+  const currentDay = Math.min(totalDays, Math.max(1, dayOfMonth(asOfDate)));
+  const timeElapsedFraction = currentDay / totalDays;
+  const spentFraction = Number(row.activity) / Number(plan);
+  if (spentFraction > timeElapsedFraction + 0.15) return 'fast';
+  return 'onTrack';
+}
+
+export function categoryTemplateInfo(
+  snapshot: Snapshot,
+  categoryId: string,
+  month: string,
+  planned: bigint,
+): { hasTemplate: boolean; unmet: boolean; targetAmount: bigint } {
+  const lines = categoryTemplateLines(snapshot, categoryId);
+  const bill = snapshot.recurring.find(
+    (r) => r.categoryId === categoryId && (r.kind === 'bill' || r.kind === 'subscription') && !r.cancelled,
+  );
+  const hasTemplate = lines.length > 0 || bill !== undefined;
+  if (!hasTemplate) return { hasTemplate: false, unmet: false, targetAmount: 0n };
+  let target = 0n;
+  for (const item of lines) {
+    const amt = resolveTemplateLineAmount(snapshot, month, item.line);
+    if (amt > target) target = amt;
+  }
+  if (bill && BigInt(bill.amountMinor) > target) {
+    target = BigInt(bill.amountMinor);
+  }
+  const unmet = target > 0n && planned < target;
+  return { hasTemplate: true, unmet, targetAmount: target };
+}
+
+export function smartCoverSuggestions(snapshot: Snapshot, month: string) {
+  const overspent = overspentCategories(snapshot, month);
+  if (overspent.length === 0) return [];
+  const budget = budgetForMonth(snapshot, month);
+  const candidates = budgetCategories(snapshot)
+    .filter((c) => !overspent.some((o) => o.category.id === c.id))
+    .map((c) => ({
+      category: c,
+      available: budget.rows.get(c.id)?.available ?? 0n,
+    }))
+    .filter((c) => c.available > 0n)
+    .sort((a, b) => {
+      const order = { flexible: 0, fixed: 1, nonMonthly: 2, savings: 3 };
+      const diff = (order[a.category.budgetType] ?? 0) - (order[b.category.budgetType] ?? 0);
+      if (diff !== 0) return diff;
+      return Number(b.available - a.available);
+    });
+
+  const suggestions: {
+    overspentId: string;
+    overspentName: string;
+    overAmount: bigint;
+    fromId: string;
+    fromName: string;
+    coverAmount: bigint;
+  }[] = [];
+  const candidateBalances = new Map(candidates.map((c) => [c.category.id, c.available]));
+
+  for (const o of overspent) {
+    let needed = o.over;
+    for (const c of candidates) {
+      if (needed <= 0n) break;
+      const currentAvail = candidateBalances.get(c.category.id) ?? 0n;
+      if (currentAvail <= 0n) continue;
+      const take = currentAvail >= needed ? needed : currentAvail;
+      suggestions.push({
+        overspentId: o.category.id,
+        overspentName: o.category.name,
+        overAmount: o.over,
+        fromId: c.category.id,
+        fromName: c.category.name,
+        coverAmount: take,
+      });
+      needed -= take;
+      candidateBalances.set(c.category.id, currentAvail - take);
+    }
+  }
+  return suggestions;
+}
+
+export function sinkingFundInfo(
+  snapshot: Snapshot,
+  categoryId: string,
+  month: string,
+): { target: bigint; saved: bigint; neededPerMonth: bigint } | null {
+  const goal = snapshot.goals.find((g) => g.categoryId === categoryId && g.status === 'active');
+  const lines = categoryTemplateLines(snapshot, categoryId);
+  const saveByLine = lines.find((l) => l.line.ruleKind === 'saveBy');
+
+  if (!goal && !saveByLine) return null;
+
+  const target = goal ? BigInt(goal.targetMinor) : BigInt(saveByLine?.line.ruleMeta?.targetMinor ?? '0');
+  if (target <= 0n) return null;
+
+  let saved = 0n;
+  if (goal) {
+    for (const a of snapshot.allocations) {
+      if (a.goalId === goal.id) {
+        saved += a.kind === 'spend' ? -BigInt(a.amountMinor) : BigInt(a.amountMinor);
+      }
+    }
+  } else {
+    const row = rowFor(snapshot, month, categoryId);
+    saved = row.available > 0n ? row.available : 0n;
+  }
+
+  const targetMonth = goal?.targetDate ? monthOf(goal.targetDate) : saveByLine?.line.ruleMeta?.targetMonth;
+  let neededPerMonth = 0n;
+  if (targetMonth && targetMonth > month) {
+    const monthsLeft = monthsBetween(month, targetMonth) + 1;
+    const remaining = target > saved ? target - saved : 0n;
+    neededPerMonth = remaining / BigInt(Math.max(1, monthsLeft));
+  } else if (target > saved) {
+    neededPerMonth = target - saved;
+  }
+
+  return { target, saved: saved > 0n ? saved : 0n, neededPerMonth };
+}
+
 export { monthOf, nextMonth, prevMonth, monthsEndingAt, periodTotals, categoryActivity };

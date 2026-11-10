@@ -7,7 +7,7 @@ export function useOnline(): boolean {
     Platform.OS === 'web' && typeof navigator !== 'undefined' ? navigator.onLine !== false : true,
   );
   useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
     const on = () => setOnline(true);
     const off = () => setOnline(false);
     window.addEventListener('online', on);
