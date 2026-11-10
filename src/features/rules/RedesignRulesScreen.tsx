@@ -31,6 +31,7 @@ import {
   type SuggestedRule,
 } from './helpers';
 import { RunRulesSheet } from './RunRulesSheet';
+import { RulebookSheet } from './RulebookSheet';
 
 const sp = tokens.space;
 const shape = tokens.shape;
@@ -70,6 +71,7 @@ export function RedesignRulesScreen() {
   const [editRule, setEditRule] = useState<TransactionRule | null>(null);
   const [runOpen, setRunOpen] = useState(params.runRules === '1');
   const [suggestedOpen, setSuggestedOpen] = useState(params.suggested === '1');
+  const [rulebookOpen, setRulebookOpen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
   const [openedFromLink, setOpenedFromLink] = useState<string | null>(null);
   const [runLinked, setRunLinked] = useState(false);
@@ -237,6 +239,35 @@ export function RedesignRulesScreen() {
                 </RedesignText>
               </Pressable>
             ) : null}
+            {/* Personal Rulebook Co-pilot Card */}
+            <View
+              testID="rules-rulebook-card"
+              style={{
+                backgroundColor: theme.surface,
+                borderRadius: shape['radius-lg'],
+                borderWidth: 1,
+                borderColor: theme.border,
+                padding: sp.lg,
+                gap: sp.sm,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.sm }}>
+                <RedesignIcon name="zap" size={size['icon-md']} color={theme.text} />
+                <View style={{ flex: 1 }}>
+                  <RedesignText variant="label">{t('rules.rulebook.title')}</RedesignText>
+                  <RedesignText variant="caption" tone="textSecondary">
+                    {t('rules.rulebook.subtitle')}
+                  </RedesignText>
+                </View>
+              </View>
+              <RedesignButton
+                testID="rules-open-rulebook"
+                kind="secondary"
+                label={t('rules.rulebook.adopt')}
+                onPress={() => setRulebookOpen(true)}
+              />
+            </View>
+
             <RedesignButton
               testID="rules-run"
               kind="link"
@@ -247,6 +278,18 @@ export function RedesignRulesScreen() {
           </>
         )}
       </ScrollView>
+
+      {rulebookOpen && snapshot ? (
+        <RulebookSheet
+          visible={rulebookOpen}
+          snapshot={snapshot}
+          onClose={() => setRulebookOpen(false)}
+          onAdopt={async (draft) => {
+            await repo.createRule(draft);
+            toast.show(t('rules.rulebook.adopt'));
+          }}
+        />
+      ) : null}
 
       {runOpen && snapshot ? (
         <RunRulesSheet

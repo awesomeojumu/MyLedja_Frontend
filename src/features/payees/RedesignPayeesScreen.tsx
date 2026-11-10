@@ -31,6 +31,7 @@ import {
   aliasOwner,
   applyPayeeChipFilter,
   debtForPayee,
+  payeeCadence,
   payeeRowSubtitle,
   payeeRows,
   payeeTransactions,
@@ -39,6 +40,9 @@ import {
   type PayeeRow,
 } from './helpers';
 import { pickImageUri } from './pickMedia';
+import { findFuzzyDuplicates, cleanNigerianMerchantName } from './fuzzyDuplicates';
+import { identifyNigerianBrand, suggestCategoryForBrand } from './nigerianBrands';
+import type { TextKey } from '@/i18n';
 
 const sp = tokens.space;
 const shape = tokens.shape;
@@ -86,6 +90,8 @@ export function RedesignPayeesScreen() {
     });
     return applyPayeeChipFilter(filtered, chip);
   }, [snapshot, year, query, chip]);
+
+  const duplicates = useMemo(() => (snapshot ? findFuzzyDuplicates(snapshot.payees) : []), [snapshot]);
 
   const selected = useMemo(() => {
     const id = paramId(params.payee);
@@ -250,6 +256,31 @@ export function RedesignPayeesScreen() {
             />
           ))}
         </ScrollView>
+
+        {duplicates.length > 0 ? (
+          <View
+            testID="payees-duplicates-banner"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.primarySoft,
+              borderRadius: shape['radius-lg'],
+              padding: sp.md,
+              gap: sp.sm,
+            }}
+          >
+            <RedesignIcon name="users" size={size['icon-md']} color={theme.text} />
+            <RedesignText style={{ flex: 1 }} variant="caption">
+              {t('payees.redesign.duplicatesFound', { count: duplicates.reduce((s, d) => s + d.group.length, 0) })}
+            </RedesignText>
+            <RedesignButton
+              testID="payees-review-duplicates"
+              kind="secondary"
+              label={t('payees.redesign.reviewDuplicates')}
+              onPress={() => openMerge(duplicates[0]!.group)}
+            />
+          </View>
+        ) : null}
 
         {error ? <RedesignInlineError message={error} /> : null}
 
@@ -441,6 +472,14 @@ function RedesignPayeeDetail({
   const [newAlias, setNewAlias] = useState('');
   const [aliasError, setAliasError] = useState<string | null>(null);
 
+  const cadence = useMemo(() => payeeCadence(snapshot, payee.id), [snapshot, payee.id]);
+  const cleanSuggestion = useMemo(() => cleanNigerianMerchantName(name), [name]);
+  const brandMatch = useMemo(() => identifyNigerianBrand(name), [name]);
+  const suggestedCat = useMemo(
+    () => (brandMatch ? suggestCategoryForBrand(brandMatch.brand, snapshot.categories) : null),
+    [brandMatch, snapshot.categories],
+  );
+
   const categories = snapshot.categories.filter((c) => c.kind === 'expense' && !c.hidden);
   const categoryName =
     categories.find((c) => c.id === categoryId)?.name ?? t('payees.redesign.chipNotSorted');
@@ -546,7 +585,46 @@ function RedesignPayeeDetail({
               avg: privacy ? '••••' : formatNaira(avg),
             })}
           </RedesignText>
+          {cadence.avgDays !== null ? (
+            <View testID="payee-visit-cadence" style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+              <RedesignIcon name="calendar" size={14} color={theme.textSecondary} />
+              <RedesignText variant="caption" tone="textSecondary">
+                {t(cadence.cadenceKey as TextKey, { days: String(cadence.days) })}
+              </RedesignText>
+            </View>
+          ) : null}
         </View>
+
+        {cleanSuggestion.isDirty ? (
+          <View
+            testID="payee-clean-suggestion"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.surfaceMuted,
+              borderRadius: shape['radius-md'],
+              padding: sp.md,
+              gap: sp.sm,
+            }}
+          >
+            <RedesignIcon name="refresh" size={size['icon-md']} color={theme.primary} />
+            <RedesignText style={{ flex: 1 }} variant="caption">
+              {t('payees.redesign.cleanSuggestion', { cleaned: cleanSuggestion.cleaned })}
+            </RedesignText>
+            <RedesignButton
+              testID="payee-apply-clean"
+              kind="secondary"
+              label={t('payees.redesign.cleanApply')}
+              onPress={async () => {
+                const rawAlias = cleanSuggestion.original;
+                const nextAliases = Array.from(new Set([...aliases, rawAlias]));
+                setName(cleanSuggestion.cleaned);
+                setAliases(nextAliases);
+                await persist({ name: cleanSuggestion.cleaned, aliases: nextAliases });
+              }}
+            />
+          </View>
+        ) : null}
 
         <Pressable
           testID="payee-name"
@@ -588,6 +666,49 @@ function RedesignPayeeDetail({
             </View>
           </View>
         </Pressable>
+
+        {suggestedCat && !categoryId ? (
+          <View
+            testID="payee-brand-suggestion"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.primarySoft,
+              borderRadius: shape['radius-md'],
+              padding: sp.md,
+              gap: sp.sm,
+            }}
+          >
+            <RedesignIcon name="list" size={size['icon-md']} color={theme.primary} />
+            <RedesignText style={{ flex: 1 }} variant="caption">
+              {t('payees.redesign.brandSuggestion', {
+                brand: brandMatch?.brand.name ?? '',
+                category: suggestedCat.name,
+              })}
+            </RedesignText>
+            <RedesignButton
+              testID="payee-apply-brand-category"
+              kind="secondary"
+              label={t('payees.redesign.brandApply')}
+              onPress={async () => {
+                setCategoryId(suggestedCat.id);
+                await persist({ defaultCategoryId: suggestedCat.id });
+              }}
+            />
+          </View>
+        ) : null}
+
+        <RedesignButton
+          testID="payee-quick-rule-cta"
+          kind="secondary"
+          label={
+            categoryName && categoryName !== t('payees.redesign.chipNotSorted')
+              ? t('payees.redesign.quickRuleCta', { category: categoryName })
+              : t('payees.createRule')
+          }
+          onPress={onCreateRule}
+          fullWidth
+        />
 
         <View style={{ gap: sp.sm }}>
           <RedesignText variant="label">{t('payees.aliases')}</RedesignText>

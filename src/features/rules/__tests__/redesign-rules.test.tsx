@@ -154,4 +154,28 @@ describe('Page 25 redesign Rules (EXPO_PUBLIC_REDESIGN on)', () => {
     expect(screen.getByText(t('rules.emptyTitle'))).toBeTruthy();
     expect(screen.getByText(t('rules.redesign.emptyBody'))).toBeTruthy();
   });
+
+  it('opens Rulebook sheet and adopts a personal financial framework', async () => {
+    const { sync, repo } = await seeded();
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <RulesScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+
+    expect(await screen.findByTestId('rules-rulebook-card')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('rules-open-rulebook'));
+
+    expect(await screen.findByTestId('redesign-rulebook-sheet')).toBeTruthy();
+    expect(screen.getByTestId('rulebook-template-nigerian_balanced')).toBeTruthy();
+    expect(screen.getByTestId('rulebook-adopt-btn')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('rulebook-adopt-btn'));
+
+    await waitFor(async () => {
+      const after = await repo.load();
+      expect(after.rules.some((r) => r.actions[0]?.kind === 'split')).toBe(true);
+    });
+  });
 });

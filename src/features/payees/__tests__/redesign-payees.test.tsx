@@ -170,4 +170,45 @@ describe('Page 24 redesign Payees (EXPO_PUBLIC_REDESIGN on)', () => {
     expect(screen.getByText(t('payees.emptyTitle'))).toBeTruthy();
     expect(screen.getByText(t('payees.redesign.emptyBody'))).toBeTruthy();
   });
+
+  it('surfaces duplicate detector banner when similar payees exist', async () => {
+    const { sync, repo, accountId, marketId } = await seeded();
+    await repo.addTransaction({
+      kind: 'expense',
+      accountId,
+      parts: [{ categoryId: marketId, amount: 1_000_000n }],
+      date: '2026-10-18',
+      payeeName: 'POS/SHOPRITE LEKKI LA NG',
+    });
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <PayeesScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(await screen.findByTestId('payees-duplicates-banner')).toBeTruthy();
+    expect(screen.getByTestId('payees-review-duplicates')).toBeTruthy();
+  });
+
+  it('shows auto-clean suggestion, brand category match, cadence, and quick rule in detail', async () => {
+    const { sync, repo, accountId } = await seeded();
+    await repo.addTransaction({
+      kind: 'expense',
+      accountId,
+      parts: [{ categoryId: (await repo.load()).categories[0]!.id, amount: 1_000_000n }],
+      date: '2026-10-20',
+      payeeName: 'POS/CHICKEN REPUBLIC YABA 99281',
+    });
+    const p = (await repo.load()).payees.find((x) => x.name.includes('CHICKEN'))!;
+    await act(async () => setParams({ payee: p.id }));
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <PayeesScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(await screen.findByTestId('redesign-payee-detail')).toBeTruthy();
+    expect(screen.getByTestId('payee-clean-suggestion')).toBeTruthy();
+    expect(screen.getByTestId('payee-quick-rule-cta')).toBeTruthy();
+  });
 });

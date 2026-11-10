@@ -131,4 +131,34 @@ export function debtForPayee(snapshot: Snapshot, payeeId: string) {
   return snapshot.debts.find((d) => d.payeeId === payeeId);
 }
 
+
+
+/**
+ * Calculates transaction frequency and average cadence between transactions.
+ */
+export function payeeCadence(snapshot: Snapshot, payeeId: string): { avgDays: number | null; cadenceKey: string; days: number } {
+  const dates = snapshot.events
+    .filter((e) => e.status === 'posted' && e.payeeId === payeeId && e.type !== 'transfer')
+    .map((e) => e.date)
+    .sort();
+
+  if (dates.length < 2) {
+    return { avgDays: null, cadenceKey: 'payees.redesign.cadenceFirst', days: 0 };
+  }
+
+  const diffs: number[] = [];
+  for (let i = 1; i < dates.length; i++) {
+    const prev = new Date(dates[i - 1]!).getTime();
+    const curr = new Date(dates[i]!).getTime();
+    const diffDays = Math.max(1, Math.round((curr - prev) / (1000 * 60 * 60 * 24)));
+    diffs.push(diffDays);
+  }
+
+  const avgDays = Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length);
+  if (avgDays <= 3) return { avgDays, cadenceKey: 'payees.redesign.cadenceFewDays', days: avgDays };
+  if (avgDays <= 9) return { avgDays, cadenceKey: 'payees.redesign.cadenceWeekly', days: avgDays };
+  if (avgDays <= 18) return { avgDays, cadenceKey: 'payees.redesign.cadenceBiweekly', days: avgDays };
+  if (avgDays <= 35) return { avgDays, cadenceKey: 'payees.redesign.cadenceMonthly', days: avgDays };
+  return { avgDays, cadenceKey: 'payees.redesign.cadenceDays', days: avgDays };
+}
 export { monthOf };
