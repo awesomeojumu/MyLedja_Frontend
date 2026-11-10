@@ -1,6 +1,7 @@
 import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { X } from 'lucide-react-native';
 
 import { reconcileApi } from '@/api/reconcile';
 import {
@@ -75,7 +76,15 @@ export function historyWho(event: TxEvent): string | null {
   return t('panel.historyDevice', { device: device!.slice(0, 8) });
 }
 
-export function TransactionPanel({ id, onClose }: { id: string; onClose: () => void }) {
+export function TransactionPanel({
+  id,
+  onClose,
+  docked,
+}: {
+  id: string;
+  onClose: () => void;
+  docked?: boolean;
+}) {
   const { repo, snapshot } = useWorkspace();
   const { client, user, source } = useAuth();
   const online = useOnline();
@@ -162,10 +171,8 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
     if (r.ok) toast.show(t('common.saved'));
   };
 
-  return (
-    <>
-    <Panel visible title={t('panel.title')} onClose={onClose} testID="tx-panel" width={440}>
-      <View style={{ gap: sp['spacing-lg'] }}>
+  const panelContent = (
+    <View style={{ gap: sp['spacing-lg'] }}>
         <View style={{ gap: sp['spacing-xs'] }}>
           <Amount minor={amount} variant="display-md" signed={event.type !== 'transfer'} testID="panel-amount" />
           <View style={{ flexDirection: 'row', gap: sp['spacing-xs'], flexWrap: 'wrap' }}>
@@ -345,8 +352,9 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
           ) : null}
         </View>
       </View>
-    </Panel>
-    {/* Sibling of Panel (GoalPanel pattern) so Confirm isn't nested inside another Modal. */}
+  );
+
+  const confirmDialog = (
     <Confirm
       visible={unlockOpen}
       testID="panel-unlock-confirm"
@@ -356,6 +364,56 @@ export function TransactionPanel({ id, onClose }: { id: string; onClose: () => v
       onCancel={() => setUnlockOpen(false)}
       onConfirm={doUnlock}
     />
+  );
+
+  if (docked) {
+    return (
+      <>
+        <View
+          testID="tx-panel"
+          style={{
+            width: 420,
+            backgroundColor: theme.card,
+            borderLeftWidth: 1,
+            borderColor: theme.border,
+            flex: 1,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: sp['spacing-lg'],
+              borderBottomWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
+            <Text variant="heading-sm">{t('panel.title')}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.close')}
+              onPress={onClose}
+              style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <X size={18} color={theme.textSecondary} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: sp['spacing-lg'], gap: sp['spacing-lg'] }}>
+            {panelContent}
+          </ScrollView>
+        </View>
+        {confirmDialog}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Panel visible title={t('panel.title')} onClose={onClose} testID="tx-panel" width={440}>
+        {panelContent}
+      </Panel>
+      {confirmDialog}
     </>
   );
 }

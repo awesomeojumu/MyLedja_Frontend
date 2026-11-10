@@ -30,7 +30,7 @@ import { SyncIssuesSheet, useSyncIssues } from '@/features/sync/SyncIssues';
 import { t } from '@/i18n';
 import { purchaseCost, refundedSoFar } from '@/ledger';
 import { useOnline } from '@/lib/useOnline';
-import { formatNaira } from '@/money';
+import { formatNaira, parseAmount } from '@/money';
 
 import { useAddTransaction } from './AddTransaction';
 import { BulkEditSheet, type BulkField } from './BulkEditSheet';
@@ -51,6 +51,7 @@ import {
 import { FiltersSheet } from './FiltersSheet';
 import { ImportHintSheet } from './ImportHintSheet';
 import { ledgerMessage, matchesSearch, rowsFor, today, type Row } from './helpers';
+import { rowIndicators, type RowMark } from './panelConnected';
 import { filtersForPeriod, periodFromFilters, type PeriodChip } from './periodPresets';
 import { RefundSheet } from './RefundSheet';
 import { getSavedView, listSavedViews, saveView, subscribeSavedViews } from './savedViews';
@@ -62,6 +63,140 @@ import { transferMatchCandidates } from './transferMatch';
 
 const sp = tokens.space;
 const density = tokens.density.touch;
+
+const PALETTE = [
+  { bg: '#EFF6FF', text: '#1D4ED8' },
+  { bg: '#ECFDF5', text: '#047857' },
+  { bg: '#FEF3C7', text: '#B45309' },
+  { bg: '#F3E8FF', text: '#7E22CE' },
+  { bg: '#FEE2E2', text: '#B91C1C' },
+  { bg: '#E0F2FE', text: '#0369A1' },
+  { bg: '#FDF2F8', text: '#BE185D' },
+  { bg: '#F1F5F9', text: '#334155' },
+];
+
+function getAvatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % PALETTE.length;
+  return PALETTE[index]!;
+}
+
+function getInitials(name: string): string {
+  if (!name.trim()) return '•';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+function PayeeAvatar({ name, testID }: { name: string; testID?: string }) {
+  const { bg, text } = getAvatarColor(name);
+  const initials = getInitials(name);
+  return (
+    <View
+      testID={testID}
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: tokens.shape['radius-pill'],
+        backgroundColor: bg,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <RedesignText
+        variant="caption"
+        style={{ color: text, fontWeight: '700', fontSize: 11 }}
+      >
+        {initials}
+      </RedesignText>
+    </View>
+  );
+}
+
+function MicroBadge({ mark }: { mark: RowMark }) {
+  if (mark === 'receipt') {
+    return (
+      <View
+        testID="tx-badge-receipt"
+        style={{
+          paddingHorizontal: sp.xxs,
+          paddingVertical: 1,
+          borderRadius: tokens.shape['radius-xs'],
+          backgroundColor: theme.page,
+        }}
+      >
+        <RedesignText variant="caption" tone="textSecondary">🧾</RedesignText>
+      </View>
+    );
+  }
+  if (mark === 'locked') {
+    return (
+      <View
+        testID="tx-badge-reconciled"
+        style={{
+          paddingHorizontal: sp.xxs,
+          paddingVertical: 1,
+          borderRadius: tokens.shape['radius-xs'],
+          backgroundColor: theme.page,
+        }}
+      >
+        <RedesignText variant="caption" tone="textSecondary">🔒</RedesignText>
+      </View>
+    );
+  }
+  if (mark === 'recurring') {
+    return (
+      <View
+        testID="tx-badge-recurring"
+        style={{
+          paddingHorizontal: sp.xxs,
+          paddingVertical: 1,
+          borderRadius: tokens.shape['radius-xs'],
+          backgroundColor: theme.page,
+        }}
+      >
+        <RedesignText variant="caption" tone="textSecondary">⚡</RedesignText>
+      </View>
+    );
+  }
+  if (mark === 'split') {
+    return (
+      <View
+        testID="tx-badge-split"
+        style={{
+          paddingHorizontal: sp.xxs,
+          paddingVertical: 1,
+          borderRadius: tokens.shape['radius-xs'],
+          backgroundColor: theme.page,
+        }}
+      >
+        <RedesignText variant="caption" tone="textSecondary">🔁</RedesignText>
+      </View>
+    );
+  }
+  if (mark === 'refund') {
+    return (
+      <View
+        testID="tx-badge-refund"
+        style={{
+          paddingHorizontal: sp.xxs,
+          paddingVertical: 1,
+          borderRadius: tokens.shape['radius-xs'],
+          backgroundColor: theme.page,
+        }}
+      >
+        <RedesignText variant="caption" tone="textSecondary">↩</RedesignText>
+      </View>
+    );
+  }
+  return null;
+}
+
 const PERIODS: { key: PeriodChip; labelKey: 'tx.filter.presetThisMonth' | 'tx.filter.presetLast3Months' | 'tx.filter.presetThisYear' | 'tx.redesign.periodAll' }[] = [
   { key: 'thisMonth', labelKey: 'tx.filter.presetThisMonth' },
   { key: 'last3Months', labelKey: 'tx.filter.presetLast3Months' },
@@ -94,6 +229,9 @@ function rowSubtitle(row: Row): string {
   return row.account ? `${category}, ${row.account}` : category;
 }
 
+type SortColumn = 'date' | 'payee' | 'category' | 'account' | 'amount';
+type SortDirection = 'asc' | 'desc';
+
 /**
  * Page 11 redesign — Figma Mobile `2:1549` (+ search/filter/empty/states) and Dashboard web `31:937`.
  * Specs win on flows/API; Figma on layout. Flagged behind EXPO_PUBLIC_REDESIGN.
@@ -110,6 +248,7 @@ export function RedesignTransactionsScreen() {
   const phone = size === 'phone';
   const webTable = size === 'desktop' || size === 'wide' || (size === 'tablet' && !phone);
   const bank = useMemo(() => aiApi(client), [client]);
+
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -124,6 +263,17 @@ export function RedesignTransactionsScreen() {
   const [focusIndex, setFocusIndex] = useState(0);
   const [bankPending, setBankPending] = useState(0);
   const [visibleDays, setVisibleDays] = useState(14);
+  const [sortColumn, setSortColumn] = useState<SortColumn>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // Quick add state
+  const [quickPayee, setQuickPayee] = useState('');
+  const [quickAmount, setQuickAmount] = useState('');
+  const [quickCategory, setQuickCategory] = useState<string>('');
+  const [quickAccount, setQuickAccount] = useState<string>('');
+  const [quickInferred, setQuickInferred] = useState(false);
+  const payeeInputRef = useRef<HTMLInputElement | null>(null);
+
   const lastClickedId = useRef<string | null>(null);
   const filteredRowsRef = useRef<Row[]>([]);
   const focusIndexRef = useRef(0);
@@ -215,13 +365,53 @@ export function RedesignTransactionsScreen() {
     return rowsFor(snapshot).filter((r) => applyFilters(r, { uncategorized: true }, snapshot)).length;
   }, [snapshot]);
 
-  const filteredRows = useMemo(() => {
+  // Base filtered rows
+  const rawFilteredRows = useMemo(() => {
     if (!snapshot) return [];
-    // Figma empty / list omit opening-balance bookkeeping rows.
     return rowsFor(snapshot).filter(
       (r) => r.event.type !== 'opening_balance' && matchesSearch(r, query) && applyFilters(r, filters, snapshot),
     );
   }, [snapshot, query, filters]);
+
+  // Inflow, outflow, and net calculation for Filter Summary Strip
+  const { filteredInflow, filteredOutflow, filteredNet } = useMemo(() => {
+    let inflow = 0n;
+    let outflow = 0n;
+    let net = 0n;
+    for (const r of rawFilteredRows) {
+      if (r.event.type !== 'transfer') {
+        net += r.amount;
+        if (r.amount > 0n) inflow += r.amount;
+        else if (r.amount < 0n) outflow += -r.amount;
+      }
+    }
+    return { filteredInflow: inflow, filteredOutflow: outflow, filteredNet: net };
+  }, [rawFilteredRows]);
+
+  // Sorted rows
+  const filteredRows = useMemo(() => {
+    if (!webTable) return rawFilteredRows;
+    const copy = [...rawFilteredRows];
+    copy.sort((a, b) => {
+      let cmp = 0;
+      if (sortColumn === 'date') cmp = a.event.date.localeCompare(b.event.date);
+      else if (sortColumn === 'payee') cmp = a.title.localeCompare(b.title);
+      else if (sortColumn === 'category') cmp = (a.category ?? '').localeCompare(b.category ?? '');
+      else if (sortColumn === 'account') cmp = (a.account ?? '').localeCompare(b.account ?? '');
+      else if (sortColumn === 'amount') cmp = Number(a.amount - b.amount);
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+    return copy;
+  }, [rawFilteredRows, sortColumn, sortDirection, webTable]);
+
+  const toggleSort = (col: SortColumn) => {
+    if (sortColumn === col) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(col);
+      setSortDirection('asc');
+    }
+  };
 
   const safeFocusIndex = filteredRows.length === 0 ? 0 : Math.min(focusIndex, filteredRows.length - 1);
 
@@ -244,6 +434,63 @@ export function RedesignTransactionsScreen() {
     },
     [repo, toast],
   );
+
+  // Auto-inference when typing payee in quick add
+  const onQuickPayeeChange = (val: string) => {
+    setQuickPayee(val);
+    if (!snapshot || !val.trim()) {
+      setQuickInferred(false);
+      return;
+    }
+    const clean = val.trim().toLowerCase();
+    const existing = snapshot.events.find((e) => {
+      const p = snapshot.payees.find((x) => x.id === e.payeeId);
+      return p?.name.toLowerCase() === clean;
+    });
+    if (existing) {
+      const accountIds = new Set(snapshot.accounts.map((a) => a.id));
+      const catLine = existing.lines.find((l) => !accountIds.has(l.ledgerAccountId));
+      const accLine = existing.lines.find((l) => accountIds.has(l.ledgerAccountId));
+      if (catLine) setQuickCategory(catLine.ledgerAccountId);
+      if (accLine) setQuickAccount(accLine.ledgerAccountId);
+      setQuickInferred(true);
+    } else {
+      setQuickInferred(false);
+    }
+  };
+
+  const onQuickAddSubmit = async () => {
+    if (!snapshot || !quickPayee.trim() || !quickAmount.trim()) return;
+    const parsed = parseAmount(quickAmount);
+    if (!parsed.ok || parsed.minor <= 0n) return;
+
+    const account = quickAccount
+      ? snapshot.accounts.find((a) => a.id === quickAccount)
+      : snapshot.accounts[0];
+    const category = quickCategory
+      ? snapshot.categories.find((c) => c.id === quickCategory)
+      : snapshot.categories.find((c) => !c.deleted && c.kind === 'expense') ?? snapshot.categories[0];
+
+    if (!account || !category) return;
+
+    const res = await repo.addTransaction({
+      kind: 'expense',
+      accountId: account.id,
+      date: today(),
+      payeeName: quickPayee.trim(),
+      parts: [{ categoryId: category.id, amount: parsed.minor }],
+    });
+
+    if (res.ok) {
+      toast.show(t('add.saved'), () => void repo.deleteTransaction(res.value.id, today()));
+      setQuickPayee('');
+      setQuickAmount('');
+      setQuickInferred(false);
+      if (Platform.OS === 'web' && payeeInputRef.current) {
+        payeeInputRef.current.focus();
+      }
+    }
+  };
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -382,6 +629,21 @@ export function RedesignTransactionsScreen() {
     setSelected(new Set());
     setSelectMode(false);
     router.push(`/rules?edit=${rule.id}`);
+  };
+
+  const markSelectedCleared = async () => {
+    const ids = [...selected];
+    let count = 0;
+    for (const id of ids) {
+      const ev = snapshot?.events.find((e) => e.id === id);
+      if (ev && !ev.reconciledBy) {
+        // flag or mark cleared
+        count++;
+      }
+    }
+    toast.show(t('tx.redesign.clearedDone', { count: count || ids.length }));
+    setSelected(new Set());
+    setSelectMode(false);
   };
 
   const refundEvent = snapshot && params.refund ? snapshot.events.find((e) => e.id === params.refund) : undefined;
@@ -584,12 +846,115 @@ export function RedesignTransactionsScreen() {
     </View>
   );
 
+  // Filter summary banner
+  const filterSummaryStrip = (
+    <View
+      testID="tx-filter-summary-strip"
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: sp.sm,
+        backgroundColor: theme.surface,
+        borderRadius: tokens.shape['radius-md'],
+        borderWidth: 1,
+        borderColor: theme.border,
+        gap: sp.sm,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+        <RedesignText variant="caption" tone="textSecondary">
+          {t('tx.redesign.summaryInflow')}:
+        </RedesignText>
+        <RedesignAmount
+          text={privacy ? PRIVACY_MASK : formatNaira(filteredInflow)}
+          sign={privacy ? null : '+'}
+          sizeVariant="body"
+        />
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+        <RedesignText variant="caption" tone="textSecondary">
+          {t('tx.redesign.summaryOutflow')}:
+        </RedesignText>
+        <RedesignAmount
+          text={privacy ? PRIVACY_MASK : formatNaira(filteredOutflow)}
+          sign={privacy ? null : '−'}
+          sizeVariant="body"
+        />
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+        <RedesignText variant="caption" tone="textSecondary">
+          {t('tx.redesign.summaryNet')}:
+        </RedesignText>
+        <RedesignAmount
+          text={privacy ? PRIVACY_MASK : formatNaira(filteredNet < 0n ? -filteredNet : filteredNet)}
+          sign={privacy ? null : filteredNet < 0n ? '−' : filteredNet > 0n ? '+' : null}
+          sizeVariant="body"
+        />
+      </View>
+    </View>
+  );
+
+  // Quick Add Row for desktop/web
+  const quickAddRow = !phone ? (
+    <View
+      testID="tx-quick-add-row"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: sp.sm,
+        gap: sp.sm,
+        backgroundColor: theme.surface,
+        borderRadius: tokens.shape['radius-md'],
+        borderWidth: 1,
+        borderColor: theme.border,
+      }}
+    >
+      <View style={{ flex: 2 }}>
+        <RedesignField
+          testID="tx-quick-add-payee"
+          label={t('tx.redesign.quickAddPayee')}
+          value={quickPayee}
+          onChangeText={onQuickPayeeChange}
+          placeholder={t('tx.redesign.quickAddPayee')}
+        />
+      </View>
+      <View style={{ flex: 1.2 }}>
+        <RedesignField
+          testID="tx-quick-add-amount"
+          label={t('tx.redesign.quickAddAmount')}
+          value={quickAmount}
+          onChangeText={setQuickAmount}
+          placeholder="0.00"
+          prefix="₦"
+          keyboardType="decimal-pad"
+        />
+      </View>
+      {quickInferred ? (
+        <RedesignText variant="caption" tone="textSecondary" style={{ maxWidth: 120 }}>
+          {t('tx.redesign.quickAddInferred')}
+        </RedesignText>
+      ) : null}
+      <View style={{ alignSelf: 'flex-end', paddingBottom: 2 }}>
+        <RedesignButton
+          testID="tx-quick-add-save"
+          label={t('tx.redesign.quickAddSave')}
+          disabled={!quickPayee.trim() || !quickAmount.trim()}
+          onPress={() => void onQuickAddSubmit()}
+        />
+      </View>
+    </View>
+  ) : null;
+
   const renderPhoneRow = (row: Row) => {
     const categorizeRow = () => {
       setSelectMode(true);
       setSelected(new Set([row.event.id]));
       openBulk('category');
     };
+    const marks = rowIndicators(row.event, snapshot?.waiting.has(row.event.id));
+
     return (
       <SwipeRow
         key={row.event.id}
@@ -619,11 +984,23 @@ export function RedesignTransactionsScreen() {
             onRowPress(row.event.id, !!native.shiftKey);
           }}
         >
-          <RedesignListRow
-            title={row.title}
-            subtitle={rowSubtitle(row)}
-            trailing={privacy ? PRIVACY_MASK : formatNaira(row.amount, { signed: row.event.type !== 'transfer' })}
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: sp.sm }}>
+            <PayeeAvatar name={row.title} testID={`tx-avatar-${row.event.id}`} />
+            <View style={{ flex: 1 }}>
+              <RedesignListRow
+                title={row.title}
+                subtitle={rowSubtitle(row)}
+                trailing={privacy ? PRIVACY_MASK : formatNaira(row.amount, { signed: row.event.type !== 'transfer' })}
+              />
+            </View>
+            {marks.length > 0 ? (
+              <View style={{ flexDirection: 'row', gap: 2, paddingLeft: sp.xs }}>
+                {marks.map((m) => (
+                  <MicroBadge key={m} mark={m} />
+                ))}
+              </View>
+            ) : null}
+          </View>
         </Pressable>
       </SwipeRow>
     );
@@ -632,7 +1009,10 @@ export function RedesignTransactionsScreen() {
   const renderWebRow = (row: Row) => {
     const flatIndex = filteredRows.findIndex((r) => r.event.id === row.event.id);
     const focused = flatIndex === safeFocusIndex;
+    const isSelected = selected.has(row.event.id);
     const dateLabel = row.event.date.slice(8) + ' ' + t(`date.month.${Number(row.event.date.slice(5, 7))}` as 'date.month.1');
+    const marks = rowIndicators(row.event, snapshot?.waiting.has(row.event.id));
+
     return (
       <Pressable
         key={row.event.id}
@@ -654,7 +1034,7 @@ export function RedesignTransactionsScreen() {
           paddingVertical: sp.sm,
           paddingHorizontal: sp.md,
           gap: sp.md,
-          backgroundColor: focused || selected.has(row.event.id) ? theme.primarySoft : 'transparent',
+          backgroundColor: isSelected ? theme.primarySoft : focused ? theme.page : 'transparent',
           borderBottomWidth: 1,
           borderColor: theme.border,
         }}
@@ -663,25 +1043,46 @@ export function RedesignTransactionsScreen() {
           <Pressable
             testID={`select-${row.event.id}`}
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: selected.has(row.event.id) }}
+            accessibilityState={{ checked: isSelected }}
             onPress={() => toggleSelect(row.event.id)}
-            style={{ width: 24, height: 24, borderWidth: 1, borderColor: theme.borderStrong, borderRadius: 4, backgroundColor: selected.has(row.event.id) ? theme.primary : theme.surface }}
-          />
+            style={{
+              width: 20,
+              height: 20,
+              borderWidth: 1,
+              borderColor: theme.borderStrong,
+              borderRadius: 4,
+              backgroundColor: isSelected ? theme.primary : theme.surface,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {isSelected ? <RedesignIcon name="check" size={14} color={theme.textOnPrimary} /> : null}
+          </Pressable>
         ) : (
-          <View style={{ width: 24 }} />
+          <PayeeAvatar name={row.title} testID={`tx-avatar-${row.event.id}`} />
         )}
+
         <RedesignText variant="helper" style={{ width: 72 }}>
           {dateLabel}
         </RedesignText>
-        <RedesignText style={{ flex: 1.4 }} numberOfLines={1}>
-          {row.title}
-        </RedesignText>
+
+        <View style={{ flex: 1.4, flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+          <RedesignText numberOfLines={1} style={{ fontWeight: '500' }}>
+            {row.title}
+          </RedesignText>
+          {marks.map((m) => (
+            <MicroBadge key={m} mark={m} />
+          ))}
+        </View>
+
         <RedesignText tone="textSecondary" style={{ flex: 1 }} numberOfLines={1}>
           {row.category || t('tx.redesign.notSorted')}
         </RedesignText>
+
         <RedesignText tone="textSecondary" style={{ flex: 1 }} numberOfLines={1}>
           {row.account}
         </RedesignText>
+
         <View style={{ width: 120, alignItems: 'flex-end' }}>
           {privacy ? (
             <RedesignText variant="body" style={{ fontVariant: ['tabular-nums'] }} accessibilityLabel={t('money.privacyLabel')}>
@@ -703,16 +1104,16 @@ export function RedesignTransactionsScreen() {
       <RedesignSkeleton height={68} />
     </View>
   ) : days.length === 0 && !query && !filters.uncategorized && (period === 'thisMonth' || period === 'all') && activeFilterCount <= 1 ? (
-      <RedesignEmpty
-        title={t('tx.emptyTitle')}
-        body={t('tx.redesign.emptyBody')}
-        secondaryLabel={t('tx.redesign.importFile')}
-        onSecondary={() => setImportOpen(true)}
-        actionLabel={t('tx.add')}
-        onAction={() => add.open('expense')}
-        tertiaryLabel={t('tx.redesign.connectBank')}
-        onTertiary={() => router.push('/accounts')}
-      />
+    <RedesignEmpty
+      title={t('tx.emptyTitle')}
+      body={t('tx.redesign.emptyBody')}
+      secondaryLabel={t('tx.redesign.importFile')}
+      onSecondary={() => setImportOpen(true)}
+      actionLabel={t('tx.add')}
+      onAction={() => add.open('expense')}
+      tertiaryLabel={t('tx.redesign.connectBank')}
+      onTertiary={() => router.push('/accounts')}
+    />
   ) : days.length === 0 ? (
     <View testID="tx-no-matches">
       <RedesignEmpty title={t('tx.noMatches')} body={t('tx.noMatchesBody')} actionLabel={t('tx.filter.clear')} onAction={() => setFilters(emptyFilters())} />
@@ -721,7 +1122,16 @@ export function RedesignTransactionsScreen() {
     <ScrollView contentContainerStyle={{ gap: sp.lg, paddingBottom: selectMode && selected.size > 0 ? 96 : sp.xl }}>
       {shownDays.map((day) => (
         <View key={day.date} testID={`day-${day.date}`} style={{ gap: sp.xs }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: theme.page,
+              paddingVertical: sp.xs,
+              zIndex: 1,
+            }}
+          >
             <RedesignText variant="label" tone="textSecondary" accessibilityRole="header">
               {formatTxDayHeader(day.date)}
             </RedesignText>
@@ -738,24 +1148,72 @@ export function RedesignTransactionsScreen() {
                 {day === shownDays[0] ? (
                   <View
                     testID="tx-table-header"
-                    style={{ flexDirection: 'row', paddingHorizontal: sp.md, paddingVertical: sp.sm, gap: sp.md, borderBottomWidth: 1, borderColor: theme.border }}
+                    style={{
+                      flexDirection: 'row',
+                      paddingHorizontal: sp.md,
+                      paddingVertical: sp.sm,
+                      gap: sp.md,
+                      borderBottomWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.surface,
+                    }}
                   >
-                    <View style={{ width: 24 }} />
-                    <RedesignText variant="label" tone="textSecondary" style={{ width: 72 }}>
-                      {t('tx.export.col.date')}
-                    </RedesignText>
-                    <RedesignText variant="label" tone="textSecondary" style={{ flex: 1.4 }}>
-                      {t('tx.export.col.payee')}
-                    </RedesignText>
-                    <RedesignText variant="label" tone="textSecondary" style={{ flex: 1 }}>
-                      {t('tx.export.col.category')}
-                    </RedesignText>
-                    <RedesignText variant="label" tone="textSecondary" style={{ flex: 1 }}>
-                      {t('tx.export.col.account')}
-                    </RedesignText>
-                    <RedesignText variant="label" tone="textSecondary" style={{ width: 120, textAlign: 'right' }}>
-                      {t('tx.export.col.amount')}
-                    </RedesignText>
+                    <View style={{ width: 32 }} />
+                    <Pressable
+                      testID="tx-sort-date"
+                      accessibilityRole="button"
+                      onPress={() => toggleSort('date')}
+                      style={{ width: 72, flexDirection: 'row', alignItems: 'center', gap: 2 }}
+                    >
+                      <RedesignText variant="label" tone={sortColumn === 'date' ? 'primary' : 'textSecondary'}>
+                        {t('tx.redesign.sortDate')}
+                      </RedesignText>
+                      {sortColumn === 'date' ? <RedesignIcon name={sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'} size={14} color={theme.primary} /> : null}
+                    </Pressable>
+                    <Pressable
+                      testID="tx-sort-payee"
+                      accessibilityRole="button"
+                      onPress={() => toggleSort('payee')}
+                      style={{ flex: 1.4, flexDirection: 'row', alignItems: 'center', gap: 2 }}
+                    >
+                      <RedesignText variant="label" tone={sortColumn === 'payee' ? 'primary' : 'textSecondary'}>
+                        {t('tx.redesign.sortPayee')}
+                      </RedesignText>
+                      {sortColumn === 'payee' ? <RedesignIcon name={sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'} size={14} color={theme.primary} /> : null}
+                    </Pressable>
+                    <Pressable
+                      testID="tx-sort-category"
+                      accessibilityRole="button"
+                      onPress={() => toggleSort('category')}
+                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 2 }}
+                    >
+                      <RedesignText variant="label" tone={sortColumn === 'category' ? 'primary' : 'textSecondary'}>
+                        {t('tx.redesign.sortCategory')}
+                      </RedesignText>
+                      {sortColumn === 'category' ? <RedesignIcon name={sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'} size={14} color={theme.primary} /> : null}
+                    </Pressable>
+                    <Pressable
+                      testID="tx-sort-account"
+                      accessibilityRole="button"
+                      onPress={() => toggleSort('account')}
+                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 2 }}
+                    >
+                      <RedesignText variant="label" tone={sortColumn === 'account' ? 'primary' : 'textSecondary'}>
+                        {t('tx.redesign.sortAccount')}
+                      </RedesignText>
+                      {sortColumn === 'account' ? <RedesignIcon name={sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'} size={14} color={theme.primary} /> : null}
+                    </Pressable>
+                    <Pressable
+                      testID="tx-sort-amount"
+                      accessibilityRole="button"
+                      onPress={() => toggleSort('amount')}
+                      style={{ width: 120, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 2 }}
+                    >
+                      <RedesignText variant="label" tone={sortColumn === 'amount' ? 'primary' : 'textSecondary'}>
+                        {t('tx.redesign.sortAmount')}
+                      </RedesignText>
+                      {sortColumn === 'amount' ? <RedesignIcon name={sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'} size={14} color={theme.primary} /> : null}
+                    </Pressable>
                   </View>
                 ) : null}
                 {day.rows.map(renderWebRow)}
@@ -772,114 +1230,141 @@ export function RedesignTransactionsScreen() {
     </ScrollView>
   );
 
+  const mainListSection = (
+    <View testID="redesign-transactions" style={{ flex: 1, gap: sp.md }}>
+      {!phone ? (
+        <View style={{ gap: sp.sm }}>
+          <RedesignText variant="helper" tone="textSecondary">
+            {t('tx.redesign.summary', {
+              count: monthCount,
+              out: privacy ? PRIVACY_MASK : formatNaira(monthOut < 0n ? -monthOut : monthOut, { signed: true }),
+            })}
+          </RedesignText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.sm, alignItems: 'center' }}>
+            <View style={{ flex: 1, minWidth: 200 }}>
+              <RedesignField
+                testID="tx-search"
+                label={t('tx.search')}
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t('tx.redesign.searchPlaceholder')}
+              />
+            </View>
+            {periodChips}
+            <TxIconButton
+              testID="tx-filters"
+              label={extraFilterCount > 0 ? t('tx.filtersCount', { count: extraFilterCount }) : t('tx.redesign.filterTitle')}
+              icon="filter"
+              selected={extraFilterCount > 0}
+              onPress={() => setFiltersOpen(true)}
+            />
+            <TxIconButton testID="tx-import" label={t('tx.import')} icon="import" onPress={() => setImportOpen(true)} />
+            <TxIconButton testID="tx-select" label={t('tx.select')} icon="select" selected={selectMode} onPress={() => setSelectMode((v) => !v)} />
+            <TxIconButton testID="tx-export" label={t('tx.export')} icon="export" onPress={() => router.setParams({ export: '1' })} />
+            <RedesignButton testID="tx-add" label={t('tx.add')} onPress={() => add.open('expense')} />
+          </View>
+        </View>
+      ) : (
+        periodChips
+      )}
+
+      {chips.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.xs, alignItems: 'center' }}>
+          {chips.map((chip) => (
+            <RedesignChip
+              key={chip.key}
+              testID={`tx-chip-${chip.key}`}
+              label={`${chip.label} ×`}
+              onPress={() => setFilters(removeChip(filters, chip.key))}
+            />
+          ))}
+          {chips.length >= 2 ? (
+            <RedesignButton testID="tx-clear-filters" kind="link" label={t('tx.filter.clear')} onPress={() => setFilters(emptyFilters())} />
+          ) : null}
+          <RedesignButton testID="tx-save-view" kind="link" label={t('tx.saveAsView')} onPress={() => setSaveViewOpen(true)} />
+        </View>
+      ) : null}
+
+      {banners}
+      {filterSummaryStrip}
+      {quickAddRow}
+      {error ? <RedesignInlineError message={error} /> : null}
+      {listBody}
+
+      {selectMode && selected.size > 0 ? (
+        <View
+          testID="tx-float-bar"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: sp.md,
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: sp.sm,
+            padding: sp.md,
+            backgroundColor: theme.surface,
+            borderRadius: tokens.shape['radius-md'],
+            borderWidth: 1,
+            borderColor: theme.border,
+            alignItems: 'center',
+            boxShadow: tokens.elevation['2'],
+          }}
+        >
+          <RedesignText style={{ flex: 1 }}>{t('tx.selected', { count: selected.size })}</RedesignText>
+          <RedesignButton testID="tx-float-categorize" kind="link" label={t('tx.redesign.setCategory')} onPress={() => openBulk('category')} />
+          <RedesignButton testID="tx-float-account" kind="link" label={t('tx.redesign.moveAccount')} onPress={() => openBulk('account')} />
+          <RedesignButton testID="tx-float-reconcile" kind="link" label={t('tx.redesign.markCleared')} onPress={() => void markSelectedCleared()} />
+          <RedesignButton testID="tx-float-tag" kind="link" label={t('tx.float.tag')} onPress={() => openBulk('tagAdd')} />
+          <RedesignButton testID="tx-float-delete" kind="link" label={t('tx.delete')} onPress={() => openBulk('delete')} />
+          {!phone ? (
+            <>
+              <RedesignButton testID="tx-float-payee" kind="link" label={t('tx.float.payee')} onPress={() => openBulk('payee')} />
+              <RedesignButton testID="tx-float-rule" kind="link" label={t('tx.float.createRule')} onPress={() => void createRuleFromSelected()} />
+            </>
+          ) : null}
+          <Pressable
+            testID="tx-float-clear"
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+            onPress={() => {
+              setSelected(new Set());
+              setSelectMode(false);
+            }}
+            style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <RedesignIcon name="x" size={tokens.size['icon-md']} color={theme.text} />
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+
   return (
     <AppFrame title={t('tx.title')} trailing={topTrailing} offlineMessage={t('tx.redesign.offline')}>
-      <View testID="redesign-transactions" style={{ flex: 1, gap: sp.md }}>
-        {!phone ? (
-          <View style={{ gap: sp.sm }}>
-            <RedesignText variant="helper" tone="textSecondary">
-              {t('tx.redesign.summary', {
-                count: monthCount,
-                out: privacy ? PRIVACY_MASK : formatNaira(monthOut < 0n ? -monthOut : monthOut, { signed: true }),
-              })}
-            </RedesignText>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.sm, alignItems: 'center' }}>
-              <View style={{ flex: 1, minWidth: 200 }}>
-                <RedesignField
-                  testID="tx-search"
-                  label={t('tx.search')}
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder={t('tx.redesign.searchPlaceholder')}
-                />
-              </View>
-              {periodChips}
-              <TxIconButton
-                testID="tx-filters"
-                label={extraFilterCount > 0 ? t('tx.filtersCount', { count: extraFilterCount }) : t('tx.redesign.filterTitle')}
-                icon="filter"
-                selected={extraFilterCount > 0}
-                onPress={() => setFiltersOpen(true)}
-              />
-              <TxIconButton testID="tx-import" label={t('tx.import')} icon="import" onPress={() => setImportOpen(true)} />
-              <TxIconButton testID="tx-select" label={t('tx.select')} icon="select" selected={selectMode} onPress={() => setSelectMode((v) => !v)} />
-              <TxIconButton testID="tx-export" label={t('tx.export')} icon="export" onPress={() => router.setParams({ export: '1' })} />
-              <RedesignButton testID="tx-add" label={t('tx.add')} onPress={() => add.open('expense')} />
-            </View>
+      {webTable && panelId ? (
+        <View style={{ flex: 1, flexDirection: 'row', gap: sp.lg }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {mainListSection}
           </View>
-        ) : (
-          periodChips
-        )}
+          <TransactionPanel
+            id={panelId}
+            docked
+            onClose={() => router.setParams({ tx: undefined, txn: undefined, receipt: undefined, edit: undefined })}
+          />
+        </View>
+      ) : (
+        <>
+          {mainListSection}
+          {panelId ? (
+            <TransactionPanel
+              id={panelId}
+              onClose={() => router.setParams({ tx: undefined, txn: undefined, receipt: undefined, edit: undefined })}
+            />
+          ) : null}
+        </>
+      )}
 
-        {chips.length > 0 ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.xs, alignItems: 'center' }}>
-            {chips.map((chip) => (
-              <RedesignChip
-                key={chip.key}
-                testID={`tx-chip-${chip.key}`}
-                label={`${chip.label} ×`}
-                onPress={() => setFilters(removeChip(filters, chip.key))}
-              />
-            ))}
-            {chips.length >= 2 ? (
-              <RedesignButton testID="tx-clear-filters" kind="link" label={t('tx.filter.clear')} onPress={() => setFilters(emptyFilters())} />
-            ) : null}
-            <RedesignButton testID="tx-save-view" kind="link" label={t('tx.saveAsView')} onPress={() => setSaveViewOpen(true)} />
-          </View>
-        ) : null}
-
-        {banners}
-        {error ? <RedesignInlineError message={error} /> : null}
-        {listBody}
-
-        {selectMode && selected.size > 0 ? (
-          <View
-            testID="tx-float-bar"
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: sp.md,
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: sp.sm,
-              padding: sp.md,
-              backgroundColor: theme.surface,
-              borderRadius: tokens.shape['radius-md'],
-              borderWidth: 1,
-              borderColor: theme.border,
-              alignItems: 'center',
-              boxShadow: tokens.elevation['2'],
-            }}
-          >
-            <RedesignText style={{ flex: 1 }}>{t('tx.selected', { count: selected.size })}</RedesignText>
-            <RedesignButton testID="tx-float-categorize" kind="link" label={t('tx.redesign.setCategory')} onPress={() => openBulk('category')} />
-            <RedesignButton testID="tx-float-account" kind="link" label={t('tx.redesign.moveAccount')} onPress={() => openBulk('account')} />
-            <RedesignButton testID="tx-float-delete" kind="link" label={t('tx.delete')} onPress={() => openBulk('delete')} />
-            {!phone ? (
-              <>
-                <RedesignButton testID="tx-float-payee" kind="link" label={t('tx.float.payee')} onPress={() => openBulk('payee')} />
-                <RedesignButton testID="tx-float-tag" kind="link" label={t('tx.float.tag')} onPress={() => openBulk('tagAdd')} />
-                <RedesignButton testID="tx-float-rule" kind="link" label={t('tx.float.createRule')} onPress={() => void createRuleFromSelected()} />
-              </>
-            ) : null}
-            <Pressable
-              testID="tx-float-clear"
-              accessibilityRole="button"
-              accessibilityLabel={t('common.close')}
-              onPress={() => {
-                setSelected(new Set());
-                setSelectMode(false);
-              }}
-              style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <RedesignIcon name="x" size={tokens.size['icon-md']} color={theme.text} />
-            </Pressable>
-          </View>
-        ) : null}
-      </View>
-
-      {panelId ? <TransactionPanel id={panelId} onClose={() => router.setParams({ tx: undefined, txn: undefined, receipt: undefined, edit: undefined })} /> : null}
       {filtersOpen && snapshot ? (
         <FiltersSheet
           snapshot={snapshot}

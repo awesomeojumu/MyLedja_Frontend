@@ -6,7 +6,7 @@ import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 import { formatNaira } from '@/money';
 
-import { ledgerMessage, today } from './helpers';
+import { ledgerMessage } from './helpers';
 
 /** Popup #22 — refund against purchase (addendum PU-22). */
 export function RefundSheet({
@@ -29,7 +29,7 @@ export function RefundSheet({
   const [text, setText] = useState(formatNaira(left).replace('₦', '').replace(/,/g, ''));
   const [minor, setMinor] = useState<bigint | null>(left);
   const [accountId, setAccountId] = useState<string | null>(event.lines.find((l) => accountIds.has(l.ledgerAccountId))?.ledgerAccountId ?? null);
-  const [date, setDate] = useState(today());
+  const [date, setDate] = useState(event.date);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const too = minor !== null && minor > left;

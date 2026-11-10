@@ -814,7 +814,7 @@ export function RedesignReconcileScreen() {
               label={t('redesign.reconcile.statementDate')}
               value={statementDate}
               onChangeText={setStatementDate}
-              placeholder="YYYY-MM-DD"
+              placeholder={t('redesign.reconcile.datePlaceholder')}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -954,7 +954,7 @@ export function RedesignReconcileScreen() {
         <RedesignField
           testID="reconcile-import-input"
           label={t('redesign.reconcile.importStatement')}
-          placeholder="Paste amounts from statement..."
+          placeholder={t('redesign.reconcile.importPlaceholder')}
           value={importRawText}
           onChangeText={setImportRawText}
         />
