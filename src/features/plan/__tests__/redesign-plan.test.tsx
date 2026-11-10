@@ -32,7 +32,7 @@ async function seeded(opts?: { empty?: boolean; lowBalance?: boolean; inflation?
   });
   if (!opts?.empty) {
     const snap = await repo.load();
-    const bill = await repo.addRecurring({
+    await repo.addRecurring({
       kind: 'bill',
       name: 'Rent',
       amountMinor: '7500000',

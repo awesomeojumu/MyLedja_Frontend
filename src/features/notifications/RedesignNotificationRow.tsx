@@ -10,7 +10,7 @@ import { redesignLight as theme, redesignTokens as tokens } from '@/design/redes
 import { useSizeClass } from '@/design/size';
 import type { AppNotification } from '@/data/workspace/model';
 import { formatNaira } from '@/money';
-import { t, type TextKey } from '@/i18n';
+import { t } from '@/i18n';
 
 import { formatRedesignNotificationWhen, redesignNotificationSubtitle } from './redesignHelpers';
 

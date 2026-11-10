@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import type { Snapshot } from '@/data/workspace/repository';
 import { RedesignButton, RedesignChip, RedesignIcon, RedesignSheet, RedesignText } from '@/design/redesign';
@@ -30,7 +30,7 @@ export function RulebookSheet({
 }) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<RulebookTemplate['id']>('nigerian_balanced');
   const [triggerMode, setTriggerMode] = useState<'any' | 'salary'>('any');
-  const [salaryPayee, setSalaryPayee] = useState('');
+  const [salaryPayee] = useState('');
   const [busy, setBusy] = useState(false);
 
   const template = useMemo(

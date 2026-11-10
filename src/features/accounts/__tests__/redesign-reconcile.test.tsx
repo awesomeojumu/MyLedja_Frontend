@@ -164,8 +164,7 @@ describe('Page 10 redesign Reconcile', () => {
   });
 
   it('bulk selects with Clear all and Unclear all', async () => {
-    const { sync, repo, id } = await seeded();
-    const opening = (await repo.load()).events.find((e) => e.type === 'opening_balance')!;
+    const { sync, id } = await seeded();
     setParams({ id });
     await renderWithProviders(wrap(<ReconcileScreen />), { sync });
 

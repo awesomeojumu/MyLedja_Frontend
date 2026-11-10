@@ -133,6 +133,7 @@ export function findFuzzyDuplicates(payees: Payee[]): DuplicateGroup[] {
     const norm1 = normalizeMerchantName(p1.name);
     const tokens1 = new Set(norm1.split(' ').filter((w) => w.length > 2));
     const matched: Payee[] = [p1];
+    let groupReason = 'Potential duplicate merchant names';
 
     for (let j = i + 1; j < payees.length; j++) {
       const p2 = payees[j]!;
@@ -170,6 +171,7 @@ export function findFuzzyDuplicates(payees: Payee[]): DuplicateGroup[] {
       }
 
       if (isDuplicate) {
+        groupReason = reason || groupReason;
         matched.push(p2);
         visited.add(p2.id);
       }
@@ -182,7 +184,7 @@ export function findFuzzyDuplicates(payees: Payee[]): DuplicateGroup[] {
       duplicateGroups.push({
         group: matched,
         primary: sorted[0]!,
-        reason: 'Potential duplicate merchant names',
+        reason: groupReason,
       });
     }
   }
