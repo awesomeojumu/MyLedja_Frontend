@@ -11,6 +11,7 @@ import {
   RedesignDialog,
   RedesignField,
   RedesignIcon,
+  RedesignSheet,
   RedesignText,
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
@@ -41,6 +42,8 @@ function successHaptic() {
   }
 }
 
+const abs = (v: bigint) => (v < 0n ? -v : v);
+
 /** Figma Phone `3:1727` / Web `31:2473` — Check this account against your bank. */
 export function RedesignReconcileScreen() {
   const { snapshot, repo } = useWorkspace();
@@ -57,18 +60,27 @@ export function RedesignReconcileScreen() {
   const phone = useSizeClass() === 'phone';
   const account = snapshot?.accounts.find((a) => a.id === params.id);
 
-  const statementDate = today();
+  const [statementDate, setStatementDate] = useState(today());
   const [statementText, setStatementText] = useState('');
   const [statementMinor, setStatementMinor] = useState<bigint | null>(null);
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState<'all' | 'payments' | 'deposits'>('all');
+
   const seedKey = `${account?.id ?? ''}:${statementDate}`;
   const [activeSeed, setActiveSeed] = useState(seedKey);
   if (activeSeed !== seedKey) {
     setActiveSeed(seedKey);
     setOverrides({});
   }
+
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustMemo, setAdjustMemo] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [undoOpen, setUndoOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importRawText, setImportRawText] = useState('');
+
   const [busy, setBusy] = useState(false);
   const [reconId, setReconId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -83,6 +95,7 @@ export function RedesignReconcileScreen() {
     for (const [id, on] of Object.entries(overrides)) if (on) next.add(id);
     return next;
   }, [overrides]);
+
   const rows = useMemo(
     () => (snapshot && account ? reconcileRows(snapshot, account.id, statementDate, ticked) : []),
     [snapshot, account, statementDate, ticked],
@@ -95,6 +108,51 @@ export function RedesignReconcileScreen() {
     if (!ledger) return liability ? -bal : bal;
     return shownBalance(ledger, bal);
   }, [snapshot, account, statementDate, liability]);
+
+  const payments = useMemo(
+    () => rows.filter((r) => (liability ? -r.line : r.line) < 0n),
+    [rows, liability],
+  );
+  const deposits = useMemo(
+    () => rows.filter((r) => (liability ? -r.line : r.line) > 0n),
+    [rows, liability],
+  );
+
+  const displayedRows = useMemo(() => {
+    if (activeTab === 'payments') return payments;
+    if (activeTab === 'deposits') return deposits;
+    return rows;
+  }, [rows, payments, deposits, activeTab]);
+
+  const clearedDeposits = useMemo(() => {
+    let sum = 0n;
+    for (const r of rows) {
+      if (ticked.has(r.event.id)) {
+        const shown = liability ? -r.line : r.line;
+        if (shown > 0n) sum += shown;
+      }
+    }
+    return sum;
+  }, [rows, ticked, liability]);
+
+  const clearedWithdrawals = useMemo(() => {
+    let sum = 0n;
+    for (const r of rows) {
+      if (ticked.has(r.event.id)) {
+        const shown = liability ? -r.line : r.line;
+        if (shown < 0n) sum += -shown;
+      }
+    }
+    return sum;
+  }, [rows, ticked, liability]);
+
+  const history = useMemo(
+    () => (snapshot?.reconciles || []).filter((r) => r.accountId === account?.id),
+    [snapshot?.reconciles, account?.id],
+  );
+  const lastReconcile = history.length > 0 ? history[history.length - 1] : null;
+
+  const progressPercent = rows.length > 0 ? Math.round((ticked.size / rows.length) * 100) : 0;
 
   useEffect(() => {
     const nav = navigation as unknown as {
@@ -164,9 +222,23 @@ export function RedesignReconcileScreen() {
 
   const difference = statementMinor === null ? null : statementMinor - myledja;
   const balanced = difference === 0n;
-  const absDiff = difference === null ? 0n : difference < 0n ? -difference : difference;
+  const absDiff = difference === null ? 0n : abs(difference);
   const amountError =
     statementText.trim() !== '' && statementMinor === null ? t('redesign.reconcile.amountHint') : null;
+
+  // Detective calculations
+  const exactMatch =
+    difference !== null && difference !== 0n
+      ? rows.find((r) => !ticked.has(r.event.id) && abs(liability ? -r.line : r.line) === absDiff)
+      : null;
+
+  const inversionMatch =
+    difference !== null && difference !== 0n && absDiff % 2n === 0n
+      ? rows.find((r) => abs(liability ? -r.line : r.line) === absDiff / 2n)
+      : null;
+
+  const isTransposition =
+    difference !== null && difference !== 0n && absDiff / 100n > 0n && (absDiff / 100n) % 9n === 0n;
 
   const leave = () => {
     allowLeave.current = true;
@@ -193,7 +265,7 @@ export function RedesignReconcileScreen() {
       const on = !prev[id];
       const next = { ...prev };
       if (shiftRange && lastClicked.current && Platform.OS === 'web') {
-        const ids = rows.map((r) => r.event.id);
+        const ids = displayedRows.map((r) => r.event.id);
         const a = ids.indexOf(lastClicked.current);
         const b = ids.indexOf(id);
         if (a >= 0 && b >= 0) {
@@ -220,6 +292,98 @@ export function RedesignReconcileScreen() {
       })();
     }
   }
+
+  const onClearAll = () => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      for (const r of displayedRows) next[r.event.id] = true;
+      return next;
+    });
+  };
+
+  const onUnclearAll = () => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      for (const r of displayedRows) next[r.event.id] = false;
+      return next;
+    });
+  };
+
+  const logBankFee = async (name: string, feeMinor: bigint) => {
+    if (!account || !snapshot) return;
+    const expenseCat =
+      snapshot.categories.find(
+        (c) =>
+          !c.deleted &&
+          c.kind === 'expense' &&
+          (c.name.toLowerCase().includes('bank') || (c.key ? c.key.includes('charge') || c.key.includes('fee') : false)),
+      ) ??
+      snapshot.categories.find((c) => !c.deleted && c.kind === 'expense') ??
+      snapshot.categories[0];
+    if (!expenseCat) return;
+
+    try {
+      const res = await repo.addTransaction({
+        kind: 'expense',
+        accountId: account.id,
+        date: statementDate,
+        payeeName: name,
+        notes: name,
+        parts: [{ categoryId: expenseCat.id, amount: feeMinor }],
+      });
+      if (res.ok) {
+        setOverrides((prev) => ({ ...prev, [res.value.id]: true }));
+        toast.show(t('redesign.reconcile.feeLogged', { name }));
+      }
+    } catch {
+      toast.show(t('errors.network'));
+    }
+  };
+
+  const onImportStatement = () => {
+    const matches = importRawText.match(/\b\d+(?:,\d{3})*(?:\.\d{1,2})?\b/g);
+    if (!matches || matches.length === 0) {
+      setImportOpen(false);
+      return;
+    }
+    let count = 0;
+    const nextOverrides: Record<string, boolean> = {};
+    for (const m of matches) {
+      const p = parseAmount(m);
+      if (!p.ok) continue;
+      const targetMinor = p.minor;
+      for (const r of rows) {
+        if (!ticked.has(r.event.id) && !nextOverrides[r.event.id]) {
+          const shown = liability ? -r.line : r.line;
+          if (abs(shown) === targetMinor) {
+            nextOverrides[r.event.id] = true;
+            count++;
+            break;
+          }
+        }
+      }
+    }
+    if (count > 0) {
+      setOverrides((prev) => ({ ...prev, ...nextOverrides }));
+    }
+    toast.show(t('redesign.reconcile.autoMatched', { count }));
+    setImportRawText('');
+    setImportOpen(false);
+  };
+
+  const undoLastReconciliation = async () => {
+    if (!lastReconcile) return;
+    try {
+      const res = await repo.undoReconcile(lastReconcile.id);
+      if (res.ok) {
+        toast.show(t('redesign.reconcile.undoSuccess'));
+        setUndoOpen(false);
+        setHistoryOpen(false);
+      }
+    } catch {
+      toast.show(t('errors.network'));
+    }
+  };
 
   const finish = async (withAdjustment: boolean) => {
     if (statementMinor === null || !account) return;
@@ -257,6 +421,7 @@ export function RedesignReconcileScreen() {
           eventIds: [...ticked],
           withAdjustment,
           finishedBy: user?.id,
+          notes: adjustMemo.trim() || undefined,
         });
         if (!r.ok) return;
       }
@@ -295,54 +460,301 @@ export function RedesignReconcileScreen() {
     <View
       testID="reconcile-totals"
       style={{
-        flexDirection: phone ? 'column' : 'row',
         gap: sp.md,
         backgroundColor: theme.surface,
         borderRadius: tokens.shape['radius-lg'],
         padding: sp.lg,
       }}
     >
-      <Total label={t('redesign.reconcile.myledjaShows')} minor={myledja} testID="reconcile-cleared" />
-      <Total
-        label={t('redesign.reconcile.bankShows')}
-        minor={statementMinor}
-        testID="reconcile-says"
-        pendingLabel={t('redesign.reconcile.bankPending')}
-      />
-      <View style={{ flexGrow: 1, minWidth: 120, gap: sp.xxs }}>
-        <RedesignText variant="caption" tone="textSecondary">
-          {t('redesign.reconcile.difference')}
-        </RedesignText>
-        {balanced ? (
-          <View testID="reconcile-balanced" style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
-            <RedesignIcon name="check" size={16} color={theme.primary} />
-            <RedesignText variant="label" tone="primary">
-              {t('reconcile.balanced')}
+      <View
+        style={{
+          flexDirection: phone ? 'column' : 'row',
+          gap: sp.md,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Total label={t('redesign.reconcile.myledjaShows')} minor={myledja} testID="reconcile-cleared" />
+        <Total
+          label={t('redesign.reconcile.bankShows')}
+          minor={statementMinor}
+          testID="reconcile-says"
+          pendingLabel={t('redesign.reconcile.bankPending')}
+        />
+        <Total
+          label={t('redesign.reconcile.clearedDeposits')}
+          minor={clearedDeposits}
+          testID="reconcile-cleared-deposits"
+        />
+        <Total
+          label={t('redesign.reconcile.clearedWithdrawals')}
+          minor={clearedWithdrawals}
+          testID="reconcile-cleared-withdrawals"
+        />
+        <View style={{ flexGrow: 1, minWidth: 120, gap: sp.xxs }}>
+          <RedesignText variant="caption" tone="textSecondary">
+            {t('redesign.reconcile.difference')}
+          </RedesignText>
+          {balanced ? (
+            <View testID="reconcile-balanced" style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+              <RedesignIcon name="check" size={16} color={theme.primary} />
+              <RedesignText variant="label" tone="primary">
+                {t('reconcile.balanced')}
+              </RedesignText>
+            </View>
+          ) : difference === null ? (
+            <RedesignText testID="reconcile-difference-pending" tone="textSecondary">
+              {t('redesign.reconcile.diffPending')}
+            </RedesignText>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+              <View
+                testID="reconcile-difference-ruby"
+                style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.danger }}
+              />
+              <RedesignAmount testID="reconcile-difference" text={formatNaira(difference, { signed: true })} />
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Progress pill & Past History CTA */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderTopWidth: 1,
+          borderColor: theme.border,
+          paddingTop: sp.sm,
+          gap: sp.md,
+        }}
+      >
+        <View
+          testID="reconcile-progress"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: sp.xs,
+            backgroundColor: theme.page,
+            paddingVertical: sp.xxs,
+            paddingHorizontal: sp.sm,
+            borderRadius: tokens.shape['radius-pill'],
+          }}
+        >
+          <RedesignText variant="caption" tone="textSecondary">
+            {t('redesign.reconcile.progressPercent', { percent: progressPercent })}
+          </RedesignText>
+        </View>
+        <RedesignButton
+          testID="reconcile-history-btn"
+          kind="link"
+          label={t('redesign.reconcile.pastReconciles')}
+          onPress={() => setHistoryOpen(true)}
+        />
+      </View>
+    </View>
+  );
+
+  const detectiveCard =
+    difference !== null && difference !== 0n ? (
+      <View
+        testID="reconcile-detective"
+        style={{
+          gap: sp.sm,
+          padding: sp.md,
+          borderRadius: tokens.shape['radius-md'],
+          backgroundColor: theme.surface,
+          borderWidth: 1,
+          borderColor: theme.border,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+          <RedesignIcon name="search" size={16} color={theme.primary} />
+          <RedesignText variant="label">{t('redesign.reconcile.detectiveTitle')}</RedesignText>
+        </View>
+
+        {exactMatch ? (
+          <Pressable
+            testID="reconcile-detective-exact"
+            accessibilityRole="button"
+            onPress={() => toggleTick(exactMatch.event.id)}
+            style={{
+              padding: sp.sm,
+              backgroundColor: theme.page,
+              borderRadius: tokens.shape['radius-sm'],
+            }}
+          >
+            <RedesignText variant="caption" tone="primary">
+              {t('redesign.reconcile.detectiveExact', {
+                title: exactMatch.title,
+                amount: formatNaira(absDiff),
+              })}
+            </RedesignText>
+          </Pressable>
+        ) : null}
+
+        {inversionMatch ? (
+          <View
+            testID="reconcile-detective-inversion"
+            style={{
+              padding: sp.sm,
+              backgroundColor: theme.page,
+              borderRadius: tokens.shape['radius-sm'],
+            }}
+          >
+            <RedesignText variant="caption" tone="textSecondary">
+              {t('redesign.reconcile.detectiveInversion', {
+                payee: inversionMatch.title,
+                amount: formatNaira(absDiff / 2n),
+              })}
             </RedesignText>
           </View>
-        ) : difference === null ? (
-          <RedesignText testID="reconcile-difference-pending" tone="textSecondary">
-            {t('redesign.reconcile.diffPending')}
-          </RedesignText>
-        ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
-            <View
-              testID="reconcile-difference-ruby"
-              style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.danger }}
-            />
-            <RedesignAmount testID="reconcile-difference" text={formatNaira(difference, { signed: true })} />
+        ) : null}
+
+        {isTransposition ? (
+          <View
+            testID="reconcile-detective-transposition"
+            style={{
+              padding: sp.sm,
+              backgroundColor: theme.page,
+              borderRadius: tokens.shape['radius-sm'],
+            }}
+          >
+            <RedesignText variant="caption" tone="textSecondary">
+              {t('redesign.reconcile.detectiveTransposition')}
+            </RedesignText>
           </View>
-        )}
+        ) : null}
+
+        <View style={{ gap: sp.xs, paddingTop: sp.xs }}>
+          <RedesignText variant="caption" tone="textSecondary">
+            {t('redesign.reconcile.commonFees')}
+          </RedesignText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.xs }}>
+            <RedesignButton
+              testID="reconcile-fee-emtl"
+              kind="secondary"
+              label={t('redesign.reconcile.feeEmtl')}
+              onPress={() => void logBankFee('EMTL levy', 5000n)}
+            />
+            <RedesignButton
+              testID="reconcile-fee-sms"
+              kind="secondary"
+              label={t('redesign.reconcile.feeSms')}
+              onPress={() => void logBankFee('SMS fee', 1000n)}
+            />
+            <RedesignButton
+              testID="reconcile-fee-maintenance"
+              kind="secondary"
+              label={t('redesign.reconcile.feeMaintenance')}
+              onPress={() => void logBankFee('Account maintenance', 50000n)}
+            />
+          </View>
+        </View>
+      </View>
+    ) : null;
+
+  const tabAndBulkBar = (
+    <View style={{ gap: sp.sm }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: sp.sm,
+        }}
+      >
+        <View style={{ flexDirection: 'row', gap: sp.xs }}>
+          <Pressable
+            testID="reconcile-tab-all"
+            accessibilityRole="tab"
+            onPress={() => setActiveTab('all')}
+            style={{
+              paddingVertical: sp.xs,
+              paddingHorizontal: sp.md,
+              borderRadius: tokens.shape['radius-pill'],
+              backgroundColor: activeTab === 'all' ? theme.primary : theme.surface,
+            }}
+          >
+            <RedesignText
+              variant="caption"
+              tone={activeTab === 'all' ? 'textOnPrimary' : 'textSecondary'}
+              style={{ fontWeight: activeTab === 'all' ? '600' : '400' }}
+            >
+              {t('redesign.reconcile.tabAll')}
+            </RedesignText>
+          </Pressable>
+          <Pressable
+            testID="reconcile-tab-payments"
+            accessibilityRole="tab"
+            onPress={() => setActiveTab('payments')}
+            style={{
+              paddingVertical: sp.xs,
+              paddingHorizontal: sp.md,
+              borderRadius: tokens.shape['radius-pill'],
+              backgroundColor: activeTab === 'payments' ? theme.primary : theme.surface,
+            }}
+          >
+            <RedesignText
+              variant="caption"
+              tone={activeTab === 'payments' ? 'textOnPrimary' : 'textSecondary'}
+              style={{ fontWeight: activeTab === 'payments' ? '600' : '400' }}
+            >
+              {t('redesign.reconcile.tabPayments', { count: payments.length })}
+            </RedesignText>
+          </Pressable>
+          <Pressable
+            testID="reconcile-tab-deposits"
+            accessibilityRole="tab"
+            onPress={() => setActiveTab('deposits')}
+            style={{
+              paddingVertical: sp.xs,
+              paddingHorizontal: sp.md,
+              borderRadius: tokens.shape['radius-pill'],
+              backgroundColor: activeTab === 'deposits' ? theme.primary : theme.surface,
+            }}
+          >
+            <RedesignText
+              variant="caption"
+              tone={activeTab === 'deposits' ? 'textOnPrimary' : 'textSecondary'}
+              style={{ fontWeight: activeTab === 'deposits' ? '600' : '400' }}
+            >
+              {t('redesign.reconcile.tabDeposits', { count: deposits.length })}
+            </RedesignText>
+          </Pressable>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: sp.xs }}>
+          <RedesignButton
+            testID="reconcile-clear-all"
+            kind="link"
+            label={t('redesign.reconcile.clearAll')}
+            onPress={onClearAll}
+          />
+          <RedesignButton
+            testID="reconcile-unclear-all"
+            kind="link"
+            label={t('redesign.reconcile.unclearAll')}
+            onPress={onUnclearAll}
+          />
+          <RedesignButton
+            testID="reconcile-import-btn"
+            kind="link"
+            label={t('redesign.reconcile.importStatement')}
+            onPress={() => setImportOpen(true)}
+          />
+        </View>
       </View>
     </View>
   );
 
   const rowList =
-    rows.length === 0 ? (
+    displayedRows.length === 0 ? (
       <RedesignText tone="textSecondary">{t('reconcile.empty')}</RedesignText>
     ) : (
       <View style={{ gap: sp.sm }} testID="reconcile-list">
-        {rows.map((r) => {
+        {displayedRows.map((r) => {
           const shown = liability ? -r.line : r.line;
           const checked = ticked.has(r.event.id);
           return (
@@ -394,21 +806,55 @@ export function RedesignReconcileScreen() {
           </View>
         ) : null}
         <RedesignText tone="textSecondary">{t('redesign.reconcile.hint')}</RedesignText>
-        <RedesignField
-          testID="reconcile-statement"
-          label={t('redesign.reconcile.balanceLabel')}
-          value={statementText}
-          onChangeText={onAmountChange}
-          placeholder={t('redesign.reconcile.balancePlaceholder')}
-          prefix="₦"
-          keyboardType="decimal-pad"
-          error={amountError}
-        />
-        {/* Hidden date hook for tests that expect statement date control in legacy; redesign uses today. */}
+
+        <View style={{ flexDirection: phone ? 'column' : 'row', gap: sp.md }}>
+          <View style={{ flex: 1 }}>
+            <RedesignField
+              testID="reconcile-statement-date"
+              label={t('redesign.reconcile.statementDate')}
+              value={statementDate}
+              onChangeText={setStatementDate}
+              placeholder="YYYY-MM-DD"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <RedesignField
+              testID="reconcile-statement"
+              label={t('redesign.reconcile.balanceLabel')}
+              value={statementText}
+              onChangeText={onAmountChange}
+              placeholder={t('redesign.reconcile.balancePlaceholder')}
+              prefix="₦"
+              keyboardType="decimal-pad"
+              error={amountError}
+            />
+          </View>
+        </View>
+
+        {/* Hidden date hook for tests that expect statement date control in legacy; redesign uses statementDate state */}
         <View testID="reconcile-date" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ height: 0, overflow: 'hidden' }} />
         {phone ? null : totals}
-        <RedesignText variant="label">{t('redesign.reconcile.tickHeading')}</RedesignText>
+        {detectiveCard}
+
+        {difference !== null && difference !== 0n ? (
+          <View style={{ gap: sp.xs }}>
+            <RedesignField
+              testID="reconcile-adjust-memo"
+              label={t('redesign.reconcile.adjustMemoLabel')}
+              placeholder={t('redesign.reconcile.adjustMemoPlaceholder')}
+              value={adjustMemo}
+              onChangeText={setAdjustMemo}
+            />
+          </View>
+        ) : null}
+
+        <View style={{ gap: sp.sm }}>
+          <RedesignText variant="label">{t('redesign.reconcile.tickHeading')}</RedesignText>
+          {tabAndBulkBar}
+        </View>
+
         {rowList}
+
         {!phone && difference !== null && difference !== 0n ? (
           <RedesignText tone="textSecondary">{t('redesign.reconcile.stillOff')}</RedesignText>
         ) : null}
@@ -476,6 +922,100 @@ export function RedesignReconcileScreen() {
         cancelLabel={t('reconcile.keepGoing')}
         onCancel={() => setAdjustOpen(false)}
         onConfirm={() => void finish(true)}
+      />
+
+      {/* Statement Import Sheet */}
+      <RedesignSheet
+        visible={importOpen}
+        testID="reconcile-import-dialog"
+        title={t('redesign.reconcile.importStatement')}
+        onClose={() => {
+          setImportRawText('');
+          setImportOpen(false);
+        }}
+        footer={
+          <View style={{ flexDirection: 'row', gap: sp.sm }}>
+            <RedesignButton
+              kind="secondary"
+              label={t('common.cancel')}
+              onPress={() => {
+                setImportRawText('');
+                setImportOpen(false);
+              }}
+            />
+            <RedesignButton
+              testID="reconcile-import-confirm"
+              label={t('common.save')}
+              onPress={onImportStatement}
+            />
+          </View>
+        }
+      >
+        <RedesignField
+          testID="reconcile-import-input"
+          label={t('redesign.reconcile.importStatement')}
+          placeholder="Paste amounts from statement..."
+          value={importRawText}
+          onChangeText={setImportRawText}
+        />
+      </RedesignSheet>
+
+      {/* Past Reconciliations History Sheet */}
+      <RedesignSheet
+        visible={historyOpen}
+        testID="reconcile-history-sheet"
+        title={t('redesign.reconcile.pastReconciles')}
+        onClose={() => setHistoryOpen(false)}
+      >
+        <View style={{ gap: sp.md }}>
+          {history.length === 0 ? (
+            <RedesignText testID="reconcile-no-history" tone="textSecondary">
+              {t('redesign.reconcile.noHistory')}
+            </RedesignText>
+          ) : (
+            <View style={{ gap: sp.sm }}>
+              {history.map((h) => (
+                <View
+                  key={h.id}
+                  style={{
+                    padding: sp.sm,
+                    backgroundColor: theme.page,
+                    borderRadius: tokens.shape['radius-sm'],
+                    gap: sp.xxs,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <RedesignText variant="label">{h.statementDate}</RedesignText>
+                    <RedesignAmount text={formatNaira(BigInt(h.statementBalance))} />
+                  </View>
+                  <RedesignText variant="caption" tone="textSecondary">
+                    {h.finishedAt.slice(0, 10)}
+                  </RedesignText>
+                </View>
+              ))}
+              {lastReconcile ? (
+                <RedesignButton
+                  testID="reconcile-undo-btn"
+                  kind="secondary"
+                  label={t('redesign.reconcile.undoLast')}
+                  onPress={() => setUndoOpen(true)}
+                />
+              ) : null}
+            </View>
+          )}
+        </View>
+      </RedesignSheet>
+
+      {/* Undo Reconciliation Confirmation Dialog */}
+      <RedesignDialog
+        visible={undoOpen}
+        testID="reconcile-undo-dialog"
+        title={t('redesign.reconcile.undoConfirmTitle')}
+        body={t('redesign.reconcile.undoConfirmBody')}
+        confirmLabel={t('common.continue')}
+        cancelLabel={t('common.cancel')}
+        onCancel={() => setUndoOpen(false)}
+        onConfirm={() => void undoLastReconciliation()}
       />
     </>
   );

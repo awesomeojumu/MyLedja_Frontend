@@ -364,6 +364,7 @@ export class WorkspaceRepository {
         .filter((p) => !p.deleted),
       events: eventList,
       reconciles: reconciles
+        .filter((r) => !(r.data as { deleted?: boolean })?.deleted)
         .map((r) => {
           const data = r.data as Omit<Reconcile, 'id'>;
           return { ...data, finishedBy: data.finishedBy ?? null, id: r.id };
@@ -930,6 +931,7 @@ export class WorkspaceRepository {
     withAdjustment: boolean;
     /** Current user id for Details history “who” (TB03-3). */
     finishedBy?: string | null;
+    notes?: string | null;
   }): Promise<Result<Reconcile>> {
     const snapshot = await this.load();
     const account = snapshot.accounts.find((a) => a.id === input.accountId);
@@ -948,6 +950,7 @@ export class WorkspaceRepository {
           type: 'balance_adjustment',
           date: input.statementDate,
           lines: lines.value,
+          notes: input.notes ?? undefined,
         });
         if (!posted.ok) return posted;
         adjustment = delta;
@@ -985,6 +988,30 @@ export class WorkspaceRepository {
     const { id, ...data } = reconcile;
     await this.put('reconciles', id, data, 'reconcile.finish');
     return { ok: true, value: reconcile };
+  }
+
+  /**
+   * Undo a previous reconciliation: unlock all locked events, void/reverse any balance
+   * adjustments posted by this session, and delete the reconciliation record.
+   */
+  async undoReconcile(reconcileId: string): Promise<Result<void>> {
+    const snapshot = await this.load();
+    const reconcile = snapshot.reconciles.find((r) => r.id === reconcileId);
+    if (!reconcile) return { ok: false, error: 'missing_lines' };
+
+    const lockedEvents = snapshot.events.filter((e) => e.reconciledBy === reconcileId);
+    for (const ev of lockedEvents) {
+      await this.unlockEvent(ev.id);
+      if (ev.type === 'balance_adjustment') {
+        await this.deleteTransaction(ev.id, ev.date);
+      }
+    }
+
+    const rec = await this.store.read('reconciles', reconcileId);
+    if (rec) {
+      await this.put('reconciles', reconcileId, { ...rec.data, deleted: true }, 'reconcile.delete');
+    }
+    return { ok: true, value: undefined };
   }
 
   /**
