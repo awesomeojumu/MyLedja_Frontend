@@ -39,6 +39,7 @@ import { pickImageUri } from '@/features/payees/pickMedia';
 import { withReceipt } from './receiptMeta';
 import { withTags } from './tags';
 import { uploadReceiptFromUri } from './uploadReceipt';
+import { inferCategoryMetadata } from '@/features/budget/categoryInference';
 
 const sp = tokens.spacing;
 const LAST_TAB_KEY = 'myledja:add-txn-last-tab';
@@ -229,12 +230,50 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [moneyBack, setMoneyBack] = useState<{ suggestion: MoneyBackSuggestion; another: boolean } | null>(null);
+  const [categorySearch, setCategorySearch] = useState('');
 
   const dirty = amount.text !== '' || payee !== '' || notes !== '' || categoryId !== null || tags.length > 0;
   const categories = (snapshot?.categories ?? []).filter((c) => c.kind === (kind === 'income' ? 'income' : 'expense') && !c.hidden);
   const recentCategoryIds = recentCategoriesFor(snapshot, kind);
-  const visibleCategories = allCategories ? categories : categories.filter((c) => recentCategoryIds.includes(c.id)).slice(0, 8);
-  const categoryGrid = visibleCategories.length > 0 ? visibleCategories : categories.slice(0, 8);
+  const filteredCategories = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) => c.name.toLowerCase().includes(q));
+  }, [categories, categorySearch]);
+  const hasExactCategoryMatch = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    if (!q) return true;
+    return categories.some((c) => c.name.toLowerCase() === q);
+  }, [categories, categorySearch]);
+  const visibleCategories = allCategories || categorySearch.trim()
+    ? filteredCategories
+    : categories.filter((c) => recentCategoryIds.includes(c.id)).slice(0, 8);
+  const categoryGrid = visibleCategories.length > 0 ? visibleCategories : filteredCategories.slice(0, 8);
+
+  const createCategoryOnTheFly = async () => {
+    const name = categorySearch.trim();
+    if (!name || busy) return;
+    setBusy(true);
+    try {
+      const inferred = inferCategoryMetadata(name);
+      const created = await repo.addCategory({
+        name,
+        kind: kind === 'income' ? 'income' : 'expense',
+        group: inferred.group,
+        icon: inferred.icon,
+        budgetType: inferred.budgetType,
+        essential: inferred.essential,
+        hidden: false,
+      });
+      setCategoryId(created.id);
+      setCategorySearch('');
+      toast.show(t('category.saved'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create category');
+    } finally {
+      setBusy(false);
+    }
+  };
   const recentPayees = recentPayeesFor(snapshot, kind);
   const assigned = parts.reduce((s, p) => s + (p.minor ?? 0n), 0n);
   const leftToAssign = (amount.minor ?? 0n) - assigned;
@@ -541,11 +580,27 @@ function AddTransactionSheet({ kind, prefill, onKind, onClose }: { kind: AddKind
                   <Text variant="caption" tone="textSecondary">
                     {t('add.category')}
                   </Text>
+                  <TextInput
+                    testID="add-category-search"
+                    label={t('add.categorySearch')}
+                    placeholder={t('add.categorySearch')}
+                    value={categorySearch}
+                    onChangeText={setCategorySearch}
+                  />
+                  {categorySearch.trim() && !hasExactCategoryMatch ? (
+                    <Button
+                      testID="add-create-category-fly"
+                      kind="secondary"
+                      label={t('add.createCategoryFly', { name: categorySearch.trim() })}
+                      onPress={() => void createCategoryOnTheFly()}
+                      disabled={busy}
+                    />
+                  ) : null}
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'] }}>
                     {categoryGrid.map((c) => (
                       <PillTag key={c.id} testID={`category-${c.id}`} label={c.name} selected={categoryId === c.id} onPress={() => setCategoryId(c.id)} />
                     ))}
-                    {!allCategories && categories.length > categoryGrid.length ? (
+                    {!allCategories && !categorySearch.trim() && categories.length > categoryGrid.length ? (
                       <Button kind="link" testID="add-all-categories" label={t('add.allCategories')} onPress={() => setAllCategories(true)} />
                     ) : null}
                   </View>

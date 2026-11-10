@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { createElement, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import {
@@ -21,7 +21,8 @@ import { t, type TextKey } from '@/i18n';
 import { formatNaira } from '@/money';
 
 import { assignedOf } from './helpers';
-import { CATEGORY_ICONS, defaultIconForName } from './categoryIcons';
+import { CATEGORY_ICONS, categoryIconByName, defaultIconForName } from './categoryIcons';
+import { inferCategoryMetadata, NIGERIAN_CATEGORY_PRESETS } from './categoryInference';
 
 const sp = tokens.spacing;
 
@@ -99,6 +100,8 @@ export function EditCategorySheet({
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [extraGroups, setExtraGroups] = useState<{ value: string; label: string }[]>([]);
+  const [showAdvanced, setShowAdvanced] = useState(!isNew);
+  const [showIconGrid, setShowIconGrid] = useState(false);
 
   const openKey = visible ? (seed?.id ?? (isNew ? 'new' : null)) : null;
   if (openKey !== filledFor) {
@@ -112,10 +115,31 @@ export function EditCategorySheet({
       setEssential(seed?.essential ?? false);
       setHidden(seed?.hidden ?? false);
       setIconQuery('');
+      setShowAdvanced(!isNew);
+      setShowIconGrid(false);
       setError(null);
       setBusy(false);
     }
   }
+
+  const handleNameChange = (val: string) => {
+    setName(val);
+    if (isNew && val.trim()) {
+      const inferred = inferCategoryMetadata(val);
+      setIcon(inferred.icon);
+      setGroup(inferred.group);
+      setBudgetType(inferred.budgetType);
+      setEssential(inferred.essential);
+    }
+  };
+
+  const applyPreset = (preset: (typeof NIGERIAN_CATEGORY_PRESETS)[0]) => {
+    setName(preset.name);
+    setGroup(preset.group);
+    setIcon(preset.icon);
+    setBudgetType(preset.budgetType);
+    setEssential(preset.essential);
+  };
 
   const hasTx = seed ? categoryHasTransactions(snapshot, seed.id) : false;
   const dirty =
@@ -208,43 +232,43 @@ export function EditCategorySheet({
           </View>
         }
       >
-        <TextInput testID="category-edit-name" label={t('category.name')} value={name} onChangeText={setName} />
+        {isNew ? (
+          <View style={{ gap: sp['spacing-xs'], marginBottom: sp['spacing-xs'] }}>
+            <Text variant="caption" tone="textSecondary">
+              {t('category.quickPillsTitle')}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-xs'] }}>
+              {NIGERIAN_CATEGORY_PRESETS.map((p) => {
+                const selected = name === p.name;
+                return (
+                  <Pressable
+                    key={p.name}
+                    testID={`category-preset-${p.name.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}`}
+                    accessibilityRole="button"
+                    onPress={() => applyPreset(p)}
+                    style={{
+                      paddingHorizontal: sp['spacing-sm'],
+                      paddingVertical: sp['spacing-xs'],
+                      borderRadius: tokens.radius['rounded-pill'],
+                      borderWidth: 1,
+                      borderColor: selected ? theme.primaryFill : theme.border,
+                      backgroundColor: selected ? tokens.color['primary-bg-subdued-hover'] : theme.card,
+                    }}
+                  >
+                    <Text variant="caption" tone={selected ? 'link' : 'text'}>
+                      + {p.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+        <TextInput testID="category-edit-name" label={t('category.name')} value={name} onChangeText={handleNameChange} />
         {error ? <InlineError message={error} /> : null}
         {!valid && name.trim() && duplicateCategoryName(snapshot, name, group, seed?.id) ? (
           <InlineError message={t('category.duplicateName', { name: name.trim() })} />
         ) : null}
-
-        <Text variant="caption" tone="textSecondary">
-          {t('category.icon')}
-        </Text>
-        <TextInput testID="category-icon-search" label={t('category.iconSearch')} value={iconQuery} onChangeText={setIconQuery} />
-        <View testID="category-icon-grid" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
-          {icons.map(({ name: iconName, Icon }) => {
-            const selected = icon === iconName;
-            return (
-              <Pressable
-                key={iconName}
-                testID={`category-icon-${iconName}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                accessibilityLabel={iconName}
-                onPress={() => setIcon(iconName)}
-                style={{
-                  width: 44,
-                  height: 44,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: tokens.radius['rounded-md'],
-                  borderWidth: 1,
-                  borderColor: selected ? theme.primaryFill : theme.border,
-                  backgroundColor: selected ? tokens.color['primary-bg-subdued-hover'] : theme.card,
-                }}
-              >
-                <Icon size={20} color={selected ? theme.primaryFill : theme.textSecondary} />
-              </Pressable>
-            );
-          })}
-        </View>
 
         <Select
           testID="category-edit-group"
@@ -279,39 +303,121 @@ export function EditCategorySheet({
           </View>
         ) : null}
 
-        <SegmentedControl
-          testID="category-edit-kind"
-          label={t('category.kind')}
-          value={kind}
-          onChange={(v) => {
-            if (hasTx) return;
-            setKind(v);
-          }}
-          options={[
-            { value: 'expense', label: t('category.kind.spending') },
-            { value: 'income', label: t('category.kind.income') },
-          ]}
-        />
-        {hasTx ? (
-          <Text variant="caption" tone="textSecondary">
-            {t('category.kindLocked')}
+        <View style={{ gap: sp['spacing-xs'] }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text variant="caption" tone="textSecondary">
+              {t('category.icon')}
+            </Text>
+            <Pressable
+              testID="category-icon-toggle"
+              accessibilityRole="button"
+              onPress={() => setShowIconGrid(!showIconGrid)}
+            >
+              <Text variant="caption" tone="link">
+                {showIconGrid ? t('common.close') : t('category.iconSearch')}
+              </Text>
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp['spacing-sm'] }}>
+            <View
+              testID="category-icon-preview"
+              style={{
+                width: 44,
+                height: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: tokens.radius['rounded-md'],
+                borderWidth: 1,
+                borderColor: theme.primaryFill,
+                backgroundColor: tokens.color['primary-bg-subdued-hover'],
+              }}
+            >
+              {createElement(categoryIconByName(icon), { size: 22, color: theme.primaryFill })}
+            </View>
+            <Text tone="textSecondary">{icon}</Text>
+          </View>
+          {showIconGrid || iconQuery ? (
+            <View style={{ gap: sp['spacing-xs'], marginTop: sp['spacing-xs'] }}>
+              <TextInput testID="category-icon-search" label={t('category.iconSearch')} value={iconQuery} onChangeText={setIconQuery} />
+              <View testID="category-icon-grid" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp['spacing-sm'] }}>
+                {icons.map(({ name: iconName, Icon }) => {
+                  const selected = icon === iconName;
+                  return (
+                    <Pressable
+                      key={iconName}
+                      testID={`category-icon-${iconName}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={iconName}
+                      onPress={() => setIcon(iconName)}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: tokens.radius['rounded-md'],
+                        borderWidth: 1,
+                        borderColor: selected ? theme.primaryFill : theme.border,
+                        backgroundColor: selected ? tokens.color['primary-bg-subdued-hover'] : theme.card,
+                      }}
+                    >
+                      <Icon size={20} color={selected ? theme.primaryFill : theme.textSecondary} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        <Pressable
+          testID="category-toggle-advanced"
+          accessibilityRole="button"
+          onPress={() => setShowAdvanced(!showAdvanced)}
+          style={{ paddingVertical: sp['spacing-xs'] }}
+        >
+          <Text tone="link">
+            {showAdvanced ? t('category.hideAdvancedOptions') : t('category.advancedOptions')}
           </Text>
-        ) : null}
+        </Pressable>
 
-        {kind === 'expense' ? (
-          <>
+        {showAdvanced ? (
+          <View testID="category-advanced-tier" style={{ gap: sp['spacing-md'] }}>
             <SegmentedControl
-              testID="category-edit-type"
-              label={t('category.type')}
-              value={budgetType}
-              onChange={(v) => setBudgetType(v)}
-              options={BUDGET_TYPES.map((v) => ({ value: v, label: t(`category.budgetType.${v}`) }))}
+              testID="category-edit-kind"
+              label={t('category.kind')}
+              value={kind}
+              onChange={(v) => {
+                if (hasTx) return;
+                setKind(v);
+              }}
+              options={[
+                { value: 'expense', label: t('category.kind.spending') },
+                { value: 'income', label: t('category.kind.income') },
+              ]}
             />
-            <Switch testID="category-edit-essential" label={t('category.essential')} value={essential} onChange={setEssential} />
-          </>
-        ) : null}
+            {hasTx ? (
+              <Text variant="caption" tone="textSecondary">
+                {t('category.kindLocked')}
+              </Text>
+            ) : null}
 
-        <Switch testID="category-edit-hide" label={t('category.hideFromBudget')} value={hidden} onChange={setHidden} />
+            {kind === 'expense' ? (
+              <>
+                <SegmentedControl
+                  testID="category-edit-type"
+                  label={t('category.type')}
+                  value={budgetType}
+                  onChange={(v) => setBudgetType(v)}
+                  options={BUDGET_TYPES.map((v) => ({ value: v, label: t(`category.budgetType.${v}`) }))}
+                />
+                <Switch testID="category-edit-essential" label={t('category.essential')} value={essential} onChange={setEssential} />
+              </>
+            ) : null}
+
+            <Switch testID="category-edit-hide" label={t('category.hideFromBudget')} value={hidden} onChange={setHidden} />
+          </View>
+        ) : null}
       </Sheet>
       <Confirm
         visible={confirmDiscard}

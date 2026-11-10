@@ -82,6 +82,15 @@ describe('Page 07 redesign Category (EXPO_PUBLIC_REDESIGN on)', () => {
     expect(screen.getByText(t('category.redesign.viewAsTable'))).toBeTruthy();
     expect(screen.getByTestId('category-transactions')).toBeTruthy();
     expect(screen.getByText('Shoprite Lekki')).toBeTruthy();
+    expect(screen.getByTestId('category-quick-actions')).toBeTruthy();
+    expect(screen.getByTestId('category-add-tx')).toBeTruthy();
+    expect(screen.getByTestId('category-quick-cover')).toBeTruthy();
+    expect(screen.getByTestId('category-burn-rate')).toBeTruthy();
+    expect(screen.getByTestId('category-pacing-day')).toBeTruthy();
+    expect(screen.getByTestId('category-daily-velocity')).toBeTruthy();
+    expect(screen.getByTestId('category-merchants')).toBeTruthy();
+    expect(screen.getByTestId('category-connected-hub')).toBeTruthy();
+    expect(screen.getByTestId('category-rollover-cushion')).toBeTruthy();
   });
 
   it('opens Change plan via setParams', async () => {
@@ -125,6 +134,17 @@ describe('Page 07 redesign Category (EXPO_PUBLIC_REDESIGN on)', () => {
     expect(screen.getByTestId('category-planned')).toBeTruthy();
     expect(screen.getByTestId('category-spent')).toBeTruthy();
     expect(screen.getByTestId('category-remaining')).toBeTruthy();
+  });
+
+  it('supports interactive historical scrubbing and back to current month', async () => {
+    const { sync, foodId } = await seeded();
+    setParams({ id: foodId });
+    await renderWithProviders(wrap(<CategoryScreen />), { sync });
+    expect(await screen.findByTestId('category-bar-2026-09')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('category-bar-2026-09'));
+    expect(await screen.findByTestId('category-back-to-current-month')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('category-back-to-current-month'));
+    expect(screen.queryByTestId('category-back-to-current-month')).toBeNull();
   });
 
   it('i18n Figma strings are wired', () => {

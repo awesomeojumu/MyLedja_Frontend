@@ -63,6 +63,7 @@ import { CoverSheet } from './CoverSheet';
 import { EditAmountSheet } from './EditAmountSheet';
 import { MoveMoneySheet } from './MoveMoneySheet';
 import { TemplatesSheet } from './TemplatesSheet';
+import { NIGERIAN_CATEGORY_PRESETS } from './categoryInference';
 
 const sp = tokens.space;
 const density = tokens.density.touch;
@@ -842,6 +843,38 @@ export function RedesignBudgetScreen() {
           onPress={() => router.push('/settings')}
           fullWidth
         />
+        <View testID="budget-nigerian-pills" style={{ gap: sp.xs, marginTop: sp.sm }}>
+          <RedesignText variant="label" tone="textSecondary">
+            {t('category.quickPillsTitle')}
+          </RedesignText>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp.xs }}>
+            {NIGERIAN_CATEGORY_PRESETS.map((preset) => (
+              <RedesignChip
+                key={preset.name}
+                testID={`budget-nigerian-pill-${preset.name.toLowerCase().replace(/\s+/g, '-')}`}
+                label={`+ ${preset.name}`}
+                onPress={async () => {
+                  const exists = snapshot.categories.some(
+                    (c) => c.name.toLowerCase() === preset.name.toLowerCase(),
+                  );
+                  if (exists) {
+                    toast.show(t('category.saved'));
+                    return;
+                  }
+                  await repo.addCategory({
+                    name: preset.name,
+                    group: preset.group,
+                    kind: 'expense',
+                    icon: preset.icon,
+                    budgetType: preset.budgetType,
+                    essential: preset.essential,
+                  });
+                  toast.show(t('category.saved'));
+                }}
+              />
+            ))}
+          </ScrollView>
+        </View>
       </View>
     ) : null;
 

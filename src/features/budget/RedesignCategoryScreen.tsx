@@ -11,6 +11,7 @@ import {
   RedesignButton,
   RedesignCouldNotLoad,
   RedesignEmpty,
+  RedesignField,
   RedesignIcon,
   RedesignInlineError,
   RedesignListRow,
@@ -21,6 +22,7 @@ import {
 } from '@/design/redesign';
 import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { useToast } from '@/design/components';
+import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
 import { ledgerMessage, rowsFor, today } from '@/features/transactions/helpers';
 import { parseTags } from '@/features/transactions/tags';
 import { catalogue, t, type TextKey } from '@/i18n';
@@ -31,7 +33,11 @@ import {
   assignedOf,
   budgetCategories,
   categoryActivity,
+  categoryActiveRules,
+  categoryBurnRate,
+  categoryMerchantBreakdown,
   categoryTemplateLines,
+  categoryUpcomingBills,
   monthsEndingAt,
   overspentCategories,
   periodTotals,
@@ -82,36 +88,38 @@ function DetailChrome({
   children: ReactNode;
 }) {
   return (
-    <RedesignShell><SafeAreaView testID="redesign-category-frame" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
-      <View
-        testID="redesign-top-bar"
-        style={{
-          minHeight: Math.max(tokens.size['top-bar'], tokens.frame.topBarHeadroom),
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: sp.sm,
-          backgroundColor: theme.surface,
-          borderBottomWidth: 1,
-          borderColor: theme.border,
-          gap: sp.xs,
-        }}
-      >
-        <Pressable
-          testID="category-back"
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          onPress={onBack}
-          style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
+    <RedesignShell>
+      <SafeAreaView testID="redesign-category-frame" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
+        <View
+          testID="redesign-top-bar"
+          style={{
+            minHeight: Math.max(tokens.size['top-bar'], tokens.frame.topBarHeadroom),
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: sp.sm,
+            backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+            gap: sp.xs,
+          }}
         >
-          <RedesignIcon name="arrow-left" size={24} color={theme.text} />
-        </Pressable>
-        <RedesignText variant="headline" accessibilityRole="header" numberOfLines={1} style={{ flex: 1 }}>
-          {title}
-        </RedesignText>
-        {trailing ?? <View style={{ width: density.minTarget }} />}
-      </View>
-      <View style={{ flex: 1 }}>{children}</View>
-    </SafeAreaView></RedesignShell>
+          <Pressable
+            testID="category-back"
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            onPress={onBack}
+            style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <RedesignIcon name="arrow-left" size={24} color={theme.text} />
+          </Pressable>
+          <RedesignText variant="headline" accessibilityRole="header" numberOfLines={1} style={{ flex: 1 }}>
+            {title}
+          </RedesignText>
+          {trailing ?? <View style={{ width: density.minTarget }} />}
+        </View>
+        <View style={{ flex: 1 }}>{children}</View>
+      </SafeAreaView>
+    </RedesignShell>
   );
 }
 
@@ -129,10 +137,17 @@ export function RedesignCategoryScreen() {
   const size = useSizeClass();
   const phone = size === 'phone';
   const wide = size === 'desktop' || size === 'wide';
-  const month = monthOf(today());
+  const addTx = useOptionalAddTransaction();
+
+  const currentMonth = monthOf(today());
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const activeMonth = selectedMonth ?? currentMonth;
+  const isHistorical = activeMonth !== currentMonth;
+
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
 
   const category = snapshot?.categories.find((c) => c.id === id);
   const isNew = params.category === 'new';
@@ -153,9 +168,9 @@ export function RedesignCategoryScreen() {
 
   const model = useMemo(() => {
     if (!snapshot || !category) return null;
-    const row = rowFor(snapshot, month, category.id);
-    const avg = sixMonthAverage(snapshot, category.id, month);
-    const months6 = monthsEndingAt(month, 6);
+    const row = rowFor(snapshot, activeMonth, category.id);
+    const avg = sixMonthAverage(snapshot, category.id, activeMonth);
+    const months6 = monthsEndingAt(activeMonth, 6);
     const totals = periodTotals(snapshot.events);
     const chartRows = months6.map((m) => {
       const planned = assignedOf(snapshot, category.id, m);
@@ -164,7 +179,7 @@ export function RedesignCategoryScreen() {
     });
     const txs = rowsFor(snapshot).filter(
       (r) =>
-        monthOf(r.event.date) === month &&
+        monthOf(r.event.date) === activeMonth &&
         r.event.lines.some((l) => l.ledgerAccountId === category.id) &&
         r.event.type !== 'transfer' &&
         r.event.type !== 'opening_balance',
@@ -173,10 +188,17 @@ export function RedesignCategoryScreen() {
     const over = row.available < 0n ? -row.available : 0n;
     const donors = budgetCategories(snapshot)
       .filter((c) => c.id !== category.id)
-      .map((c) => ({ cat: c, available: rowFor(snapshot, month, c.id).available }))
+      .map((c) => ({ cat: c, available: rowFor(snapshot, activeMonth, c.id).available }))
       .filter((x) => x.available > 0n)
       .sort((a, b) => (a.available > b.available ? -1 : 1));
     const donor = over > 0n ? donors.find((d) => d.available >= over) ?? donors[0] : undefined;
+
+    const burnRate = categoryBurnRate(row, activeMonth, today());
+    const merchants = categoryMerchantBreakdown(snapshot, category.id, activeMonth);
+    const upcoming = categoryUpcomingBills(snapshot, category.id, activeMonth);
+    const rules = categoryActiveRules(snapshot, category.id);
+    const note = snapshot.assignNotes.get(budgetAssignId(category.id, activeMonth)) ?? '';
+
     return {
       row,
       avg,
@@ -185,13 +207,15 @@ export function RedesignCategoryScreen() {
       plan,
       over,
       donor,
-      bills: snapshot.recurring.filter((r) => r.categoryId === category.id && !r.cancelled),
+      burnRate,
+      merchants,
+      upcoming,
+      rules,
+      note,
       templates: categoryTemplateLines(snapshot, category.id),
-      rules: snapshot.rules.filter((r) => r.actions.some((a) => a.kind === 'setCategory' && a.value === category.id)),
-      note: snapshot.assignNotes.get(budgetAssignId(category.id, month)) ?? '',
-      overspent: overspentCategories(snapshot, month),
+      overspent: overspentCategories(snapshot, activeMonth),
     };
-  }, [snapshot, category, month]);
+  }, [snapshot, category, activeMonth]);
 
   const saveCategory = async (draft: CategoryDraft) => {
     if (isNew || !category) {
@@ -226,19 +250,19 @@ export function RedesignCategoryScreen() {
 
   const savePlanned = async (amount: bigint, opts: { carryOver: boolean; note: string }) => {
     if (!category || !snapshot) return;
-    const prevAmount = repo.assigned(category.id, month, snapshot);
+    const prevAmount = repo.assigned(category.id, activeMonth, snapshot);
     const prevCarry = category.carryOver;
-    const prevNote = snapshot.assignNotes.get(`${category.id}:${month}`) ?? '';
+    const prevNote = snapshot.assignNotes.get(`${category.id}:${activeMonth}`) ?? '';
     if (category.carryOver !== opts.carryOver) {
       await repo.updateCategory({ ...category, carryOver: opts.carryOver });
     }
-    await repo.setAssigned(category.id, month, amount, { note: opts.note });
+    await repo.setAssigned(category.id, activeMonth, amount, { note: opts.note });
     toast.show(t('budget.planSaved'), () => {
       void (async () => {
         const current = await repo.load();
         const c2 = current.categories.find((x) => x.id === category.id);
         if (c2 && c2.carryOver !== prevCarry) await repo.updateCategory({ ...c2, carryOver: prevCarry });
-        await repo.setAssigned(category.id, month, prevAmount, { note: prevNote });
+        await repo.setAssigned(category.id, activeMonth, prevAmount, { note: prevNote });
       })();
     });
     closePlan();
@@ -297,6 +321,48 @@ export function RedesignCategoryScreen() {
 
   const maxBar = model ? model.chartRows.reduce((m, r) => (r.value > m ? r.value : m), 1n) : 1n;
 
+  const quickActionBar =
+    category && model ? (
+      <View
+        testID="category-quick-actions"
+        style={{
+          flexDirection: 'row',
+          gap: sp.sm,
+          alignItems: 'center',
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <RedesignButton
+            testID="category-add-tx"
+            kind="primary"
+            label={t('category.addTransaction')}
+            onPress={() => {
+              if (addTx) {
+                addTx.open('expense', { categoryId: category.id, date: today() });
+              } else {
+                router.push({
+                  pathname: '/transactions',
+                  params: { new: 'expense', categoryId: category.id },
+                });
+              }
+            }}
+            fullWidth
+          />
+        </View>
+        {model.over > 0n ? (
+          <View style={{ flex: 1 }}>
+            <RedesignButton
+              testID="category-quick-cover"
+              kind="secondary"
+              label={t('category.coverAction')}
+              onPress={openCover}
+              fullWidth
+            />
+          </View>
+        ) : null}
+      </View>
+    ) : null;
+
   const statusCard =
     category && model ? (
       <View
@@ -336,6 +402,67 @@ export function RedesignCategoryScreen() {
           max={Number(model.plan > 0n ? model.plan : 1n)}
           overPlan={model.over > 0n}
         />
+
+        {/* Burn Rate & Daily Velocity / Pacing Gauge */}
+        <View testID="category-burn-rate" style={{ gap: sp.xs, paddingTop: sp.xs }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <RedesignText testID="category-pacing-day" variant="caption" tone="textSecondary">
+              {t('category.pacingDay', { day: model.burnRate.currentDay, total: model.burnRate.totalDays })}
+            </RedesignText>
+            {model.burnRate.pace && (
+              <View
+                testID="category-pacing-badge"
+                style={{
+                  paddingHorizontal: sp.sm,
+                  paddingVertical: 2,
+                  borderRadius: tokens.shape['radius-pill'],
+                  backgroundColor:
+                    model.burnRate.pace === 'over' || model.burnRate.pace === 'fast'
+                      ? theme.primarySoft
+                      : theme.surface,
+                  borderWidth: 1,
+                  borderColor:
+                    model.burnRate.pace === 'over'
+                      ? theme.danger
+                      : model.burnRate.pace === 'fast'
+                      ? theme.primary
+                      : theme.border,
+                }}
+              >
+                <RedesignText
+                  variant="caption"
+                  tone={
+                    model.burnRate.pace === 'over'
+                      ? 'danger'
+                      : model.burnRate.pace === 'fast'
+                      ? 'text'
+                      : 'textSecondary'
+                  }
+                >
+                  {model.burnRate.pace === 'over'
+                    ? t('category.pacingOver')
+                    : model.burnRate.pace === 'fast'
+                    ? t('category.pacingFast')
+                    : t('category.pacingOnTrack')}
+                </RedesignText>
+              </View>
+            )}
+          </View>
+          <RedesignText testID="category-daily-velocity" variant="helper">
+            {t('category.dailyVelocity', {
+              spent: money(model.burnRate.dailyBurn, privacy),
+              planned: money(model.burnRate.plannedDailyRate, privacy),
+            })}
+          </RedesignText>
+          <RedesignText testID="category-pacing-forecast" variant="caption" tone="textSecondary">
+            {model.burnRate.pace === 'over'
+              ? t('category.paceForecastOver', { amount: money(model.over, privacy) })
+              : model.burnRate.isProjectedEarly
+              ? t('category.paceForecastFast', { day: model.burnRate.limitDay })
+              : t('category.paceForecastOnTrack')}
+          </RedesignText>
+        </View>
+
         <View style={{ flexDirection: 'row', gap: sp.sm, flexWrap: 'wrap' }}>
           <View style={{ flex: 1, minWidth: 140 }}>
             <RedesignButton testID="category-change-plan" kind="secondary" label={t('category.redesign.changePlan')} onPress={openPlan} fullWidth />
@@ -370,26 +497,37 @@ export function RedesignCategoryScreen() {
         </View>
         {tableView ? (
           <View testID="category-chart-table" style={{ gap: sp.sm }}>
-            {model.chartRows.map((r) => (
-              <Pressable
-                key={r.month}
-                testID={`category-table-${r.month}`}
-                onPress={() => {
-                  selectHaptic();
-                  router.push({ pathname: '/transactions', params: { category: category.id, month: r.month } });
-                }}
-                style={{ flexDirection: 'row', justifyContent: 'space-between', minHeight: density.minTarget, alignItems: 'center' }}
-              >
-                <RedesignText>{r.label}</RedesignText>
-                <RedesignText style={{ fontVariant: ['tabular-nums'] }}>{money(r.value, privacy)}</RedesignText>
-              </Pressable>
-            ))}
+            {model.chartRows.map((r) => {
+              const isSelected = r.month === activeMonth;
+              return (
+                <Pressable
+                  key={r.month}
+                  testID={`category-table-${r.month}`}
+                  onPress={() => {
+                    selectHaptic();
+                    setSelectedMonth(r.month);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    minHeight: density.minTarget,
+                    alignItems: 'center',
+                    paddingHorizontal: sp.xs,
+                    backgroundColor: isSelected ? theme.primarySoft : 'transparent',
+                    borderRadius: tokens.shape['radius-sm'],
+                  }}
+                >
+                  <RedesignText tone={isSelected ? 'primary' : 'text'}>{r.label}</RedesignText>
+                  <RedesignText style={{ fontVariant: ['tabular-nums'] }}>{money(r.value, privacy)}</RedesignText>
+                </Pressable>
+              );
+            })}
           </View>
         ) : (
           <View testID="category-chart" style={{ flexDirection: 'row', alignItems: 'flex-end', gap: sp.sm, height: 140 }}>
-            {model.chartRows.map((r, i) => {
+            {model.chartRows.map((r) => {
               const pct = maxBar > 0n ? Number((r.value * 100n) / maxBar) / 100 : 0;
-              const current = i === model.chartRows.length - 1;
+              const isSelected = r.month === activeMonth;
               return (
                 <Pressable
                   key={r.month}
@@ -398,7 +536,7 @@ export function RedesignCategoryScreen() {
                   accessibilityLabel={`${r.label} ${money(r.value, privacy)}`}
                   onPress={() => {
                     selectHaptic();
-                    router.push({ pathname: '/transactions', params: { category: category.id, month: r.month } });
+                    setSelectedMonth(r.month);
                   }}
                   style={{ flex: 1, alignItems: 'center', gap: sp.xs, height: '100%', justifyContent: 'flex-end' }}
                 >
@@ -407,10 +545,10 @@ export function RedesignCategoryScreen() {
                       width: '70%',
                       height: Math.max(4, Math.round(pct * 110)),
                       borderRadius: tokens.shape['radius-sm'],
-                      backgroundColor: current ? theme.primary : theme.primarySoft,
+                      backgroundColor: isSelected ? theme.primary : theme.primarySoft,
                     }}
                   />
-                  <RedesignText variant="caption" tone="textSecondary">
+                  <RedesignText variant="caption" tone={isSelected ? 'primary' : 'textSecondary'}>
                     {r.label}
                   </RedesignText>
                 </Pressable>
@@ -418,15 +556,180 @@ export function RedesignCategoryScreen() {
             })}
           </View>
         )}
-        <Pressable
-          testID="category-view-table"
-          accessibilityRole="button"
-          onPress={() => router.setParams({ table: tableView ? undefined : '1' })}
-        >
-          <RedesignText tone="primary" style={{ textDecorationLine: 'underline' }}>
-            {tableView ? t('category.redesign.viewAsChart') : t('category.redesign.viewAsTable')}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Pressable
+            testID="category-view-table"
+            accessibilityRole="button"
+            onPress={() => router.setParams({ table: tableView ? undefined : '1' })}
+          >
+            <RedesignText tone="primary" style={{ textDecorationLine: 'underline' }}>
+              {tableView ? t('category.redesign.viewAsChart') : t('category.redesign.viewAsTable')}
+            </RedesignText>
+          </Pressable>
+          {isHistorical && (
+            <RedesignButton
+              testID="category-back-to-current-month"
+              kind="soft"
+              label={t('category.backToCurrentMonth')}
+              onPress={() => {
+                selectHaptic();
+                setSelectedMonth(null);
+              }}
+            />
+          )}
+        </View>
+      </View>
+    ) : null;
+
+  const merchantsCard =
+    category && model ? (
+      <View
+        testID="category-merchants"
+        style={{
+          backgroundColor: theme.surface,
+          borderRadius: tokens.shape['radius-lg'],
+          borderWidth: 1,
+          borderColor: theme.border,
+          padding: sp.lg,
+          gap: sp.md,
+        }}
+      >
+        <RedesignText variant="label" tone="textSecondary">
+          {t('category.topMerchants')}
+        </RedesignText>
+        {model.merchants.length === 0 ? (
+          <RedesignText tone="textSecondary">{t('category.noMerchants')}</RedesignText>
+        ) : (
+          model.merchants.map((m, idx) => (
+            <View key={m.name} style={{ gap: sp.xs }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <RedesignText testID={`category-merchant-name-${idx}`}>{m.name}</RedesignText>
+                <RedesignText testID={`category-merchant-spent-${idx}`} style={{ fontVariant: ['tabular-nums'] }}>
+                  {money(m.amount, privacy)} ({m.percentage}%)
+                </RedesignText>
+              </View>
+              <RedesignProgress testID={`category-merchant-bar-${idx}`} value={m.percentage} max={100} />
+            </View>
+          ))
+        )}
+      </View>
+    ) : null;
+
+  const connectedHubCard =
+    category && model ? (
+      <View
+        testID="category-connected-hub"
+        style={{
+          backgroundColor: theme.surface,
+          borderRadius: tokens.shape['radius-lg'],
+          borderWidth: 1,
+          borderColor: theme.border,
+          padding: sp.lg,
+          gap: sp.lg,
+        }}
+      >
+        {/* Upcoming Bills */}
+        <View style={{ gap: sp.sm }}>
+          <RedesignText variant="label" tone="textSecondary">
+            {t('category.upcomingBillsTitle')}
           </RedesignText>
-        </Pressable>
+          {model.upcoming.bills.length === 0 ? (
+            <RedesignText tone="textSecondary">{t('category.noUpcomingBills')}</RedesignText>
+          ) : (
+            <View style={{ gap: sp.xs }}>
+              {model.upcoming.bills.map((item) => (
+                <View
+                  key={item.bill.id}
+                  testID={`category-bill-${item.bill.id}`}
+                  style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <RedesignText>{item.bill.name}</RedesignText>
+                  <RedesignText style={{ fontVariant: ['tabular-nums'] }}>
+                    {money(BigInt(item.bill.amountMinor), privacy)}
+                  </RedesignText>
+                </View>
+              ))}
+              <RedesignText
+                testID="category-available-after-bills"
+                variant="helper"
+                tone="primary"
+                style={{ marginTop: sp.xs }}
+              >
+                {t('category.availableAfterBills', { amount: money(model.upcoming.availableAfterBills, privacy) })}
+              </RedesignText>
+            </View>
+          )}
+        </View>
+
+        {/* Auto-categorization Rules */}
+        <View style={{ gap: sp.sm }}>
+          <RedesignText variant="label" tone="textSecondary">
+            {t('category.autoRulesTitle')}
+          </RedesignText>
+          {model.rules.length === 0 ? (
+            <RedesignText tone="textSecondary">{t('category.noAutoRules')}</RedesignText>
+          ) : (
+            model.rules.map((rule) => {
+              const pattern = rule.conditions.map((c) => c.value).join(', ');
+              return (
+                <View key={rule.id} testID={`category-rule-${rule.id}`}>
+                  <RedesignText variant="helper">
+                    {t('category.ruleMatching', { pattern })}
+                  </RedesignText>
+                </View>
+              );
+            })
+          )}
+          <RedesignButton
+            testID="category-add-rule"
+            kind="link"
+            label={t('category.addAutoRule')}
+            onPress={() => router.push({ pathname: '/rules', params: { new: '1', categoryId: category.id } })}
+          />
+        </View>
+
+        {/* Rollover cushion & Notes */}
+        <View style={{ gap: sp.sm }}>
+          <RedesignText variant="label" tone="textSecondary">
+            {t('category.rolloverCushion')}
+          </RedesignText>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <RedesignText variant="helper">{t('category.rolloverCushion')}</RedesignText>
+            <RedesignText testID="category-rollover-cushion" variant="helper" style={{ fontVariant: ['tabular-nums'] }}>
+              {money(model.row.carried, privacy)}
+            </RedesignText>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <RedesignText variant="helper">{t('category.assignedThisMonth')}</RedesignText>
+            <RedesignText testID="category-assigned-amount" variant="helper" style={{ fontVariant: ['tabular-nums'] }}>
+              {money(model.row.assigned, privacy)}
+            </RedesignText>
+          </View>
+
+          <View style={{ gap: sp.xs, marginTop: sp.sm }}>
+            <RedesignText variant="label" tone="textSecondary">
+              {t('category.noteLabel')}
+            </RedesignText>
+            <RedesignField
+              testID="category-note-input"
+              label={t('category.noteLabel')}
+              value={noteDraft !== null ? noteDraft : (model.note || '')}
+              onChangeText={(text) => setNoteDraft(text)}
+              placeholder={t('category.notePlaceholder')}
+            />
+            {noteDraft !== null && noteDraft !== model.note ? (
+              <RedesignButton
+                testID="category-note-save"
+                kind="secondary"
+                label={t('category.noteSaved')}
+                onPress={async () => {
+                  await repo.setAssigned(category.id, activeMonth, model.row.assigned, { note: noteDraft });
+                  toast.show(t('category.noteSaved'));
+                }}
+              />
+            ) : null}
+          </View>
+        </View>
       </View>
     ) : null;
 
@@ -485,7 +788,7 @@ export function RedesignCategoryScreen() {
           testID="category-see-all"
           kind="link"
           label={t('category.seeAll')}
-          onPress={() => router.push({ pathname: '/transactions', params: { category: category.id, month } })}
+          onPress={() => router.push({ pathname: '/transactions', params: { category: category.id, month: activeMonth } })}
         />
       </View>
     ) : null;
@@ -545,8 +848,11 @@ export function RedesignCategoryScreen() {
           ) : null
         ) : phone || !wide ? (
           <>
+            {quickActionBar}
             {statusCard}
+            {merchantsCard}
             {historyCard}
+            {connectedHubCard}
             {txList}
             {!phone ? (
               <View testID="category-stats" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.md }}>
@@ -556,9 +862,9 @@ export function RedesignCategoryScreen() {
                 <Stat label={t('category.sixMonthAvg')} value={money(model.avg, privacy)} testID="category-avg-stat" />
               </View>
             ) : null}
-            {monthLongLabel(month) ? (
+            {monthLongLabel(activeMonth) ? (
               <RedesignText variant="caption" tone="textSecondary" testID="category-month-caption">
-                {t('category.redesign.budgetMonth', { month: monthLongLabel(month) })}
+                {t('category.redesign.budgetMonth', { month: monthLongLabel(activeMonth) })}
               </RedesignText>
             ) : null}
           </>
@@ -566,10 +872,13 @@ export function RedesignCategoryScreen() {
           <View style={{ flexDirection: 'row', gap: sp.lg, alignItems: 'flex-start' }}>
             <View style={{ flex: 1, gap: sp.lg }}>
               <RedesignText variant="helper" tone="textSecondary">
-                {t('category.redesign.budgetMonth', { month: monthLongLabel(month) })}
+                {t('category.redesign.budgetMonth', { month: monthLongLabel(activeMonth) })}
               </RedesignText>
+              {quickActionBar}
               {statusCard}
+              {merchantsCard}
               {historyCard}
+              {connectedHubCard}
               {txList}
             </View>
             {sideSummary}
@@ -600,7 +909,7 @@ export function RedesignCategoryScreen() {
           visible
           category={category}
           snapshot={snapshot}
-          month={month}
+          month={activeMonth}
           onClose={() => setDeleteOpen(false)}
           onConfirm={async (moveTo) => {
             setError(null);
@@ -621,7 +930,7 @@ export function RedesignCategoryScreen() {
           visible
           categoryId={category.id}
           category={category}
-          month={month}
+          month={activeMonth}
           snapshot={snapshot}
           categoryOrder={[category.id]}
           onClose={closePlan}
@@ -632,23 +941,23 @@ export function RedesignCategoryScreen() {
       {category && moveOpen ? (
         <MoveMoneySheet
           visible
-          month={month}
+          month={activeMonth}
           snapshot={snapshot}
           fromCategoryId={undefined}
           onClose={closeMove}
           onSave={async (fromId, toId, amount) => {
             const before = await repo.load();
-            const fromPrev = repo.assigned(fromId, month, before);
-            const toPrev = repo.assigned(toId, month, before);
-            const r = await repo.moveAssigned(fromId, toId, month, amount);
+            const fromPrev = repo.assigned(fromId, activeMonth, before);
+            const toPrev = repo.assigned(toId, activeMonth, before);
+            const r = await repo.moveAssigned(fromId, toId, activeMonth, amount);
             if (!r.ok) {
               setError(ledgerMessage(r.error));
               return;
             }
             toast.show(t('budget.moved'), () => {
               void (async () => {
-                await repo.setAssigned(fromId, month, fromPrev);
-                await repo.setAssigned(toId, month, toPrev);
+                await repo.setAssigned(fromId, activeMonth, fromPrev);
+                await repo.setAssigned(toId, activeMonth, toPrev);
               })();
             });
             closeMove();
@@ -659,29 +968,29 @@ export function RedesignCategoryScreen() {
       {category && coverOpen ? (
         <CoverSheet
           visible
-          month={month}
+          month={activeMonth}
           snapshot={snapshot}
           onClose={closeCover}
           onSave={async (covers) => {
             const before = await repo.load();
             const prev = covers.map((cvr) => ({
               id: cvr.overspentId,
-              amount: repo.assigned(cvr.overspentId, month, before),
+              amount: repo.assigned(cvr.overspentId, activeMonth, before),
             }));
             const fromPrev = covers.map((cvr) => ({
               id: cvr.fromId,
-              amount: cvr.fromId === '__left_to_plan__' ? 0n : repo.assigned(cvr.fromId, month, before),
+              amount: cvr.fromId === '__left_to_plan__' ? 0n : repo.assigned(cvr.fromId, activeMonth, before),
             }));
-            const r = await repo.coverOverspending(month, covers);
+            const r = await repo.coverOverspending(activeMonth, covers);
             if (!r.ok) {
               setError(ledgerMessage(r.error));
               return;
             }
             toast.show(t('budget.covered'), () => {
               void (async () => {
-                for (const p of prev) await repo.setAssigned(p.id, month, p.amount);
+                for (const p of prev) await repo.setAssigned(p.id, activeMonth, p.amount);
                 for (const p of fromPrev) {
-                  if (p.id !== '__left_to_plan__') await repo.setAssigned(p.id, month, p.amount);
+                  if (p.id !== '__left_to_plan__') await repo.setAssigned(p.id, activeMonth, p.amount);
                 }
               })();
             });

@@ -19,6 +19,7 @@ import {
 } from '@/ledger';
 import type { BudgetMonth, BudgetRow } from '@/ledger/budget';
 import { budgetableIncomeReceived } from '@/features/income/budgetableIncome';
+import { dueDatesInMonth } from '@/features/plan/recurrence';
 
 /** Expense categories that appear on the Budget page. */
 export function budgetCategories(snapshot: Snapshot) {
@@ -397,6 +398,122 @@ export function sinkingFundInfo(
   }
 
   return { target, saved: saved > 0n ? saved : 0n, neededPerMonth };
+}
+
+export type CategoryBurnRate = {
+  totalDays: number;
+  currentDay: number;
+  daysRemaining: number;
+  dailyBurn: bigint;
+  plannedDailyRate: bigint;
+  projectedTotal: bigint;
+  pace: 'onTrack' | 'fast' | 'over' | null;
+  limitDay: number;
+  isProjectedEarly: boolean;
+};
+
+export function categoryBurnRate(
+  row: BudgetRow,
+  month: string,
+  asOfDate: string,
+): CategoryBurnRate {
+  const totalDays = daysInMonth(month);
+  const currentDay = Math.min(totalDays, Math.max(1, dayOfMonth(asOfDate)));
+  const daysRemaining = Math.max(0, totalDays - currentDay);
+  const spent = row.activity;
+  const plan = row.carried + row.assigned;
+  const dailyBurn = currentDay > 0 ? spent / BigInt(currentDay) : 0n;
+  const plannedDailyRate = plan > 0n ? plan / BigInt(totalDays) : 0n;
+  const projectedTotal = dailyBurn * BigInt(totalDays);
+  const pace = categoryPace(row, month, asOfDate);
+
+  let limitDay = totalDays;
+  let isProjectedEarly = false;
+  if (spent > 0n && plan > 0n && spent < plan) {
+    const projectedLimit = Math.round(Number((plan * BigInt(currentDay)) / spent));
+    if (projectedLimit < totalDays) {
+      limitDay = Math.max(currentDay, projectedLimit);
+      isProjectedEarly = true;
+    }
+  }
+
+  return {
+    totalDays,
+    currentDay,
+    daysRemaining,
+    dailyBurn,
+    plannedDailyRate,
+    projectedTotal,
+    pace,
+    limitDay,
+    isProjectedEarly,
+  };
+}
+
+export type CategoryMerchant = {
+  name: string;
+  amount: bigint;
+  percentage: number;
+};
+
+export function categoryMerchantBreakdown(
+  snapshot: Snapshot,
+  categoryId: string,
+  month: string,
+): CategoryMerchant[] {
+  const spendByPayee = new Map<string, bigint>();
+  let totalSpent = 0n;
+
+  for (const e of snapshot.events) {
+    if (e.status !== 'posted' || e.type !== 'expense' || monthOf(e.date) !== month) continue;
+    const catLine = e.lines.find((l) => l.ledgerAccountId === categoryId);
+    if (!catLine) continue;
+    const payeeName = (e.payeeName ?? '').trim() || t('common.notSet');
+    const amt = catLine.amountMinor;
+    totalSpent += amt;
+    spendByPayee.set(payeeName, (spendByPayee.get(payeeName) ?? 0n) + amt);
+  }
+
+  if (totalSpent <= 0n) return [];
+
+  const list: CategoryMerchant[] = [];
+  for (const [name, amount] of spendByPayee.entries()) {
+    const percentage = Math.round(Number((amount * 100n) / totalSpent));
+    list.push({ name, amount, percentage });
+  }
+
+  list.sort((a, b) => (b.amount > a.amount ? 1 : b.amount < a.amount ? -1 : 0));
+  return list.slice(0, 5);
+}
+
+export function categoryUpcomingBills(
+  snapshot: Snapshot,
+  categoryId: string,
+  month: string,
+) {
+  const candidateBills = snapshot.recurring.filter(
+    (r) =>
+      r.categoryId === categoryId &&
+      (r.kind === 'bill' || r.kind === 'subscription') &&
+      !r.cancelled,
+  );
+  const billsWithDue: { bill: (typeof candidateBills)[0]; dueDate: string }[] = [];
+  for (const b of candidateBills) {
+    const dates = dueDatesInMonth(b.rule, month, b.startDate, b.endDate);
+    if (dates.length > 0) {
+      billsWithDue.push({ bill: b, dueDate: dates[0]! });
+    }
+  }
+  const upcomingTotal = billsWithDue.reduce((sum, item) => sum + BigInt(item.bill.amountMinor), 0n);
+  const row = rowFor(snapshot, month, categoryId);
+  const availableAfterBills = row.available - upcomingTotal;
+  return { bills: billsWithDue, upcomingTotal, availableAfterBills };
+}
+
+export function categoryActiveRules(snapshot: Snapshot, categoryId: string) {
+  return snapshot.rules.filter((r) =>
+    r.actions.some((a) => a.kind === 'setCategory' && a.value === categoryId),
+  );
 }
 
 export { monthOf, nextMonth, prevMonth, monthsEndingAt, periodTotals, categoryActivity };
