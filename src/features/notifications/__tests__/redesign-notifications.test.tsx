@@ -153,4 +153,40 @@ describe('Page 27 redesign Notifications (EXPO_PUBLIC_REDESIGN on)', () => {
     await fireEvent.press(await screen.findByTestId('notification-n-budget'));
     expect(router.push).toHaveBeenCalledWith('/budget');
   });
+
+  it('shows smart filter chips and 1-tap action button when notifications exist', async () => {
+    const { sync } = await seeded();
+    await sync.store.replace({
+      collection: 'notifications',
+      id: 'n-action',
+      version: 1,
+      data: {
+        createdAt: '2026-10-28T09:00:00.000Z',
+        title: 'Rent is due on Sunday',
+        body: '₦75,000.00 from GTBank Current',
+        category: 'bills',
+        read: false,
+        action: 'mark_paid',
+      },
+    });
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <NotificationsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+
+    expect(await screen.findByTestId('notifications-filter-all')).toBeTruthy();
+    expect(screen.getByTestId('notifications-filter-action')).toBeTruthy();
+    expect(screen.getByTestId('notifications-filter-bills_debts')).toBeTruthy();
+    expect(screen.getByTestId('notifications-filter-insights')).toBeTruthy();
+
+    expect(screen.getByTestId('notification-action-n-action')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('notifications-filter-insights'));
+    expect(screen.queryByTestId('notification-action-n-action')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('notifications-filter-action'));
+    expect(screen.getByTestId('notification-action-n-action')).toBeTruthy();
+  });
 });

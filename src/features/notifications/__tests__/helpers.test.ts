@@ -35,6 +35,9 @@ describe('notification helpers', () => {
   });
 
   it('formats when label for today', () => {
-    expect(formatNotificationWhen('2026-10-28T09:00:00.000Z', '2026-10-28')).toBe('9 a.m.');
+    const d = new Date('2026-10-28T09:00:00.000Z');
+    const h12 = d.getHours() % 12 || 12;
+    const suffix = d.getHours() >= 12 ? 'p.m.' : 'a.m.';
+    expect(formatNotificationWhen('2026-10-28T09:00:00.000Z', '2026-10-28')).toBe(`${h12} ${suffix}`);
   });
 });

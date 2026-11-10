@@ -199,4 +199,30 @@ describe('Page 26 redesign Settings (EXPO_PUBLIC_REDESIGN on)', () => {
     expect(screen.getByTestId('settings-help-centre')).toBeTruthy();
     expect(screen.getByTestId('settings-privacy')).toBeTruthy();
   });
+
+  it('Workspace shows role badge, profile switcher, and backup export CTA', async () => {
+    const { sync } = await seeded();
+    setParams({ tab: 'workspace' });
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(await screen.findByTestId('settings-workspace-role')).toBeTruthy();
+    expect(screen.getByTestId('settings-workspace-switch')).toBeTruthy();
+    expect(screen.getByTestId('settings-workspace-backup')).toBeTruthy();
+  });
+
+  it('Security includes mask on open toggle', async () => {
+    const { sync } = await seeded();
+    setParams({ tab: 'security' });
+    await renderWithProviders(
+      <WorkspaceProvider workspaceId="ws-personal">
+        <SettingsScreen />
+      </WorkspaceProvider>,
+      { sync },
+    );
+    expect(await screen.findByTestId('settings-mask-on-open')).toBeTruthy();
+  });
 });

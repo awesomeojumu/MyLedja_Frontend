@@ -6,6 +6,7 @@ import type { AppNotification } from '@/data/workspace/model';
 import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import {
   RedesignIcon,
+  RedesignChip,
   RedesignInlineError,
   RedesignSkeleton,
   RedesignStackFrame,
@@ -17,7 +18,7 @@ import { debtRows } from '@/features/debts/helpers';
 import { ChangePasswordSheet, useSecurityApi } from '@/features/settings/SecuritySheets';
 import { ledgerMessage, today } from '@/features/transactions/helpers';
 import { useToast } from '@/design/components';
-import { t } from '@/i18n';
+import { t, type TextKey } from '@/i18n';
 
 import {
   groupNotifications,
@@ -51,6 +52,7 @@ export function RedesignNotificationsScreen() {
     null,
   );
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [filterTab, setFilterTab] = useState<'all' | 'action' | 'bills_debts' | 'insights'>('all');
   const day = today();
 
   const reload = useCallback(async () => {
@@ -81,7 +83,23 @@ export function RedesignNotificationsScreen() {
     for (const n of items) void syncLocalBillReminder(n);
   }, [items]);
 
-  const groups = items ? groupNotifications(items, day) : null;
+  const filteredItems = useMemo(() => {
+    if (!items) return null;
+    if (filterTab === 'action') {
+      return items.filter(
+        (n) => n.action === 'mark_paid' || n.action === 'match' || n.action === 'record_payment' || n.category === 'security',
+      );
+    }
+    if (filterTab === 'bills_debts') {
+      return items.filter((n) => n.category === 'bills' || n.category === 'debts');
+    }
+    if (filterTab === 'insights') {
+      return items.filter((n) => n.category === 'budget' || n.category === 'goals');
+    }
+    return items;
+  }, [items, filterTab]);
+
+  const groups = filteredItems ? groupNotifications(filteredItems, day) : null;
   const empty = redesignEmptyCopy();
 
   const debtBalance = (debtId: string) => {
@@ -132,6 +150,7 @@ export function RedesignNotificationsScreen() {
         await repo.markNotificationRead(n.id);
         router.push('/budget');
         return;
+
       case 'record_payment': {
         if (!n.debtId) {
           router.push('/debts');
@@ -204,8 +223,28 @@ export function RedesignNotificationsScreen() {
       </RedesignText>
     </View>
   ) : (
-    <ScrollView
-      testID="notifications-redesign-list"
+    <View style={{ flex: 1, gap: sp.md }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp.xs, paddingBottom: sp.xs }}>
+        {(
+          [
+            { key: 'all', labelKey: 'notifications.filter.all' },
+            { key: 'action', labelKey: 'notifications.filter.action' },
+            { key: 'bills_debts', labelKey: 'notifications.filter.billsDebts' },
+            { key: 'insights', labelKey: 'notifications.filter.insights' },
+          ] as const
+        ).map((f) => (
+          <RedesignChip
+            key={f.key}
+            testID={`notifications-filter-${f.key}`}
+            label={t(f.labelKey as TextKey)}
+            selected={filterTab === f.key}
+            onPress={() => setFilterTab(f.key)}
+          />
+        ))}
+      </ScrollView>
+
+      <ScrollView
+        testID="notifications-redesign-list"
       refreshControl={phone ? <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} /> : undefined}
       contentContainerStyle={{ gap: sp.lg, paddingBottom: sp.xxl }}
     >
@@ -249,6 +288,7 @@ export function RedesignNotificationsScreen() {
         </RedesignText>
       </Pressable>
     </ScrollView>
+    </View>
   );
 
   return (

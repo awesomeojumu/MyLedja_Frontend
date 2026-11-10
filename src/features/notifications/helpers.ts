@@ -3,7 +3,7 @@ import type { AppNotification, NotificationCategory } from '@/data/workspace/mod
 import type { Snapshot, TxEvent } from '@/data/workspace/repository';
 import { rowFor } from '@/features/budget/helpers';
 import { addDays } from '@/features/transactions/helpers';
-import { monthOf } from '@/ledger';
+import { monthOf, ledgerBalance } from '@/ledger';
 import { t } from '@/i18n';
 
 export type NotificationGroup = 'today' | 'week' | 'earlier';
@@ -59,6 +59,28 @@ export function mergeDerivedNotifications(snapshot: Snapshot, stored: AppNotific
       action: 'see_budget',
     });
   }
+
+  // Danger Dip runway warning when liquid buffer is tight
+  const liquidAccounts = snapshot.accounts.filter(
+    (a) => a.type === 'bank' || a.type === 'cash' || a.type === 'wallet',
+  );
+  if (liquidAccounts.length > 0) {
+    const totalLiquid = liquidAccounts.reduce((sum, a) => sum + ledgerBalance(a.id, snapshot.events), 0n);
+    if (totalLiquid > 0n && totalLiquid < 10_000_000n) {
+      const dipId = `derived:danger_dip:${month}`;
+      if (!seen.has(dipId)) {
+        derived.push({
+          id: dipId,
+          createdAt: `${today}T08:00:00.000Z`,
+          title: t('notifications.dangerDipTitle'),
+          category: 'budget',
+          read: false,
+          action: 'open_plan',
+        });
+      }
+    }
+  }
+
   return [...stored, ...derived];
 }
 

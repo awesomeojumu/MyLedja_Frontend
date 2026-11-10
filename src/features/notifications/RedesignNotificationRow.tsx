@@ -10,7 +10,7 @@ import { redesignLight as theme, redesignTokens as tokens } from '@/design/redes
 import { useSizeClass } from '@/design/size';
 import type { AppNotification } from '@/data/workspace/model';
 import { formatNaira } from '@/money';
-import { t } from '@/i18n';
+import { t, type TextKey } from '@/i18n';
 
 import { formatRedesignNotificationWhen, redesignNotificationSubtitle } from './redesignHelpers';
 
@@ -135,6 +135,24 @@ export function RedesignNotificationRow({
           <RedesignText variant="caption" tone="textSecondary" numberOfLines={2}>
             {subtitle}
           </RedesignText>
+        ) : null}
+        {n.action && n.category !== 'security' ? (
+          <View style={{ flexDirection: 'row', gap: sp.sm, marginTop: sp.xs }}>
+            <RedesignButton
+              testID={`notification-action-${n.id}`}
+              kind="secondary"
+              label={
+                n.action === 'mark_paid'
+                  ? t('notifications.action.markPaid')
+                  : n.action === 'match'
+                    ? t('notifications.action.match')
+                    : n.action === 'record_payment'
+                      ? t('notifications.action.recordPayment')
+                      : t('notifications.action.seeBudget')
+              }
+              onPress={onPrimary}
+            />
+          </View>
         ) : null}
         {n.category === 'security' ? (
           <View style={{ flexDirection: 'row', gap: sp.sm, marginTop: sp.xs }}>

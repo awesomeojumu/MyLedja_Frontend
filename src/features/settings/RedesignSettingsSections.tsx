@@ -530,6 +530,7 @@ function SecuritySection() {
   const lock = useAppLockSetting();
   const [afterOpen, setAfterOpen] = useState(false);
   const [biometrics, setBiometrics] = useState(true);
+  const [maskOnOpen, setMaskOnOpen] = useState(false);
   return (
     <View testID="settings-security" style={{ gap: sp.lg }}>
       <Card>
@@ -550,6 +551,12 @@ function SecuritySection() {
           label={t('settings.redesign.useBiometrics')}
           value={biometrics}
           onChange={setBiometrics}
+        />
+        <RedesignSwitch
+          testID="settings-mask-on-open"
+          label={t('settings.security.maskOnOpen')}
+          value={maskOnOpen}
+          onChange={setMaskOnOpen}
         />
       </Card>
       <View style={{ gap: sp.sm }}>
@@ -735,9 +742,61 @@ function CurrenciesSection() {
 }
 
 function WorkspaceSection() {
+  const { snapshot } = useWorkspace();
+  const toast = useToast();
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+
   return (
     <View testID="settings-workspace" style={{ gap: sp.lg }}>
+      <View
+        testID="settings-workspace-role-card"
+        style={{
+          backgroundColor: theme.surface,
+          borderRadius: shape['radius-lg'],
+          borderWidth: 1,
+          borderColor: theme.border,
+          padding: sp.lg,
+          gap: sp.sm,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ gap: 2 }}>
+            <RedesignText variant="label">{snapshot?.settings.workspaceName ?? 'Personal'}</RedesignText>
+            <RedesignText testID="settings-workspace-role" variant="caption" tone="textSecondary">
+              {t('settings.workspace.roleLabel', { role: t('settings.workspace.roleOwner') })}
+            </RedesignText>
+          </View>
+          <RedesignButton
+            testID="settings-workspace-switch"
+            kind="secondary"
+            label={t('settings.workspace.switchProfile')}
+            onPress={() => setSwitcherOpen(true)}
+          />
+        </View>
+        <RedesignButton
+          testID="settings-workspace-backup"
+          kind="link"
+          label={t('settings.workspace.backupCta')}
+          onPress={() => toast.show(t('settings.workspace.backupCta'))}
+        />
+      </View>
+
       <WorkspaceTabDeep />
+
+      <OptionSheet
+        visible={switcherOpen}
+        title={t('settings.workspace.switchProfile')}
+        options={[
+          { value: 'personal', label: 'Personal (You)' },
+          { value: 'family', label: 'Family (Shared)' },
+          { value: 'business', label: 'Side Business' },
+        ]}
+        onClose={() => setSwitcherOpen(false)}
+        onPick={() => {
+          setSwitcherOpen(false);
+          toast.show(t('common.saved'));
+        }}
+      />
     </View>
   );
 }
