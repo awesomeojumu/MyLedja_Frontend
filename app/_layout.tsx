@@ -1,4 +1,5 @@
 import '@/lib/cryptoPolyfill';
+import { setupPreventIosZoom } from '@/design/preventIosZoom';
 import { Inter_300Light, Inter_400Regular, useFonts } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -11,6 +12,8 @@ import { AuthProvider } from '@/features/auth/AuthProvider';
 import { SyncProvider } from '@/data/sync/SyncProvider';
 import { ConfigErrorScreen } from '@/features/dev/ConfigErrorScreen';
 import { DevMenu } from '@/features/dev/DevMenu';
+
+setupPreventIosZoom();
 
 export default function RootLayout() {
   const [interLoaded] = useFonts({ Inter_300Light, Inter_400Regular });

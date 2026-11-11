@@ -223,6 +223,7 @@ export function Select<T extends string>({
               style={[
                 typeStyle('body-md'),
                 {
+                  fontSize: 16,
                   minHeight: 40,
                   borderWidth: 1,
                   borderColor: theme.inputBorder,

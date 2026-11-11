@@ -48,6 +48,7 @@ export const TextInput = forwardRef<ComponentRef<typeof RNTextInput>, TextInputP
           style={[
             typeStyle('body-md'),
             {
+              fontSize: 16,
               color: theme.text,
               backgroundColor: theme.card,
               borderWidth: 1,

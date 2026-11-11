@@ -1306,6 +1306,7 @@ function InlinePlannedInput({
       style={{
         width: 100,
         minHeight: density.minTarget,
+        fontSize: 16,
         textAlign: 'right',
         color: theme.text,
         borderWidth: 1,
