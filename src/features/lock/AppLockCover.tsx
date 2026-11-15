@@ -9,7 +9,7 @@ const size = tokens.size;
 /**
  * Locked / app-switcher cover (Figma Mobile App Phone / App lock 6:2755 · Components AppLock 30:459).
  */
-export function RedesignAppLockCover({
+export function AppLockCover({
   locked,
   unlockLabel,
   onUnlock,
@@ -75,3 +75,5 @@ export function RedesignAppLockCover({
     </View>
   );
 }
+
+export { AppLockCover as RedesignAppLockCover };

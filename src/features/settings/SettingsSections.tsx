@@ -59,7 +59,7 @@ function lockAfterLabel(ms: LockAfterMs): string {
 const sp = tokens.space;
 const shape = tokens.shape;
 
-export function RedesignSettingsSection({ tab }: { tab: SettingsTabId }) {
+export function SettingsSection({ tab }: { tab: SettingsTabId }) {
   const router = useRouter();
   const title = t(REDESIGN_SETTINGS_TITLE[tab] as TextKey);
   return (
@@ -929,3 +929,5 @@ function HelpSection() {
     </View>
   );
 }
+
+export { SettingsSection as RedesignSettingsSection };

@@ -7,7 +7,7 @@ import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
 import { resetParams, router, setParams } from '../../../../test/helpers/router';
-import { RedesignReportScreen } from '../RedesignReportScreen';
+import { RedesignReportScreen } from '../ReportScreen';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 
@@ -85,7 +85,7 @@ describe('Redesign Report (Figma 5:2369 / 12:6128)', () => {
     const { sync, card } = await seeded();
     setParams({ id: card.id });
     await renderWithProviders(
-      wrap(<RedesignReportScreen runner={async (_ws, body) => wireFor(body)} />),
+      wrap(<RedesignReportScreen runner={async (_ws: string, body: RunReportBody) => wireFor(body)} />),
       { sync },
     );
     expect(await screen.findByTestId('redesign-report-total')).toBeTruthy();
@@ -101,7 +101,7 @@ describe('Redesign Report (Figma 5:2369 / 12:6128)', () => {
     const { sync, card } = await seeded();
     setParams({ id: card.id, view: 'table' });
     await renderWithProviders(
-      wrap(<RedesignReportScreen runner={async (_ws, body) => wireFor(body)} />),
+      wrap(<RedesignReportScreen runner={async (_ws: string, body: RunReportBody) => wireFor(body)} />),
       { sync },
     );
     expect(await screen.findByTestId('redesign-report-table')).toBeTruthy();
@@ -115,7 +115,7 @@ describe('Redesign Report (Figma 5:2369 / 12:6128)', () => {
     const { sync, card } = await seeded();
     setParams({ id: card.id });
     await renderWithProviders(
-      wrap(<RedesignReportScreen runner={async (_ws, body) => wireFor(body)} />),
+      wrap(<RedesignReportScreen runner={async (_ws: string, body: RunReportBody) => wireFor(body)} />),
       { sync },
     );
     expect(await screen.findByTestId('redesign-report-total')).toBeTruthy();
@@ -143,7 +143,7 @@ describe('Redesign Report (Figma 5:2369 / 12:6128)', () => {
     const { sync, card } = await seeded();
     setParams({ id: card.id, share: '1' });
     await renderWithProviders(
-      wrap(<RedesignReportScreen runner={async (_ws, body) => wireFor(body)} />),
+      wrap(<RedesignReportScreen runner={async (_ws: string, body: RunReportBody) => wireFor(body)} />),
       { sync },
     );
     expect(await screen.findByTestId('redesign-report-share')).toBeTruthy();
@@ -157,7 +157,7 @@ describe('Redesign Report (Figma 5:2369 / 12:6128)', () => {
     const { sync } = await seeded();
     setParams({ id: 'missing-card' });
     await renderWithProviders(
-      wrap(<RedesignReportScreen runner={async (_ws, body) => wireFor(body)} />),
+      wrap(<RedesignReportScreen runner={async (_ws: string, body: RunReportBody) => wireFor(body)} />),
       { sync },
     );
     expect(await screen.findByTestId('redesign-report-missing')).toBeTruthy();

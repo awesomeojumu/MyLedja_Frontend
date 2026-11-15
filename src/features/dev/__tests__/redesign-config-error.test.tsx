@@ -3,7 +3,7 @@ import { Linking } from 'react-native';
 import { t } from '@/i18n';
 import { renderWithProviders } from '../../../../test/helpers/render';
 import { ConfigErrorScreen } from '../ConfigErrorScreen';
-import { RedesignConfigErrorScreen } from '../RedesignConfigErrorScreen';
+import { RedesignConfigErrorScreen } from '../ConfigErrorScreen';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 jest.mock('@/design/redesign/flag', () => ({ isRedesignEnabled: () => true }));

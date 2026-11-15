@@ -28,7 +28,7 @@ type Step = 'before' | 'waiting' | 'connecting' | 'connected' | 'error';
  * Figma Phone / Bank steps after search (`11:4473`–`11:4558`).
  * Receives the bank label chosen in RedesignConnectBankSearchSheet.
  */
-export function RedesignConnectBankFlow({
+export function ConnectBankFlow({
   bankLabel,
   onClose,
   onManual,
@@ -269,3 +269,5 @@ export function RedesignConnectBankFlow({
     </RedesignSheet>
   );
 }
+
+export { ConnectBankFlow as RedesignConnectBankFlow };

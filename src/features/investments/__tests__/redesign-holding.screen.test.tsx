@@ -7,7 +7,7 @@ import { formatNaira } from '@/money';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
 import { resetParams, setParams } from '../../../../test/helpers/router';
-import { RedesignHoldingScreen } from '../RedesignHoldingScreen';
+import { RedesignHoldingScreen } from '../HoldingScreen';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 

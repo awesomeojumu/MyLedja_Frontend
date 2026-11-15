@@ -64,7 +64,7 @@ async function pickFile(): Promise<{ ok: true; value: Picked } | { ok: false; er
 }
 
 /** Figma Phone / Import `10:5052`–`10:5228` — Choose → Match → Review → Done / Could not read. */
-export function RedesignImportSheet({
+export function ImportSheet({
   account,
   initialText,
   initialStatement,
@@ -482,3 +482,5 @@ function MapSelect({
     </>
   );
 }
+
+export { ImportSheet as RedesignImportSheet };

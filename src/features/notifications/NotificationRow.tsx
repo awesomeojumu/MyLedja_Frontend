@@ -1,29 +1,23 @@
 import { useMemo, useState } from 'react';
 import { PanResponder, Pressable, View } from 'react-native';
-import { AlertTriangle, Check, CircleDot, Lock, MoreHorizontal, X } from 'lucide-react-native';
 
-import { Amount, Button, Card, Icon, Menu, Text } from '@/design/components';
-import tokens from '@/design/tokens.json';
+import {
+  RedesignButton,
+  RedesignIcon,
+  RedesignText,
+} from '@/design/redesign';
+import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
 import { useSizeClass } from '@/design/size';
-import { useTheme } from '@/design/ThemeProvider';
 import type { AppNotification } from '@/data/workspace/model';
+import { formatNaira } from '@/money';
 import { t } from '@/i18n';
 
-import { formatNotificationWhen, notificationIcon } from './helpers';
+import { formatRedesignNotificationWhen, redesignNotificationSubtitle } from './redesignHelpers';
 
-const sp = tokens.spacing;
-const c = tokens.color;
+const sp = tokens.space;
+const shape = tokens.shape;
+const size = tokens.size;
 
-const ICONS = {
-  due: AlertTriangle,
-  missed: X,
-  budget: CircleDot,
-  goal: Check,
-  security: Lock,
-  default: CircleDot,
-} as const;
-
-/** Phone: swipe left to dismiss (D27-08). Web keeps the ⋯ menu. */
 function PhoneSwipe({
   enabled,
   onDismiss,
@@ -53,28 +47,31 @@ function PhoneSwipe({
 
   if (!enabled) return <>{children}</>;
   return (
-    <View
-      testID="notification-swipe"
-      collapsable={false}
-      style={{ transform: [{ translateX: dx }] }}
-      {...panHandlers}
-    >
+    <View testID="notification-swipe" collapsable={false} style={{ transform: [{ translateX: dx }] }} {...panHandlers}>
       {children}
     </View>
   );
 }
 
+function avatarLetter(title: string): string {
+  const ch = title.trim().charAt(0);
+  return ch ? ch.toUpperCase() : 'A';
+}
+
+function subtitleFor(n: AppNotification): string | undefined {
+  const body = redesignNotificationSubtitle(n);
+  if (body) return body;
+  if (n.amountMinor && n.category === 'bills') return formatNaira(BigInt(n.amountMinor));
+  return undefined;
+}
+
+/** Figma Mobile Phone / Notifications row (2:1156). */
 export function NotificationRow({
   notification: n,
   today,
   selected,
   onSelect,
-  onMarkPaid,
-  onMarkReceived,
-  onMatch,
-  onRemindTomorrow,
-  onSeeBudget,
-  onRecordPayment,
+  onPrimary,
   onSecurityYes,
   onSecurityNo,
   onDismiss,
@@ -83,133 +80,106 @@ export function NotificationRow({
   today: string;
   selected?: boolean;
   onSelect?: () => void;
-  onMarkPaid: () => Promise<void>;
-  onMarkReceived: () => void;
-  onMatch: () => void;
-  onRemindTomorrow: () => void;
-  onSeeBudget: () => void;
-  onRecordPayment: () => void;
+  onPrimary: () => void;
   onSecurityYes: () => void;
   onSecurityNo: () => void;
   onDismiss: () => void;
 }) {
-  const theme = useTheme();
   const phone = useSizeClass() === 'phone';
-  const iconKey = notificationIcon(n);
-  const Glyph = ICONS[iconKey];
-  const when = formatNotificationWhen(n.createdAt, today);
-  const unread = !n.read;
+  const when = formatRedesignNotificationWhen(n.createdAt, today);
+  const subtitle = subtitleFor(n);
   const canSwipe = phone && n.category !== 'security';
+  const unread = !n.read;
 
-  const body = (
-    <Card
+  const row = (
+    <Pressable
       testID={`notification-${n.id}`}
+      accessibilityRole="button"
+      onPress={() => {
+        onSelect?.();
+        if (n.category !== 'security') onPrimary();
+      }}
       style={{
-        gap: sp['spacing-sm'],
+        minHeight: size['list-row'],
         flexDirection: 'row',
-        alignItems: 'flex-start',
-        backgroundColor: unread || selected ? c['primary-bg-subdued-hover'] : undefined,
-        opacity: n.read && !selected ? 0.92 : 1,
-        borderWidth: selected ? 1 : undefined,
-        borderColor: selected ? theme.primaryFill : undefined,
+        alignItems: 'center',
+        gap: sp.md,
+        paddingVertical: sp.md,
+        paddingHorizontal: sp.md,
+        backgroundColor: selected || unread ? theme.primarySoft : 'transparent',
+        borderRadius: shape['radius-md'],
       }}
     >
-      <View style={{ paddingTop: 2, width: 20, alignItems: 'center' }}>
-        {unread ? (
-          <View
-            accessibilityElementsHidden
-            style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primaryFill, marginBottom: sp['spacing-xxs'] }}
-          />
-        ) : (
-          <View style={{ width: 8, height: 8, marginBottom: sp['spacing-xxs'] }} />
-        )}
-        <Icon icon={Glyph} size="row" color={iconKey === 'missed' ? theme.error : theme.textSecondary} />
+      <View
+        style={{
+          width: size.avatar,
+          height: size.avatar,
+          borderRadius: size.avatar / 2,
+          backgroundColor: theme.surfaceMuted,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <RedesignText variant="label">{avatarLetter(n.title)}</RedesignText>
       </View>
-      <View style={{ flex: 1, gap: sp['spacing-xs'] }}>
-        <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], alignItems: 'flex-start' }}>
-          <View style={{ flex: 1, gap: sp['spacing-xxs'] }}>
-            <Text variant="heading-sm">{n.title}</Text>
-            {n.amountMinor && n.category === 'bills' ? (
-              <Text variant="caption" tone="textSecondary">
-                <Amount minor={BigInt(n.amountMinor)} variant="caption" />
-              </Text>
-            ) : null}
-            {n.body ? (
-              <Text tone="textSecondary" variant="caption">
-                {n.body}
-              </Text>
-            ) : null}
-          </View>
-          <Text variant="caption" tone="textSecondary" style={{ fontVariant: ['tabular-nums'] }}>
+      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp.sm }}>
+          <RedesignText variant="body-medium" style={{ flex: 1 }} numberOfLines={2}>
+            {n.title}
+          </RedesignText>
+          <RedesignText variant="helper" style={{ fontVariant: ['tabular-nums'] }}>
             {when}
-          </Text>
+          </RedesignText>
         </View>
-        <View style={{ flexDirection: 'row', gap: sp['spacing-sm'], flexWrap: 'wrap', alignItems: 'center' }}>
-          {n.action === 'mark_paid' ? (
-            <>
-              <Button testID={`notification-action-${n.id}`} kind="secondary" size="sm" label={t('plan.markPaid')} onPress={() => void onMarkPaid()} />
-              <Button testID={`notification-snooze-${n.id}`} kind="link" size="sm" label={t('notifications.remindTomorrow')} onPress={onRemindTomorrow} />
-            </>
-          ) : null}
-          {n.action === 'mark_received' ? (
-            <>
-              <Button
-                testID={`notification-action-${n.id}`}
-                kind="secondary"
-                size="sm"
-                label={t('notifications.markReceived')}
-                onPress={onMarkReceived}
-              />
-              <Button testID={`notification-snooze-${n.id}`} kind="link" size="sm" label={t('notifications.remindTomorrow')} onPress={onRemindTomorrow} />
-            </>
-          ) : null}
-          {n.action === 'match' ? (
-            <Button testID={`notification-action-${n.id}`} kind="secondary" size="sm" label={t('notifications.match')} onPress={onMatch} />
-          ) : null}
-          {n.action === 'see_budget' ? (
-            <Button testID={`notification-action-${n.id}`} kind="secondary" size="sm" label={t('notifications.seeBudget')} onPress={onSeeBudget} />
-          ) : null}
-          {n.action === 'record_payment' ? (
-            <Button testID={`notification-action-${n.id}`} kind="secondary" size="sm" label={t('debts.recordPayment')} onPress={onRecordPayment} />
-          ) : null}
-          {n.category === 'security' ? (
-            <>
-              <Button testID={`notification-security-yes-${n.id}`} kind="secondary" size="sm" label={t('notifications.securityYes')} onPress={onSecurityYes} />
-              <Button testID={`notification-security-no-${n.id}`} kind="link" size="sm" label={t('notifications.securityNo')} onPress={onSecurityNo} />
-            </>
-          ) : null}
-          {n.category !== 'security' ? (
-            <Menu
-              testID={`notification-menu-${n.id}`}
-              trigger={(open) => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('notifications.more')}
-                  onPress={open}
-                  style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Icon icon={MoreHorizontal} size="nav" color={theme.textSecondary} />
-                </Pressable>
-              )}
-              items={[{ key: 'dismiss', label: t('notifications.dismiss'), onPress: onDismiss }]}
+        {subtitle ? (
+          <RedesignText variant="caption" tone="textSecondary" numberOfLines={2}>
+            {subtitle}
+          </RedesignText>
+        ) : null}
+        {n.action && n.category !== 'security' ? (
+          <View style={{ flexDirection: 'row', gap: sp.sm, marginTop: sp.xs }}>
+            <RedesignButton
+              testID={`notification-action-${n.id}`}
+              kind="secondary"
+              label={
+                n.action === 'mark_paid'
+                  ? t('notifications.action.markPaid')
+                  : n.action === 'match'
+                    ? t('notifications.action.match')
+                    : n.action === 'record_payment'
+                      ? t('notifications.action.recordPayment')
+                      : t('notifications.action.seeBudget')
+              }
+              onPress={onPrimary}
             />
-          ) : null}
-        </View>
+          </View>
+        ) : null}
+        {n.category === 'security' ? (
+          <View style={{ flexDirection: 'row', gap: sp.sm, marginTop: sp.xs }}>
+            <RedesignButton
+              testID={`notification-security-yes-${n.id}`}
+              kind="secondary"
+              label={t('notifications.securityYes')}
+              onPress={onSecurityYes}
+            />
+            <RedesignButton
+              testID={`notification-security-no-${n.id}`}
+              kind="link"
+              label={t('notifications.securityNo')}
+              onPress={onSecurityNo}
+            />
+          </View>
+        ) : null}
       </View>
-    </Card>
-  );
-
-  const selectable = onSelect ? (
-    <Pressable accessibilityRole="button" onPress={onSelect}>
-      {body}
+      <RedesignIcon name="chevron-right" size={20} color={theme.textSecondary} />
     </Pressable>
-  ) : (
-    body
   );
 
   return (
     <PhoneSwipe enabled={canSwipe} onDismiss={onDismiss}>
-      {selectable}
+      {row}
     </PhoneSwipe>
   );
 }
+
+export { NotificationRow as RedesignNotificationRow };

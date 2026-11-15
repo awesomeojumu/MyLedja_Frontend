@@ -36,7 +36,7 @@ function same(a: RedesignDashboardLayout, b: RedesignDashboardLayout): boolean {
 }
 
 /** Figma Phone / Edit Home 17:1663 and Web / Edit Home 10:591. */
-export function RedesignEditHomeSheet({ visible, layout, deviceKind = 'phone', onClose, onSave }: Props) {
+export function EditHomeSheet({ visible, layout, deviceKind = 'phone', onClose, onSave }: Props) {
   const [draft, setDraft] = useState(layout);
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -234,3 +234,5 @@ export function RedesignEditHomeSheet({ visible, layout, deviceKind = 'phone', o
     </>
   );
 }
+
+export { EditHomeSheet as RedesignEditHomeSheet };

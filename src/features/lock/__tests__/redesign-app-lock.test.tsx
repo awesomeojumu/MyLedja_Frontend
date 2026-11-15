@@ -1,7 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react-native';
 import { t } from '@/i18n';
 import { renderWithProviders } from '../../../../test/helpers/render';
-import { RedesignAppLockCover } from '../RedesignAppLockCover';
+import { RedesignAppLockCover } from '../AppLockCover';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 

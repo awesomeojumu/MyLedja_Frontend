@@ -10,7 +10,7 @@ import { useDesign, useTheme } from '@/design/ThemeProvider';
 import tokens from '@/design/tokens.json';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { t } from '@/i18n';
-import { RedesignAppLockCover } from './RedesignAppLockCover';
+import { AppLockCover } from './AppLockCover';
 
 /** App lock and app-switcher privacy on phones (DESIGN.md 10.3, 10.4; build plan F3.3, G-11; TB-11 Security timing). */
 
@@ -216,7 +216,7 @@ export function AppLockGate({ children }: { children: ReactNode }) {
       {children}
       {cover ? (
         redesign ? (
-          <RedesignAppLockCover
+          <AppLockCover
             locked={locked}
             unlockLabel={unlockLabel}
             onUnlock={() => void unlock(false)}

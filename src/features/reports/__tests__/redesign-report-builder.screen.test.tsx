@@ -6,7 +6,7 @@ import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
 import { resetParams, router } from '../../../../test/helpers/router';
-import { RedesignReportBuilderScreen } from '../RedesignReportBuilderScreen';
+import { RedesignReportBuilderScreen } from '../ReportBuilderScreen';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 
