@@ -1,5 +1,6 @@
 import { forwardRef, useState, type ComponentRef } from 'react';
 import {
+  Platform,
   Pressable,
   TextInput as RNTextInput,
   View,
@@ -58,7 +59,7 @@ export const TextInput = forwardRef<ComponentRef<typeof RNTextInput>, TextInputP
               paddingHorizontal: tokens.spacing['spacing-md'],
               paddingRight: secure ? 88 : tokens.spacing['spacing-md'],
               minHeight: 48,
-              boxShadow: focused ? `0 0 0 3px ${tokens.color['primary-bg-subdued-hover']}` : undefined,
+              ...Platform.select({ web: { outline: 'none' } as any }),
             },
             style,
           ]}

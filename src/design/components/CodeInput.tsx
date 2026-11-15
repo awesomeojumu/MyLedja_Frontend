@@ -1,5 +1,5 @@
 import { useRef, type ComponentRef } from 'react';
-import { TextInput as RNTextInput, View } from 'react-native';
+import { Platform, TextInput as RNTextInput, View } from 'react-native';
 import { t } from '@/i18n';
 import tokens from '../tokens.json';
 import { useTheme } from '../ThemeProvider';
@@ -68,6 +68,7 @@ export function CodeInput({
                 borderColor: error ? theme.error : theme.inputBorder,
                 borderRadius: tokens.radius['rounded-sm'],
                 fontVariant: ['tabular-nums'],
+                ...Platform.select({ web: { outline: 'none' } as any }),
               },
             ]}
           />

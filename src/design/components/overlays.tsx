@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, TextInput as RNTextInput, useWindowDimensions, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, TextInput as RNTextInput, useWindowDimensions, View } from 'react-native';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { t, type TextKey } from '@/i18n';
 import tokens from '../tokens.json';
@@ -231,6 +231,7 @@ export function Select<T extends string>({
                   paddingHorizontal: sp['spacing-sm'],
                   color: theme.text,
                   backgroundColor: theme.card,
+                  ...Platform.select({ web: { outline: 'none' } as any }),
                 },
               ]}
             />

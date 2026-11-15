@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, TextInput as RNTextInput, View, type TextInputProps, type ViewProps } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, TextInput as RNTextInput, View, type TextInputProps, type ViewProps } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { t } from '@/i18n';
 import { RedesignIcon, type RedesignIconName } from './icons';
@@ -23,6 +24,48 @@ export function RedesignBottomNav({
   onTab: (key: string) => void;
   onAdd: () => void;
 }) {
+  const isEven = tabs.length % 2 === 0;
+  const middle = Math.floor(tabs.length / 2);
+  const leftTabs = isEven ? tabs.slice(0, middle) : tabs;
+  const rightTabs = isEven ? tabs.slice(middle) : [];
+
+  const renderTab = (tab: { key: string; label: string; icon: RedesignIconName }) => {
+    const active = tab.key === activeKey;
+    return (
+      <Pressable
+        key={tab.key}
+        testID={`redesign-nav-${tab.key}`}
+        accessibilityRole="link"
+        accessibilityState={{ selected: active }}
+        accessibilityLabel={tab.label}
+        onPress={() => onTab(tab.key)}
+        style={{
+          width: size['nav-tab'],
+          minHeight: density.minTarget,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: sp.xxs,
+        }}
+      >
+        <View
+          style={{
+            width: size['nav-pill-w'],
+            height: size['nav-pill-h'],
+            borderRadius: shape['radius-pill'],
+            backgroundColor: active ? theme.navActivePill : 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <RedesignIcon name={tab.icon} size={size['icon-lg']} color={active ? theme.navActive : theme.navInactive} />
+        </View>
+        <RedesignText variant="nav-label" tone={active ? 'text' : 'textSecondary'}>
+          {tab.label}
+        </RedesignText>
+      </Pressable>
+    );
+  };
+
   return (
     <View testID="redesign-bottom-nav" style={{ height: tokens.frame.bottomNavHeight + tokens.frame.fabOffset, justifyContent: 'flex-end' }}>
       <Pressable
@@ -60,42 +103,15 @@ export function RedesignBottomNav({
           paddingTop: sp.sm,
         }}
       >
-        {tabs.map((tab) => {
-          const active = tab.key === activeKey;
-          return (
-            <Pressable
-              key={tab.key}
-              testID={`redesign-nav-${tab.key}`}
-              accessibilityRole="link"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={tab.label}
-              onPress={() => onTab(tab.key)}
-              style={{
-                width: size['nav-tab'],
-                minHeight: density.minTarget,
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: sp.xxs,
-              }}
-            >
-              <View
-                style={{
-                  width: size['nav-pill-w'],
-                  height: size['nav-pill-h'],
-                  borderRadius: shape['radius-pill'],
-                  backgroundColor: active ? theme.navActivePill : 'transparent',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <RedesignIcon name={tab.icon} size={size['icon-lg']} color={active ? theme.navActive : theme.navInactive} />
-              </View>
-              <RedesignText variant="nav-label" tone={active ? 'text' : 'textSecondary'}>
-                {tab.label}
-              </RedesignText>
-            </Pressable>
-          );
-        })}
+        {isEven ? (
+          <>
+            {leftTabs.map(renderTab)}
+            <View style={{ width: size['add-fab'], minHeight: density.minTarget }} />
+            {rightTabs.map(renderTab)}
+          </>
+        ) : (
+          tabs.map(renderTab)
+        )}
       </View>
     </View>
   );
@@ -110,10 +126,11 @@ export function RedesignTopBar({
 }: {
   title: string;
   onMenu?: () => void;
-  /** Secondary pages (Investments, Bills, …): back instead of menu. */
   onBack?: () => void;
   trailing?: ReactNode;
 }) {
+  const insets = useSafeAreaInsets();
+  const topPad = insets.top > 0 ? insets.top : Platform.OS === 'web' ? 16 : 14;
   const leading = onBack ? (
     <Pressable
       testID="redesign-back"
@@ -142,7 +159,9 @@ export function RedesignTopBar({
     <View
       testID="redesign-top-bar"
       style={{
-        minHeight: Math.max(size['top-bar'], tokens.frame.topBarHeadroom),
+        minHeight: Math.max(size['top-bar'], tokens.frame.topBarHeadroom) + (topPad > 0 ? topPad : 0),
+        paddingTop: topPad,
+        paddingBottom: sp.xs,
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: sp.sm,
@@ -669,6 +688,8 @@ export function RedesignField({
   trailing,
   editable = true,
   onPress,
+  onFocus,
+  onBlur,
 }: {
   label: string;
   value: string;
@@ -689,7 +710,10 @@ export function RedesignField({
   trailing?: ReactNode;
   editable?: boolean;
   onPress?: () => void;
+  onFocus?: TextInputProps['onFocus'];
+  onBlur?: TextInputProps['onBlur'];
 }) {
+  const [focused, setFocused] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const secure = !!secureTextEntry && !revealed;
   const field = (
@@ -697,7 +721,7 @@ export function RedesignField({
       style={{
         minHeight: size.field,
         borderWidth: 1,
-        borderColor: error ? theme.danger : theme.border,
+        borderColor: error ? theme.danger : focused ? theme.borderStrong : theme.border,
         borderRadius: shape['radius-md'],
         paddingLeft: density.fieldPadX,
         paddingRight: sp.sm,
@@ -705,6 +729,7 @@ export function RedesignField({
         flexDirection: 'row',
         alignItems: 'center',
         gap: sp.sm,
+        overflow: 'hidden',
       }}
     >
       {prefix ? <RedesignText tone="textSecondary">{prefix}</RedesignText> : null}
@@ -731,6 +756,14 @@ export function RedesignField({
           keyboardType={keyboardType}
           onSubmitEditing={onSubmitEditing}
           autoFocus={autoFocus}
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
           style={[
             redesignTypeStyle('body'),
             {
@@ -738,6 +771,8 @@ export function RedesignField({
               minHeight: size.field,
               color: theme.text,
               paddingVertical: sp.sm,
+              backgroundColor: 'transparent',
+              ...Platform.select({ web: { outline: 'none' } as any }),
             },
           ]}
         />
@@ -983,6 +1018,7 @@ export function RedesignCodeInput({
               borderColor: theme.border,
               borderRadius: shape['radius-md'],
               fontVariant: ['tabular-nums'],
+              ...Platform.select({ web: { outline: 'none' } as any }),
             },
           ]}
         />

@@ -37,5 +37,29 @@ const responsiveStyles = `
   }
   input, select, textarea, button {
     touch-action: manipulation;
+    outline: none !important;
+  }
+  input:focus, select:focus, textarea:focus, button:focus,
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  /* WebKit Autofill: prevent browser from breaking input backgrounds and injecting default blue/black rects */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+    box-shadow: 0 0 0 1000px transparent inset !important;
+    -webkit-text-fill-color: inherit !important;
+    caret-color: currentColor !important;
+    transition: background-color 999999s ease-in-out 0s;
+    background-color: transparent !important;
+  }
+  /* Safe area space at top for iPhone status bar / notch and mobile views */
+  @supports (padding-top: env(safe-area-inset-top)) {
+    [data-testid="redesign-top-bar"] {
+      padding-top: max(env(safe-area-inset-top, 0px), 16px) !important;
+    }
   }
 `;

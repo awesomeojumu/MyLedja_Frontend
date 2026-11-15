@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useOnline } from '@/lib/useOnline';
@@ -27,11 +27,10 @@ import { RedesignText } from './Text';
 import { redesignLight as theme, redesignTokens as tokens } from './theme';
 import type { RedesignIconName } from './icons';
 
-const PHONE_TABS: { key: string; labelKey: 'nav.home' | 'nav.transactions' | 'nav.budget' | 'nav.accounts' | 'nav.more'; href: string; icon: RedesignIconName }[] = [
+const PHONE_TABS: { key: string; labelKey: 'nav.home' | 'nav.transactions' | 'nav.budget' | 'nav.more'; href: string; icon: RedesignIconName }[] = [
   { key: 'home', labelKey: 'nav.home', href: '/', icon: 'home' },
   { key: 'transactions', labelKey: 'nav.transactions', href: '/transactions', icon: 'list' },
   { key: 'budget', labelKey: 'nav.budget', href: '/budget', icon: 'pie' },
-  { key: 'accounts', labelKey: 'nav.accounts', href: '/accounts', icon: 'bank' },
   { key: 'more', labelKey: 'nav.more', href: '/more', icon: 'more' },
 ];
 
@@ -39,9 +38,7 @@ function activeTab(pathname: string): string {
   if (pathname === '/' || pathname === '') return 'home';
   if (pathname.startsWith('/transactions')) return 'transactions';
   if (pathname.startsWith('/budget')) return 'budget';
-  if (pathname.startsWith('/accounts')) return 'accounts';
-  if (pathname.startsWith('/more')) return 'more';
-  // Secondary pages highlight More
+  if (pathname.startsWith('/accounts') || pathname.startsWith('/more')) return 'more';
   return 'more';
 }
 
@@ -122,6 +119,7 @@ export function RedesignAppFrame({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isHome = pathname === '/' || pathname === '';
   const online = useOnline();
   const sync = useSyncStatus();
   const { snapshot } = useWorkspace();
@@ -140,7 +138,7 @@ export function RedesignAppFrame({
   const offline = !online || sync?.state === 'offline';
 
   return (
-    <SafeAreaView testID="frame-phone" style={{ flex: 1, backgroundColor: theme.page }} edges={['top']}>
+    <SafeAreaView testID="frame-phone" style={{ flex: 1, backgroundColor: theme.surface }} edges={['top']}>
       <View testID="redesign-frame" style={{ flex: 1 }}>
         <RedesignTopBar
           title={title}
@@ -150,7 +148,7 @@ export function RedesignAppFrame({
                 {trailingExtra}
                 <CommandSearchButton />
                 <NotificationsBell items={inbox} />
-                <PrivacyToggle />
+                {!isHome ? <PrivacyToggle /> : null}
               </View>
             )
           }
@@ -194,6 +192,7 @@ export function RedesignMoreScreen() {
     {
       title: t('nav.wealth'),
       items: [
+        { label: t('nav.accounts'), href: '/accounts', icon: 'bank' },
         { label: t('nav.investments'), href: '/investments', icon: 'trending-up' },
         { label: t('nav.reports'), href: '/reports', icon: 'file' },
         { label: t('nav.cashflow'), href: '/cash-flow', icon: 'flow' },
@@ -212,20 +211,27 @@ export function RedesignMoreScreen() {
   ];
 
   const body = (
-      <View testID="redesign-more-screen" style={{ gap: tokens.space.xl }}>
+    <ScrollView
+      testID="redesign-more-scroll"
+      contentContainerStyle={{ gap: tokens.space.md, paddingBottom: tokens.space.huge * 1.5 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <View testID="redesign-more-screen" style={{ gap: tokens.space.md }}>
         {sections.map((section) => (
-          <View key={section.title} style={{ gap: tokens.space.sm }}>
-            <RedesignText variant="label" tone="textSecondary">
+          <View key={section.title} style={{ gap: tokens.space.xs }}>
+            <RedesignText variant="label" tone="textSecondary" style={{ paddingHorizontal: tokens.space.xs }}>
               {section.title}
             </RedesignText>
             <View
               style={{
                 backgroundColor: theme.surface,
-                borderRadius: tokens.shape['radius-lg'],
+                borderRadius: tokens.shape['radius-md'],
                 overflow: 'hidden',
+                borderWidth: 1,
+                borderColor: theme.border,
               }}
             >
-              {section.items.map((item) => (
+              {section.items.map((item, index) => (
                 <Pressable
                   key={item.href}
                   testID={`more-link-${item.href.replace(/\//g, '') || 'home'}`}
@@ -233,44 +239,42 @@ export function RedesignMoreScreen() {
                   accessibilityLabel={item.label}
                   onPress={() => router.push(item.href as never)}
                   style={{
-                    minHeight: tokens.size['list-row'],
+                    minHeight: 46,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: tokens.space.md,
+                    gap: tokens.space.sm,
                     paddingHorizontal: tokens.space.md,
-                    paddingVertical: tokens.density.touch.rowPadY,
+                    paddingVertical: 8,
+                    borderBottomWidth: index < section.items.length - 1 ? 1 : 0,
+                    borderBottomColor: theme.border,
                   }}
                 >
                   <View
                     style={{
-                      width: tokens.size.avatar,
-                      height: tokens.size.avatar,
-                      borderRadius: tokens.size.avatar / 2,
+                      width: 32,
+                      height: 32,
+                      borderRadius: tokens.shape['radius-sm'],
                       backgroundColor: theme.surfaceMuted,
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <RedesignIcon name={item.icon} size={20} color={theme.text} />
+                    <RedesignIcon name={item.icon} size={18} color={theme.text} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <RedesignText>{item.label}</RedesignText>
-                    {item.subtitle ? (
-                      <RedesignText variant="helper" tone="textSecondary">
-                        {item.subtitle}
-                      </RedesignText>
-                    ) : null}
+                    <RedesignText variant="body-medium">{item.label}</RedesignText>
                   </View>
-                  <RedesignIcon name="chevron-right" size={20} color={theme.textSecondary} />
+                  <RedesignIcon name="chevron-right" size={16} color={theme.textSecondary} />
                 </Pressable>
               ))}
             </View>
           </View>
         ))}
-        <RedesignText variant="helper" tone="textSecondary">
+        <RedesignText variant="helper" tone="textSecondary" style={{ paddingHorizontal: tokens.space.xs, paddingTop: tokens.space.xxs }}>
           {t('redesign.more.pinTip')}
         </RedesignText>
       </View>
+    </ScrollView>
   );
 
   if (size !== 'phone') {

@@ -232,7 +232,11 @@ export class WorkspaceRepository {
     private readonly engine: SyncEngine,
     readonly workspaceId: string,
     private readonly newId: () => string = uuidv7,
-  ) {}
+  ) {
+    this.store.subscribe(() => {
+      this.invalidateCache();
+    });
+  }
 
   /** Stamp History who/device on new money events (DESIGN page 11). */
   setActor(actor: WorkspaceActor): void {
@@ -249,9 +253,25 @@ export class WorkspaceRepository {
   /** Sentinel for envelope "Left to plan" when covering overspending (PU-10). */
   static readonly LEFT_TO_PLAN = '__left_to_plan__';
 
-  async load(): Promise<Snapshot> {
-    const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows, ruleRows, holdingRows, lotRows, priceRows, dashboardRows, savedRows] =
-      await Promise.all([
+  private _cachedSnapshot: Snapshot | null = null;
+  private _loadPromise: Promise<Snapshot> | null = null;
+
+  invalidateCache(): void {
+    this._cachedSnapshot = null;
+    this._loadPromise = null;
+  }
+
+  async load(force = false): Promise<Snapshot> {
+    if (!force && this._cachedSnapshot) {
+      return this._cachedSnapshot;
+    }
+    if (!force && this._loadPromise) {
+      return this._loadPromise;
+    }
+    this._loadPromise = (async () => {
+      try {
+        const [accounts, categories, payees, events, outbox, reconciles, settingsRows, assignRows, goalRows, allocationRows, recurringRows, occurrenceRows, streamRows, debtRows, debtEntryRows, notificationRows, templateRows, ruleRows, holdingRows, lotRows, priceRows, dashboardRows, savedRows] =
+          await Promise.all([
       this.store.list('accounts'),
       this.store.list('categories'),
       this.store.list('payees'),
@@ -355,7 +375,7 @@ export class WorkspaceRepository {
       assigns.set(budgetAssignId(d.categoryId, d.month), BigInt(d.amountMinor));
       if (d.note?.trim()) assignNotes.set(budgetAssignId(d.categoryId, d.month), d.note.trim());
     }
-    return {
+    const snap: Snapshot = {
       workspaceId: this.workspaceId,
       settings,
       accounts: accountList,
@@ -415,6 +435,13 @@ export class WorkspaceRepository {
       waiting,
       chart: this.chartFor(accountList, categoryList, debts, holdings, settings.currency),
     };
+        this._cachedSnapshot = snap;
+        return snap;
+      } finally {
+        this._loadPromise = null;
+      }
+    })();
+    return this._loadPromise;
   }
 
   chartFor(
@@ -449,6 +476,7 @@ export class WorkspaceRepository {
    * can't be mapped on its own (see RemoteOperation); null keeps the write on this device.
    */
   private async put(collection: string, id: string, data: object, type: string, baseVersion?: number, remote?: RemoteOperation | null) {
+    this.invalidateCache();
     const kept = remote === undefined && LOCAL_ONLY.has(type) ? null : remote;
     const payload = kept === undefined ? { collection, id, data } : { collection, id, data, remote: kept };
     await this.engine.save(record(collection, id, data, baseVersion ?? 0), type, payload, baseVersion);

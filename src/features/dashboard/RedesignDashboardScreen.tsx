@@ -351,31 +351,79 @@ export function RedesignDashboardScreen() {
                 </View>
               ) : null}
             </View>
-            <RedesignAmount testID="redesign-home-nw-amount" text={money(model.worthNow, privacy)} sizeVariant="amount" hidden={privacy} />
+            <RedesignAmount testID="redesign-home-nw-amount" text={money(model.worthNow, privacy)} sizeVariant="display" hidden={privacy} />
             {model.worthChange !== 0n ? (
-              <RedesignText tone="textSecondary">
+              <RedesignText variant="caption" tone="textSecondary">
                 {model.worthChange >= 0n
                   ? t('dashboard.redesign.worthUp', { amount: money(model.worthChange, privacy) })
                   : t('dashboard.redesign.worthDown', { amount: money(model.worthChange, privacy, true) })}
               </RedesignText>
             ) : (
-              <RedesignText tone="textSecondary">{t('dashboard.redesign.worthTrendHint')}</RedesignText>
+              <RedesignText variant="caption" tone="textSecondary">{t('dashboard.redesign.worthTrendHint')}</RedesignText>
             )}
+            {phone ? (
+              <View style={{ flexDirection: 'row', gap: sp.sm, paddingTop: sp.xs }}>
+                <Pressable
+                  testID="redesign-hero-add-btn"
+                  accessibilityRole="button"
+                  onPress={() => add?.open('expense')}
+                  style={{
+                    flex: 1,
+                    height: 40,
+                    backgroundColor: theme.primary,
+                    borderRadius: shape['radius-pill'],
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: sp.xs,
+                  }}
+                >
+                  <RedesignIcon name="plus" size={16} color={theme.textOnPrimary} />
+                  <RedesignText variant="button" style={{ color: theme.textOnPrimary }}>
+                    {t('tx.add')}
+                  </RedesignText>
+                </Pressable>
+                <Pressable
+                  testID="redesign-hero-transfer-btn"
+                  accessibilityRole="button"
+                  onPress={() => add?.open('transfer')}
+                  style={{
+                    flex: 1,
+                    height: 40,
+                    backgroundColor: theme.surfaceMuted,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    borderRadius: shape['radius-pill'],
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: sp.xs,
+                  }}
+                >
+                  <RedesignIcon name="repeat" size={16} color={theme.text} />
+                  <RedesignText variant="button" tone="text">
+                    {t('dashboard.redesign.presetTransfer')}
+                  </RedesignText>
+                </Pressable>
+              </View>
+            ) : null}
             {netWorthLine.length > 1 ? (
-              <View testID="redesign-home-nw-chart" style={{ height: 72, justifyContent: 'flex-end' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 56 }}>
+              <View testID="redesign-home-nw-chart" style={{ height: 48, justifyContent: 'flex-end', marginTop: sp.xs }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 44 }}>
                   {netWorthLine.map((p, i) => {
                     const max = netWorthLine.reduce((m, x) => (x.value > m ? x.value : m), 1n);
-                    const h = Math.max(4, Math.round((Number(p.value) / Number(max)) * 56));
+                    const isLatest = i === netWorthLine.length - 1;
+                    const h = Math.max(4, Math.round((Number(p.value) / Number(max)) * 44));
                     return (
                       <View
                         key={`${p.label}-${i}`}
                         style={{
                           flex: 1,
                           height: h,
-                          backgroundColor: i === netWorthLine.length - 1 ? theme.primary : theme.primarySoft,
-                          borderTopLeftRadius: 2,
-                          borderTopRightRadius: 2,
+                          backgroundColor: isLatest ? theme.primary : theme.borderStrong,
+                          opacity: isLatest ? 0.85 : 0.25,
+                          borderTopLeftRadius: 3,
+                          borderTopRightRadius: 3,
                         }}
                       />
                     );
@@ -688,22 +736,23 @@ export function RedesignDashboardScreen() {
 
   const checklistCard =
     items.length > 0 ? (
-      <View key="checklist" style={{ width: '100%', gap: sp.lg, marginBottom: sp.sm }}>
-        <View style={{ gap: sp.md }}>
-          <RedesignText variant="headline" testID="redesign-home-welcome">
-            {t('dashboard.redesign.welcome', { name: user?.name?.split(' ')[0] || user?.name || '' })}
-          </RedesignText>
-          <RedesignText tone="textSecondary">{t('dashboard.redesign.welcomeBody')}</RedesignText>
-        </View>
-        <CardShell testID="redesign-home-checklist">
+      <View key="checklist" style={{ width: '100%', marginBottom: sp.xs }}>
+        <CardShell testID="redesign-home-checklist" style={{ gap: sp.sm, padding: sp.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View>
-              <RedesignText variant="headline">{t('dashboard.redesign.getStarted')}</RedesignText>
-              <RedesignText tone="textSecondary">
-                {t('dashboard.redesign.progress', {
-                  done: items.filter((i) => i.done).length,
-                  total: items.length,
-                })}
+            <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+                <RedesignText variant="label" testID="redesign-home-welcome">
+                  {t('dashboard.redesign.getStarted')}
+                </RedesignText>
+                <RedesignText variant="caption" tone="textSecondary">
+                  · {t('dashboard.redesign.progress', {
+                    done: items.filter((i) => i.done).length,
+                    total: items.length,
+                  })}
+                </RedesignText>
+              </View>
+              <RedesignText variant="caption" tone="textSecondary">
+                {t('dashboard.redesign.welcomeBody')}
               </RedesignText>
             </View>
             <Pressable
@@ -730,25 +779,25 @@ export function RedesignDashboardScreen() {
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: sp.md,
-                paddingVertical: sp.sm,
+                gap: sp.sm,
+                paddingVertical: sp.xs,
                 borderTopWidth: 1,
                 borderColor: theme.border,
               }}
             >
               <View
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
                   backgroundColor: item.done ? theme.primary : 'transparent',
-                  borderWidth: item.done ? 0 : 2,
+                  borderWidth: item.done ? 0 : 1.5,
                   borderColor: theme.borderStrong,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                {item.done ? <RedesignIcon name="check" size={16} color={theme.textOnPrimary} /> : null}
+                {item.done ? <RedesignIcon name="check" size={12} color={theme.textOnPrimary} /> : null}
               </View>
               <View style={{ flex: 1 }}>
                 <RedesignText
@@ -757,11 +806,8 @@ export function RedesignDashboardScreen() {
                 >
                   {t(item.labelKey)}
                 </RedesignText>
-                <RedesignText variant="caption" tone="textSecondary">
-                  {snapshot ? redesignCheckHint(snapshot, item.key) : ''}
-                </RedesignText>
               </View>
-              {!item.done ? <RedesignIcon name="chevron-right" size={20} color={theme.textSecondary} /> : null}
+              {!item.done ? <RedesignIcon name="chevron-right" size={16} color={theme.textSecondary} /> : null}
             </Pressable>
           ))}
           {firstTodo ? (

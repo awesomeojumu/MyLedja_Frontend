@@ -16,7 +16,7 @@ type SyncContext = { store: LocalStore; engine: SyncEngine; status: SyncStatus; 
 
 const Context = createContext<SyncContext | null>(null);
 
-const TICK_MS = 2_000;
+const TICK_MS = 15_000;
 const DEVICE_KEY = 'm:deviceId';
 
 function createDefault(): { store: LocalStore; engine: SyncEngine; transport: SwitchingSyncTransport; deviceId: string } {

@@ -31,7 +31,7 @@ export function DevMenu() {
       style={{
         position: 'absolute',
         right: tokens.spacing['spacing-sm'],
-        bottom: tokens.spacing['spacing-sm'],
+        bottom: tokens.frame['bottom-bar'] + tokens.spacing['spacing-md'],
         zIndex: 0,
         flexDirection: 'row',
         alignItems: 'center',
