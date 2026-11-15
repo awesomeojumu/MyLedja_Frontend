@@ -221,7 +221,7 @@ export function SidebarList({ compact, onNavigate }: { compact: boolean; onNavig
               fontWeight: '700',
             }}
           >
-            M
+            {t('app.name').slice(0, 1)}
           </Text>
         </View>
       ) : (

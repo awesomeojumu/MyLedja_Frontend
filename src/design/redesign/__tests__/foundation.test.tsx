@@ -17,8 +17,8 @@ import redesignTokens from '../tokens.json';
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 
 describe('W0 redesign foundation', () => {
-  it('flag defaults off', () => {
-    expect(isRedesignEnabled()).toBe(false);
+  it('flag defaults on', () => {
+    expect(isRedesignEnabled()).toBe(true);
   });
 
   it('ships the icon set', async () => {

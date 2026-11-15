@@ -5,11 +5,16 @@ import { WorkspaceProvider } from '@/data/workspace/WorkspaceProvider';
 import { t } from '@/i18n';
 
 import { memorySync, renderWithProviders } from '../../../../test/helpers/render';
+import { resetParams } from '../../../../test/helpers/router';
 import { RulesScreen } from '../RulesScreen';
 import { ruleIfTitle, suggestRules } from '../helpers';
 
 jest.mock('expo-router', () => require('../../../../test/helpers/router'));
 jest.mock('@/design/redesign/flag', () => ({ isRedesignEnabled: () => true }));
+
+beforeEach(() => {
+  resetParams();
+});
 
 async function seeded() {
   const sync = memorySync();
