@@ -46,6 +46,12 @@ export function DesignProvider({
   const dark = choice === 'dark' || (choice === 'system' && scheme === 'dark');
   syncRedesignTheme(dark ? 'dark' : 'light');
 
+  useEffect(() => {
+    if (typeof document !== 'undefined' && document.documentElement) {
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    }
+  }, [dark]);
+
   const value = useMemo<DesignContext>(() => {
     return {
       theme: dark ? darkTheme : lightTheme,

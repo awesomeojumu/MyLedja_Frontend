@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { BackHandler, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useGlobalSearchParams, useRouter } from 'expo-router';
+import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 
 import {
   RedesignAmount,
@@ -139,6 +140,57 @@ function CardHeader({ title, onPress, trailing }: { title: string; onPress?: () 
   );
 }
 
+function NetWorthSparkline({
+  points,
+  lineColor,
+  gradientColor,
+}: {
+  points: { label: string; value: bigint }[];
+  lineColor: string;
+  gradientColor: string;
+}) {
+  if (points.length < 2) return null;
+  const numVals = points.map((p) => Number(p.value));
+  const rawMin = Math.min(...numVals);
+  const rawMax = Math.max(...numVals);
+  const range = rawMax - rawMin;
+  const min = range === 0 ? (rawMin > 0 ? 0 : rawMin) : rawMin;
+  const max = range === 0 ? (rawMax > 0 ? rawMax * 1.25 : 100) : rawMax;
+  const effectiveRange = max - min || 1;
+
+  const w = 300;
+  const h = 44;
+  const padY = 8;
+  const graphH = h - padY * 2;
+
+  const coords = numVals.map((v, i) => {
+    const x = Math.round((i / (numVals.length - 1)) * (w - 12) + 6);
+    const y = Math.round(h - padY - ((v - min) / effectiveRange) * graphH);
+    return { x, y };
+  });
+
+  const lineD = coords.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '');
+  const lastPt = coords[coords.length - 1]!;
+  const firstPt = coords[0]!;
+  const areaD = `${lineD} L ${lastPt.x} ${h} L ${firstPt.x} ${h} Z`;
+
+  return (
+    <View testID="redesign-home-nw-chart" style={{ height: h, width: '100%', marginTop: sp.xs }}>
+      <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+        <Defs>
+          <LinearGradient id="nwSparkGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={gradientColor} stopOpacity={0.35} />
+            <Stop offset="100%" stopColor={gradientColor} stopOpacity={0.0} />
+          </LinearGradient>
+        </Defs>
+        <Path d={areaD} fill="url(#nwSparkGrad)" />
+        <Path d={lineD} fill="none" stroke={lineColor} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+        <Circle cx={lastPt.x} cy={lastPt.y} r={4} fill={lineColor} />
+      </Svg>
+    </View>
+  );
+}
+
 /**
  * Figma Dashboard Home — Phone 16:865 / Tablet 11:922 / Web 1:141.
  * Only mounted when EXPO_PUBLIC_REDESIGN is on.
@@ -233,14 +285,18 @@ export function DashboardScreen() {
             id,
             <CardShell testID="redesign-home-left">
               <CardHeader title={t('dashboard.card.leftToSpend')} />
-              <RedesignText variant="amount">{t('dashboard.redesign.noBudgetTitle', { month: fullMonthName(month) })}</RedesignText>
-              <RedesignText tone="textSecondary">{t('dashboard.redesign.noBudgetBody')}</RedesignText>
-              <RedesignButton
-                testID="redesign-home-plan-budget"
-                kind="link"
-                label={t('dashboard.redesign.planBudget')}
-                onPress={() => router.push('/budget')}
-              />
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp.md, flexWrap: 'wrap' }}>
+                <View style={{ flex: 1, minWidth: 200, gap: sp.xxs }}>
+                  <RedesignText variant="headline">{t('dashboard.redesign.noBudgetTitle', { month: fullMonthName(month) })}</RedesignText>
+                  <RedesignText variant="caption" tone="textSecondary">{t('dashboard.redesign.noBudgetBody')}</RedesignText>
+                </View>
+                <RedesignButton
+                  testID="redesign-home-plan-budget"
+                  kind="secondary"
+                  label={t('dashboard.redesign.planBudget')}
+                  onPress={() => router.push('/budget')}
+                />
+              </View>
             </CardShell>,
           );
         }
@@ -408,28 +464,11 @@ export function DashboardScreen() {
               </View>
             ) : null}
             {netWorthLine.length > 1 ? (
-              <View testID="redesign-home-nw-chart" style={{ height: 48, justifyContent: 'flex-end', marginTop: sp.xs }}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 44 }}>
-                  {netWorthLine.map((p, i) => {
-                    const max = netWorthLine.reduce((m, x) => (x.value > m ? x.value : m), 1n);
-                    const isLatest = i === netWorthLine.length - 1;
-                    const h = Math.max(4, Math.round((Number(p.value) / Number(max)) * 44));
-                    return (
-                      <View
-                        key={`${p.label}-${i}`}
-                        style={{
-                          flex: 1,
-                          height: h,
-                          backgroundColor: isLatest ? theme.primary : theme.borderStrong,
-                          opacity: isLatest ? 0.85 : 0.25,
-                          borderTopLeftRadius: 3,
-                          borderTopRightRadius: 3,
-                        }}
-                      />
-                    );
-                  })}
-                </View>
-              </View>
+              <NetWorthSparkline
+                points={netWorthLine}
+                lineColor={theme.borderStrong}
+                gradientColor={theme.borderStrong}
+              />
             ) : null}
             {!phone ? (
               <RedesignButton kind="link" label={t('chart.viewAsTable')} onPress={() => router.push({ pathname: '/reports', params: { kind: 'netWorth' } })} />
@@ -838,24 +877,6 @@ export function DashboardScreen() {
               <RedesignText tone="textSecondary">{todayLong(todayStr)}</RedesignText>
             </View>
             <View style={{ flexDirection: 'row', gap: sp.sm, alignItems: 'center' }}>
-              <Pressable
-                testID="redesign-home-privacy-toggle"
-                accessibilityRole="button"
-                accessibilityLabel={t('dashboard.redesign.privacyToggle')}
-                onPress={() => setPrivacy(!privacy)}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: theme.surfaceMuted,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <RedesignIcon name={privacy ? 'eye-off' : 'eye'} size={20} color={theme.textSecondary} />
-              </Pressable>
               <RedesignButton testID="redesign-home-edit" kind="secondary" label={t('dashboard.redesign.editHome')} onPress={openEdit} />
               <RedesignButton
                 testID="redesign-home-add"
@@ -872,24 +893,6 @@ export function DashboardScreen() {
               </RedesignText>
               <RedesignText variant="caption" tone="textSecondary">{todayLong(todayStr)}</RedesignText>
             </View>
-            <Pressable
-              testID="redesign-home-privacy-toggle"
-              accessibilityRole="button"
-              accessibilityLabel={t('dashboard.redesign.privacyToggle')}
-              onPress={() => setPrivacy(!privacy)}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: theme.surfaceMuted,
-                borderWidth: 1,
-                borderColor: theme.border,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <RedesignIcon name={privacy ? 'eye-off' : 'eye'} size={20} color={theme.textSecondary} />
-            </Pressable>
           </View>
         )}
 
@@ -978,18 +981,24 @@ export function DashboardScreen() {
                   accessibilityRole="link"
                   onPress={() => router.push({ pathname: '/accounts', params: { account: account.id } })}
                   style={{
-                    padding: sp.md,
+                    paddingHorizontal: sp.md,
+                    paddingVertical: sp.sm,
                     backgroundColor: theme.surface,
                     borderRadius: shape['radius-md'],
                     borderWidth: 1,
                     borderColor: theme.border,
-                    minWidth: 140,
+                    minWidth: 150,
                     gap: sp.xxs,
                   }}
                 >
-                  <RedesignText variant="caption" tone="textSecondary">
-                    {account.name}
-                  </RedesignText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
+                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
+                      <RedesignIcon name="bank" size={12} color={theme.textSecondary} />
+                    </View>
+                    <RedesignText variant="caption" tone="textSecondary" numberOfLines={1}>
+                      {account.name}
+                    </RedesignText>
+                  </View>
                   <RedesignAmount
                     text={money(balance, privacy)}
                     sizeVariant="body"

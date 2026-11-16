@@ -39,6 +39,34 @@ export function setupPreventIosZoom() {
       input, select, textarea, button {
         touch-action: manipulation;
       }
+      /* Clean input styling: remove browser default outlines & inner borders */
+      input, select, textarea {
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+      }
+      input:focus, select:focus, textarea:focus {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+      /* Browser autofill theme harmony (neutralize browser blue/yellow overrides) */
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus,
+      input:-webkit-autofill:active {
+        -webkit-box-shadow: 0 0 0 1000px #102844 inset !important;
+        -webkit-text-fill-color: #F6F9FE !important;
+        caret-color: #F6F9FE !important;
+        transition: background-color 5000s ease-in-out 0s;
+      }
+      html[data-theme='light'] input:-webkit-autofill,
+      html[data-theme='light'] input:-webkit-autofill:hover,
+      html[data-theme='light'] input:-webkit-autofill:focus,
+      html[data-theme='light'] input:-webkit-autofill:active {
+        -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+        -webkit-text-fill-color: #001D34 !important;
+        caret-color: #001D34 !important;
+      }
     `;
     document.head.appendChild(style);
   }

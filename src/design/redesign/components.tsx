@@ -772,7 +772,16 @@ export function RedesignField({
               color: theme.text,
               paddingVertical: sp.sm,
               backgroundColor: 'transparent',
-              ...Platform.select({ web: { outline: 'none' } as any }),
+              borderWidth: 0,
+              ...Platform.select({
+                web: {
+                  outline: 'none',
+                  outlineStyle: 'none',
+                  borderWidth: 0,
+                  borderStyle: 'none',
+                  backgroundColor: 'transparent',
+                } as any,
+              }),
             },
           ]}
         />

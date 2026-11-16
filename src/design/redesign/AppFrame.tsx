@@ -42,19 +42,19 @@ function activeTab(pathname: string): string {
   return 'more';
 }
 
-function PrivacyToggle() {
+function PrivacyToggle({ testID = 'privacy-toggle' }: { testID?: string }) {
   const { privacy, setPrivacy } = useDesign();
   return (
     <Pressable
-      testID="privacy-toggle"
+      testID={testID}
       accessibilityRole="switch"
       accessibilityState={{ checked: privacy }}
       aria-checked={privacy}
       accessibilityLabel={privacy ? t('nav.privacyOff') : t('nav.privacyOn')}
       onPress={() => setPrivacy(!privacy)}
-      style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}
+      style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
     >
-      <RedesignIcon name={privacy ? 'eye-off' : 'eye'} size={24} color={theme.text} />
+      <RedesignIcon name={privacy ? 'eye-off' : 'eye'} size={22} color={theme.text} />
     </Pressable>
   );
 }
@@ -148,7 +148,7 @@ export function RedesignAppFrame({
                 {trailingExtra}
                 <CommandSearchButton />
                 <NotificationsBell items={inbox} />
-                {!isHome ? <PrivacyToggle /> : null}
+                <PrivacyToggle testID="redesign-home-privacy-toggle" />
               </View>
             )
           }
