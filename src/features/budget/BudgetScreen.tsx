@@ -531,10 +531,8 @@ export function BudgetScreen() {
           expectedIncomeMinor={currentConfig.expectedIncomeMinor}
           frameworkName={activeMonthFramework.name}
           overspentCount={overspentList.length}
-          onMoveMoney={() => setMoveMoneyVisible(true)}
           onCoverOverspending={() => setCoverOverspentVisible(true)}
           onOpenSetup={() => setSetupSheetVisible(true)}
-          onOpenCategoryBudgets={() => setCategoryBudgetsVisible(true)}
           onOpenIncomeBudget={() => setIncomeBudgetVisible(true)}
         />
 

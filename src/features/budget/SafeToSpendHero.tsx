@@ -14,10 +14,8 @@ export interface SafeToSpendHeroProps {
   expectedIncomeMinor: bigint;
   frameworkName: string;
   overspentCount: number;
-  onMoveMoney: () => void;
   onCoverOverspending: () => void;
   onOpenSetup: () => void;
-  onOpenCategoryBudgets?: () => void;
   onOpenIncomeBudget?: () => void;
 }
 
@@ -30,10 +28,8 @@ export function SafeToSpendHero({
   expectedIncomeMinor,
   frameworkName,
   overspentCount,
-  onMoveMoney,
   onCoverOverspending,
   onOpenSetup,
-  onOpenCategoryBudgets,
   onOpenIncomeBudget,
 }: SafeToSpendHeroProps) {
   const { colors, typography, spacing, radii } = useTheme();
@@ -121,46 +117,6 @@ export function SafeToSpendHero({
                 {frameworkName}
               </Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={onMoveMoney}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                borderRadius: radii.full,
-                backgroundColor: colors.surfaceSubtle,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: colors.borderSubtle,
-              }}
-            >
-              <ArrowLeftRight size={11} color={colors.textSecondary} style={{ marginRight: 3 }} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary, fontFamily: typography.fonts.medium }}>
-                Move Money
-              </Text>
-            </TouchableOpacity>
-
-            {onOpenCategoryBudgets && (
-              <TouchableOpacity
-                onPress={onOpenCategoryBudgets}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 8,
-                  paddingVertical: 3,
-                  borderRadius: radii.full,
-                  backgroundColor: colors.surfaceSubtle,
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: colors.borderSubtle,
-                }}
-              >
-                <Sliders size={11} color={colors.textSecondary} style={{ marginRight: 3 }} />
-                <Text style={{ fontSize: 11, color: colors.textSecondary, fontFamily: typography.fonts.medium }}>
-                  Category Budgets
-                </Text>
-              </TouchableOpacity>
-            )}
 
             {overspentCount > 0 && (
               <TouchableOpacity
@@ -393,28 +349,6 @@ export function SafeToSpendHero({
             icon={<Sliders size={15} color={colors.primary} />}
           />
         </View>
-
-        <View style={{ flex: 1 }}>
-          <Button
-            label="Move Money"
-            onPress={onMoveMoney}
-            variant="secondary"
-            size="md"
-            icon={<ArrowLeftRight size={15} color={colors.textPrimary} />}
-          />
-        </View>
-
-        {onOpenCategoryBudgets && (
-          <View style={{ flex: 1 }}>
-            <Button
-              label="Budgets"
-              onPress={onOpenCategoryBudgets}
-              variant="secondary"
-              size="md"
-              icon={<Sliders size={15} color={colors.primary} />}
-            />
-          </View>
-        )}
 
         {overspentCount > 0 && (
           <View style={{ flex: 1 }}>
