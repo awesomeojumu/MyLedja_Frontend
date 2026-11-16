@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Sliders, Settings, RotateCcw, Check } from 'lucide-react-native';
-import { useTheme, BottomSheet, CurrencyInput, Button } from '../../design';
+import { useTheme, BottomSheet, CurrencyInput, Button, formatCurrencyString } from '../../design';
 import { formatNaira, toInputText, parseAmount } from '../../money';
 import type { CategoryEnvelope } from './CategoryEnvelopeRow';
 
@@ -43,7 +43,7 @@ export function EditEnvelopeLimitSheet({
 
       subcategories.forEach((sub, idx) => {
         if (currentSubBudgets && currentSubBudgets[sub] !== undefined) {
-          map[sub] = toInputText(currentSubBudgets[sub]);
+          map[sub] = formatCurrencyString(toInputText(currentSubBudgets[sub]));
         } else {
           // Provide realistic intelligent initial default distribution
           let shareMinor = 0n;
@@ -56,12 +56,12 @@ export function EditEnvelopeLimitSheet({
             const remaining = (totalToDistribute * 50n) / 100n;
             shareMinor = remaining / BigInt(subcategories.length - 1);
           }
-          map[sub] = toInputText(shareMinor);
+          map[sub] = formatCurrencyString(toInputText(shareMinor));
         }
       });
       setInputMap(map);
     } else {
-      setSingleLimitText(toInputText(envelope.plannedMinor));
+      setSingleLimitText(formatCurrencyString(toInputText(envelope.plannedMinor)));
     }
   }, [envelope, visible, subcategories, currentSubBudgets]);
 
@@ -305,7 +305,7 @@ export function EditEnvelopeLimitSheet({
         {/* Save Button */}
         <View style={{ marginTop: 8 }}>
           <Button
-            label={`Save ${envelope.name} Budget (${formatNaira(totalCalculatedMinor)})`}
+            label={`Save ${envelope.name} Budget · ${formatNaira(totalCalculatedMinor)}`}
             onPress={handleSave}
             variant="primary"
             size="md"

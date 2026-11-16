@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { RotateCcw, Settings, ChevronDown, ChevronUp, Tag } from 'lucide-react-native';
-import { useTheme, BottomSheet, CurrencyInput, Button, Dropdown } from '../../design';
+import { useTheme, BottomSheet, CurrencyInput, Button, Dropdown, formatCurrencyString } from '../../design';
 import { formatNaira, toInputText, parseAmount } from '../../money';
 import { EXPENSE_TAXONOMY } from '../../data/categoriesTaxonomy';
 import type { IncomeStreamItem } from './IncomeProgressCard';
@@ -70,7 +70,7 @@ export function EditIncomeBudgetSheet({
 
         cat.subcategories.forEach((sub) => {
           const val = savedConfig.subBudgets?.[sub];
-          initialSubInputs[cat.id]![sub] = val !== undefined ? toInputText(val) : '';
+          initialSubInputs[cat.id]![sub] = val !== undefined ? formatCurrencyString(toInputText(val)) : '';
         });
       } else {
         // Defaults: Regular framework income (NOT earmarked)
@@ -81,11 +81,11 @@ export function EditIncomeBudgetSheet({
 
         cat.subcategories.forEach((sub, idx) => {
           if (cat.name.toLowerCase() === 'employment' && idx === 0) {
-            initialSubInputs[cat.id]![sub] = '700000'; // ₦700k default salary
+            initialSubInputs[cat.id]![sub] = '700,000'; // ₦700k default salary
           } else if (cat.name.toLowerCase() === 'business' && idx === 0) {
-            initialSubInputs[cat.id]![sub] = '200000'; // ₦200k default business
+            initialSubInputs[cat.id]![sub] = '200,000'; // ₦200k default business
           } else if (cat.name.toLowerCase() === 'investments' && idx === 0) {
-            initialSubInputs[cat.id]![sub] = '100000'; // ₦100k default investments
+            initialSubInputs[cat.id]![sub] = '100,000'; // ₦100k default investments
           } else {
             initialSubInputs[cat.id]![sub] = '';
           }
@@ -403,7 +403,7 @@ export function EditIncomeBudgetSheet({
         {/* Save Button */}
         <View style={{ marginTop: 8 }}>
           <Button
-            label={`Save Expected Income (${formatNaira(totalExpectedMinor)})`}
+            label={`Save Expected Income · ${formatNaira(totalExpectedMinor)}`}
             onPress={handleSave}
             variant="primary"
             size="md"

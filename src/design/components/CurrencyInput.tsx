@@ -11,6 +11,24 @@ export interface CurrencyInputProps {
   compact?: boolean;
 }
 
+export function formatCurrencyString(raw: string): string {
+  if (!raw) return '';
+  const negative = raw.startsWith('-');
+  const cleaned = raw.replace(/[^0-9.]/g, '');
+  if (!cleaned) return negative ? '-' : '';
+
+  const parts = cleaned.split('.');
+  const integerPart = parts[0]
+    ? parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    : '';
+
+  let result = integerPart;
+  if (parts.length > 1) {
+    result = `${integerPart}.${parts.slice(1).join('').slice(0, 2)}`;
+  }
+  return negative ? `-${result}` : result;
+}
+
 export function CurrencyInput({
   value,
   onChangeText,
@@ -22,12 +40,12 @@ export function CurrencyInput({
   const { colors, typography, spacing, radii } = useTheme();
 
   const handleChange = (raw: string) => {
-    // Strip everything except numbers and a single decimal point
-    const cleaned = raw.replace(/[^0-9.]/g, '');
-    onChangeText(cleaned);
+    const formatted = formatCurrencyString(raw);
+    onChangeText(formatted);
   };
 
   const showLabel = Boolean(label) && !compact;
+  const displayValue = formatCurrencyString(value);
 
   return (
     <View style={styles.container}>
@@ -74,7 +92,7 @@ export function CurrencyInput({
           ₦
         </Text>
         <TextInput
-          value={value}
+          value={displayValue}
           onChangeText={handleChange}
           placeholder={placeholder}
           placeholderTextColor={colors.textTertiary}
