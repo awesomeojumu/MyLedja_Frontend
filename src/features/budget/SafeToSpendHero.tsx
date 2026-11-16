@@ -338,30 +338,20 @@ export function SafeToSpendHero({
         </View>
       </View>
 
-      {/* Action Buttons */}
-      <View style={[styles.mobileActionsRow, { marginTop: spacing.md, gap: 8 }]}>
-        <View style={{ flex: 1 }}>
-          <Button
-            label="Adjust Structure"
-            onPress={onOpenSetup}
-            variant="secondary"
-            size="md"
-            icon={<Sliders size={15} color={colors.primary} />}
-          />
-        </View>
-
-        {overspentCount > 0 && (
+      {/* Overspending Deficit Alert Action (only when deficits exist) */}
+      {overspentCount > 0 && (
+        <View style={[styles.mobileActionsRow, { marginTop: spacing.md }]}>
           <View style={{ flex: 1 }}>
             <Button
-              label={`Cover (${overspentCount})`}
+              label={`Cover Overspending (${overspentCount})`}
               onPress={onCoverOverspending}
               variant="danger"
               size="md"
               icon={<AlertCircle size={15} color="#FFFFFF" />}
             />
           </View>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 }
