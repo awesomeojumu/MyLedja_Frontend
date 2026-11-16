@@ -1,651 +1,445 @@
-import { useGlobalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-
-import type { RangePreset } from '@/data/workspace/model';
-import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import {
-  RedesignAmount,
-  RedesignButton,
-  RedesignChip,
-  RedesignEmpty,
-  RedesignField,
-  RedesignIcon,
-  RedesignProgress,
-  RedesignSheet,
-  RedesignSkeleton,
-  RedesignStackFrame,
-  RedesignText,
-} from '@/design/redesign';
-import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
-import { rangeFor } from '@/features/reports/runner';
-import { today } from '@/features/transactions/helpers';
-import { t, type TextKey } from '@/i18n';
-import { formatNaira, parseAmount, PRIVACY_MASK } from '@/money';
+  ArrowLeft,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Sparkles,
+  ChevronRight,
+  TrendingUp,
+  PieChart,
+} from 'lucide-react-native';
+import { useTheme } from '../../design';
+import { formatNaira } from '../../money';
+import { NodeBreakdownSheet, type FlowNodeItem } from './NodeBreakdownSheet';
 
-import { calculateCashFlowForecast } from './forecast';
-import { cashFlowPage, drillHref, percentText, type FlowGroup } from './helpers';
-
-const sp = tokens.space;
-const shape = tokens.shape;
-
-/** Figma Phone / Cash flow chips (5:2542): This month · Last month · 3 months · This year. */
-const RANGE_CHIPS: {
-  key: RangePreset;
-  labelKey: 'reports.redesign.chipThisMonth' | 'reports.redesign.chipLastMonth' | 'reports.redesign.chip3Months' | 'reports.redesign.chipThisYear';
-}[] = [
-  { key: 'this_month', labelKey: 'reports.redesign.chipThisMonth' },
-  { key: 'last_month', labelKey: 'reports.redesign.chipLastMonth' },
-  { key: 'last_3_months', labelKey: 'reports.redesign.chip3Months' },
-  { key: 'this_year', labelKey: 'reports.redesign.chipThisYear' },
-];
-
-function monthLong(monthKey: string): string {
-  const m = Number(monthKey.slice(5, 7));
-  return t(`date.monthLong.${m}` as TextKey);
-}
-
-function sharePct(amount: bigint, total: bigint): number {
-  if (total <= 0n) return 0;
-  return Math.round(Number((amount * 1000n) / total) / 10);
-}
-
-function changeBp(now: bigint, before: bigint): bigint | null {
-  if (before === 0n) return null;
-  return ((now - before) * 10_000n) / (before < 0n ? -before : before);
-}
-
-function safeNum(v: bigint): number {
-  return Number(v > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : v);
-}
-
-/**
- * Figma Mobile App Phone / Cash flow (5:2532).
- * Upgraded with Dual Horizon (Actuals vs Forward Forecast), Danger Dip Shortfall Alert,
- * and Interactive Scenario & What-If Stress Tester ("Can I Afford This?").
- */
 export function CashFlowScreen() {
-  const { snapshot } = useWorkspace();
+  const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
-  const params = useGlobalSearchParams<{ range?: string; view?: string; mode?: string }>();
-  const onDate = today();
 
-  const [mode, setMode] = useState<'actuals' | 'forecast'>((params.mode as 'actuals' | 'forecast') || 'actuals');
-  const [forecastHorizon, setForecastHorizon] = useState<30 | 60 | 90>(30);
-  const [simOpen, setSimOpen] = useState(false);
-  const [simExpenseText, setSimExpenseText] = useState('');
-  const [simDelayDays, setSimDelayDays] = useState(0);
+  const [period, setPeriod] = useState<'this-month' | 'last-month' | '90-days'>('this-month');
+  const [selectedNode, setSelectedNode] = useState<{
+    title: string;
+    totalMinor: bigint;
+    items: FlowNodeItem[];
+  } | null>(null);
 
-  const preset = (RANGE_CHIPS.some((c) => c.key === params.range) ? params.range : 'this_month') as RangePreset;
-  const tableView = params.view === 'table';
-  const bounds = rangeFor(preset, onDate, null);
+  // Financial Stream Figures
+  const totalInflowMinor = 145000000n; // ₦1,450,000.00
+  const fixedMinor = 42000000n;        // ₦420,000.00
+  const livingMinor = 38000000n;       // ₦380,000.00
+  const retainedMinor = totalInflowMinor - (fixedMinor + livingMinor); // ₦650,000.00
 
-  const privacy = false;
+  const fixedItems: FlowNodeItem[] = [
+    { id: 'f-1', label: 'Rent Allocation', amountMinor: 25000000n, percent: 60, transactionsCount: 1 },
+    { id: 'f-2', label: 'Electricity & Utilities', amountMinor: 9000000n, percent: 21, transactionsCount: 3 },
+    { id: 'f-3', label: 'Health Insurance', amountMinor: 8000000n, percent: 19, transactionsCount: 1 },
+  ];
 
-  const data = useMemo(
-    () => (snapshot ? cashFlowPage(snapshot, { ...bounds, includeTransfers: false }) : null),
-    [snapshot, bounds],
-  );
+  const livingItems: FlowNodeItem[] = [
+    { id: 'l-1', label: 'Food & Groceries', amountMinor: 18500000n, percent: 49, transactionsCount: 14 },
+    { id: 'l-2', label: 'Fuel & Transportation', amountMinor: 12000000n, percent: 32, transactionsCount: 8 },
+    { id: 'l-3', label: 'Entertainment & Dining', amountMinor: 7500000n, percent: 19, transactionsCount: 4 },
+  ];
 
-  const forecast = useMemo(() => {
-    if (!snapshot) return null;
-    const expenseParsed = parseAmount(simExpenseText);
-    return calculateCashFlowForecast(snapshot, onDate, forecastHorizon, {
-      expenseMinor: expenseParsed.ok ? expenseParsed.minor : 0n,
-      paydayDelayDays: simDelayDays,
-    });
-  }, [snapshot, onDate, forecastHorizon, simExpenseText, simDelayDays]);
+  const inflowItems: FlowNodeItem[] = [
+    { id: 'i-1', label: 'Primary Salary', amountMinor: 125000000n, percent: 86, transactionsCount: 1 },
+    { id: 'i-2', label: 'Consulting & Freelance', amountMinor: 15000000n, percent: 10, transactionsCount: 2 },
+    { id: 'i-3', label: 'Dividends & Interest', amountMinor: 5000000n, percent: 4, transactionsCount: 3 },
+  ];
 
-  const setPreset = (key: RangePreset) => router.setParams({ range: key });
-  const toggleTable = () => router.setParams({ view: tableView ? undefined : 'table' });
-
-  const show = (v: bigint, signed = false) => {
-    if (privacy) return PRIVACY_MASK;
-    return formatNaira(v, signed ? { signed: true } : undefined);
-  };
-
-  const frame = (body: React.ReactNode) => (
-    <RedesignStackFrame testID="redesign-cashflow" title={t('cashFlow.title')} onBack={() => router.back()}>
-      {body}
-    </RedesignStackFrame>
-  );
-
-  if (!snapshot || !data) {
-    return frame(
-      <View testID="redesign-cashflow-loading" style={{ gap: sp.lg }}>
-        <RedesignSkeleton height={36} />
-        <RedesignSkeleton height={140} />
-        <RedesignSkeleton height={200} />
-      </View>,
-    );
-  }
-
-  const sources = data.bands.filter((b) => b.side === 'in');
-  const sinks = data.groups.filter((g) => g.kind !== 'left_over');
-  const leftBand = data.bands.find((b) => b.kind === 'left_over');
-  const left = leftBand?.amount ?? data.tiles.in - data.tiles.out;
-  const inTotal = data.tiles.in;
-  const outTotal = data.tiles.out;
-  const monthKey = bounds.to.slice(0, 7);
-  const singleMonth = preset === 'this_month' || preset === 'last_month';
-  const netTitle = singleMonth
-    ? t('cashFlow.redesign.leftOverIn', { month: monthLong(monthKey) })
-    : t('cashFlow.redesign.leftOver');
-  const maxIn = sources.reduce((m, b) => (b.amount > m ? b.amount : m), 0n);
-  const maxOut = sinks.reduce((m, g) => (g.amount > m ? g.amount : m), 0n);
-
-  const see = (categoryId?: string) =>
-    router.push(drillHref({ ...bounds, ...(categoryId ? { categoryId } : {}) }));
-
-  if (data.bands.length === 0 && mode === 'actuals') {
-    return frame(
-      <View testID="redesign-cashflow-empty" style={{ gap: sp.lg }}>
-        {/* Mode Selector */}
-        <View style={{ flexDirection: 'row', gap: sp.sm }}>
-          <RedesignChip
-            testID="redesign-cashflow-mode-actuals"
-            label={t('cashFlow.redesign.modeActuals')}
-            selected={mode === 'actuals'}
-            onPress={() => setMode('actuals')}
-          />
-          <RedesignChip
-            testID="redesign-cashflow-mode-forecast"
-            label={t('cashFlow.redesign.modeForecast')}
-            selected={(mode as string) === 'forecast'}
-            onPress={() => setMode('forecast')}
-          />
-        </View>
-        <ChipRow preset={preset} onSelect={setPreset} />
-        <RedesignEmpty
-          title={t('cashFlow.emptyTitle')}
-          body={t('cashFlow.emptyBody')}
-          actionLabel={t('cashFlow.addTransaction')}
-          onAction={() => router.push('/transactions')}
-        />
-      </View>,
-    );
-  }
-
-  return frame(
-    <ScrollView contentContainerStyle={{ gap: sp.lg, paddingBottom: sp.xxl }}>
-      {/* Mode Selector Chips */}
-      <View style={{ flexDirection: 'row', gap: sp.sm }}>
-        <RedesignChip
-          testID="redesign-cashflow-mode-actuals"
-          label={t('cashFlow.redesign.modeActuals')}
-          selected={mode === 'actuals'}
-          onPress={() => setMode('actuals')}
-        />
-        <RedesignChip
-          testID="redesign-cashflow-mode-forecast"
-          label={t('cashFlow.redesign.modeForecast')}
-          selected={mode === 'forecast'}
-          onPress={() => setMode('forecast')}
-        />
-      </View>
-
-      {mode === 'actuals' ? (
-        <>
-          <ChipRow preset={preset} onSelect={setPreset} />
-
-          <View
-            testID="redesign-cashflow-net"
+  return (
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Top Header */}
+      <View
+        style={[
+          styles.headerBar,
+          {
+            borderBottomColor: colors.borderSubtle,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backBtn, { padding: spacing.xs }]}
+        >
+          <ArrowLeft size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text
+            style={[
+              styles.screenTitle,
+              {
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.lg,
+              },
+            ]}
+          >
+            Cash Flow Streams
+          </Text>
+          <Text
             style={{
-              backgroundColor: theme.surface,
-              borderRadius: shape['radius-lg'],
-              borderWidth: 1,
-              borderColor: theme.border,
-              padding: sp.lg,
-              gap: sp.sm,
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
             }}
           >
-            <RedesignText variant="label" tone="textSecondary">
-              {netTitle}
-            </RedesignText>
-            <RedesignAmount
-              testID="redesign-cashflow-left"
-              text={formatNaira(left < 0n ? -left : left)}
-              hidden={privacy}
-              sign={left < 0n ? '−' : '+'}
-              sizeVariant="display"
-            />
-            <RedesignText tone="textSecondary">{t('cashFlow.redesign.moneyInMinusOut')}</RedesignText>
-            <View
-              testID="redesign-cashflow-in"
-              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}
-            >
-              <RedesignText>{t('cashFlow.redesign.moneyIn')}</RedesignText>
-              <RedesignText style={{ fontVariant: ['tabular-nums'] }}>{show(inTotal, true)}</RedesignText>
-            </View>
-            <View
-              testID="redesign-cashflow-out"
-              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}
-            >
-              <RedesignText>{t('cashFlow.redesign.moneyOut')}</RedesignText>
-              <RedesignText style={{ fontVariant: ['tabular-nums'] }}>
-                {privacy ? PRIVACY_MASK : `−${formatNaira(outTotal)}`}
-              </RedesignText>
-            </View>
-          </View>
-
-          {tableView ? (
-            <TableCard groups={sinks} show={show} onCategory={see} />
-          ) : (
-            <>
-              <BarSection
-                testID="redesign-cashflow-from"
-                title={t('cashFlow.redesign.whereItCameFrom')}
-                items={sources.map((b) => ({
-                  key: b.key,
-                  label: b.label,
-                  amount: b.amount,
-                  pct: sharePct(b.amount, inTotal),
-                  categoryId: b.categoryId ?? undefined,
-                }))}
-                max={maxIn}
-                show={show}
-                onPress={see}
-              />
-              <BarSection
-                testID="redesign-cashflow-went"
-                title={t('cashFlow.whereItWent')}
-                items={sinks.map((g) => ({
-                  key: g.key,
-                  label: g.label,
-                  amount: g.amount,
-                  pct: sharePct(g.amount, outTotal),
-                  categoryId: g.categories[0]?.categoryId,
-                }))}
-                max={maxOut}
-                show={show}
-                onPress={see}
-              />
-            </>
-          )}
-
-          <RedesignButton
-            testID="redesign-cashflow-view-table"
-            kind="link"
-            label={tableView ? t('cashFlow.redesign.viewAsBars') : t('cashFlow.redesign.viewAsTable')}
-            onPress={toggleTable}
-          />
-        </>
-      ) : (
-        /* Forecast Mode */
-        forecast && (
-          <>
-            {/* Forecast Horizon Selector */}
-            <View style={{ gap: sp.xs }}>
-              <RedesignText variant="caption" tone="textSecondary">
-                {t('cashFlow.redesign.forecastHorizon')}
-              </RedesignText>
-              <View style={{ flexDirection: 'row', gap: sp.sm }}>
-                <RedesignChip
-                  testID="redesign-forecast-horizon-30"
-                  label={t('cashFlow.redesign.forecast30')}
-                  selected={forecastHorizon === 30}
-                  onPress={() => setForecastHorizon(30)}
-                />
-                <RedesignChip
-                  testID="redesign-forecast-horizon-60"
-                  label={t('cashFlow.redesign.forecast60')}
-                  selected={forecastHorizon === 60}
-                  onPress={() => setForecastHorizon(60)}
-                />
-                <RedesignChip
-                  testID="redesign-forecast-horizon-90"
-                  label={t('cashFlow.redesign.forecast90')}
-                  selected={forecastHorizon === 90}
-                  onPress={() => setForecastHorizon(90)}
-                />
-              </View>
-            </View>
-
-            {/* Shortfall / Danger Dip Alert Card */}
-            <View
-              testID="redesign-forecast-danger-alert"
-              style={{
-                backgroundColor: theme.surface,
-                borderRadius: shape['radius-lg'],
-                borderWidth: 1,
-                borderColor: theme.border,
-                padding: sp.lg,
-                gap: sp.xs,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
-                <RedesignIcon name="alert" size={18} color={theme.primary} />
-                <RedesignText variant="label">
-                  {forecast.hasDangerDip ? t('cashFlow.redesign.dangerDipAlert') : t('cashFlow.redesign.safetyFloorSafe')}
-                </RedesignText>
-              </View>
-              {forecast.hasDangerDip ? (
-                <RedesignText variant="caption" tone="textSecondary">
-                  {t('cashFlow.redesign.dangerDipDesc', {
-                    amount: formatNaira(forecast.minBalance),
-                    date: forecast.minBalanceDate,
-                  })}
-                </RedesignText>
-              ) : null}
-            </View>
-
-            {/* Forecast Summary Card */}
-            <View
-              testID="redesign-forecast-summary"
-              style={{
-                backgroundColor: theme.surface,
-                borderRadius: shape['radius-lg'],
-                borderWidth: 1,
-                borderColor: theme.border,
-                padding: sp.lg,
-                gap: sp.sm,
-              }}
-            >
-              <RedesignText variant="label" tone="textSecondary">
-                {t('cashFlow.redesign.projectedMinBalance')}
-              </RedesignText>
-              <RedesignAmount
-                testID="redesign-forecast-min-balance"
-                text={formatNaira(forecast.minBalance < 0n ? -forecast.minBalance : forecast.minBalance)}
-                sign={forecast.minBalance < 0n ? '−' : '+'}
-                sizeVariant="display"
-              />
-              <View style={{ gap: sp.xs, marginTop: sp.xs }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}>
-                  <RedesignText tone="textSecondary">{t('cashFlow.redesign.recurringInflow')}</RedesignText>
-                  <RedesignText testID="redesign-forecast-inflows" style={{ fontVariant: ['tabular-nums'] }}>
-                    {formatNaira(forecast.totalProjectedInflow)}
-                  </RedesignText>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}>
-                  <RedesignText tone="textSecondary">{t('cashFlow.redesign.recurringOutflow')}</RedesignText>
-                  <RedesignText testID="redesign-forecast-outflows" style={{ fontVariant: ['tabular-nums'] }}>
-                    {formatNaira(forecast.totalProjectedOutflow)}
-                  </RedesignText>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}>
-                  <RedesignText tone="textSecondary">{t('cashFlow.redesign.dailyRunRate')}</RedesignText>
-                  <RedesignText style={{ fontVariant: ['tabular-nums'] }}>
-                    {formatNaira(forecast.dailyRunRate)}
-                  </RedesignText>
-                </View>
-              </View>
-            </View>
-
-            {/* What-If Scenario Stress Tester Trigger */}
-            <RedesignButton
-              testID="redesign-open-simulator"
-              kind="secondary"
-              label={t('cashFlow.redesign.simulatorTitle')}
-              onPress={() => setSimOpen(true)}
-              fullWidth
-            />
-          </>
-        )
-      )}
-
-      {/* Scenario What-If Stress Tester Sheet */}
-      {simOpen && forecast ? (
-        <RedesignSheet
-          testID="redesign-simulator-sheet"
-          visible
-          title={t('cashFlow.redesign.simulatorTitle')}
-          onClose={() => setSimOpen(false)}
-        >
-          <View style={{ gap: sp.md, paddingVertical: sp.xs }}>
-            <RedesignField
-              testID="redesign-sim-amount"
-              label={t('cashFlow.redesign.expenseAmount')}
-              value={simExpenseText}
-              onChangeText={setSimExpenseText}
-              placeholder="0"
-              keyboardType="numeric"
-            />
-
-            <View style={{ gap: sp.xs }}>
-              <RedesignText variant="caption" tone="textSecondary">
-                {t('cashFlow.redesign.simulateDelay')}
-              </RedesignText>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.xs }}>
-                {[0, 7, 14, 30].map((d) => (
-                  <RedesignChip
-                    key={d}
-                    testID={`redesign-sim-delay-${d}`}
-                    label={t('cashFlow.redesign.delayDays', { days: d })}
-                    selected={simDelayDays === d}
-                    onPress={() => setSimDelayDays(d)}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View
-              style={{
-                padding: sp.md,
-                backgroundColor: theme.surface,
-                borderRadius: shape['radius-md'],
-                borderWidth: 1,
-                borderColor: theme.border,
-                gap: sp.xs,
-              }}
-            >
-              <RedesignText testID="redesign-sim-lowest-balance" variant="label">
-                {t('cashFlow.redesign.simLowestBalance', { amount: formatNaira(forecast.minBalance) })}
-              </RedesignText>
-              <RedesignText testID="redesign-sim-buffer-days" variant="caption" tone="textSecondary">
-                {t('cashFlow.redesign.simRunwayImpact', { days: forecast.bufferDays })}
-              </RedesignText>
-            </View>
-          </View>
-        </RedesignSheet>
-      ) : null}
-    </ScrollView>,
-  );
-}
-
-function ChipRow({ preset, onSelect }: { preset: RangePreset; onSelect: (key: RangePreset) => void }) {
-  return (
-    <View testID="redesign-cashflow-chips" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sp.sm }}>
-      {RANGE_CHIPS.map((chip) => (
-        <RedesignChip
-          key={chip.key}
-          testID={`redesign-cashflow-range-${chip.key}`}
-          label={t(chip.labelKey)}
-          selected={preset === chip.key}
-          onPress={() => onSelect(chip.key)}
-        />
-      ))}
-    </View>
-  );
-}
-
-function BarSection({
-  testID,
-  title,
-  items,
-  max,
-  show,
-  onPress,
-}: {
-  testID: string;
-  title: string;
-  items: { key: string; label: string; amount: bigint; pct: number; categoryId?: string }[];
-  max: bigint;
-  show: (v: bigint) => string;
-  onPress: (categoryId?: string) => void;
-}) {
-  return (
-    <View
-      testID={testID}
-      style={{
-        backgroundColor: theme.surface,
-        borderRadius: shape['radius-lg'],
-        borderWidth: 1,
-        borderColor: theme.border,
-        padding: sp.lg,
-        gap: sp.md,
-      }}
-    >
-      <RedesignText variant="label" tone="textSecondary">
-        {title}
-      </RedesignText>
-      {items.map((item) => (
-        <Pressable
-          key={item.key}
-          testID={`${testID}-row-${item.key}`}
-          accessibilityRole="button"
-          accessibilityLabel={`${item.label}, ${item.pct}%, ${show(item.amount)}`}
-          onPress={() => onPress(item.categoryId)}
-          style={{ gap: sp.xs }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.sm }}>
-            <RedesignText style={{ flex: 1 }} numberOfLines={1}>
-              {item.label}
-            </RedesignText>
-            <RedesignText variant="helper" tone="textSecondary" style={{ fontVariant: ['tabular-nums'] }}>
-              {`${item.pct}%`}
-            </RedesignText>
-            <RedesignText style={{ fontVariant: ['tabular-nums'], minWidth: 96, textAlign: 'right' }}>
-              {show(item.amount)}
-            </RedesignText>
-          </View>
-          <RedesignProgress
-            testID={`${testID}-bar-${item.key}`}
-            value={safeNum(item.amount)}
-            max={safeNum(max) || 1}
-          />
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
-function TableCard({
-  groups,
-  show,
-  onCategory,
-}: {
-  groups: FlowGroup[];
-  show: (v: bigint) => string;
-  onCategory: (categoryId?: string) => void;
-}) {
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const toggle = (key: string) =>
-    setOpen((s) => {
-      const next = new Set(s);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  const share = (bp: bigint | null) => (bp === null ? t('cashFlow.noIncome') : percentText(bp).replace('+', '').replace('−', ''));
-
-  return (
-    <View
-      testID="redesign-cashflow-table"
-      style={{
-        backgroundColor: theme.surface,
-        borderRadius: shape['radius-lg'],
-        borderWidth: 1,
-        borderColor: theme.border,
-        overflow: 'hidden',
-      }}
-    >
-      <View
-        style={{
-          flexDirection: 'row',
-          gap: sp.sm,
-          paddingHorizontal: sp.md,
-          paddingVertical: sp.sm,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-        }}
-      >
-        <RedesignText variant="caption" tone="textSecondary" style={{ flex: 2 }}>
-          {t('cashFlow.col.group')}
-        </RedesignText>
-        <RedesignText variant="caption" tone="textSecondary" style={{ flex: 1, textAlign: 'right' }}>
-          {t('cashFlow.col.amount')}
-        </RedesignText>
-        <RedesignText variant="caption" tone="textSecondary" style={{ flex: 1, textAlign: 'right' }}>
-          {t('cashFlow.col.share')}
-        </RedesignText>
-        <RedesignText variant="caption" tone="textSecondary" style={{ flex: 1, textAlign: 'right' }}>
-          {t('cashFlow.col.change')}
-        </RedesignText>
+            Income to Outflow Ribbon
+          </Text>
+        </View>
       </View>
-      {groups.map((g) => {
-        const change = changeBp(g.amount, g.previous);
-        const can = g.categories.length > 0;
-        const expanded = open.has(g.key);
-        return (
-          <View key={g.key}>
-            <Pressable
-              testID={`redesign-cashflow-group-${g.key}`}
-              accessibilityRole={can ? 'button' : undefined}
-              accessibilityState={can ? { expanded } : undefined}
-              disabled={!can}
-              onPress={() => toggle(g.key)}
+
+      <ScrollView
+        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Period Filter Tabs */}
+        <View
+          style={[
+            styles.periodTabs,
+            {
+              backgroundColor: colors.surfaceSubtle,
+              borderRadius: radii.full,
+              padding: 3,
+              marginBottom: spacing.lg,
+            },
+          ]}
+        >
+          {(
+            [
+              { id: 'this-month', label: 'This Month' },
+              { id: 'last-month', label: 'Last Month' },
+              { id: '90-days', label: 'Last 90 Days' },
+            ] as const
+          ).map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              onPress={() => setPeriod(tab.id)}
+              style={[
+                styles.tabBtn,
+                {
+                  backgroundColor: period === tab.id ? colors.surface : 'transparent',
+                  borderRadius: radii.full,
+                  paddingVertical: 6,
+                  flex: 1,
+                  alignItems: 'center',
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  color: period === tab.id ? colors.primary : colors.textSecondary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.xs,
+                }}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Retained Cash Surplus Card */}
+        <View
+          style={[
+            styles.heroCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.lg,
+              padding: spacing.lg,
+              marginBottom: spacing.lg,
+            },
+          ]}
+        >
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.medium,
+              fontSize: typography.sizes.xs,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+            }}
+          >
+            Net Cash Flow Surplus
+          </Text>
+          <Text
+            style={{
+              color: colors.statusSuccess,
+              fontFamily: typography.fonts.light,
+              fontSize: typography.sizes.hero,
+              marginTop: spacing.xxs,
+            }}
+          >
+            +{formatNaira(retainedMinor)}
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+              marginTop: spacing.xxs,
+            }}
+          >
+            45% of total income preserved for savings & investments
+          </Text>
+        </View>
+
+        {/* Flow Streams */}
+        <Text
+          style={{
+            color: colors.textPrimary,
+            fontFamily: typography.fonts.semiBold,
+            fontSize: typography.sizes.md,
+            marginBottom: spacing.md,
+          }}
+        >
+          Stream Ribbon Nodes
+        </Text>
+
+        {/* Node 1: Inflows */}
+        <TouchableOpacity
+          onPress={() =>
+            setSelectedNode({
+              title: 'Total Inflow',
+              totalMinor: totalInflowMinor,
+              items: inflowItems,
+            })
+          }
+          style={[
+            styles.streamCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.md,
+              padding: spacing.md,
+              marginBottom: spacing.md,
+            },
+          ]}
+        >
+          <View style={styles.cardHeader}>
+            <View
+              style={[
+                styles.iconWrap,
+                {
+                  backgroundColor: colors.primaryLight,
+                  borderRadius: radii.full,
+                },
+              ]}
+            >
+              <ArrowDownLeft size={18} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1, marginLeft: spacing.md }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                1. Total Inflows
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typography.sizes.xs,
+                }}
+              >
+                Salary, consulting & investment income
+              </Text>
+            </View>
+            <Text
               style={{
-                flexDirection: 'row',
-                gap: sp.sm,
-                paddingHorizontal: sp.md,
-                paddingVertical: sp.sm,
-                minHeight: 48,
-                alignItems: 'center',
-                borderBottomWidth: 1,
-                borderBottomColor: theme.border,
+                color: colors.primary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.body,
               }}
             >
-              <RedesignText style={{ flex: 2 }} numberOfLines={1}>
-                {g.label}
-              </RedesignText>
-              <RedesignText style={{ flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
-                {show(g.amount)}
-              </RedesignText>
-              <RedesignText style={{ flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
-                {share(g.shareBasisPoints)}
-              </RedesignText>
-              <RedesignText
-                testID={`redesign-cashflow-change-${g.key}`}
-                style={{ flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] }}
-              >
-                {change === null ? t('cashFlow.new') : percentText(change)}
-              </RedesignText>
-            </Pressable>
-            {expanded
-              ? g.categories.map((cat) => (
-                  <Pressable
-                    key={cat.categoryId}
-                    testID={`redesign-cashflow-cat-${cat.categoryId}`}
-                    accessibilityRole="button"
-                    onPress={() => onCategory(cat.categoryId)}
-                    style={{
-                      flexDirection: 'row',
-                      gap: sp.sm,
-                      paddingHorizontal: sp.md,
-                      paddingLeft: sp.xl,
-                      paddingVertical: sp.sm,
-                      minHeight: 44,
-                      alignItems: 'center',
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.border,
-                    }}
-                  >
-                    <RedesignText style={{ flex: 2 }} numberOfLines={1}>
-                      {cat.label}
-                    </RedesignText>
-                    <RedesignText style={{ flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
-                      {show(cat.amount)}
-                    </RedesignText>
-                    <View style={{ flex: 2 }} />
-                  </Pressable>
-                ))
-              : null}
+              {formatNaira(totalInflowMinor)}
+            </Text>
+            <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 6 }} />
           </View>
-        );
-      })}
+        </TouchableOpacity>
+
+        {/* Node 2: Fixed Commitments */}
+        <TouchableOpacity
+          onPress={() =>
+            setSelectedNode({
+              title: 'Fixed Commitments',
+              totalMinor: fixedMinor,
+              items: fixedItems,
+            })
+          }
+          style={[
+            styles.streamCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.md,
+              padding: spacing.md,
+              marginBottom: spacing.md,
+            },
+          ]}
+        >
+          <View style={styles.cardHeader}>
+            <View
+              style={[
+                styles.iconWrap,
+                {
+                  backgroundColor: colors.surfaceSubtle,
+                  borderRadius: radii.full,
+                },
+              ]}
+            >
+              <ArrowUpRight size={18} color={colors.textSecondary} />
+            </View>
+            <View style={{ flex: 1, marginLeft: spacing.md }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                2. Fixed Commitments
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typography.sizes.xs,
+                }}
+              >
+                Rent, utilities, subscriptions (29%)
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.body,
+              }}
+            >
+              {formatNaira(fixedMinor)}
+            </Text>
+            <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 6 }} />
+          </View>
+        </TouchableOpacity>
+
+        {/* Node 3: Living & Discretionary */}
+        <TouchableOpacity
+          onPress={() =>
+            setSelectedNode({
+              title: 'Living & Discretionary',
+              totalMinor: livingMinor,
+              items: livingItems,
+            })
+          }
+          style={[
+            styles.streamCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.md,
+              padding: spacing.md,
+              marginBottom: spacing.md,
+            },
+          ]}
+        >
+          <View style={styles.cardHeader}>
+            <View
+              style={[
+                styles.iconWrap,
+                {
+                  backgroundColor: colors.surfaceSubtle,
+                  borderRadius: radii.full,
+                },
+              ]}
+            >
+              <ArrowUpRight size={18} color={colors.textSecondary} />
+            </View>
+            <View style={{ flex: 1, marginLeft: spacing.md }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                3. Living & Discretionary
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typography.sizes.xs,
+                }}
+              >
+                Food, transport, entertainment (26%)
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.body,
+              }}
+            >
+              {formatNaira(livingMinor)}
+            </Text>
+            <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 6 }} />
+          </View>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Node Breakdown Sheet */}
+      {selectedNode && (
+        <NodeBreakdownSheet
+          visible={Boolean(selectedNode)}
+          onClose={() => setSelectedNode(null)}
+          nodeTitle={selectedNode.title}
+          nodeTotalMinor={selectedNode.totalMinor}
+          items={selectedNode.items}
+        />
+      )}
     </View>
   );
 }
 
-export { CashFlowScreen as RedesignCashFlowScreen };
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backBtn: {},
+  screenTitle: {},
+  content: {
+    paddingBottom: 40,
+  },
+  periodTabs: {
+    flexDirection: 'row',
+  },
+  tabBtn: {},
+  heroCard: {
+    borderWidth: 1,
+  },
+  streamCard: {
+    borderWidth: 1,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

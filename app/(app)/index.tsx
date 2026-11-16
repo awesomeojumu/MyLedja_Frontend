@@ -1,5 +1,6 @@
-import { DashboardScreen } from '@/features/dashboard/DashboardScreen';
+import React from 'react';
+import { DashboardScreen } from '../../src/features/dashboard/DashboardScreen';
 
-export default function DashboardPage() {
+export default function HomeRoute() {
   return <DashboardScreen />;
 }

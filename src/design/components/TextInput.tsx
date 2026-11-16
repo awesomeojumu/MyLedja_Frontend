@@ -1,91 +1,144 @@
-import { forwardRef, useState, type ComponentRef } from 'react';
+import React, { useState } from 'react';
 import {
-  Platform,
-  Pressable,
-  TextInput as RNTextInput,
   View,
+  Text,
+  TextInput as RNTextInput,
+  StyleSheet,
   type TextInputProps as RNTextInputProps,
+  type ViewStyle,
 } from 'react-native';
-import { t } from '@/i18n';
-import tokens from '../tokens.json';
-import { useTheme } from '../ThemeProvider';
-import { Text, typeStyle } from './Text';
+import { useTheme } from '../theme';
 
-export type TextInputProps = RNTextInputProps & {
-  label: string;
-  error?: string | null;
-  caption?: string;
-  secure?: boolean;
-};
+export interface TextInputProps extends RNTextInputProps {
+  label?: string;
+  error?: string;
+  helperText?: string;
+  containerStyle?: ViewStyle;
+  leftElement?: React.ReactNode;
+  rightElement?: React.ReactNode;
+}
 
-export const TextInput = forwardRef<ComponentRef<typeof RNTextInput>, TextInputProps>(function TextInput(
-  { label, error, caption, secure, style, onFocus, onBlur, ...rest },
-  ref,
-) {
-  const theme = useTheme();
-  const [focused, setFocused] = useState(false);
-  const [hidden, setHidden] = useState(true);
+export function TextInput({
+  label,
+  error,
+  helperText,
+  containerStyle,
+  leftElement,
+  rightElement,
+  style,
+  onFocus,
+  onBlur,
+  ...rest
+}: TextInputProps) {
+  const { colors, typography, spacing, radii } = useTheme();
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
-    <View style={{ gap: tokens.spacing['spacing-xs'] }}>
-      <Text variant="caption" tone="textSecondary" nativeID={`${rest.testID ?? label}-label`}>
-        {label}
-      </Text>
-      <View style={{ justifyContent: 'center' }}>
-        <RNTextInput
-          ref={ref}
-          accessibilityLabel={label}
-          aria-invalid={!!error}
-          placeholderTextColor={theme.textHelper}
-          secureTextEntry={secure && hidden}
-          onFocus={(e) => {
-            setFocused(true);
-            onFocus?.(e);
-          }}
-          onBlur={(e) => {
-            setFocused(false);
-            onBlur?.(e);
-          }}
-          {...rest}
+    <View style={[styles.container, containerStyle]}>
+      {label && (
+        <Text
           style={[
-            typeStyle('body-md'),
+            styles.label,
             {
-              fontSize: 16,
-              color: theme.text,
-              backgroundColor: theme.card,
-              borderWidth: 1,
-              borderColor: error ? theme.error : focused ? theme.link : theme.inputBorder,
-              borderRadius: tokens.radius['rounded-sm'],
-              paddingVertical: tokens.spacing['spacing-sm'],
-              paddingHorizontal: tokens.spacing['spacing-md'],
-              paddingRight: secure ? 88 : tokens.spacing['spacing-md'],
-              minHeight: 48,
-              ...Platform.select({ web: { outline: 'none' } as any }),
+              color: error ? colors.statusDanger : colors.textPrimary,
+              fontFamily: typography.fonts.medium,
+              fontSize: typography.sizes.sm,
+              marginBottom: spacing.xs,
+            },
+          ]}
+        >
+          {label}
+        </Text>
+      )}
+
+      <View
+        style={[
+          styles.inputWrapper,
+          {
+            backgroundColor: colors.surface,
+            borderColor: error ? colors.statusDanger : isFocused ? colors.primary : colors.border,
+            borderWidth: isFocused || error ? 1.5 : 1,
+            borderRadius: radii.md,
+            paddingHorizontal: spacing.md,
+          },
+        ]}
+      >
+        {leftElement && <View style={[styles.element, { marginRight: spacing.sm }]}>{leftElement}</View>}
+        <RNTextInput
+          placeholderTextColor={colors.textTertiary}
+          style={[
+            styles.input,
+            {
+              color: colors.textPrimary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.body,
+              paddingVertical: spacing.sm + 4,
             },
             style,
           ]}
+          onFocus={(e) => {
+            setIsFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            onBlur?.(e);
+          }}
+          {...rest}
         />
-        {secure ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={hidden ? t('common.showPassword') : t('common.hidePassword')}
-            onPress={() => setHidden((h) => !h)}
-            style={{ position: 'absolute', right: tokens.spacing['spacing-md'], minHeight: 44, justifyContent: 'center' }}
-          >
-            <Text variant="caption" tone="link">
-              {hidden ? t('common.showPassword') : t('common.hidePassword')}
-            </Text>
-          </Pressable>
-        ) : null}
+        {rightElement && <View style={[styles.element, { marginLeft: spacing.sm }]}>{rightElement}</View>}
       </View>
+
       {error ? (
-        <Text variant="caption" accessibilityRole="alert" testID={`${rest.testID ?? 'field'}-error`}>
+        <Text
+          style={[
+            styles.feedbackText,
+            {
+              color: colors.statusDanger,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+              marginTop: spacing.xxs,
+            },
+          ]}
+        >
           {error}
         </Text>
-      ) : caption ? (
-        <Text variant="caption" tone="textHelper">
-          {caption}
+      ) : helperText ? (
+        <Text
+          style={[
+            styles.feedbackText,
+            {
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+              marginTop: spacing.xxs,
+            },
+          ]}
+        >
+          {helperText}
         </Text>
       ) : null}
     </View>
   );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+  },
+  label: {},
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  input: {
+    flex: 1,
+    padding: 0,
+    outlineStyle: 'none' as any,
+  },
+  element: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedbackText: {},
 });

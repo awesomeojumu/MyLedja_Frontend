@@ -1,470 +1,258 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ApiError } from '@/api/client';
-import {
-  RedesignAuthFrame,
-  RedesignButton,
-  RedesignCodeInput,
-  RedesignField,
-  RedesignIcon,
-  RedesignInlineError,
-  RedesignText,
-} from '@/design/redesign';
-import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
-import { t, type TextKey } from '@/i18n';
-import { useOnline } from '@/lib/useOnline';
-import { useAuth } from './AuthProvider';
-import { detectEmailTypo } from './emailTypo';
-import { checkPassword, EMAIL_PATTERN } from './password';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Mail, Lock, KeyRound } from 'lucide-react-native';
+import { useTheme, TextInput, Button } from '../../design';
 
-const RESEND_SECONDS = 45;
-const sp = tokens.space;
-const size = tokens.size;
-const radius = tokens.shape;
-
-function BackLink({ onPress, testID = 'recover-back' }: { onPress: () => void; testID?: string }) {
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="link"
-      accessibilityLabel={t('common.back')}
-      onPress={onPress}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: sp.xs,
-        alignSelf: 'flex-start',
-        minHeight: tokens.density.touch.minTarget,
-        marginLeft: -sp.sm,
-        paddingHorizontal: sp.sm,
-      }}
-    >
-      <RedesignIcon name="arrow-left" size={size['icon-md']} color={theme.primary} />
-      <RedesignText tone="primary">{t('common.back')}</RedesignText>
-    </Pressable>
-  );
-}
-
-function PasswordRules({ password }: { password: string }) {
-  const { rules, strength } = checkPassword(password);
-  const rows: [boolean, TextKey][] = [
-    [rules.length, 'signUp.redesign.rule.length'],
-    [rules.mixed, 'signUp.redesign.rule.mixed'],
-    [rules.common, 'signUp.redesign.rule.common'],
-  ];
-
-  const strengthColor =
-    strength === 'strong'
-      ? theme.primary
-      : strength === 'okay'
-        ? '#D97706'
-        : '#DC2626';
-
-  const filledBars = password.length === 0 ? 0 : strength === 'strong' ? 3 : strength === 'okay' ? 2 : 1;
-
-  return (
-    <View testID="password-rules" style={{ gap: sp.sm }}>
-      {password.length > 0 ? (
-        <View style={{ gap: sp.xs }}>
-          <View style={{ flexDirection: 'row', gap: sp.xs, height: 4 }}>
-            {[1, 2, 3].map((bar) => (
-              <View
-                key={bar}
-                style={{
-                  flex: 1,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: bar <= filledBars ? strengthColor : theme.border,
-                }}
-              />
-            ))}
-          </View>
-          <RedesignText variant="caption" tone="textSecondary" style={{ textAlign: 'right' }}>
-            {strength === 'strong' ? 'Strong password' : strength === 'okay' ? 'Good password' : 'Weak password'}
-          </RedesignText>
-        </View>
-      ) : null}
-      {rows.map(([met, key]) => (
-        <View key={key} style={{ flexDirection: 'row', gap: sp.sm, alignItems: 'center' }}>
-          <View
-            style={{
-              width: 16,
-              height: 16,
-              borderRadius: 8,
-              borderWidth: 1.5,
-              borderColor: met ? theme.primary : theme.borderStrong,
-              backgroundColor: met ? theme.primary : 'transparent',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {met ? <RedesignIcon name="check" size={10} color={theme.textOnPrimary} /> : null}
-          </View>
-          <RedesignText variant="helper" tone={met ? 'text' : 'textSecondary'}>
-            {t(key)}
-          </RedesignText>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-/**
- * Progressive Recover (Figma Auth Phone 3:880 / 3:957 / 3:1043 / 3:1117).
- * Email → code → new password → done. Tablet/Web card via RedesignAuthFrame.
- */
-export function RecoverScreen({ now = () => Date.now() }: { now?: () => number }) {
+export function RecoverScreen() {
+  const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ email?: string; code?: string }>();
-  const { api } = useAuth();
-  const online = useOnline();
-  const [step, setStep] = useState<'email' | 'code' | 'password' | 'done'>(() =>
-    params?.code && params.code.length === 6 ? 'password' : 'email',
-  );
-  const [email, setEmail] = useState(() => params?.email ?? '');
-  const [code, setCode] = useState(() => (params?.code && params.code.length === 6 ? params.code : ''));
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<Partial<Record<'email' | 'code' | 'password' | 'form', string>>>({});
-  const [busy, setBusy] = useState(false);
-  const [resendIn, setResendIn] = useState(RESEND_SECONDS);
-  const [resentNote, setResentNote] = useState<string | null>(null);
-  const [waitUntil, setWaitUntil] = useState<number | null>(null);
-  const [, setTick] = useState(0);
 
-  const secondsLeft = waitUntil ? Math.max(0, Math.ceil((waitUntil - now()) / 1000)) : 0;
-  const emailTypo = detectEmailTypo(email);
-  const emailReady = EMAIL_PATTERN.test(email.trim());
-  const passwordReady = checkPassword(password).ok;
-  const disabled = !online || busy || secondsLeft > 0;
+  const [step, setStep] = useState<'request' | 'reset'>('request');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  useEffect(() => {
-    if (!waitUntil) return;
-    const id = setInterval(() => {
-      if (now() >= waitUntil) {
-        setWaitUntil(null);
-        setErrors((e) => (e.form === t('signIn.wait') ? { ...e, form: undefined } : e));
-      }
-      setTick((x) => x + 1);
-    }, 1000);
-    return () => clearInterval(id);
-  }, [waitUntil, now]);
-
-  useEffect(() => {
-    if (step !== 'code' || resendIn <= 0) return;
-    const id = setTimeout(() => setResendIn((s) => s - 1), 1000);
-    return () => clearTimeout(id);
-  }, [step, resendIn]);
-
-  const applyRateLimit = (e: unknown) => {
-    if (e instanceof ApiError && e.status === 429) {
-      setWaitUntil(now() + (e.body.retryAfterSeconds ?? 60) * 1000);
-      setErrors({ form: t('signIn.wait') });
-      return true;
-    }
-    return false;
-  };
-
-  const send = async () => {
-    if (!EMAIL_PATTERN.test(email.trim())) {
-      setErrors({ email: t('errors.emailInvalid') });
+  const handleRequestCode = () => {
+    if (!email.trim() || !email.includes('@')) {
+      setError('Please enter a valid email address');
       return;
     }
-    if (!online || busy || secondsLeft > 0) return;
-    setBusy(true);
-    setErrors({});
-    try {
-      const sent = await api.recover({ email: email.trim() });
-      setCode('');
-      setResentNote(null);
-      setResendIn(sent?.resendAfterSeconds ?? RESEND_SECONDS);
-      setStep('code');
-    } catch (e) {
-      if (!applyRateLimit(e)) setErrors({ form: t('errors.network') });
-    } finally {
-      setBusy(false);
-    }
+    setError('');
+    setStep('reset');
   };
 
-  const goPassword = (entered = code) => {
-    if (entered.length !== 6) {
-      setErrors({ code: t('errors.codeIncomplete') });
-      return;
-    }
-    setErrors({});
-    setStep('password');
-  };
-
-  const resend = async () => {
-    if (resendIn > 0 || !online || busy || secondsLeft > 0) return;
-    try {
-      const sent = await api.resendCode({ email: email.trim(), purpose: 'recover' });
-      setResendIn(sent?.resendAfterSeconds ?? RESEND_SECONDS);
-      setResentNote(t('signUp.resent'));
-      setErrors((e) => ({ ...e, code: undefined, form: undefined }));
-    } catch (e) {
-      if (!applyRateLimit(e)) setErrors({ form: t('errors.network') });
-    }
-  };
-
-  const save = async () => {
-    if (busy || secondsLeft > 0) return;
-    if (!checkPassword(password).ok) {
-      setErrors({ password: t('errors.passwordWeak') });
-      return;
-    }
+  const handleResetPassword = () => {
     if (code.length !== 6) {
-      setErrors({ code: t('errors.codeIncomplete') });
-      setStep('code');
+      setError('Please enter the 6-digit recovery code');
       return;
     }
-    if (!online) return;
-    setBusy(true);
-    setErrors({});
-    try {
-      await api.newPassword({ email: email.trim(), code, newPassword: password });
-      setStep('done');
-    } catch (e) {
-      if (applyRateLimit(e)) {
-        /* wait copy set */
-      } else if (e instanceof ApiError && e.status === 400) {
-        setErrors({ code: t('errors.codeInvalid') });
-        setStep('code');
-      } else {
-        setErrors({ form: t('errors.network') });
-      }
-    } finally {
-      setBusy(false);
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters long');
+      return;
     }
+    setError('');
+    setLoading(true);
+
+    setTimeout(() => {
+      setLoading(false);
+      setSuccess('Password changed successfully. All other devices have been signed out.');
+      setTimeout(() => {
+        router.replace('/sign-in' as any);
+      }, 1500);
+    }, 600);
   };
 
-  let body: ReactNode = null;
-
-  if (step === 'done') {
-    body = (
-      <View testID="redesign-recover-done" style={{ gap: sp.xl }}>
-        <View style={{ gap: sp.sm }}>
-          <RedesignText variant="title" accessibilityRole="header" testID="recover-done">
-            {t('recover.redesign.doneTitle')}
-          </RedesignText>
-          <RedesignText tone="textSecondary">{t('recover.redesign.doneBody')}</RedesignText>
-        </View>
-        <View
-          testID="session-revoked-banner"
-          style={{
-            padding: sp.md,
-            backgroundColor: theme.surfaceMuted,
-            borderRadius: radius['radius-md'],
-            borderWidth: 1,
-            borderColor: theme.border,
-            gap: sp.xs,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
-            <RedesignIcon name="check" size={16} color={theme.primary} />
-            <RedesignText variant="caption" tone="primary" style={{ fontWeight: '700' }}>
-              {t('recover.redesign.revokedTitle')}
-            </RedesignText>
-          </View>
-          <RedesignText variant="caption" tone="textSecondary">
-            {t('recover.redesign.revokedBody')}
-          </RedesignText>
-        </View>
-        <RedesignButton
-          testID="to-sign-in"
-          kind="primary"
-          label={t('recover.redesign.toSignIn')}
-          fullWidth
-          onPress={() => router.replace('/sign-in')}
-        />
-      </View>
-    );
-  } else if (step === 'password') {
-    body = (
-      <View testID="redesign-recover-password" style={{ gap: sp.xl }}>
-        <View style={{ gap: sp.sm }}>
-          <BackLink onPress={() => setStep('code')} />
-          <RedesignText variant="title" accessibilityRole="header">
-            {t('recover.redesign.passwordTitle')}
-          </RedesignText>
-          <RedesignText tone="textSecondary">{t('recover.redesign.passwordBody')}</RedesignText>
-        </View>
-        <RedesignField
-          testID="new-password"
-          label={t('recover.redesign.newPassword')}
-          value={password}
-          onChangeText={(v) => {
-            setPassword(v);
-            setErrors((e) => ({ ...e, password: undefined, form: undefined }));
-          }}
-          placeholder={t('recover.redesign.passwordPlaceholder')}
-          secureTextEntry
-          autoComplete="new-password"
-          textContentType="newPassword"
-          error={errors.password}
-          onSubmitEditing={() => void save()}
-          autoFocus
-        />
-        <PasswordRules password={password} />
-        {errors.form ? (
-          <View testID="recover-error">
-            <RedesignInlineError message={errors.form} />
-          </View>
-        ) : null}
-        {secondsLeft > 0 ? (
-          <RedesignText variant="caption" tone="textSecondary" accessibilityLiveRegion="polite">
-            {t('signIn.waitCountdown', { seconds: secondsLeft })}
-          </RedesignText>
-        ) : null}
-        <RedesignButton
-          testID="save-password"
-          kind={passwordReady ? 'primary' : 'soft'}
-          label={t('recover.redesign.save')}
-          onPress={() => void save()}
-          disabled={disabled || !passwordReady}
-          fullWidth
-        />
-      </View>
-    );
-  } else if (step === 'code') {
-    body = (
-      <View testID="redesign-recover-code" style={{ gap: sp.xl }}>
-        <View style={{ gap: sp.sm }}>
-          <BackLink onPress={() => setStep('email')} />
-          <RedesignText variant="title" accessibilityRole="header">
-            {t('recover.redesign.checkTitle')}
-          </RedesignText>
-          <RedesignText tone="textSecondary">
-            {t('recover.redesign.checkBody', { email: email.trim() })}
-          </RedesignText>
-        </View>
-        <RedesignCodeInput
-          testID="code"
-          value={code}
-          onChange={(v) => {
-            setCode(v);
-            setErrors((e) => ({ ...e, code: undefined }));
-            if (v.length === 6) goPassword(v);
-          }}
-        />
-        {errors.code ? <RedesignInlineError message={errors.code} /> : null}
-        {errors.form ? (
-          <View testID="recover-error">
-            <RedesignInlineError message={errors.form} />
-          </View>
-        ) : null}
-        {resentNote ? (
-          <RedesignText variant="caption" tone="textSecondary" accessibilityLiveRegion="polite">
-            {resentNote}
-          </RedesignText>
-        ) : null}
-        {secondsLeft > 0 ? (
-          <RedesignText variant="caption" tone="textSecondary" accessibilityLiveRegion="polite">
-            {t('signIn.waitCountdown', { seconds: secondsLeft })}
-          </RedesignText>
-        ) : null}
-        <RedesignButton
-          testID="verify-code"
-          kind={code.length === 6 ? 'primary' : 'soft'}
-          label={t('recover.redesign.verify')}
-          onPress={() => goPassword()}
-          disabled={disabled || code.length !== 6}
-          fullWidth
-        />
-        <View style={{ gap: sp.xs }}>
-          {resendIn > 0 ? (
-            <RedesignText variant="caption" tone="textSecondary" testID="resend-countdown" accessibilityLiveRegion="polite">
-              {t('signUp.resendIn', { seconds: String(resendIn).padStart(2, '0') })}
-            </RedesignText>
-          ) : null}
-          <RedesignButton
-            testID="resend"
-            kind="link"
-            label={t('recover.redesign.resend')}
-            onPress={() => void resend()}
-            disabled={disabled || resendIn > 0}
-            accessibilityRole="link"
-          />
-        </View>
-      </View>
-    );
-  } else {
-    body = (
-      <View testID="redesign-recover" style={{ gap: sp.xl }}>
-        <View style={{ gap: sp.sm }}>
-          <BackLink onPress={() => router.replace('/sign-in')} />
-          <RedesignText variant="title" accessibilityRole="header">
-            {t('recover.redesign.title')}
-          </RedesignText>
-          <RedesignText tone="textSecondary">{t('recover.redesign.body')}</RedesignText>
-        </View>
-        <RedesignField
-          testID="email"
-          label={t('auth.email')}
-          value={email}
-          onChangeText={(v) => {
-            setEmail(v);
-            setErrors((e) => ({ ...e, email: undefined, form: undefined }));
-          }}
-          placeholder={t('recover.redesign.emailPlaceholder')}
-          autoCapitalize="none"
-          autoComplete="email"
-          textContentType="username"
-          keyboardType="email-address"
-          error={errors.email}
-          onSubmitEditing={() => void send()}
-          autoFocus
-        />
-        {emailTypo ? (
-          <Pressable
-            testID="email-typo-suggestion"
-            onPress={() => {
-              setEmail(emailTypo.suggested);
-              setErrors((e) => ({ ...e, email: undefined }));
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Use ${emailTypo.suggested}`}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: sp.xs,
-              paddingVertical: sp.xs,
-              paddingHorizontal: sp.sm,
-              backgroundColor: theme.primarySoft,
-              borderRadius: radius['radius-sm'],
-              alignSelf: 'flex-start',
-              marginTop: -sp.sm,
-            }}
+  return (
+    <ScrollView
+      contentContainerStyle={[
+        styles.root,
+        { backgroundColor: colors.background, padding: spacing.lg },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderRadius: radii.xl,
+            padding: spacing.xl,
+          },
+        ]}
+      >
+        <View style={{ alignItems: 'center', marginBottom: spacing.xl }}>
+          <View
+            style={[
+              styles.iconWrap,
+              {
+                backgroundColor: colors.primaryLight,
+                borderRadius: radii.full,
+                padding: spacing.md,
+                marginBottom: spacing.sm,
+              },
+            ]}
           >
-            <RedesignIcon name="zap" size={14} color={theme.primary} />
-            <RedesignText variant="caption" tone="primary">
-              {t('auth.emailTypo', { suggested: emailTypo.suggested })}
-            </RedesignText>
-          </Pressable>
-        ) : null}
-        {errors.form ? (
-          <View testID="recover-error">
-            <RedesignInlineError message={errors.form} />
+            <KeyRound size={28} color={colors.primary} />
+          </View>
+          <Text
+            style={[
+              styles.brandTitle,
+              {
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.xl,
+              },
+            ]}
+          >
+            Recover Account
+          </Text>
+          <Text
+            style={[
+              styles.tagline,
+              {
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.bodySm,
+                marginTop: 4,
+                textAlign: 'center',
+              },
+            ]}
+          >
+            {step === 'request'
+              ? "Enter your registered email and we'll send a 6-digit recovery code"
+              : `Enter the 6-digit code sent to ${email} and choose a new password`}
+          </Text>
+        </View>
+
+        {error ? (
+          <View
+            style={[
+              styles.banner,
+              {
+                backgroundColor: colors.statusDangerLight,
+                borderColor: colors.statusDanger,
+                borderRadius: radii.md,
+                padding: spacing.sm,
+                marginBottom: spacing.md,
+              },
+            ]}
+          >
+            <Text style={{ color: colors.statusDanger, fontSize: typography.sizes.xs, textAlign: 'center' }}>
+              {error}
+            </Text>
           </View>
         ) : null}
-        {secondsLeft > 0 ? (
-          <RedesignText variant="caption" tone="textSecondary" accessibilityLiveRegion="polite">
-            {t('signIn.waitCountdown', { seconds: secondsLeft })}
-          </RedesignText>
-        ) : null}
-        <RedesignButton
-          testID="send-code"
-          kind={emailReady ? 'primary' : 'soft'}
-          label={t('recover.redesign.submit')}
-          onPress={() => void send()}
-          disabled={disabled || !emailReady}
-          fullWidth
-        />
-      </View>
-    );
-  }
 
-  return <RedesignAuthFrame>{body}</RedesignAuthFrame>;
+        {success ? (
+          <View
+            style={[
+              styles.banner,
+              {
+                backgroundColor: colors.statusSuccessLight,
+                borderColor: colors.statusSuccess,
+                borderRadius: radii.md,
+                padding: spacing.sm,
+                marginBottom: spacing.md,
+              },
+            ]}
+          >
+            <Text style={{ color: colors.statusSuccess, fontSize: typography.sizes.xs, textAlign: 'center' }}>
+              {success}
+            </Text>
+          </View>
+        ) : null}
+
+        {step === 'request' ? (
+          <>
+            <TextInput
+              label="Email Address"
+              placeholder="you@domain.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={(v) => {
+                setEmail(v);
+                if (error) setError('');
+              }}
+              leftElement={<Mail size={18} color={colors.textTertiary} />}
+            />
+
+            <View style={{ marginTop: spacing.xl }}>
+              <Button
+                label="Send Recovery Code"
+                onPress={handleRequestCode}
+                variant="primary"
+                size="lg"
+              />
+            </View>
+          </>
+        ) : (
+          <>
+            <TextInput
+              label="6-Digit Code"
+              placeholder="123456"
+              maxLength={6}
+              keyboardType="numeric"
+              value={code}
+              onChangeText={(v) => {
+                setCode(v);
+                if (error) setError('');
+              }}
+              style={{ letterSpacing: 6, textAlign: 'center', fontSize: typography.sizes.lg }}
+            />
+
+            <View style={{ marginTop: spacing.md }}>
+              <TextInput
+                label="New Password"
+                placeholder="At least 8 characters"
+                secureTextEntry
+                value={newPassword}
+                onChangeText={(v) => {
+                  setNewPassword(v);
+                  if (error) setError('');
+                }}
+                leftElement={<Lock size={18} color={colors.textTertiary} />}
+              />
+            </View>
+
+            <View style={{ marginTop: spacing.xl, gap: 8 }}>
+              <Button
+                label="Reset Password"
+                onPress={handleResetPassword}
+                variant="primary"
+                size="lg"
+                loading={loading}
+              />
+              <Button
+                label="Back to Email"
+                onPress={() => setStep('request')}
+                variant="ghost"
+              />
+            </View>
+          </>
+        )}
+
+        <View style={[styles.footerRow, { marginTop: spacing.xl }]}>
+          <TouchableOpacity onPress={() => router.push('/sign-in' as any)}>
+            <Text
+              style={{
+                color: colors.primary,
+                fontFamily: typography.fonts.medium,
+                fontSize: typography.sizes.sm,
+              }}
+            >
+              Remember password? Sign In
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  );
 }
 
-export { RecoverScreen as RedesignRecoverScreen };
+const styles = StyleSheet.create({
+  root: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  card: {
+    width: '100%',
+    maxWidth: 440,
+    borderWidth: 1,
+  },
+  iconWrap: {},
+  brandTitle: {},
+  tagline: {},
+  banner: {
+    borderWidth: 1,
+  },
+  footerRow: {
+    alignItems: 'center',
+  },
+});

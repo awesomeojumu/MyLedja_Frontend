@@ -1,5 +1,6 @@
-import { AccountsScreen } from '@/features/accounts/AccountsScreen';
+import React from 'react';
+import { AccountsScreen } from '../../../src/features/accounts/AccountsScreen';
 
-export default function AccountsPage() {
+export default function AccountsRoute() {
   return <AccountsScreen />;
 }

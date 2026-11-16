@@ -1,1089 +1,224 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { BackHandler, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { useGlobalSearchParams, useRouter } from 'expo-router';
-import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import React, { useState } from 'react';
+import { ScrollView, View, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useTheme } from '../../design';
+import { Toast } from '../../design/components/Toast';
+import { MonthScopeBar } from './MonthScopeBar';
+import { NetWorthHeroCard } from './NetWorthHeroCard';
+import { QuickActionTrio } from './QuickActionTrio';
+import { AccountsCarousel, type AccountItem } from './AccountsCarousel';
+import { DashboardSummariesGrid } from './DashboardSummariesGrid';
+import { RecentActivityList, type RecentTransactionItem } from './RecentActivityList';
+import { QuickTransactionSheet } from './QuickTransactionSheet';
+import { QuickTransferSheet } from './QuickTransferSheet';
 
-import {
-  RedesignAmount,
-  RedesignButton,
-  RedesignChip,
-  RedesignIcon,
-  RedesignProgress,
-  RedesignSkeleton,
-  RedesignText,
-} from '@/design/redesign';
-import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
-import { useDesign } from '@/design/ThemeProvider';
-import { useSizeClass } from '@/design/size';
-import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
-import { monthLabel } from '@/features/budget/helpers';
-import { AppFrame } from '@/features/frame/AppFrame';
-import { useAuth } from '@/features/auth/AuthProvider';
-import { adviceText, reasonText } from '@/features/health/HealthScreen';
-import { healthPage } from '@/features/health/helpers';
-import { today } from '@/features/transactions/helpers';
-import { useOptionalAddTransaction } from '@/features/transactions/AddTransaction';
-import { t, type TextKey } from '@/i18n';
-import { formatNaira } from '@/money';
-import { monthOf } from '@/ledger';
-
-import { dashboardModel, type ComingUpRow } from './helpers';
-import {
-  comingUp48Hours,
-  comingUpDueTotal,
-  comingUpWeek,
-  liquidAccounts,
-  monthlyAverages,
-  perDayLeft,
-  redesignCheckAction,
-  redesignCheckHint,
-  redesignChecklist,
-  REDESIGN_SAVINGS_GOAL_PCT,
-  timeGreeting,
-  todaySpending,
-  unsortedCount,
-} from './redesignHelpers';
-import {
-  redesignCardSpan,
-  layoutDeviceKind,
-  resolveRedesignLayoutForDevice,
-  visibleRedesignCards,
-  withStoredRedesignLayoutForDevice,
-  type RedesignCardId,
-  type RedesignDashboardLayout,
-} from './redesignLayout';
-import { EditHomeSheet } from './EditHomeSheet';
-
-const sp = tokens.space;
-const shape = tokens.shape;
-
-function fullMonthName(month: string): string {
-  const m = Number(month.slice(5, 7));
-  return t(`dashboard.redesign.monthFull.${m}` as TextKey);
-}
-
-function longDate(iso: string): string {
-  const [y, mo, d] = iso.split('-').map(Number) as [number, number, number];
-  const weekday = new Date(Date.UTC(y, mo - 1, d, 12)).getUTCDay();
-  return t('dashboard.redesign.dueLong', {
-    weekday: t(`dashboard.redesign.weekday.${weekday}` as TextKey),
-    d,
-    month: fullMonthName(`${y}-${String(mo).padStart(2, '0')}`),
-  });
-}
-
-function todayLong(iso: string): string {
-  const [y, mo, d] = iso.split('-').map(Number) as [number, number, number];
-  const weekday = new Date(Date.UTC(y, mo - 1, d, 12)).getUTCDay();
-  return t('dashboard.redesign.todayLong', {
-    weekday: t(`dashboard.redesign.weekday.${weekday}` as TextKey),
-    d,
-    month: fullMonthName(`${y}-${String(mo).padStart(2, '0')}`),
-  });
-}
-
-const HIDDEN_AMOUNT = '₦ ••••••';
-
-function money(minor: bigint, privacy: boolean, signed = false): string {
-  if (privacy) return HIDDEN_AMOUNT;
-  return formatNaira(minor, { signed });
-}
-
-function CardShell({
-  testID,
-  children,
-  onPress,
-  style,
-}: {
-  testID?: string;
-  children: ReactNode;
-  onPress?: () => void;
-  style?: object;
-}) {
-  const body = (
-    <View
-      testID={testID}
-      style={[
-        {
-          backgroundColor: theme.surface,
-          borderRadius: shape['radius-lg'],
-          borderWidth: 1,
-          borderColor: theme.border,
-          padding: sp.lg,
-          gap: sp.md,
-        },
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
-  if (!onPress) return body;
-  return (
-    <Pressable accessibilityRole="link" onPress={onPress}>
-      {body}
-    </Pressable>
-  );
-}
-
-function CardHeader({ title, onPress, trailing }: { title: string; onPress?: () => void; trailing?: ReactNode }) {
-  return (
-    <Pressable
-      accessibilityRole={onPress ? 'link' : undefined}
-      onPress={onPress}
-      disabled={!onPress}
-      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp.sm }}
-    >
-      <RedesignText variant="label">{title}</RedesignText>
-      {trailing ?? (onPress ? <RedesignIcon name="chevron-right" size={20} color={theme.textSecondary} /> : null)}
-    </Pressable>
-  );
-}
-
-function NetWorthSparkline({
-  points,
-  lineColor,
-  gradientColor,
-}: {
-  points: { label: string; value: bigint }[];
-  lineColor: string;
-  gradientColor: string;
-}) {
-  if (points.length < 2) return null;
-  const numVals = points.map((p) => Number(p.value));
-  const rawMin = Math.min(...numVals);
-  const rawMax = Math.max(...numVals);
-  const range = rawMax - rawMin;
-  const min = range === 0 ? (rawMin > 0 ? 0 : rawMin) : rawMin;
-  const max = range === 0 ? (rawMax > 0 ? rawMax * 1.25 : 100) : rawMax;
-  const effectiveRange = max - min || 1;
-
-  const w = 300;
-  const h = 44;
-  const padY = 8;
-  const graphH = h - padY * 2;
-
-  const coords = numVals.map((v, i) => {
-    const x = Math.round((i / (numVals.length - 1)) * (w - 12) + 6);
-    const y = Math.round(h - padY - ((v - min) / effectiveRange) * graphH);
-    return { x, y };
-  });
-
-  const lineD = coords.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '');
-  const lastPt = coords[coords.length - 1]!;
-  const firstPt = coords[0]!;
-  const areaD = `${lineD} L ${lastPt.x} ${h} L ${firstPt.x} ${h} Z`;
-
-  return (
-    <View testID="redesign-home-nw-chart" style={{ height: h, width: '100%', marginTop: sp.xs }}>
-      <Svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-        <Defs>
-          <LinearGradient id="nwSparkGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={gradientColor} stopOpacity={0.35} />
-            <Stop offset="100%" stopColor={gradientColor} stopOpacity={0.0} />
-          </LinearGradient>
-        </Defs>
-        <Path d={areaD} fill="url(#nwSparkGrad)" />
-        <Path d={lineD} fill="none" stroke={lineColor} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-        <Circle cx={lastPt.x} cy={lastPt.y} r={4} fill={lineColor} />
-      </Svg>
-    </View>
-  );
-}
-
-/**
- * Figma Dashboard Home — Phone 16:865 / Tablet 11:922 / Web 1:141.
- * Only mounted when EXPO_PUBLIC_REDESIGN is on.
- */
 export function DashboardScreen() {
-  const { snapshot, repo } = useWorkspace();
-  const { user } = useAuth();
-  const { privacy, setPrivacy } = useDesign();
+  const { colors, spacing } = useTheme();
   const router = useRouter();
-  const size = useSizeClass();
-  const phone = size === 'phone';
-  const add = useOptionalAddTransaction();
-  const params = useGlobalSearchParams<{ customize?: string }>();
-  const editOpen = params.customize === '1';
-  const month = monthOf(today());
-  const [checklistHidden, setChecklistHidden] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [range, setRange] = useState<'1M' | '3M' | '6M' | '1Y' | 'All'>('6M');
 
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      BackHandler.exitApp();
-      return true;
-    });
-    return () => sub.remove();
-  }, []);
+  // Screen State
+  const [currentMonth, setCurrentMonth] = useState('November 2026');
+  const [isCurrentMonth, setIsCurrentMonth] = useState(true);
+  const [privacyMode, setPrivacyMode] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastVisible, setToastVisible] = useState(false);
 
-  const model = useMemo(() => (snapshot ? dashboardModel(snapshot, month) : null), [snapshot, month]);
-  const items = useMemo(
-    () => (snapshot ? redesignChecklist(snapshot, checklistHidden || !!snapshot.settings.checklistHidden) : []),
-    [snapshot, checklistHidden],
-  );
-  const deviceKind = layoutDeviceKind(size);
-  const layout = useMemo(() => resolveRedesignLayoutForDevice(snapshot?.settings, size), [snapshot?.settings, size]);
-  const cards = useMemo(() => visibleRedesignCards(layout, deviceKind), [layout, deviceKind]);
-  const averages = useMemo(() => (snapshot ? monthlyAverages(snapshot, month) : null), [snapshot, month]);
-  const weekRows = useMemo(() => (snapshot ? comingUpWeek(snapshot, today()) : []), [snapshot]);
-  const toSort = useMemo(() => (snapshot ? unsortedCount(snapshot) : 0), [snapshot]);
-  const todayStr = today();
-  const todaySpentInfo = useMemo(() => (snapshot ? todaySpending(snapshot, todayStr) : { spent: 0n, count: 0 }), [snapshot, todayStr]);
-  const liquidRows = useMemo(() => (snapshot ? liquidAccounts(snapshot) : []), [snapshot]);
-  const urgentRows = useMemo(() => (snapshot ? comingUp48Hours(snapshot, todayStr) : []), [snapshot, todayStr]);
-  const greetingText = useMemo(() => timeGreeting(user?.name), [user?.name]);
-
-  const openEdit = () => router.setParams({ customize: '1' });
-  const closeEdit = () => router.setParams({ customize: undefined });
-
-  const saveLayout = async (next: RedesignDashboardLayout) => {
-    if (!snapshot) return;
-    await repo.updateSettings(withStoredRedesignLayoutForDevice(snapshot.settings, size, next));
+  const handlePrevMonth = () => {
+    setCurrentMonth('October 2026');
+    setIsCurrentMonth(false);
   };
 
-  const hideChecklist = () => {
-    setChecklistHidden(true);
-    if (snapshot) void repo.updateSettings({ ...snapshot.settings, checklistHidden: true });
+  const handleNextMonth = () => {
+    setCurrentMonth('December 2026');
+    setIsCurrentMonth(false);
   };
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await repo.load();
-    } finally {
-      setRefreshing(false);
+  const handleResetToCurrent = () => {
+    setCurrentMonth('November 2026');
+    setIsCurrentMonth(true);
+  };
+
+  // Popups State
+  const [expenseSheetVisible, setExpenseSheetVisible] = useState(false);
+  const [incomeSheetVisible, setIncomeSheetVisible] = useState(false);
+  const [transferSheetVisible, setTransferSheetVisible] = useState(false);
+
+  // Mock initial data (will sync with SQLite/Backend)
+  const [netWorth, setNetWorth] = useState(1485020000n); // ₦14,850,200.00
+  const [income, setIncome] = useState(85000000n);       // ₦850,000.00
+  const [spent, setSpent] = useState(32040000n);         // ₦320,400.00
+
+  const [accounts, setAccounts] = useState<AccountItem[]>([
+    { id: '1', name: 'GTBank (Current)', type: 'bank', balanceMinor: 84500000n },
+    { id: '2', name: 'Kuda Bank', type: 'wallet', balanceMinor: 21500000n },
+    { id: '3', name: 'Cash Wallet', type: 'wallet', balanceMinor: 3500000n },
+    { id: '4', name: 'Access Credit Card', type: 'card', balanceMinor: -1200000n },
+  ]);
+
+  const [transactions, setTransactions] = useState<RecentTransactionItem[]>([
+    {
+      id: 'tx-1',
+      payee: 'Shoprite Supermarket',
+      category: 'Groceries',
+      date: 'Today, 2:15 PM',
+      amountMinor: 2450000n,
+      type: 'expense',
+    },
+    {
+      id: 'tx-2',
+      payee: 'Bolt Ride to Victoria Island',
+      category: 'Transportation & Fuel',
+      date: 'Today, 9:40 AM',
+      amountMinor: 420000n,
+      type: 'expense',
+    },
+    {
+      id: 'tx-3',
+      payee: 'Freelance Design Retainer',
+      category: 'Salary / Income',
+      date: 'Yesterday',
+      amountMinor: 35000000n,
+      type: 'income',
+    },
+  ]);
+
+  const handleSaveTransaction = (data: {
+    amount: string;
+    category: string;
+    account: string;
+    payee: string;
+    note: string;
+  }) => {
+    const minor = BigInt(Math.round(parseFloat(data.amount) * 100));
+    const isExpense = expenseSheetVisible;
+
+    if (isExpense) {
+      setSpent((prev) => prev + minor);
+      setNetWorth((prev) => prev - minor);
+    } else {
+      setIncome((prev) => prev + minor);
+      setNetWorth((prev) => prev + minor);
     }
-  }, [repo]);
 
-  const rangeMonths = range === '1M' ? 1 : range === '3M' ? 3 : range === '6M' ? 6 : range === '1Y' ? 12 : 12;
-  const netWorthLine = useMemo(() => {
-    if (!model) return [];
-    return model.netWorthLine.slice(-rangeMonths);
-  }, [model, rangeMonths]);
+    const newTx: RecentTransactionItem = {
+      id: `tx-${Date.now()}`,
+      payee: data.payee || data.category,
+      category: data.category,
+      date: 'Just now',
+      amountMinor: minor,
+      type: isExpense ? 'expense' : 'income',
+    };
 
-  const wrap = (id: RedesignCardId, node: ReactNode) => {
-    const span = redesignCardSpan(id, size);
-    return (
-      <View key={id} style={{ width: phone ? '100%' : `${(span / 12) * 100}%`, paddingHorizontal: phone ? 0 : sp.xs }}>
-        {node}
-      </View>
-    );
+    setTransactions((prev) => [newTx, ...prev]);
+    setToastMessage(`Saved ${isExpense ? 'expense' : 'income'} of ₦${data.amount}`);
+    setToastVisible(true);
   };
 
-  const renderCard = (id: RedesignCardId) => {
-    if (!model || !snapshot || !averages) return null;
-
-    switch (id) {
-      case 'leftToSpend': {
-        const hasPlan = model.plannedTotal > 0n;
-        const dayLeft = perDayLeft(model.leftToSpend, model.daysLeft);
-        if (!hasPlan) {
-          return wrap(
-            id,
-            <CardShell testID="redesign-home-left">
-              <CardHeader title={t('dashboard.card.leftToSpend')} />
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp.md, flexWrap: 'wrap' }}>
-                <View style={{ flex: 1, minWidth: 200, gap: sp.xxs }}>
-                  <RedesignText variant="headline">{t('dashboard.redesign.noBudgetTitle', { month: fullMonthName(month) })}</RedesignText>
-                  <RedesignText variant="caption" tone="textSecondary">{t('dashboard.redesign.noBudgetBody')}</RedesignText>
-                </View>
-                <RedesignButton
-                  testID="redesign-home-plan-budget"
-                  kind="secondary"
-                  label={t('dashboard.redesign.planBudget')}
-                  onPress={() => router.push('/budget')}
-                />
-              </View>
-            </CardShell>,
-          );
-        }
-        return wrap(
-          id,
-          <CardShell testID="redesign-home-left">
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <RedesignText variant="label">{t('dashboard.card.leftToSpend')}</RedesignText>
-              <RedesignText variant="label" tone="textSecondary">
-                {fullMonthName(month)}
-              </RedesignText>
-            </View>
-            <View style={{ gap: sp.xxs }}>
-              <RedesignAmount testID="redesign-home-left-amount" text={money(dayLeft != null ? dayLeft : model.leftToSpend, privacy)} sizeVariant="display" hidden={privacy} />
-              <RedesignText variant="caption" tone="primary" style={{ fontWeight: '600' }}>
-                {t('dashboard.redesign.safeForToday', { amount: money(dayLeft != null ? dayLeft : model.leftToSpend, privacy) })}
-              </RedesignText>
-            </View>
-            <RedesignText variant="caption" tone="textSecondary">
-              {todaySpentInfo.spent > 0n
-                ? t('dashboard.redesign.safeForTodaySubtitle', {
-                    spent: money(todaySpentInfo.spent, privacy),
-                    remaining: money(
-                      dayLeft != null && dayLeft > todaySpentInfo.spent ? dayLeft - todaySpentInfo.spent : 0n,
-                      privacy,
-                    ),
-                  })
-                : t('dashboard.redesign.safeForTodayNoSpent')}
-            </RedesignText>
-            {model.daysLeft != null ? (
-              <RedesignText tone="textSecondary">
-                {model.daysLeft === 1
-                  ? t('dashboard.redesign.daysLeftOne')
-                  : t('dashboard.redesign.daysLeft', { n: model.daysLeft })}
-              </RedesignText>
-            ) : null}
-            <RedesignProgress
-              testID="redesign-home-left-bar"
-              value={Number(model.spent)}
-              max={Number(model.plannedTotal > 0n ? model.plannedTotal : 1n)}
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <RedesignText variant="helper" tone="textSecondary">
-                {t('dashboard.redesign.spentOf', { spent: money(model.spent, privacy) })}
-              </RedesignText>
-              <RedesignText variant="helper" tone="textSecondary">
-                {t('dashboard.redesign.plannedOf', { planned: money(model.plannedTotal, privacy) })}
-              </RedesignText>
-            </View>
-            <View
-              style={{
-                flexDirection: phone ? 'row' : 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderTopWidth: 1,
-                borderColor: theme.border,
-                paddingTop: sp.md,
-                gap: sp.sm,
-                flexWrap: 'wrap',
-              }}
-            >
-              <RedesignText variant="body-medium">
-                {dayLeft != null
-                  ? phone
-                    ? t('dashboard.redesign.aboutPerDay', { amount: money(dayLeft, privacy) })
-                    : t('dashboard.redesign.youCanSpend', { amount: money(dayLeft, privacy) })
-                  : null}
-              </RedesignText>
-              <RedesignButton
-                testID="redesign-home-open-budget"
-                kind="link"
-                label={t('dashboard.redesign.openBudget')}
-                onPress={() => router.push('/budget')}
-              />
-            </View>
-          </CardShell>,
-        );
-      }
-      case 'netWorth':
-        return wrap(
-          id,
-          <CardShell testID="redesign-home-net-worth" onPress={() => router.push({ pathname: '/reports', params: { kind: 'netWorth' } })}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <CardHeader title={t('dashboard.card.netWorth')} onPress={() => router.push({ pathname: '/reports', params: { kind: 'netWorth' } })} />
-              {!phone ? (
-                <View style={{ flexDirection: 'row', gap: sp.xs }}>
-                  {(['1M', '3M', '6M', '1Y', 'All'] as const).map((r) => (
-                    <Pressable
-                      key={r}
-                      testID={`redesign-nw-range-${r}`}
-                      onPress={() => setRange(r)}
-                      style={{
-                        paddingHorizontal: sp.sm,
-                        paddingVertical: sp.xs,
-                        borderRadius: shape['radius-pill'],
-                        backgroundColor: range === r ? theme.primary : 'transparent',
-                      }}
-                    >
-                      <RedesignText
-                        variant="label"
-                        tone={range === r ? 'textOnPrimary' : 'textSecondary'}
-                        style={range === r ? { color: theme.textOnPrimary } : undefined}
-                      >
-                        {t(`dashboard.redesign.range.${r.toLowerCase()}` as TextKey)}
-                      </RedesignText>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
-            </View>
-            <RedesignAmount testID="redesign-home-nw-amount" text={money(model.worthNow, privacy)} sizeVariant="display" hidden={privacy} />
-            {model.worthChange !== 0n ? (
-              <RedesignText variant="caption" tone="textSecondary">
-                {model.worthChange >= 0n
-                  ? t('dashboard.redesign.worthUp', { amount: money(model.worthChange, privacy) })
-                  : t('dashboard.redesign.worthDown', { amount: money(model.worthChange, privacy, true) })}
-              </RedesignText>
-            ) : (
-              <RedesignText variant="caption" tone="textSecondary">{t('dashboard.redesign.worthTrendHint')}</RedesignText>
-            )}
-            {phone ? (
-              <View style={{ flexDirection: 'row', gap: sp.sm, paddingTop: sp.xs }}>
-                <Pressable
-                  testID="redesign-hero-add-btn"
-                  accessibilityRole="button"
-                  onPress={() => add?.open('expense')}
-                  style={{
-                    flex: 1,
-                    height: 40,
-                    backgroundColor: theme.primary,
-                    borderRadius: shape['radius-pill'],
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: sp.xs,
-                  }}
-                >
-                  <RedesignIcon name="plus" size={16} color={theme.textOnPrimary} />
-                  <RedesignText variant="button" style={{ color: theme.textOnPrimary }}>
-                    {t('tx.add')}
-                  </RedesignText>
-                </Pressable>
-                <Pressable
-                  testID="redesign-hero-transfer-btn"
-                  accessibilityRole="button"
-                  onPress={() => add?.open('transfer')}
-                  style={{
-                    flex: 1,
-                    height: 40,
-                    backgroundColor: theme.surfaceMuted,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    borderRadius: shape['radius-pill'],
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: sp.xs,
-                  }}
-                >
-                  <RedesignIcon name="repeat" size={16} color={theme.text} />
-                  <RedesignText variant="button" tone="text">
-                    {t('dashboard.redesign.presetTransfer')}
-                  </RedesignText>
-                </Pressable>
-              </View>
-            ) : null}
-            {netWorthLine.length > 1 ? (
-              <NetWorthSparkline
-                points={netWorthLine}
-                lineColor={theme.borderStrong}
-                gradientColor={theme.borderStrong}
-              />
-            ) : null}
-            {!phone ? (
-              <RedesignButton kind="link" label={t('chart.viewAsTable')} onPress={() => router.push({ pathname: '/reports', params: { kind: 'netWorth' } })} />
-            ) : null}
-          </CardShell>,
-        );
-      case 'averages': {
-        // Tablet `11:922`: Income / Spending + Monthly average.
-        // Web `1:141`: Average monthly income / spending + Last 6 months.
-        // Phone list (when shown): Income / Spending + Last 6 months.
-        const web = size === 'desktop' || size === 'wide';
-        const incomeLabel = web ? t('dashboard.redesign.avgIncomeLong') : t('dashboard.redesign.avgIncome');
-        const spendingLabel = web ? t('dashboard.redesign.avgSpendingLong') : t('dashboard.redesign.avgSpending');
-        const avgHint = size === 'tablet' ? t('dashboard.redesign.monthlyAverage') : t('dashboard.redesign.last6');
-        const rows = [
-          {
-            key: 'income',
-            label: incomeLabel,
-            hint: avgHint,
-            value: money(averages.avgIncome, privacy),
-          },
-          {
-            key: 'spending',
-            label: spendingLabel,
-            hint: avgHint,
-            value: money(averages.avgSpending, privacy),
-          },
-          {
-            key: 'savings',
-            label: t('dashboard.redesign.savingsRate'),
-            hint: t('dashboard.redesign.savingsGoal', { pct: REDESIGN_SAVINGS_GOAL_PCT }),
-            value: `${averages.savingsRate}%`,
-          },
-        ];
-        if (phone) {
-          return wrap(
-            id,
-            <CardShell testID="redesign-home-averages" onPress={() => router.push('/reports')}>
-              <CardHeader title={t('dashboard.redesign.card.averages')} onPress={() => router.push('/reports')} />
-              {rows.map((r) => (
-                <View key={r.key} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: sp.md }}>
-                  <View style={{ flex: 1 }}>
-                    <RedesignText variant="body-medium">{r.label}</RedesignText>
-                    <RedesignText variant="caption" tone="textSecondary">
-                      {r.hint}
-                    </RedesignText>
-                  </View>
-                  <RedesignAmount text={r.value} sizeVariant="body" hidden={privacy && r.key !== 'savings'} />
-                </View>
-              ))}
-            </CardShell>,
-          );
-        }
-        return wrap(
-          id,
-          <View testID="redesign-home-averages" style={{ flexDirection: 'row', gap: sp.md, width: '100%' }}>
-            {rows.map((r) => (
-              <CardShell key={r.key} style={{ flex: 1 }}>
-                <RedesignText variant="label">{r.label}</RedesignText>
-                <RedesignAmount text={r.value} sizeVariant="amount" hidden={privacy && r.key !== 'savings'} />
-                <RedesignText tone="textSecondary">{r.hint}</RedesignText>
-              </CardShell>
-            ))}
-          </View>,
-        );
-      }
-      case 'comingUp': {
-        const due = comingUpDueTotal(weekRows);
-        return wrap(
-          id,
-          <CardShell testID="redesign-home-coming-up" onPress={() => router.push('/plan')}>
-            <CardHeader title={t('dashboard.comingUp')} onPress={() => router.push('/plan')} />
-            {urgentRows.length > 0 ? (
-              <View
-                testID="redesign-home-radar"
-                style={{
-                  padding: sp.sm,
-                  backgroundColor: theme.primarySoft,
-                  borderRadius: shape['radius-sm'],
-                  gap: sp.xxs,
-                }}
-              >
-                <RedesignText variant="caption" tone="primary" style={{ fontWeight: '700' }}>
-                  {t('dashboard.redesign.radarTitle')}
-                </RedesignText>
-                {urgentRows.slice(0, 2).map((r) => (
-                  <View key={`urgent-${r.recurring.id}:${r.dueDate}`} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <RedesignText variant="caption" tone="primary">
-                      {r.dueDate === todayStr ? t('dashboard.redesign.radarDueToday') : t('dashboard.redesign.radarDueTomorrow')}: {r.recurring.name}
-                    </RedesignText>
-                    <RedesignText variant="caption" tone="primary" style={{ fontWeight: '600' }}>
-                      {money(r.amountMinor, privacy)}
-                    </RedesignText>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-            {weekRows.length === 0 ? (
-              <>
-                <RedesignText variant="body-medium">{t('dashboard.redesign.comingEmptyTitle')}</RedesignText>
-                <RedesignText tone="textSecondary">{t('dashboard.redesign.comingEmptyBody')}</RedesignText>
-                <RedesignButton
-                  testID="redesign-home-add-bill"
-                  kind="link"
-                  label={t('dashboard.redesign.addBill')}
-                  onPress={() => router.push('/plan')}
-                />
-              </>
-            ) : (
-              <>
-                <RedesignAmount text={money(due, privacy)} sizeVariant="amount" hidden={privacy} />
-                <RedesignText tone="textSecondary">{t('dashboard.redesign.comingDue')}</RedesignText>
-                {weekRows.slice(0, 3).map((row) => (
-                  <ComingRow key={`${row.recurring.id}:${row.dueDate}`} row={row} privacy={privacy} onPress={() => router.push({ pathname: '/plan', params: { occurrence: `${row.recurring.id}:${row.dueDate}` } })} />
-                ))}
-              </>
-            )}
-          </CardShell>,
-        );
-      }
-      case 'budget': {
-        const over = model.progress.filter((p) => p.state === 'over').length;
-        return wrap(
-          id,
-          <CardShell testID="redesign-home-budget" onPress={() => router.push('/budget')}>
-            <CardHeader title={t('dashboard.redesign.card.budget')} onPress={() => router.push('/budget')} />
-            <RedesignText variant="amount">
-              {over === 1 ? t('dashboard.redesign.overPlanOne') : over > 1 ? t('dashboard.redesign.overPlanMany', { n: over }) : monthLabel(month)}
-            </RedesignText>
-            {model.progress.slice(0, 3).map((p) => {
-              const plan = p.plan;
-              const spent = p.row.activity;
-              return (
-                <View key={p.category.id} style={{ gap: sp.xs }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <RedesignText variant="body-medium">{p.category.name}</RedesignText>
-                      {p.state === 'over' ? (
-                        <RedesignText variant="caption" tone="textSecondary">
-                          {t('dashboard.redesign.overPlan')}
-                        </RedesignText>
-                      ) : null}
-                    </View>
-                    <RedesignText variant="caption" tone="textSecondary">
-                      {t('dashboard.redesign.ofPlan', {
-                        spent: money(spent, privacy),
-                        planned: money(plan, privacy),
-                      })}
-                    </RedesignText>
-                  </View>
-                  <RedesignProgress value={Number(spent)} max={Number(plan > 0n ? plan : 1n)} overPlan={p.state === 'over'} />
-                </View>
-              );
-            })}
-          </CardShell>,
-        );
-      }
-      case 'recent':
-        return wrap(
-          id,
-          <CardShell testID="redesign-home-recent" onPress={() => router.push('/transactions')}>
-            <CardHeader title={t('dashboard.redesign.card.recent')} onPress={() => router.push('/transactions')} />
-            {toSort > 0 ? (
-              <>
-                <RedesignText variant="amount">{t('dashboard.redesign.toSort', { n: toSort })}</RedesignText>
-                <RedesignText tone="textSecondary">{t('dashboard.redesign.toSortHint')}</RedesignText>
-              </>
-            ) : null}
-            {model.recent.slice(0, 3).map((r) => (
-              <Pressable
-                key={r.event.id}
-                testID={`redesign-home-tx-${r.event.id}`}
-                onPress={() => router.push({ pathname: '/transactions', params: { tx: r.event.id } })}
-                style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp.md }}
-              >
-                <View style={{ flex: 1 }}>
-                  <RedesignText variant="body-medium">{r.title}</RedesignText>
-                  <RedesignText variant="caption" tone="textSecondary">
-                    {[r.category, r.event.date === todayStr ? t('date.today').toLowerCase() : longDate(r.event.date)].filter(Boolean).join(', ')}
-                  </RedesignText>
-                </View>
-                <RedesignAmount
-                  text={privacy ? HIDDEN_AMOUNT : formatNaira(r.amount < 0n ? -r.amount : r.amount)}
-                  sizeVariant="body"
-                  sign={privacy ? null : r.amount > 0n ? '+' : r.amount < 0n ? '−' : null}
-                />
-              </Pressable>
-            ))}
-          </CardShell>,
-        );
-      case 'goals': {
-        const goal = model.goals[0];
-        if (!goal) {
-          return wrap(
-            id,
-            <CardShell testID="redesign-home-goals" onPress={() => router.push('/goals')}>
-              <CardHeader title={t('dashboard.card.goals')} onPress={() => router.push('/goals')} />
-              <RedesignText tone="textSecondary">{t('dashboard.goalsEmpty')}</RedesignText>
-            </CardShell>,
-          );
-        }
-        const pct = Math.round(goal.progress * 100);
-        return wrap(
-          id,
-          <CardShell testID="redesign-home-goals" onPress={() => router.push('/goals')}>
-            <CardHeader title={t('dashboard.card.goals')} onPress={() => router.push('/goals')} />
-            <View style={{ flexDirection: 'row', gap: sp.lg, alignItems: 'center' }}>
-              <View
-                style={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 36,
-                  borderWidth: 6,
-                  borderColor: theme.progressTrack,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <View
-                  style={{
-                    position: 'absolute',
-                    width: 72,
-                    height: 72,
-                    borderRadius: 36,
-                    borderWidth: 6,
-                    borderColor: theme.primary,
-                    borderTopColor: 'transparent',
-                    borderRightColor: pct > 25 ? theme.primary : 'transparent',
-                    borderBottomColor: pct > 50 ? theme.primary : 'transparent',
-                    borderLeftColor: pct > 75 ? theme.primary : 'transparent',
-                    transform: [{ rotate: '-45deg' }],
-                  }}
-                />
-                <View style={{ alignItems: 'center' }} testID="redesign-home-goals-ring">
-                  <RedesignText variant="label">
-                    {phone ? t('dashboard.redesign.savedScore', { pct }) : t('dashboard.redesign.savedPct', { pct })}
-                  </RedesignText>
-                  <RedesignText variant="caption" tone="textSecondary" style={{ fontSize: 10, lineHeight: 12 }}>
-                    {phone ? t('dashboard.redesign.outOf100') : t('dashboard.redesign.savedLabel')}
-                  </RedesignText>
-                </View>
-              </View>
-              <View style={{ flex: 1, gap: sp.xs }}>
-                <RedesignText variant="body-medium">{goal.goal.name}</RedesignText>
-                <RedesignText variant="caption" tone="textSecondary">
-                  {t('dashboard.redesign.ofPlan', {
-                    spent: money(goal.saved, privacy),
-                    planned: money(goal.target, privacy),
-                  })}
-                </RedesignText>
-                {goal.goal.targetDate ? (
-                  <RedesignText variant="caption" tone="textSecondary">
-                    {t('dashboard.redesign.onTrack', {
-                      month: fullMonthName(goal.goal.targetDate.slice(0, 7)),
-                    })}
-                  </RedesignText>
-                ) : null}
-              </View>
-            </View>
-          </CardShell>,
-        );
-      }
-      case 'investments':
-        if (!model.hasInvestments) return null;
-        return wrap(
-          id,
-          <CardShell testID="redesign-home-investments" onPress={() => router.push('/investments')}>
-            <CardHeader title={t('dashboard.card.investments')} onPress={() => router.push('/investments')} />
-            <RedesignAmount text={money(model.investmentsValue, privacy)} sizeVariant="amount" hidden={privacy} />
-            <RedesignText tone="textSecondary">
-              {t('dashboard.investmentsGain', { amount: money(model.investmentsGain, privacy, true) })}
-            </RedesignText>
-          </CardShell>,
-        );
-      case 'debts':
-        return wrap(
-          id,
-          <CardShell testID="redesign-home-debts" onPress={() => router.push('/debts')}>
-            <CardHeader title={t('dashboard.card.debts')} onPress={() => router.push('/debts')} />
-            <RedesignText tone="textSecondary">
-              {t('dashboard.assets', { amount: money(model.debts.owedToMe, privacy) })}
-            </RedesignText>
-            <RedesignText tone="textSecondary">
-              {t('dashboard.debtsLabel', { amount: money(model.debts.iOwe, privacy) })}
-            </RedesignText>
-          </CardShell>,
-        );
-      case 'health':
-        return wrap(id, <HealthCard month={month} privacy={privacy} onOpen={() => router.push('/health')} />);
-      case 'cashFlow':
-        return wrap(
-          id,
-          <CardShell testID="redesign-home-cash-flow" onPress={() => router.push('/cash-flow')}>
-            <CardHeader title={t('dashboard.redesign.card.cashFlow')} onPress={() => router.push('/cash-flow')} />
-            <RedesignText tone="textSecondary">{t('dashboard.whereItWent')}</RedesignText>
-          </CardShell>,
-        );
-      default:
-        return null;
-    }
+  const handleTransfer = (data: { fromAccount: string; toAccount: string; amount: string }) => {
+    setToastMessage(`Transferred ₦${data.amount} from ${data.fromAccount} to ${data.toAccount}`);
+    setToastVisible(true);
   };
-
-  const firstTodo = items.find((i) => !i.done);
-
-  const checklistCard =
-    items.length > 0 ? (
-      <View key="checklist" style={{ width: '100%', marginBottom: sp.xs }}>
-        <CardShell testID="redesign-home-checklist" style={{ gap: sp.sm, padding: sp.md }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flex: 1, gap: 2 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
-                <RedesignText variant="label" testID="redesign-home-welcome">
-                  {t('dashboard.redesign.getStarted')}
-                </RedesignText>
-                <RedesignText variant="caption" tone="textSecondary">
-                  · {t('dashboard.redesign.progress', {
-                    done: items.filter((i) => i.done).length,
-                    total: items.length,
-                  })}
-                </RedesignText>
-              </View>
-              <RedesignText variant="caption" tone="textSecondary">
-                {t('dashboard.redesign.welcomeBody')}
-              </RedesignText>
-            </View>
-            <Pressable
-              testID="redesign-home-checklist-hide"
-              accessibilityRole="button"
-              accessibilityLabel={t('dashboard.checklistHide')}
-              onPress={hideChecklist}
-              style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <RedesignIcon name="x" size={20} color={theme.textSecondary} />
-            </Pressable>
-          </View>
-          <RedesignProgress
-            value={items.filter((i) => i.done).length}
-            max={items.length}
-            testID="redesign-home-checklist-bar"
-          />
-          {items.map((item) => (
-            <Pressable
-              key={item.key}
-              testID={`redesign-home-check-${item.key}`}
-              disabled={item.done}
-              onPress={() => router.push(item.href as never)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: sp.sm,
-                paddingVertical: sp.xs,
-                borderTopWidth: 1,
-                borderColor: theme.border,
-              }}
-            >
-              <View
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 11,
-                  backgroundColor: item.done ? theme.primary : 'transparent',
-                  borderWidth: item.done ? 0 : 1.5,
-                  borderColor: theme.borderStrong,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {item.done ? <RedesignIcon name="check" size={12} color={theme.textOnPrimary} /> : null}
-              </View>
-              <View style={{ flex: 1 }}>
-                <RedesignText
-                  variant="body-medium"
-                  style={item.done ? { textDecorationLine: 'line-through', color: theme.textSecondary } : undefined}
-                >
-                  {t(item.labelKey)}
-                </RedesignText>
-              </View>
-              {!item.done ? <RedesignIcon name="chevron-right" size={16} color={theme.textSecondary} /> : null}
-            </Pressable>
-          ))}
-          {firstTodo ? (
-            <RedesignButton
-              testID="redesign-home-checklist-cta"
-              label={t(redesignCheckAction(firstTodo.key))}
-              onPress={() => router.push(firstTodo.href as never)}
-              fullWidth
-            />
-          ) : null}
-        </CardShell>
-      </View>
-    ) : null;
 
   return (
-    <AppFrame title={t('nav.home')}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <ScrollView
-        testID="redesign-home"
-        contentContainerStyle={{ gap: sp.lg, paddingBottom: sp.xxl }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
+        style={styles.scroll}
+        contentContainerStyle={{
+          padding: spacing.lg,
+          paddingHorizontal: spacing.xl,
+          paddingBottom: 100,
+          width: '100%',
+        }}
+        showsVerticalScrollIndicator={false}
       >
-        {!phone ? (
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: sp.md, flexWrap: 'wrap' }}>
-            <View>
-              <RedesignText variant="title" testID="redesign-home-title">
-                {greetingText}
-              </RedesignText>
-              <RedesignText tone="textSecondary">{todayLong(todayStr)}</RedesignText>
-            </View>
-            <View style={{ flexDirection: 'row', gap: sp.sm, alignItems: 'center' }}>
-              <RedesignButton testID="redesign-home-edit" kind="secondary" label={t('dashboard.redesign.editHome')} onPress={openEdit} />
-              <RedesignButton
-                testID="redesign-home-add"
-                label={t('tx.add')}
-                onPress={() => add?.open('expense')}
-              />
-            </View>
-          </View>
-        ) : (
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ gap: sp.xxs, flex: 1 }}>
-              <RedesignText variant="headline" testID="redesign-home-title">
-                {greetingText}
-              </RedesignText>
-              <RedesignText variant="caption" tone="textSecondary">{todayLong(todayStr)}</RedesignText>
-            </View>
-          </View>
-        )}
+        {/* Month Scope Navigator */}
+        <MonthScopeBar
+          currentMonth={currentMonth}
+          isCurrentMonth={isCurrentMonth}
+          onPrevMonth={handlePrevMonth}
+          onNextMonth={handleNextMonth}
+          onResetToCurrent={handleResetToCurrent}
+        />
 
-        <View testID="redesign-home-quick-actions" style={{ gap: sp.xs }}>
-          <RedesignText variant="label" tone="textSecondary">
-            {t('dashboard.redesign.quickLogTitle')}
-          </RedesignText>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp.xs }}>
-            <RedesignChip
-              testID="quick-log-custom"
-              label={t('dashboard.redesign.presetCustom')}
-              onPress={() => add?.open('expense')}
-              selected
-            />
-            <RedesignChip
-              testID="quick-log-transport"
-              label={t('dashboard.redesign.presetTransport')}
-              onPress={() => add?.open('expense', { amount: '1500', payee: 'Ride' })}
-            />
-            <RedesignChip
-              testID="quick-log-lunch"
-              label={t('dashboard.redesign.presetLunch')}
-              onPress={() => add?.open('expense', { amount: '2500', payee: 'Lunch' })}
-            />
-            <RedesignChip
-              testID="quick-log-transfer"
-              label={t('dashboard.redesign.presetTransfer')}
-              onPress={() => add?.open('transfer')}
-            />
-          </ScrollView>
+        {/* 1. Combined Net Worth & Metrics Card */}
+        <NetWorthHeroCard
+          netWorthMinor={netWorth}
+          monthlyDeltaMinor={42000000n}
+          incomeMinor={income}
+          spentMinor={spent}
+          currentMonth={currentMonth}
+          privacyMode={privacyMode}
+          onTogglePrivacy={() => setPrivacyMode((prev) => !prev)}
+        />
+
+        {/* 3. Primary Action Trio */}
+        <QuickActionTrio
+          onAddExpense={() => setExpenseSheetVisible(true)}
+          onAddIncome={() => setIncomeSheetVisible(true)}
+          onTransfer={() => setTransferSheetVisible(true)}
+        />
+
+        {/* 4. Compact Accounts Strip (No Truncation) */}
+        <View style={{ marginBottom: spacing.lg }}>
+          <AccountsCarousel
+            accounts={accounts}
+            privacyMode={privacyMode}
+            onSelectAccount={(id) => router.push(`/accounts/${id}` as any)}
+            onViewAll={() => router.push('/accounts' as any)}
+          />
         </View>
 
-        {toSort > 0 ? (
-          <CardShell
-            testID="redesign-home-inbox-zero"
-            style={{
-              backgroundColor: theme.primarySoft,
-              borderColor: theme.primary,
-              gap: sp.xs,
-            }}
-            onPress={() => router.push({ pathname: '/transactions', params: { uncategorized: '1' } })}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
-                <RedesignIcon name="alert" size={18} color={theme.primary} />
-                <RedesignText variant="label" tone="primary">
-                  {t('dashboard.redesign.inboxZeroCardTitle', { count: toSort })}
-                </RedesignText>
-              </View>
-              <RedesignButton
-                kind="link"
-                label={t('dashboard.redesign.inboxZeroAction')}
-                onPress={() => router.push({ pathname: '/transactions', params: { uncategorized: '1' } })}
-              />
-            </View>
-            <RedesignText variant="caption" tone="textSecondary">
-              {t('dashboard.redesign.inboxZeroCardBody')}
-            </RedesignText>
-          </CardShell>
-        ) : (
-          <View testID="redesign-home-inbox-clean" style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
-            <RedesignIcon name="check" size={14} color={theme.primary} />
-            <RedesignText variant="caption" tone="textSecondary">
-              {t('dashboard.redesign.inboxZeroAllDone')}
-            </RedesignText>
-          </View>
-        )}
+        {/* 5. Financial Overview Summary Cards (Budget, Plan, Debts, Goals) */}
+        <DashboardSummariesGrid privacyMode={privacyMode} currentMonth={currentMonth} />
 
-        {liquidRows.length > 0 ? (
-          <View testID="redesign-home-liquid-accounts" style={{ gap: sp.xs }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <RedesignText variant="label" tone="textSecondary">
-                {t('dashboard.redesign.liquidTitle')}
-              </RedesignText>
-              <RedesignButton
-                kind="link"
-                label={t('dashboard.redesign.seeAllAccounts')}
-                onPress={() => router.push('/accounts')}
-              />
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp.sm }}>
-              {liquidRows.map(({ account, balance }) => (
-                <Pressable
-                  key={account.id}
-                  testID={`liquid-account-${account.id}`}
-                  accessibilityRole="link"
-                  onPress={() => router.push({ pathname: '/accounts', params: { account: account.id } })}
-                  style={{
-                    paddingHorizontal: sp.md,
-                    paddingVertical: sp.sm,
-                    backgroundColor: theme.surface,
-                    borderRadius: shape['radius-md'],
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    minWidth: 150,
-                    gap: sp.xxs,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.xs }}>
-                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
-                      <RedesignIcon name="bank" size={12} color={theme.textSecondary} />
-                    </View>
-                    <RedesignText variant="caption" tone="textSecondary" numberOfLines={1}>
-                      {account.name}
-                    </RedesignText>
-                  </View>
-                  <RedesignAmount
-                    text={money(balance, privacy)}
-                    sizeVariant="body"
-                    hidden={privacy}
-                  />
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
-
-        {!model ? (
-          <RedesignSkeleton testID="redesign-home-skeleton" />
-        ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: phone ? 0 : -sp.xs, gap: phone ? sp.lg : 0 }}>
-            {checklistCard}
-            {cards.map((id) => renderCard(id))}
-          </View>
-        )}
-
-        {phone ? (
-          <View style={{ alignItems: 'flex-start', paddingTop: sp.sm }}>
-            <RedesignButton testID="redesign-home-edit" kind="secondary" label={t('dashboard.redesign.editHome')} onPress={openEdit} />
-          </View>
-        ) : null}
+        {/* 6. Recent Activity Ledger */}
+        <RecentActivityList transactions={transactions} privacyMode={privacyMode} />
       </ScrollView>
-      <EditHomeSheet
-        visible={editOpen}
-        layout={layout}
-        deviceKind={deviceKind}
-        onClose={closeEdit}
-        onSave={saveLayout}
+
+      {/* Floating 5-Second Toast with 1-Tap Undo */}
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        onUndo={() => {
+          // Reverts last transaction
+          setTransactions((prev) => prev.slice(1));
+          setToastMessage('Transaction undone');
+          setToastVisible(true);
+        }}
+        onDismiss={() => setToastVisible(false)}
       />
-    </AppFrame>
-  );
-}
 
-function ComingRow({ row, privacy, onPress }: { row: ComingUpRow; privacy: boolean; onPress: () => void }) {
-  const signed = row.recurring.kind === 'income';
-  const amt = signed ? row.amountMinor : -row.amountMinor;
-  return (
-    <Pressable
-      testID={`redesign-coming-${row.recurring.id}:${row.dueDate}`}
-      onPress={onPress}
-      style={{ flexDirection: 'row', justifyContent: 'space-between', gap: sp.md }}
-    >
-      <View style={{ flex: 1 }}>
-        <RedesignText variant="body-medium">{row.recurring.name}</RedesignText>
-        <RedesignText variant="caption" tone="textSecondary">
-          {longDate(row.dueDate)}
-        </RedesignText>
-      </View>
-      <RedesignAmount
-        text={money(amt < 0n ? -amt : amt, privacy)}
-        sizeVariant="body"
-        hidden={privacy}
-        sign={amt > 0n ? '+' : '−'}
+      {/* Quick Add Expense Bottom Sheet */}
+      <QuickTransactionSheet
+        visible={expenseSheetVisible}
+        onClose={() => setExpenseSheetVisible(false)}
+        type="expense"
+        onSave={handleSaveTransaction}
       />
-    </Pressable>
+
+      {/* Quick Add Income Bottom Sheet */}
+      <QuickTransactionSheet
+        visible={incomeSheetVisible}
+        onClose={() => setIncomeSheetVisible(false)}
+        type="income"
+        onSave={handleSaveTransaction}
+      />
+
+      {/* Quick Transfer Bottom Sheet */}
+      <QuickTransferSheet
+        visible={transferSheetVisible}
+        onClose={() => setTransferSheetVisible(false)}
+        onTransfer={handleTransfer}
+      />
+    </View>
   );
 }
 
-function HealthCard({ month, privacy: _privacy, onOpen }: { month: string; privacy: boolean; onOpen: () => void }) {
-  const { snapshot } = useWorkspace();
-  const onDate = today();
-  const page = useMemo(
-    () => (snapshot ? healthPage(snapshot, month < onDate.slice(0, 7) ? month : onDate.slice(0, 7), onDate, { history: false }) : null),
-    [snapshot, month, onDate],
-  );
-  if (!page) return null;
-  return (
-    <CardShell testID="redesign-home-health" onPress={onOpen}>
-      <CardHeader title={t('dashboard.healthCard')} onPress={onOpen} />
-      {page.ready && page.score !== null ? (
-        <>
-          <RedesignText variant="amount" testID="redesign-home-health-score">
-            {String(page.score)}
-          </RedesignText>
-          <RedesignText tone="textSecondary">{reasonText(page) || (page.advice[0] ? adviceText(page.advice[0], formatNaira) : '')}</RedesignText>
-        </>
-      ) : (
-        <RedesignText tone="textSecondary">{t('health.notReadyTitle')}</RedesignText>
-      )}
-    </CardShell>
-  );
-}
-
-export { DashboardScreen as RedesignDashboardScreen };
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+});

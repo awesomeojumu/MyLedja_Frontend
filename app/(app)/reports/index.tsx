@@ -1,5 +1,6 @@
-import { ReportsScreen } from '@/features/reports/ReportsScreen';
+import React from 'react';
+import { ReportsHubScreen } from '../../../src/features/reports/ReportsHubScreen';
 
-export default function ReportsPage() {
-  return <ReportsScreen />;
+export default function ReportsRoute() {
+  return <ReportsHubScreen />;
 }

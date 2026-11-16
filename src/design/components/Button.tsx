@@ -1,77 +1,124 @@
-import { forwardRef, type ComponentRef } from 'react';
-import { Pressable, View, type PressableProps } from 'react-native';
-import tokens from '../tokens.json';
-import { useTheme } from '../ThemeProvider';
-import { Text } from './Text';
+import React from 'react';
+import {
+  TouchableOpacity,
+  Text,
+  ActivityIndicator,
+  StyleSheet,
+  type ViewStyle,
+  type TextStyle,
+} from 'react-native';
+import { useTheme } from '../theme';
 
-export type ButtonKind = 'primary-pill' | 'secondary' | 'gradient' | 'link';
-
-type Props = Omit<PressableProps, 'children'> & {
+export interface ButtonProps {
   label: string;
-  kind?: ButtonKind;
-  size?: 'md' | 'sm';
-  fullWidth?: boolean;
-  /** Web: focus this control when mounted (PU02-3 Cancel on destructive confirms). */
-  autoFocus?: boolean;
-};
+  onPress: () => void;
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  size?: 'sm' | 'md' | 'lg';
+  disabled?: boolean;
+  loading?: boolean;
+  icon?: React.ReactNode;
+  style?: ViewStyle;
+  textStyle?: TextStyle;
+}
 
-const c = tokens.color;
+export function Button({
+  label,
+  onPress,
+  variant = 'primary',
+  size = 'md',
+  disabled = false,
+  loading = false,
+  icon,
+  style,
+  textStyle,
+}: ButtonProps) {
+  const { colors, typography, spacing, radii } = useTheme();
 
-export const Button = forwardRef<ComponentRef<typeof Pressable>, Props>(function Button(
-  { label, kind = 'primary-pill', size = 'md', fullWidth, disabled, style, autoFocus, ...rest },
-  ref,
-) {
-  const theme = useTheme();
-  const isLink = kind === 'link';
+  // Size specifications
+  const sizeStyles = {
+    sm: { paddingVertical: spacing.xs + 2, paddingHorizontal: spacing.md, fontSize: typography.sizes.sm },
+    md: { paddingVertical: spacing.sm + 4, paddingHorizontal: spacing.lg, fontSize: typography.sizes.bodySm },
+    lg: { paddingVertical: spacing.md, paddingHorizontal: spacing.xl, fontSize: typography.sizes.md },
+  }[size];
+
+  // Variant specifications
+  let bg = colors.primary;
+  let textCol = colors.textInverse;
+  let borderCol = 'transparent';
+
+  if (variant === 'secondary') {
+    bg = colors.surfaceSubtle;
+    textCol = colors.textPrimary;
+    borderCol = colors.border;
+  } else if (variant === 'ghost') {
+    bg = 'transparent';
+    textCol = colors.primary;
+    borderCol = 'transparent';
+  } else if (variant === 'danger') {
+    bg = colors.statusDanger;
+    textCol = '#FFFFFF';
+    borderCol = 'transparent';
+  }
+
+  if (disabled) {
+    bg = colors.surfaceSubtle;
+    textCol = colors.textTertiary;
+    borderCol = colors.borderSubtle;
+  }
+
   return (
-    <Pressable
-      ref={ref}
-      accessibilityRole={isLink ? 'link' : 'button'}
-      accessibilityState={{ disabled: !!disabled }}
-      disabled={disabled}
-      hitSlop={isLink ? 12 : undefined}
-      // @ts-expect-error RN web supports autoFocus on Pressable
-      autoFocus={autoFocus}
-      {...rest}
-      style={(state) => {
-        const pressed = state.pressed;
-        const base = isLink
-          ? { paddingVertical: tokens.spacing['spacing-xs'] }
-          : {
-              minHeight: 44,
-              paddingVertical: tokens.spacing['spacing-sm'],
-              paddingHorizontal: tokens.spacing['spacing-lg'],
-              borderRadius: tokens.radius['rounded-pill'],
-              alignItems: 'center' as const,
-              justifyContent: 'center' as const,
-              transform: pressed ? [{ scale: 0.98 }] : undefined,
-            };
-        const look =
-          kind === 'primary-pill'
-            ? { backgroundColor: pressed ? c['primary-press'] : theme.primaryFill }
-            : kind === 'gradient'
-              ? {
-                  backgroundColor: pressed ? c['primary-press'] : c.primary,
-                  borderWidth: 1,
-                  borderColor: theme.gold,
-                  experimental_backgroundImage: `linear-gradient(120deg, ${c.primary}, ${c['primary-deep']})`,
-                }
-              : kind === 'secondary'
-                ? { borderWidth: 1, borderColor: theme.inputBorder, backgroundColor: theme.card }
-                : {};
-        const userStyle = typeof style === 'function' ? style(state) : style;
-        return [base, look, fullWidth && { alignSelf: 'stretch' as const }, disabled && { opacity: 0.45 }, userStyle];
-      }}
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      onPress={onPress}
+      disabled={disabled || loading}
+      activeOpacity={0.8}
+      style={[
+        styles.baseButton,
+        {
+          backgroundColor: bg,
+          borderColor: borderCol,
+          borderWidth: variant === 'secondary' ? 1 : 0,
+          borderRadius: radii.full,
+          paddingVertical: sizeStyles.paddingVertical,
+          paddingHorizontal: sizeStyles.paddingHorizontal,
+        },
+        style,
+      ]}
     >
-      <View>
-        <Text
-          variant={size === 'md' ? 'button-md' : 'button-sm'}
-          tone={kind === 'primary-pill' ? 'onPrimaryFill' : isLink ? 'link' : 'text'}
-          style={kind === 'gradient' ? { color: c['on-primary'] } : undefined}
-        >
-          {label}
-        </Text>
-      </View>
-    </Pressable>
+      {loading ? (
+        <ActivityIndicator size="small" color={textCol} />
+      ) : (
+        <>
+          {icon ? <>{icon}</> : null}
+          <Text
+            style={[
+              styles.baseText,
+              {
+                color: textCol,
+                fontSize: sizeStyles.fontSize,
+                fontFamily: typography.fonts.medium,
+                marginLeft: icon ? spacing.xs : 0,
+              },
+              textStyle,
+            ]}
+          >
+            {label}
+          </Text>
+        </>
+      )}
+    </TouchableOpacity>
   );
+}
+
+const styles = StyleSheet.create({
+  baseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  baseText: {
+    textAlign: 'center',
+    userSelect: 'none',
+  },
 });

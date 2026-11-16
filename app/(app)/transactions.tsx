@@ -1,5 +1,6 @@
-import { TransactionsScreen } from '@/features/transactions/TransactionsScreen';
+import React from 'react';
+import { TransactionsScreen } from '../../src/features/transactions/TransactionsScreen';
 
-export default function TransactionsPage() {
+export default function TransactionsRoute() {
   return <TransactionsScreen />;
 }

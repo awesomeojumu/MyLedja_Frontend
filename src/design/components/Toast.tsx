@@ -1,101 +1,109 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { View } from 'react-native';
-import { t } from '@/i18n';
-import tokens from '../tokens.json';
-import { useTheme } from '../ThemeProvider';
-import { useSizeClass } from '../size';
-import { Button } from './Button';
-import { Text } from './Text';
+import React, { useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { useTheme } from '../theme';
 
-type ToastItem = { id: number; message: string; onUndo?: () => void };
-type ToastApi = { show: (message: string, onUndo?: () => void) => void };
+export interface ToastProps {
+  visible: boolean;
+  message: string;
+  onUndo?: () => void;
+  onDismiss: () => void;
+  durationMs?: number;
+}
 
-const Ctx = createContext<ToastApi | null>(null);
-const MAX = 3;
-export const TOAST_MS = 4000;
-export const TOAST_UNDO_MS = 8000;
+export function Toast({
+  visible,
+  message,
+  onUndo,
+  onDismiss,
+  durationMs = 5000,
+}: ToastProps) {
+  const { colors, typography, spacing, radii } = useTheme();
 
-/** Confirmations only. Errors never go here (DESIGN.md 2.12). */
-export function ToastProvider({ children }: { children: ReactNode }) {
-  const theme = useTheme();
-  const phone = useSizeClass() === 'phone';
-  const [items, setItems] = useState<ToastItem[]>([]);
-  const nextId = useRef(1);
-  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   useEffect(() => {
-    const pending = timers.current;
-    return () => {
-      for (const timer of pending) clearTimeout(timer);
-    };
-  }, []);
-
-  const dismiss = useCallback((id: number) => setItems((all) => all.filter((x) => x.id !== id)), []);
-  const show = useCallback(
-    (message: string, onUndo?: () => void) => {
-      const id = nextId.current++;
-      setItems((all) => [...all, { id, message, onUndo }].slice(-MAX));
+    if (visible) {
       const timer = setTimeout(() => {
-        timers.current.delete(timer);
-        dismiss(id);
-      }, onUndo ? TOAST_UNDO_MS : TOAST_MS);
-      timers.current.add(timer);
-    },
-    [dismiss],
-  );
-  const api = useMemo(() => ({ show }), [show]);
+        onDismiss();
+      }, durationMs);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, durationMs, onDismiss]);
+
+  if (!visible) return null;
 
   return (
-    <Ctx.Provider value={api}>
-      {children}
+    <View style={styles.floatingContainer}>
       <View
-        pointerEvents="box-none"
-        accessibilityLiveRegion="polite"
-        style={{
-          position: 'absolute',
-          bottom: tokens.spacing['spacing-xl'] + (phone ? tokens.frame['bottom-bar'] : 0),
-          right: phone ? undefined : tokens.spacing['spacing-xl'],
-          left: phone ? 0 : undefined,
-          width: phone ? '100%' : undefined,
-          alignItems: 'center',
-          gap: tokens.spacing['spacing-sm'],
-        }}
+        style={[
+          styles.toast,
+          {
+            backgroundColor: colors.textPrimary,
+            borderRadius: radii.full,
+            paddingVertical: spacing.sm,
+            paddingHorizontal: spacing.lg,
+          },
+        ]}
       >
-        {items.map((item) => (
-          <View
-            key={item.id}
-            testID="toast"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: tokens.spacing['spacing-md'],
-              backgroundColor: theme.card,
-              borderRadius: tokens.radius['rounded-lg'],
-              paddingHorizontal: tokens.spacing['spacing-lg'],
-              paddingVertical: tokens.spacing['spacing-sm'],
-              boxShadow: tokens.elevation['elevation-2'],
+        <Text
+          style={[
+            styles.message,
+            {
+              color: colors.textInverse,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.sm,
+            },
+          ]}
+        >
+          {message}
+        </Text>
+
+        {onUndo && (
+          <TouchableOpacity
+            onPress={() => {
+              onUndo();
+              onDismiss();
             }}
+            style={[styles.undoButton, { marginLeft: spacing.md }]}
           >
-            <Text>{item.message}</Text>
-            {item.onUndo ? (
-              <Button
-                kind="link"
-                accessibilityRole="button"
-                label={t('common.undo')}
-                onPress={() => {
-                  item.onUndo?.();
-                  dismiss(item.id);
-                }}
-              />
-            ) : null}
-          </View>
-        ))}
+            <Text
+              style={[
+                styles.undoText,
+                {
+                  color: colors.primary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.sm,
+                },
+              ]}
+            >
+              Undo
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
-    </Ctx.Provider>
+    </View>
   );
 }
 
-export function useToast(): ToastApi {
-  const v = useContext(Ctx);
-  if (!v) throw new Error('ToastProvider missing');
-  return v;
-}
+const styles = StyleSheet.create({
+  floatingContainer: {
+    position: 'absolute',
+    bottom: 80,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  toast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  message: {},
+  undoButton: {},
+  undoText: {
+    textDecorationLine: 'underline',
+  },
+});

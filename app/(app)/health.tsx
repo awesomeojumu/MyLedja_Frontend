@@ -1,4 +1,5 @@
-import { HealthScreen } from '@/features/health/HealthScreen';
+import React from 'react';
+import { HealthScreen } from '../../src/features/health/HealthScreen';
 
 export default function HealthRoute() {
   return <HealthScreen />;

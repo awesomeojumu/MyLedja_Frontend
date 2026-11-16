@@ -1,115 +1,143 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ApiClient, fetchTransport, type Transport } from '@/api/client';
-import { authApi, type AuthApi, type SessionResponse, type User } from '@/api/auth';
-import { createAuthMock } from '@/api/mocks/auth';
-import { config } from '@/config';
-import { createSessionStore, type SessionStore } from '@/data/session';
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import type { User, Workspace } from '../../api/auth';
+import { ApiClient, fetchTransport } from '../../api/client';
+import { createSessionStore } from '../../data/session';
+import { openKeyValue } from '../../data/kv';
 
+export type AuthStatus = 'signed-in' | 'signed-out' | 'loading';
 export type ApiSource = 'mock' | 'local' | 'staging';
-const LOCAL_API = 'http://localhost:4000';
 
-type AuthState = {
-  status: 'loading' | 'signed-out' | 'signed-in';
+export interface AuthContextType {
   user: User | null;
-  api: AuthApi;
-  client: ApiClient;
+  workspaceId: string | null;
+  workspaces: Workspace[];
+  status: AuthStatus;
   source: ApiSource;
-  setSource: (s: ApiSource) => void;
-  completeSignIn: (res: SessionResponse, staySignedIn: boolean) => Promise<void>;
-  setUser: (u: User) => void;
+  client: ApiClient;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  setSession: (user: User, workspaceId?: string | null, workspaces?: Workspace[]) => Promise<void>;
+  setWorkspaceId: (workspaceId: string) => Promise<void>;
   signOut: () => Promise<void>;
-};
-
-const Ctx = createContext<AuthState | null>(null);
-
-function transportFor(source: ApiSource, mock: Transport): Transport {
-  if (source === 'mock') return mock;
-  if (source === 'local') return fetchTransport(LOCAL_API);
-  return fetchTransport(config.apiUrl ?? LOCAL_API);
 }
 
-export function AuthProvider({
-  children,
-  initialSource = config.appEnv === 'development' ? 'mock' : 'staging',
-  session,
-  transport,
-}: {
-  children: ReactNode;
-  initialSource?: ApiSource;
-  session?: SessionStore;
-  transport?: Transport;
-}) {
-  const [{ mock, client }] = useState(() => {
-    const mockTransport = createAuthMock().transport;
-    return {
-      mock: mockTransport,
-      client: new ApiClient(transport ?? transportFor(initialSource, mockTransport), session ?? createSessionStore()),
-    };
-  });
-  const api = useMemo(() => authApi(client), [client]);
-  const [source, setSourceState] = useState<ApiSource>(initialSource);
+const AuthContext = createContext<AuthContextType | null>(null);
+
+const AUTH_USER_KEY = 'auth:user';
+const AUTH_WORKSPACE_KEY = 'auth:workspaceId';
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [status, setStatus] = useState<AuthState['status']>('loading');
+  const [workspaceId, setWorkspaceIdState] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [source, setSource] = useState<ApiSource>('mock');
+
+  const session = useMemo(() => createSessionStore(), []);
+  const client = useMemo(
+    () => new ApiClient(fetchTransport(process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'), session),
+    [session]
+  );
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
+    async function loadStoredAuth() {
       try {
-        if (await client.refresh()) {
-          const me = await api.me();
-          if (alive) {
-            setUser(me);
-            setStatus('signed-in');
-          }
-          return;
+        const kv = openKeyValue('myledja');
+        const storedUser = await kv.get(AUTH_USER_KEY);
+        const storedWorkspace = await kv.get(AUTH_WORKSPACE_KEY);
+
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser) as User;
+          setUser(parsedUser);
+          setWorkspaceIdState(storedWorkspace ?? parsedUser.workspaceId ?? 'default');
         }
       } catch {
-        // Fall through to signed out; the sign-in page explains what's needed.
+        // Fallback to unauthenticated
+      } finally {
+        setIsLoading(false);
       }
-      if (alive) setStatus('signed-out');
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [client, api]);
-
-  const setSource = useCallback(
-    (s: ApiSource) => {
-      setSourceState(s);
-      client.setTransport(transportFor(s, mock));
-    },
-    [client, mock],
-  );
-
-  const completeSignIn = useCallback(
-    async (res: SessionResponse, staySignedIn: boolean) => {
-      await client.signedIn(res, staySignedIn);
-      setUser(res.user);
-      setStatus('signed-in');
-    },
-    [client],
-  );
-
-  const signOut = useCallback(async () => {
-    try {
-      await api.signOut();
-    } catch {
-      // Signing out locally must still happen when the server can't be reached.
     }
-    await client.signOut();
+    loadStoredAuth();
+  }, []);
+
+  const setSession = async (newUser: User, activeWorkspaceId?: string | null, newWorkspaces?: Workspace[]) => {
+    setUser(newUser);
+    const resolvedWorkspace = activeWorkspaceId ?? newUser.workspaceId ?? 'default';
+    setWorkspaceIdState(resolvedWorkspace);
+    if (newWorkspaces) setWorkspaces(newWorkspaces);
+
+    try {
+      const kv = openKeyValue('myledja');
+      await kv.set([
+        [AUTH_USER_KEY, JSON.stringify(newUser)],
+        [AUTH_WORKSPACE_KEY, resolvedWorkspace],
+      ]);
+    } catch {
+      // Storage error non-fatal
+    }
+  };
+
+  const setWorkspaceId = async (id: string) => {
+    setWorkspaceIdState(id);
+    try {
+      const kv = openKeyValue('myledja');
+      await kv.set([[AUTH_WORKSPACE_KEY, id]]);
+    } catch {
+      // Non-fatal
+    }
+  };
+
+  const signOut = async () => {
     setUser(null);
-    setStatus('signed-out');
-  }, [api, client]);
+    setWorkspaceIdState(null);
+    setWorkspaces([]);
+    try {
+      const kv = openKeyValue('myledja');
+      await kv.remove([AUTH_USER_KEY, AUTH_WORKSPACE_KEY]);
+    } catch {
+      // Non-fatal
+    }
+  };
+
+  const status: AuthStatus = isLoading ? 'loading' : user ? 'signed-in' : 'signed-out';
 
   const value = useMemo(
-    () => ({ status, user, api, client, source, setSource, completeSignIn, setUser, signOut }),
-    [status, user, api, client, source, setSource, completeSignIn, signOut],
+    () => ({
+      user,
+      workspaceId,
+      workspaces,
+      status,
+      source,
+      client,
+      isAuthenticated: !!user,
+      isLoading,
+      setSession,
+      setWorkspaceId,
+      signOut,
+    }),
+    [user, workspaceId, workspaces, status, source, client, isLoading]
   );
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth(): AuthState {
-  const v = useContext(Ctx);
-  if (!v) throw new Error('AuthProvider missing');
-  return v;
+export function useAuth(): AuthContextType {
+  const context = useContext(AuthContext);
+  if (!context) {
+    const session = createSessionStore();
+    return {
+      user: null,
+      workspaceId: 'default',
+      workspaces: [],
+      status: 'signed-out',
+      source: 'mock',
+      client: new ApiClient(fetchTransport('http://localhost:3000'), session),
+      isAuthenticated: false,
+      isLoading: false,
+      setSession: async () => {},
+      setWorkspaceId: async () => {},
+      signOut: async () => {},
+    };
+  }
+  return context;
 }

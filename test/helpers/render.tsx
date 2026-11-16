@@ -3,8 +3,7 @@ import type { ReactElement } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Transport } from '@/api/client';
 import { createMemorySessionStore, type SessionStore } from '@/data/session';
-import { DesignProvider } from '@/design/ThemeProvider';
-import { ToastProvider } from '@/design/components';
+import { ThemeProvider } from '@/design';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { MockSyncServer } from '@/api/mocks/sync';
 import { MemoryKeyValue } from '@/data/kv.shared';
@@ -22,19 +21,16 @@ const metrics = { frame: { x: 0, y: 0, width: 375, height: 800 }, insets: { top:
 
 export function renderWithProviders(
   ui: ReactElement,
-  options: { privacy?: boolean; transport?: Transport; session?: SessionStore; reduceMotion?: boolean; sync?: ReturnType<typeof memorySync> } = {},
+  options: { privacy?: boolean; transport?: Transport; session?: SessionStore; sync?: ReturnType<typeof memorySync> } = {},
 ) {
-  const session = options.session ?? createMemorySessionStore();
   const sync = options.sync ?? memorySync();
   return render(
     <SafeAreaProvider initialMetrics={metrics}>
-      <DesignProvider initialPrivacy={options.privacy} initialChoice="light" reduceMotionOverride={options.reduceMotion ?? true}>
-        <AuthProvider initialSource="mock" transport={options.transport} session={session}>
-          <SyncProvider value={sync}>
-            <ToastProvider>{ui}</ToastProvider>
-          </SyncProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <SyncProvider value={sync}>{ui}</SyncProvider>
         </AuthProvider>
-      </DesignProvider>
+      </ThemeProvider>
     </SafeAreaProvider>,
   );
 }

@@ -1,3 +1,6 @@
-import { PlanScreen } from '@/features/plan/PlanScreen';
+import React from 'react';
+import { PlanScreen } from '../../../src/features/plan/PlanScreen';
 
-export default PlanScreen;
+export default function PlanRoute() {
+  return <PlanScreen />;
+}

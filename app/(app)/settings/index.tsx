@@ -1,5 +1,6 @@
-import { SettingsScreen } from '@/features/settings/SettingsScreen';
+import React from 'react';
+import { SettingsScreen } from '../../../src/features/settings/SettingsScreen';
 
-export default function SettingsPage() {
+export default function SettingsRoute() {
   return <SettingsScreen />;
 }

@@ -1,0 +1,632 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Platform, StatusBar } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  ArrowLeft,
+  Upload,
+  CheckCheck,
+  Edit2,
+  Sparkles,
+  Plus,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Search,
+} from 'lucide-react-native';
+import { useTheme, Button, TextInput } from '../../design';
+import { formatNaira, parseAmount } from '../../money';
+import { CSVImportSheet } from './CSVImportSheet';
+import { StatementAIPopup } from './StatementAIPopup';
+import { EditAccountPopup } from './EditAccountPopup';
+import { AccountEntrySheet } from './AccountEntrySheet';
+import { AccountBalanceChart } from './AccountBalanceChart';
+
+export interface AccountLedgerItem {
+  id: string;
+  date: string;
+  payee: string;
+  category: string;
+  amountMinor: bigint;
+  type: 'inflow' | 'outflow';
+  cleared: boolean;
+}
+
+interface AccountDetailScreenProps {
+  accountId: string;
+}
+
+const ACCOUNTS_DB: Record<
+  string,
+  { name: string; institution: string; type: string; balanceMinor: bigint; clearedMinor: bigint }
+> = {
+  '1': { name: 'GTBank (Current)', institution: 'Guaranty Trust Bank', type: 'Checking', balanceMinor: 84500000n, clearedMinor: 84000000n },
+  'acc-1': { name: 'Salary & Operating Account', institution: 'Guaranty Trust Bank', type: 'Checking', balanceMinor: 84500000n, clearedMinor: 84000000n },
+  '2': { name: 'Kuda Bank', institution: 'Kuda Microfinance Bank', type: 'Savings Pot', balanceMinor: 21500000n, clearedMinor: 21500000n },
+  'acc-2': { name: 'High-Yield Savings Pot', institution: 'Kuda Bank', type: 'Savings Pot', balanceMinor: 21500000n, clearedMinor: 21500000n },
+  '3': { name: 'Cash Wallet', institution: 'Physical Cash', type: 'Cash / Wallet', balanceMinor: 3500000n, clearedMinor: 3500000n },
+  'acc-3': { name: 'Emergency Physical Cash', institution: 'Cash Wallet', type: 'Physical Cash', balanceMinor: 3500000n, clearedMinor: 3500000n },
+  '4': { name: 'Access Credit Card', institution: 'Access Bank', type: 'Credit Card', balanceMinor: -1200000n, clearedMinor: -1200000n },
+  'acc-4': { name: 'Platinum Credit Card', institution: 'Access Bank', type: 'Credit Card', balanceMinor: -1200000n, clearedMinor: -1200000n },
+  '5': { name: 'Lekki Land Parcel Asset', institution: 'Real Estate / Property', type: 'Fixed Asset', balanceMinor: 1200000000n, clearedMinor: 1200000000n },
+  'acc-5': { name: 'Lekki Land Parcel Asset', institution: 'Real Estate / Property', type: 'Fixed Asset', balanceMinor: 1200000000n, clearedMinor: 1200000000n },
+};
+
+export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
+  const { colors, typography, spacing, radii } = useTheme();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+
+  const nativeTopInset = Platform.select({
+    ios: insets.top,
+    android: Math.max(insets.top, StatusBar.currentHeight ?? 0),
+    default: insets.top,
+  });
+  const topPadding = Math.max(nativeTopInset, 16) + (nativeTopInset > 0 ? 6 : 8);
+
+  const matched = ACCOUNTS_DB[accountId] ?? ACCOUNTS_DB['acc-1']!;
+
+  // State
+  const [accountName, setAccountName] = useState(matched.name);
+  const [institution, setInstitution] = useState(matched.institution);
+  const [accountType, setAccountType] = useState(matched.type);
+  const [balanceMinor, setBalanceMinor] = useState<bigint>(matched.balanceMinor);
+  const [clearedBalanceMinor, setClearedBalanceMinor] = useState<bigint>(matched.clearedMinor);
+  const [search, setSearch] = useState('');
+
+  // Sheets
+  const [csvSheetVisible, setCsvSheetVisible] = useState(false);
+  const [aiPopupVisible, setAiPopupVisible] = useState(false);
+  const [editPopupVisible, setEditPopupVisible] = useState(false);
+  const [addTxVisible, setAddTxVisible] = useState(false);
+
+  // Mock ledger data
+  const [transactions, setTransactions] = useState<AccountLedgerItem[]>([
+    {
+      id: 'tx-1',
+      date: 'Today',
+      payee: 'Salary Deposit (Paystack)',
+      category: 'Income',
+      amountMinor: 85000000n,
+      type: 'inflow',
+      cleared: true,
+    },
+    {
+      id: 'tx-2',
+      date: 'Yesterday',
+      payee: 'Ikeja Electric Token',
+      category: 'Utilities',
+      amountMinor: 2500000n,
+      type: 'outflow',
+      cleared: true,
+    },
+    {
+      id: 'tx-3',
+      date: '14 Nov',
+      payee: 'Shoprite Lekki Mall',
+      category: 'Groceries',
+      amountMinor: 4850000n,
+      type: 'outflow',
+      cleared: true,
+    },
+    {
+      id: 'tx-4',
+      date: '12 Nov',
+      payee: 'Uber Trip VI to Ikeja',
+      category: 'Transport',
+      amountMinor: 750000n,
+      type: 'outflow',
+      cleared: false,
+    },
+  ]);
+
+  const filteredTx = transactions.filter(
+    (tx) =>
+      tx.payee.toLowerCase().includes(search.toLowerCase()) ||
+      tx.category.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleImportComplete = (count: number) => {
+    // Simulated newly imported transactions
+    const newItems: AccountLedgerItem[] = [
+      {
+        id: `imp-${Date.now()}-1`,
+        date: 'Today',
+        payee: 'TotalEnergies Fueling',
+        category: 'Transport',
+        amountMinor: 1800000n,
+        type: 'outflow',
+        cleared: true,
+      },
+      {
+        id: `imp-${Date.now()}-2`,
+        date: 'Today',
+        payee: 'Netflix Subscription',
+        category: 'Entertainment',
+        amountMinor: 500000n,
+        type: 'outflow',
+        cleared: true,
+      },
+    ];
+    setTransactions((prev) => [...newItems, ...prev]);
+  };
+
+  return (
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Top Header */}
+      <View
+        style={[
+          styles.headerBar,
+          {
+            borderBottomColor: colors.borderSubtle,
+            paddingHorizontal: spacing.lg,
+            paddingTop: topPadding,
+            paddingBottom: spacing.md,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backBtn, { padding: spacing.xs }]}
+        >
+          <ArrowLeft size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text
+            style={[
+              styles.screenTitle,
+              {
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.lg,
+              },
+            ]}
+          >
+            {accountName}
+          </Text>
+          <Text
+            style={[
+              styles.accountType,
+              {
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.xs,
+              },
+            ]}
+          >
+            {accountType} • {institution}
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => setEditPopupVisible(true)}
+          style={[
+            styles.headerActionBtn,
+            {
+              backgroundColor: colors.surfaceSubtle,
+              borderRadius: radii.full,
+              padding: spacing.xs,
+            },
+          ]}
+        >
+          <Edit2 size={16} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Consolidated Compact Hero Card: Balance & Actions */}
+        <View
+          style={[
+            styles.compactHeroCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.lg,
+              padding: spacing.md,
+              marginBottom: spacing.md,
+            },
+          ]}
+        >
+          {/* Top: Current Balance & Cleared status inline */}
+          <View style={styles.compactBalanceRow}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.xs,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                }}
+              >
+                Current Balance
+              </Text>
+              <View style={styles.amountBadgeRow}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.semiBold,
+                    fontSize: typography.sizes.xxl,
+                    letterSpacing: -0.5,
+                  }}
+                >
+                  {formatNaira(balanceMinor)}
+                </Text>
+                <View
+                  style={[
+                    styles.clearedBadge,
+                    {
+                      backgroundColor: colors.primaryLight,
+                      borderRadius: radii.full,
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontFamily: typography.fonts.medium,
+                      fontSize: 11,
+                    }}
+                  >
+                    Cleared: {formatNaira(clearedBalanceMinor)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Bottom: Compact Action Trio Pills */}
+          <View
+            style={[
+              styles.compactActionTrio,
+              {
+                marginTop: spacing.sm,
+                paddingTop: spacing.sm,
+                borderTopColor: colors.borderSubtle,
+                borderTopWidth: StyleSheet.hairlineWidth,
+              },
+            ]}
+          >
+            <TouchableOpacity
+              onPress={() => router.push(`/accounts/${accountId}/reconcile` as any)}
+              style={[
+                styles.compactActionPill,
+                {
+                  backgroundColor: colors.primaryLight,
+                  borderColor: colors.primaryBorder,
+                  borderRadius: radii.full,
+                  paddingHorizontal: spacing.sm + 2,
+                  paddingVertical: 5,
+                },
+              ]}
+            >
+              <CheckCheck size={13} color={colors.primary} />
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: 12,
+                  marginLeft: 4,
+                }}
+              >
+                Reconcile
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setCsvSheetVisible(true)}
+              style={[
+                styles.compactActionPill,
+                {
+                  backgroundColor: colors.surfaceSubtle,
+                  borderColor: colors.border,
+                  borderRadius: radii.full,
+                  paddingHorizontal: spacing.sm + 2,
+                  paddingVertical: 5,
+                },
+              ]}
+            >
+              <Upload size={13} color={colors.textPrimary} />
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: 12,
+                  marginLeft: 4,
+                }}
+              >
+                Import CSV
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setAiPopupVisible(true)}
+              style={[
+                styles.compactActionPill,
+                {
+                  backgroundColor: colors.surfaceSubtle,
+                  borderColor: colors.border,
+                  borderRadius: radii.full,
+                  paddingHorizontal: spacing.sm + 2,
+                  paddingVertical: 5,
+                },
+              ]}
+            >
+              <Sparkles size={13} color={colors.textPrimary} />
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: 12,
+                  marginLeft: 4,
+                }}
+              >
+                Smart Reader
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Interactive Balance Trend Chart */}
+        <AccountBalanceChart
+          currentBalanceMinor={balanceMinor}
+          accountType={accountType}
+        />
+
+        {/* Account Transactions Section */}
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: spacing.md,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: typography.fonts.semiBold,
+              fontSize: typography.sizes.md,
+            }}
+          >
+            Account Activity
+          </Text>
+          <TouchableOpacity
+            onPress={() => setAddTxVisible(true)}
+            style={[
+              styles.addTxBtn,
+              {
+                backgroundColor: colors.primary,
+                borderRadius: radii.full,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: 4,
+              },
+            ]}
+          >
+            <Plus size={14} color="#FFFFFF" />
+            <Text
+              style={{
+                color: '#FFFFFF',
+                fontFamily: typography.fonts.medium,
+                fontSize: 12,
+                marginLeft: 4,
+              }}
+            >
+              Add Entry
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ marginBottom: spacing.md }}>
+          <TextInput
+            placeholder="Search transactions..."
+            value={search}
+            onChangeText={setSearch}
+            leftElement={<Search size={16} color={colors.textTertiary} />}
+          />
+        </View>
+
+        {filteredTx.map((item) => (
+          <View
+            key={item.id}
+            style={[
+              styles.txRow,
+              {
+                borderBottomColor: colors.borderSubtle,
+                paddingVertical: spacing.md,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.txIconWrap,
+                {
+                  backgroundColor:
+                    item.type === 'inflow' ? colors.primaryLight : colors.surfaceSubtle,
+                  borderRadius: radii.full,
+                },
+              ]}
+            >
+              {item.type === 'inflow' ? (
+                <ArrowDownLeft size={16} color={colors.primary} />
+              ) : (
+                <ArrowUpRight size={16} color={colors.textSecondary} />
+              )}
+            </View>
+
+            <View style={{ flex: 1, marginLeft: spacing.md }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                {item.payee}
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: typography.fonts.regular,
+                  fontSize: typography.sizes.xs,
+                }}
+              >
+                {item.date} • {item.category}
+              </Text>
+            </View>
+
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text
+                style={{
+                  color: item.type === 'inflow' ? colors.statusSuccess : colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                {item.type === 'inflow' ? '+' : '-'}
+                {formatNaira(item.amountMinor)}
+              </Text>
+              <Text
+                style={{
+                  color: item.cleared ? colors.statusSuccess : colors.textTertiary,
+                  fontFamily: typography.fonts.regular,
+                  fontSize: 10,
+                }}
+              >
+                {item.cleared ? 'Cleared' : 'Uncleared'}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+
+      {/* Sheets & Popups */}
+      <CSVImportSheet
+        visible={csvSheetVisible}
+        onClose={() => setCsvSheetVisible(false)}
+        accountName={accountName}
+        onImportComplete={handleImportComplete}
+      />
+
+      <StatementAIPopup
+        visible={aiPopupVisible}
+        onClose={() => setAiPopupVisible(false)}
+        onEnable={() => {}}
+      />
+
+      <EditAccountPopup
+        visible={editPopupVisible}
+        onClose={() => setEditPopupVisible(false)}
+        account={{ id: accountId, name: accountName }}
+        onSave={({ name }) => setAccountName(name)}
+      />
+
+      <AccountEntrySheet
+        visible={addTxVisible}
+        onClose={() => setAddTxVisible(false)}
+        currentAccountName={accountName}
+        onSaveEntry={(newEntry) => {
+          const isOutflow = newEntry.type === 'expense' || newEntry.type === 'transfer';
+          const newTx: AccountLedgerItem = {
+            id: `tx-${Date.now()}`,
+            date: 'Today',
+            payee: newEntry.payee,
+            category: newEntry.category,
+            amountMinor: newEntry.amountMinor,
+            type: isOutflow ? 'outflow' : 'inflow',
+            cleared: newEntry.cleared,
+          };
+
+          setTransactions((prev) => [newTx, ...prev]);
+
+          // Dynamically adjust live balance
+          if (isOutflow) {
+            setBalanceMinor((prev) => prev - newEntry.amountMinor);
+            setClearedBalanceMinor((prev) => prev - newEntry.amountMinor);
+          } else {
+            setBalanceMinor((prev) => prev + newEntry.amountMinor);
+            setClearedBalanceMinor((prev) => prev + newEntry.amountMinor);
+          }
+          setAddTxVisible(false);
+        }}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backBtn: {},
+  screenTitle: {},
+  accountType: {},
+  headerActionBtn: {},
+  content: {
+    paddingBottom: 40,
+  },
+  compactHeroCard: {
+    borderWidth: 1,
+  },
+  compactBalanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  amountBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 2,
+    gap: 8,
+  },
+  compactActionTrio: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  compactActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  heroCard: {
+    borderWidth: 1,
+  },
+  clearedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  actionRow: {
+    flexDirection: 'row',
+  },
+  actionPill: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionPillText: {},
+  addTxBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  txIconWrap: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

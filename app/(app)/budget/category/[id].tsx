@@ -1,5 +1,8 @@
-import { CategoryScreen } from '@/features/budget/CategoryScreen';
+import React from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { CategoryDetailScreen } from '../../../../src/features/budget/CategoryDetailScreen';
 
-export default function CategoryPage() {
-  return <CategoryScreen />;
+export default function CategoryDetailRoute() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return <CategoryDetailScreen categoryId={id || 'default'} />;
 }

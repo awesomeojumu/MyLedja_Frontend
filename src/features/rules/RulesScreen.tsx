@@ -1,758 +1,1168 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useGlobalSearchParams, useRouter } from 'expo-router';
-
-import type { RuleConditionField, RuleConditionOp, TransactionRule } from '@/data/workspace/model';
-import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
-import { useToast } from '@/design/components';
+import React, { useState, useMemo } from 'react';
 import {
-  RedesignButton,
-  RedesignDialog,
-  RedesignField,
-  RedesignIcon,
-  RedesignInlineError,
-  RedesignListRow,
-  RedesignSheet,
-  RedesignText,
-  RedesignShell,
-} from '@/design/redesign';
-import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
-import { t } from '@/i18n';
-import { ledgerMessage } from '@/features/transactions/helpers';
-import { orderedRules, previewMatches } from '@/features/rules/ruleEngine';
-
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
+  TextInput as RNTextInput,
+} from 'react-native';
+import { useRouter } from 'expo-router';
 import {
-  newBlankRule,
-  ruleFromPayee,
-  ruleIfTitle,
-  ruleThenTitle,
-  suggestRules,
-  type SuggestedRule,
-} from './helpers';
-import { RunRulesSheet } from './RunRulesSheet';
-import { RulebookSheet } from './RulebookSheet';
+  ArrowLeft,
+  Plus,
+  Zap,
+  Sliders,
+  ShieldCheck,
+  Check,
+  RotateCcw,
+  Sparkles,
+  HelpCircle,
+  Tag,
+  AlertTriangle,
+  ChevronRight,
+  TrendingUp,
+  Receipt,
+  Heart,
+  Landmark,
+  Trash2,
+} from 'lucide-react-native';
+import { useTheme, Button, CurrencyInput } from '../../design';
+import { useFinancialRules } from './RulesContext';
+import { AddEarmarkedRuleSheet } from './AddEarmarkedRuleSheet';
+import { formatNaira, parseAmount } from '../../money';
 
-const sp = tokens.space;
-const shape = tokens.shape;
-const size = tokens.size;
-const density = tokens.density.touch;
+type RulesTab = 'framework' | 'tax_tithe' | 'earmarked' | 'sub_allocation';
 
-const FIELD_OPTIONS: { value: RuleConditionField; label: string }[] = [
-  { value: 'payee', label: t('rules.field.payee') },
-  { value: 'description', label: t('rules.field.description') },
-  { value: 'notes', label: t('rules.field.notes') },
-  { value: 'amount', label: t('rules.field.amount') },
-  { value: 'money', label: t('rules.field.money') },
-  { value: 'account', label: t('rules.field.account') },
-  { value: 'category', label: t('rules.field.category') },
-];
-
-/** Figma Rule `6:2377` Matches value is title-case (Contains), not legacy lowercase ops. */
-const OP_OPTIONS: { value: RuleConditionOp; label: string }[] = [
-  { value: 'contains', label: t('rules.redesign.opContains') },
-  { value: 'equals', label: t('rules.redesign.opEquals') },
-  { value: 'greaterThan', label: t('rules.redesign.opGreaterThan') },
-  { value: 'lessThan', label: t('rules.redesign.opLessThan') },
-  { value: 'isIn', label: t('rules.redesign.opIsIn') },
-  { value: 'isOut', label: t('rules.redesign.opIsOut') },
-];
-
-/**
- * Page 25 Rules redesign (Figma Mobile Phone / Rules 6:2315, Rule 6:2377,
- * Suggested 12:5713, Empty 13:6390). Behind EXPO_PUBLIC_REDESIGN.
- */
 export function RulesScreen() {
-  const { snapshot, repo } = useWorkspace();
-  const toast = useToast();
+  const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
-  const params = useGlobalSearchParams<{ edit?: string; rule?: string; runRules?: string; suggested?: string }>();
-  const [error, setError] = useState<string | null>(null);
-  const [editRule, setEditRule] = useState<TransactionRule | null>(null);
-  const [runOpen, setRunOpen] = useState(params.runRules === '1');
-  const [suggestedOpen, setSuggestedOpen] = useState(params.suggested === '1');
-  const [rulebookOpen, setRulebookOpen] = useState(false);
-  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
-  const [openedFromLink, setOpenedFromLink] = useState<string | null>(null);
-  const [runLinked, setRunLinked] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<TransactionRule | null>(null);
 
-  const rules = useMemo(() => (snapshot ? orderedRules(snapshot.rules) : null), [snapshot]);
-  const suggestions = useMemo(() => {
-    if (!snapshot) return [] as SuggestedRule[];
-    return suggestRules(snapshot).filter((s) => !dismissed.has(s.key));
-  }, [snapshot, dismissed]);
+  const {
+    activeFramework,
+    frameworkPresets,
+    taxRule,
+    titheRule,
+    earmarkedRules,
+    subAllocation,
+    applyPresetFramework,
+    updatePillarPercentage,
+    updateTaxRule,
+    updateTitheRule,
+    addEarmarkedRule,
+    toggleEarmarkedRule,
+    deleteEarmarkedRule,
+    resetRulesToDefault,
+    simulateInflow,
+    totalPercentage,
+    isTotal100Percent,
+  } = useFinancialRules();
 
-  const openNew = async () => {
-    if (!snapshot) return;
-    const draft = newBlankRule(snapshot.rules.length);
-    const created = await repo.createRule(draft);
-    setEditRule(created);
-    router.setParams({ rule: created.id, edit: undefined });
-  };
+  const [activeTab, setActiveTab] = useState<RulesTab>('framework');
+  const [addEarmarkVisible, setAddEarmarkVisible] = useState(false);
 
-  if (snapshot && params.rule === 'new' && openedFromLink !== 'new') {
-    setOpenedFromLink('new');
-    queueMicrotask(() => {
-      void openNew();
-    });
-  }
+  // Live Simulator State
+  const [testAmountStr, setTestAmountStr] = useState('100,000.00');
+  const [testCategory, setTestCategory] = useState('Employment');
+  const [testNotes, setTestNotes] = useState('');
 
-  const linkId = params.rule && params.rule !== 'new' ? params.rule : params.edit;
-  if (snapshot && linkId && linkId !== openedFromLink) {
-    const found = snapshot.rules.find((r) => r.id === linkId);
-    if (found) {
-      setOpenedFromLink(linkId);
-      setEditRule(found);
-    }
-  }
-  if (params.runRules === '1' && !runLinked) {
-    setRunLinked(true);
-    setRunOpen(true);
-  }
-
-  const showRan = (changed: number, undoId?: string) => {
-    toast.show(
-      t('rules.ran', { count: changed }),
-      undoId ? () => void repo.undoRuleRun(undoId).then(() => toast.show(t('common.undo'))) : undefined,
-    );
-  };
-
-  if (editRule && snapshot) {
-    return (
-      <RedesignRuleEditor
-        rule={editRule}
-        snapshot={snapshot}
-        error={error}
-        onBack={() => {
-          setEditRule(null);
-          router.setParams({ rule: undefined, edit: undefined });
-        }}
-        onSave={async (draft, andRun) => {
-          setError(null);
-          await repo.saveRule(draft);
-          if (andRun) {
-            const r = await repo.runRule(draft.id, {});
-            if (!r.ok) {
-              setError(ledgerMessage(r.error));
-              return;
-            }
-            showRan(r.value.changed, r.value.undoId);
-          } else {
-            toast.show(t('common.saved'));
-          }
-          setEditRule(null);
-          router.setParams({ rule: undefined, edit: undefined });
-        }}
-        onDelete={() => setConfirmDelete(editRule)}
-      />
-    );
-  }
-
-  if (suggestedOpen && snapshot) {
-    return (
-      <SuggestedRulesView
-        suggestions={suggestions}
-        onBack={() => {
-          setSuggestedOpen(false);
-          router.setParams({ suggested: undefined });
-        }}
-        onAdd={async (s) => {
-          await repo.createRule({ ...ruleFromPayee(s.payeeName, s.categoryId), order: snapshot.rules.length });
-          setDismissed((prev) => new Set(prev).add(s.key));
-          toast.show(t('common.saved'));
-        }}
-        onDismiss={(s) => setDismissed((prev) => new Set(prev).add(s.key))}
-      />
-    );
-  }
+  // Compute live simulation
+  const simulation = useMemo(() => {
+    const parsed = parseAmount(testAmountStr);
+    const amountMinor = parsed.ok ? parsed.minor : 10000000n; // Default ₦100,000
+    return simulateInflow(amountMinor, testCategory, testNotes);
+  }, [testAmountStr, testCategory, testNotes, simulateInflow]);
 
   return (
-    <RedesignShell><SafeAreaView testID="redesign-rules" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
-      <StackTopBar
-        title={t('rules.title')}
-        onBack={() => router.back()}
-        trailing={
-          <Pressable
-            testID="rules-new"
-            accessibilityRole="button"
-            accessibilityLabel={t('rules.new')}
-            onPress={() => void openNew()}
-            style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Top Header */}
+      <View
+        style={[
+          styles.headerBar,
+          {
+            borderBottomColor: colors.borderSubtle,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backBtn, { padding: spacing.xs }]}
+        >
+          <ArrowLeft size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text
+            style={[
+              styles.screenTitle,
+              {
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.lg,
+              },
+            ]}
           >
-            <RedesignIcon name="plus" size={size['icon-lg']} color={theme.text} />
-          </Pressable>
-        }
-      />
-      <ScrollView contentContainerStyle={{ padding: sp.lg, gap: sp.lg, paddingBottom: sp.xxl }}>
-        {error ? <RedesignInlineError message={error} /> : null}
+            Financial Blueprint & Rules
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+            }}
+          >
+            Automate how every incoming Naira is allocated across life & wealth
+          </Text>
+        </View>
 
-        {!rules ? (
-          <View style={{ height: 120, borderRadius: shape['radius-lg'], backgroundColor: theme.surfaceMuted }} />
-        ) : rules.length === 0 ? (
-          <EmptyRules onNew={() => void openNew()} />
-        ) : (
-          <>
-            <RedesignText variant="helper" tone="textSecondary">
-              {t('rules.redesign.intro')}
-            </RedesignText>
+        <TouchableOpacity
+          onPress={resetRulesToDefault}
+          style={[
+            styles.resetBtn,
+            {
+              backgroundColor: colors.surfaceSubtle,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.md,
+              paddingHorizontal: spacing.sm,
+              paddingVertical: 6,
+            },
+          ]}
+        >
+          <RotateCcw size={14} color={colors.textSecondary} />
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.medium,
+              fontSize: 12,
+              marginLeft: 4,
+            }}
+          >
+            Reset
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 1. Live Simulator Card (See how rules execute on real money) */}
+        <View
+          style={[
+            styles.simulatorCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.xl,
+              padding: spacing.lg,
+              marginBottom: spacing.lg,
+            },
+          ]}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: spacing.sm,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Zap size={18} color={colors.primary} style={{ marginRight: 6 }} />
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                Live Allocation Simulator
+              </Text>
+            </View>
             <View
-              testID="rules-list"
-              style={{
-                backgroundColor: theme.surface,
-                borderRadius: shape['radius-lg'],
-                borderWidth: 1,
-                borderColor: theme.border,
-                paddingVertical: sp.xs,
-              }}
+              style={[
+                styles.simulatorBadge,
+                {
+                  backgroundColor: simulation.isEarmarked
+                    ? colors.statusWarningLight
+                    : colors.statusSuccessLight,
+                  borderRadius: radii.full,
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                },
+              ]}
             >
-              {rules.map((rule) => (
-                <View key={rule.id} style={{ opacity: rule.enabled ? 1 : 0.55 }}>
-                  <RedesignListRow
-                    testID={`rule-card-${rule.id}`}
-                    title={ruleIfTitle(rule, snapshot!)}
-                    subtitle={ruleThenTitle(rule, snapshot!)}
-                    onPress={() => setEditRule(rule)}
-                  />
+              <Text
+                style={{
+                  color: simulation.isEarmarked ? colors.statusWarning : colors.statusSuccess,
+                  fontSize: 10,
+                  fontFamily: typography.fonts.semiBold,
+                }}
+              >
+                {simulation.isEarmarked ? 'EARMARKED PASS-THROUGH' : 'SPLIT ACTIVE'}
+              </Text>
+            </View>
+          </View>
+
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontSize: typography.sizes.xs,
+              fontFamily: typography.fonts.regular,
+              marginBottom: spacing.md,
+            }}
+          >
+            Test how an incoming payment of any size splits through your financial rules:
+          </Text>
+
+          {/* Amount & Scenario Row */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: spacing.md }}>
+            <View style={{ flex: 1 }}>
+              <CurrencyInput
+                label="Simulated Inflow"
+                value={testAmountStr}
+                onChangeText={setTestAmountStr}
+                placeholder="100,000.00"
+              />
+            </View>
+            <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+              <View
+                style={[
+                  styles.quickPresetsRow,
+                  {
+                    backgroundColor: colors.surfaceSubtle,
+                    borderRadius: radii.md,
+                    padding: 4,
+                    height: 48,
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'space-around',
+                  },
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={() => {
+                    setTestAmountStr('100,000.00');
+                    setTestCategory('Employment');
+                    setTestNotes('');
+                  }}
+                  style={[
+                    styles.simPill,
+                    testCategory === 'Employment' && !testNotes && { backgroundColor: colors.surface },
+                  ]}
+                >
+                  <Text style={{ fontSize: 11, fontFamily: typography.fonts.medium, color: colors.textPrimary }}>
+                    ₦100k Salary
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    setTestAmountStr('1,000,000.00');
+                    setTestCategory('Gifts');
+                    setTestNotes('Rent Support Gift');
+                  }}
+                  style={[
+                    styles.simPill,
+                    testNotes.includes('Rent') && { backgroundColor: colors.surface },
+                  ]}
+                >
+                  <Text style={{ fontSize: 11, fontFamily: typography.fonts.medium, color: colors.textPrimary }}>
+                    ₦1M Rent Gift
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    setTestAmountStr('500,000.00');
+                    setTestCategory('Business');
+                    setTestNotes('Freelance Project');
+                  }}
+                  style={[
+                    styles.simPill,
+                    testCategory === 'Business' && { backgroundColor: colors.surface },
+                  ]}
+                >
+                  <Text style={{ fontSize: 11, fontFamily: typography.fonts.medium, color: colors.textPrimary }}>
+                    ₦500k Business
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Allocation Results Breakdown */}
+          <View
+            style={[
+              styles.resultsBox,
+              {
+                backgroundColor: colors.surfaceSubtle,
+                borderRadius: radii.lg,
+                padding: spacing.md,
+              },
+            ]}
+          >
+            {/* Top Deductions if any */}
+            {(simulation.taxAmountMinor > 0n || simulation.titheAmountMinor > 0n) && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  gap: 8,
+                  marginBottom: spacing.sm,
+                  paddingBottom: spacing.sm,
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderBottomColor: colors.borderSubtle,
+                }}
+              >
+                {simulation.taxAmountMinor > 0n && (
+                  <View style={styles.deductionPill}>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                      Tax Provision ({taxRule.ratePercentage}%):{' '}
+                      <Text style={{ color: colors.statusDanger, fontFamily: typography.fonts.semiBold }}>
+                        {formatNaira(simulation.taxAmountMinor)}
+                      </Text>
+                    </Text>
+                  </View>
+                )}
+                {simulation.titheAmountMinor > 0n && (
+                  <View style={styles.deductionPill}>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                      Tithe / Spiritual ({titheRule.ratePercentage}%):{' '}
+                      <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold }}>
+                        {formatNaira(simulation.titheAmountMinor)}
+                      </Text>
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Pillar Breakdown Chips */}
+            <View style={styles.simPillarsGrid}>
+              {simulation.pillarAllocations.map((item, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.simPillarCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.borderSubtle,
+                      borderRadius: radii.md,
+                      padding: spacing.sm,
+                      borderLeftWidth: 3,
+                      borderLeftColor: item.pillar.color,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontFamily: typography.fonts.medium,
+                      color: colors.textSecondary,
+                      textTransform: 'uppercase',
+                    }}
+                    numberOfLines={1}
+                  >
+                    {item.pillar.name} ({item.pillar.percentage}%)
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: typography.sizes.bodySm,
+                      fontFamily: typography.fonts.semiBold,
+                      color: colors.textPrimary,
+                      marginTop: 2,
+                    }}
+                  >
+                    {formatNaira(item.allocatedMinor)}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      color: colors.textTertiary,
+                      marginTop: 2,
+                    }}
+                  >
+                    → {item.pillar.purposeAccountType} account
+                  </Text>
                 </View>
               ))}
             </View>
-            {suggestions.length > 0 ? (
-              <Pressable
-                testID="rules-suggested-banner"
-                accessibilityRole="button"
-                onPress={() => setSuggestedOpen(true)}
-                style={{
+          </View>
+        </View>
+
+        {/* 2. Navigation Tabs */}
+        <View
+          style={[
+            styles.tabBar,
+            {
+              backgroundColor: colors.surfaceSubtle,
+              borderRadius: radii.lg,
+              padding: 4,
+              marginBottom: spacing.lg,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() => setActiveTab('framework')}
+            style={[
+              styles.tabBtn,
+              activeTab === 'framework' && {
+                backgroundColor: colors.surface,
+                shadowColor: '#000',
+                shadowOpacity: 0.05,
+                shadowRadius: 4,
+                elevation: 2,
+              },
+              { borderRadius: radii.md },
+            ]}
+          >
+            <Text
+              style={{
+                color: activeTab === 'framework' ? colors.primary : colors.textSecondary,
+                fontFamily:
+                  activeTab === 'framework' ? typography.fonts.semiBold : typography.fonts.medium,
+                fontSize: typography.sizes.xs,
+              }}
+            >
+              Framework ({totalPercentage}%)
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('tax_tithe')}
+            style={[
+              styles.tabBtn,
+              activeTab === 'tax_tithe' && {
+                backgroundColor: colors.surface,
+                shadowColor: '#000',
+                shadowOpacity: 0.05,
+                shadowRadius: 4,
+                elevation: 2,
+              },
+              { borderRadius: radii.md },
+            ]}
+          >
+            <Text
+              style={{
+                color: activeTab === 'tax_tithe' ? colors.primary : colors.textSecondary,
+                fontFamily:
+                  activeTab === 'tax_tithe' ? typography.fonts.semiBold : typography.fonts.medium,
+                fontSize: typography.sizes.xs,
+              }}
+            >
+              Tax & Tithe
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('earmarked')}
+            style={[
+              styles.tabBtn,
+              activeTab === 'earmarked' && {
+                backgroundColor: colors.surface,
+                shadowColor: '#000',
+                shadowOpacity: 0.05,
+                shadowRadius: 4,
+                elevation: 2,
+              },
+              { borderRadius: radii.md },
+            ]}
+          >
+            <Text
+              style={{
+                color: activeTab === 'earmarked' ? colors.primary : colors.textSecondary,
+                fontFamily:
+                  activeTab === 'earmarked' ? typography.fonts.semiBold : typography.fonts.medium,
+                fontSize: typography.sizes.xs,
+              }}
+            >
+              Earmarked ({earmarkedRules.filter((r) => r.active).length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('sub_allocation')}
+            style={[
+              styles.tabBtn,
+              activeTab === 'sub_allocation' && {
+                backgroundColor: colors.surface,
+                shadowColor: '#000',
+                shadowOpacity: 0.05,
+                shadowRadius: 4,
+                elevation: 2,
+              },
+              { borderRadius: radii.md },
+            ]}
+          >
+            <Text
+              style={{
+                color: activeTab === 'sub_allocation' ? colors.primary : colors.textSecondary,
+                fontFamily:
+                  activeTab === 'sub_allocation'
+                    ? typography.fonts.semiBold
+                    : typography.fonts.medium,
+                fontSize: typography.sizes.xs,
+              }}
+            >
+              Sub-Allocations
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* TAB 1: ALLOCATION FRAMEWORK */}
+        {activeTab === 'framework' && (
+          <View>
+            {/* Presets Row */}
+            <Text
+              style={[
+                styles.sectionHeader,
+                { color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.xs },
+              ]}
+            >
+              POPULAR BLUEPRINT PRESETS
+            </Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
+              {frameworkPresets.map((preset) => {
+                const isSelected = activeFramework.id === preset.id;
+                return (
+                  <TouchableOpacity
+                    key={preset.id}
+                    onPress={() => applyPresetFramework(preset.id)}
+                    style={[
+                      styles.presetCard,
+                      {
+                        backgroundColor: isSelected ? colors.primaryLight : colors.surface,
+                        borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                        borderRadius: radii.lg,
+                        padding: spacing.md,
+                        marginRight: spacing.sm,
+                        width: 220,
+                      },
+                    ]}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text
+                        style={{
+                          color: isSelected ? colors.primary : colors.textPrimary,
+                          fontFamily: typography.fonts.semiBold,
+                          fontSize: typography.sizes.bodySm,
+                        }}
+                      >
+                        {preset.name}
+                      </Text>
+                      {isSelected && <Check size={14} color={colors.primary} />}
+                    </View>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 11,
+                        fontFamily: typography.fonts.regular,
+                        marginTop: 4,
+                      }}
+                      numberOfLines={2}
+                    >
+                      {preset.tagline}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Total Balance Status Bar */}
+            <View
+              style={[
+                styles.statusBanner,
+                {
+                  backgroundColor: isTotal100Percent ? colors.statusSuccessLight : colors.statusWarningLight,
+                  borderColor: isTotal100Percent ? colors.statusSuccess : colors.statusWarning,
+                  borderRadius: radii.md,
+                  padding: spacing.md,
+                  marginBottom: spacing.md,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: sp.md,
-                  backgroundColor: theme.primarySoft,
-                  borderRadius: shape['radius-lg'],
-                  paddingHorizontal: sp.lg,
-                  minHeight: 68,
+                  justifyContent: 'space-between',
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {isTotal100Percent ? (
+                  <Check size={18} color={colors.statusSuccess} style={{ marginRight: 6 }} />
+                ) : (
+                  <AlertTriangle size={18} color={colors.statusWarning} style={{ marginRight: 6 }} />
+                )}
+                <Text
+                  style={{
+                    color: isTotal100Percent ? colors.statusSuccess : colors.statusWarning,
+                    fontFamily: typography.fonts.semiBold,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {isTotal100Percent
+                    ? '100% Balanced Allocation'
+                    : `Total is currently ${totalPercentage}% (Must equal 100%)`}
+                </Text>
+              </View>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontFamily: typography.fonts.semiBold,
+                  color: isTotal100Percent ? colors.statusSuccess : colors.statusWarning,
                 }}
               >
-                <RedesignIcon name="zap" size={size['icon-md']} color={theme.text} />
-                <RedesignText style={{ flex: 1 }}>{t('rules.redesign.suggestedCount', { count: suggestions.length })}</RedesignText>
-                <RedesignText tone="primary" style={{ textDecorationLine: 'underline' }}>
-                  {t('rules.redesign.review')}
-                </RedesignText>
-              </Pressable>
-            ) : null}
-            {/* Personal Rulebook Co-pilot Card */}
-            <View
-              testID="rules-rulebook-card"
-              style={{
-                backgroundColor: theme.surface,
-                borderRadius: shape['radius-lg'],
-                borderWidth: 1,
-                borderColor: theme.border,
-                padding: sp.lg,
-                gap: sp.sm,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp.sm }}>
-                <RedesignIcon name="zap" size={size['icon-md']} color={theme.text} />
-                <View style={{ flex: 1 }}>
-                  <RedesignText variant="label">{t('rules.rulebook.title')}</RedesignText>
-                  <RedesignText variant="caption" tone="textSecondary">
-                    {t('rules.rulebook.subtitle')}
-                  </RedesignText>
-                </View>
-              </View>
-              <RedesignButton
-                testID="rules-open-rulebook"
-                kind="secondary"
-                label={t('rules.rulebook.adopt')}
-                onPress={() => setRulebookOpen(true)}
-              />
+                {totalPercentage}%
+              </Text>
             </View>
 
-            <RedesignButton
-              testID="rules-run"
-              kind="link"
-              label={t('rules.run')}
-              onPress={() => setRunOpen(true)}
-              disabled={!rules.length}
-            />
-          </>
-        )}
-      </ScrollView>
+            {/* Pillar List */}
+            {activeFramework.pillars.map((pillar) => (
+              <View
+                key={pillar.id}
+                style={[
+                  styles.pillarRowCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.borderSubtle,
+                    borderRadius: radii.lg,
+                    padding: spacing.md,
+                    marginBottom: spacing.sm,
+                    borderLeftWidth: 4,
+                    borderLeftColor: pillar.color,
+                  },
+                ]}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1, marginRight: spacing.sm }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontFamily: typography.fonts.semiBold,
+                        fontSize: typography.sizes.bodySm,
+                      }}
+                    >
+                      {pillar.name}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: typography.sizes.xs,
+                        fontFamily: typography.fonts.regular,
+                        marginTop: 2,
+                      }}
+                    >
+                      {pillar.description}
+                    </Text>
+                    <View
+                      style={[
+                        styles.accountTag,
+                        {
+                          backgroundColor: colors.surfaceSubtle,
+                          borderRadius: radii.sm,
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          alignSelf: 'flex-start',
+                          marginTop: 6,
+                        },
+                      ]}
+                    >
+                      <Text style={{ fontSize: 10, color: colors.textSecondary, fontFamily: typography.fonts.medium }}>
+                        Maps to: {pillar.purposeAccountType} account
+                      </Text>
+                    </View>
+                  </View>
 
-      {rulebookOpen && snapshot ? (
-        <RulebookSheet
-          visible={rulebookOpen}
-          snapshot={snapshot}
-          onClose={() => setRulebookOpen(false)}
-          onAdopt={async (draft) => {
-            await repo.createRule(draft);
-            toast.show(t('rules.rulebook.adopt'));
-          }}
-        />
-      ) : null}
+                  {/* Percentage Stepper */}
+                  <View style={styles.stepperContainer}>
+                    <TouchableOpacity
+                      onPress={() => updatePillarPercentage(pillar.id, pillar.percentage - 5)}
+                      style={[styles.stepBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.sm }]}
+                    >
+                      <Text style={{ fontSize: 16, color: colors.textPrimary, fontFamily: typography.fonts.semiBold }}>
+                        -
+                      </Text>
+                    </TouchableOpacity>
 
-      {runOpen && snapshot ? (
-        <RunRulesSheet
-          snapshot={snapshot}
-          rules={snapshot.rules}
-          onClose={() => setRunOpen(false)}
-          onRun={async (ids, range) => {
-            setError(null);
-            const r = await repo.runRules(ids, range);
-            if (!r.ok) {
-              setError(ledgerMessage(r.error));
-              return;
-            }
-            showRan(r.value.changed, r.value.undoId);
-            setRunOpen(false);
-          }}
-        />
-      ) : null}
+                    <View style={styles.pctDisplay}>
+                      <Text
+                        style={{
+                          fontSize: typography.sizes.lg,
+                          fontFamily: typography.fonts.semiBold,
+                          color: colors.textPrimary,
+                        }}
+                      >
+                        {pillar.percentage}%
+                      </Text>
+                    </View>
 
-      <RedesignDialog
-        visible={!!confirmDelete}
-        title={t('rules.delete')}
-        body={confirmDelete ? ruleIfTitle(confirmDelete, snapshot!) : ''}
-        confirmLabel={t('rules.delete')}
-        onCancel={() => setConfirmDelete(null)}
-        onConfirm={() => {
-          const target = confirmDelete;
-          setConfirmDelete(null);
-          if (!target) return;
-          void repo.deleteRule(target.id).then(() => {
-            toast.show(t('rules.deleted'));
-            setEditRule(null);
-            router.setParams({ rule: undefined, edit: undefined });
-          });
-        }}
-        destructive
-      />
-    </SafeAreaView></RedesignShell>
-  );
-}
-
-function StackTopBar({
-  title,
-  onBack,
-  trailing,
-}: {
-  title: string;
-  onBack: () => void;
-  trailing?: ReactNode;
-}) {
-  return (
-    <View
-      testID="redesign-rules-top-bar"
-      style={{
-        minHeight: Math.max(size['top-bar'], tokens.frame.topBarHeadroom),
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: sp.sm,
-        backgroundColor: theme.surface,
-        borderBottomWidth: 1,
-        borderColor: theme.border,
-        gap: sp.xs,
-      }}
-    >
-      <Pressable
-        testID="rules-back"
-        accessibilityRole="button"
-        accessibilityLabel={t('common.back')}
-        onPress={onBack}
-        style={{ width: density.minTarget, height: density.minTarget, alignItems: 'center', justifyContent: 'center' }}
-      >
-        <RedesignIcon name="arrow-left" size={size['icon-lg']} color={theme.text} />
-      </Pressable>
-      <RedesignText variant="headline" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
-        {title}
-      </RedesignText>
-      {trailing ?? <View style={{ width: density.minTarget }} />}
-    </View>
-  );
-}
-
-function EmptyRules({ onNew }: { onNew: () => void }) {
-  return (
-    <View
-      testID="rules-empty"
-      style={{
-        backgroundColor: theme.surface,
-        borderRadius: shape['radius-lg'],
-        borderWidth: 1,
-        borderColor: theme.border,
-        paddingVertical: sp.xxl,
-        paddingHorizontal: sp.xl,
-        alignItems: 'center',
-        gap: sp.md,
-      }}
-    >
-      <View
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 24,
-          backgroundColor: theme.primarySoft,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <RedesignIcon name="zap" size={size['icon-lg']} color={theme.text} />
-      </View>
-      <RedesignText variant="label">{t('rules.emptyTitle')}</RedesignText>
-      <RedesignText variant="helper" tone="textSecondary" style={{ textAlign: 'center' }}>
-        {t('rules.redesign.emptyBody')}
-      </RedesignText>
-      <RedesignButton testID="rules-empty-new" label={t('rules.new')} onPress={onNew} />
-    </View>
-  );
-}
-
-function SuggestedRulesView({
-  suggestions,
-  onBack,
-  onAdd,
-  onDismiss,
-}: {
-  suggestions: SuggestedRule[];
-  onBack: () => void;
-  onAdd: (s: SuggestedRule) => Promise<void>;
-  onDismiss: (s: SuggestedRule) => void;
-}) {
-  return (
-    <RedesignShell><SafeAreaView testID="rules-suggested" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
-      <StackTopBar title={t('rules.redesign.suggestedTitle')} onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: sp.lg, gap: sp.lg }}>
-        <RedesignText>{t('rules.redesign.suggestedIntro')}</RedesignText>
-        {suggestions.length === 0 ? (
-          <RedesignText tone="textSecondary">{t('rules.redesign.noSuggestions')}</RedesignText>
-        ) : (
-          suggestions.map((s) => (
-            <View
-              key={s.key}
-              testID={`rules-suggestion-${s.key}`}
-              style={{
-                backgroundColor: theme.surface,
-                borderRadius: shape['radius-lg'],
-                borderWidth: 1,
-                borderColor: theme.border,
-                padding: sp.lg,
-                gap: sp.sm,
-              }}
-            >
-              <RedesignText variant="label">{t('rules.redesign.ifPayeeContains', { name: s.payeeName })}</RedesignText>
-              <RedesignText variant="helper" tone="textSecondary">
-                {t('rules.redesign.suggestionDetail', { category: s.categoryName, count: s.matchCount })}
-              </RedesignText>
-              <View style={{ flexDirection: 'row', gap: sp.sm }}>
-                <View style={{ flex: 1 }}>
-                  <RedesignButton
-                    testID={`rules-suggestion-add-${s.key}`}
-                    label={t('rules.redesign.addRule')}
-                    onPress={() => void onAdd(s)}
-                    fullWidth
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <RedesignButton
-                    testID={`rules-suggestion-dismiss-${s.key}`}
-                    kind="secondary"
-                    label={t('rules.redesign.notNow')}
-                    onPress={() => onDismiss(s)}
-                    fullWidth
-                  />
+                    <TouchableOpacity
+                      onPress={() => updatePillarPercentage(pillar.id, pillar.percentage + 5)}
+                      style={[styles.stepBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.sm }]}
+                    >
+                      <Text style={{ fontSize: 16, color: colors.textPrimary, fontFamily: typography.fonts.semiBold }}>
+                        +
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-            </View>
-          ))
+            ))}
+          </View>
         )}
-      </ScrollView>
-    </SafeAreaView></RedesignShell>
-  );
-}
 
-function RedesignRuleEditor({
-  rule,
-  snapshot,
-  error,
-  onBack,
-  onSave,
-  onDelete,
-}: {
-  rule: TransactionRule;
-  snapshot: NonNullable<ReturnType<typeof useWorkspace>['snapshot']>;
-  error: string | null;
-  onBack: () => void;
-  onSave: (draft: TransactionRule, andRun: boolean) => Promise<void>;
-  onDelete: () => void;
-}) {
-  const [draft, setDraft] = useState(rule);
-  const [applyPast, setApplyPast] = useState(false);
-  const [fieldOpen, setFieldOpen] = useState(false);
-  const [opOpen, setOpOpen] = useState(false);
-  const [setOpen, setSetOpen] = useState(false);
-  const [toOpen, setToOpen] = useState(false);
-  const [validation, setValidation] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const cond = draft.conditions[0] ?? { field: 'payee' as const, op: 'contains' as const, value: '' };
-  const action = draft.actions[0] ?? { kind: 'setCategory' as const, value: '' };
-  const categories = snapshot.categories.filter((c) => !c.hidden);
-  const changing = useMemo(
-    () => previewMatches(snapshot, draft, undefined, undefined, { onlyChanging: true }),
-    [snapshot, draft],
-  );
-  const blank =
-    !(rule.conditions[0]?.value || '').trim() &&
-    !(rule.actions[0]?.value || '').trim() &&
-    (rule.matchedCount ?? 0) === 0;
-
-  const setCond = (patch: Partial<typeof cond>) => {
-    setDraft((d) => {
-      const next = { ...(d.conditions[0] ?? cond), ...patch };
-      return { ...d, conditions: [next, ...d.conditions.slice(1)] };
-    });
-  };
-
-  const setAction = (patch: Partial<typeof action>) => {
-    setDraft((d) => {
-      const next = { ...(d.actions[0] ?? action), ...patch };
-      return { ...d, actions: [next, ...d.actions.slice(1)] };
-    });
-  };
-
-  const categoryName = categories.find((c) => c.id === action.value)?.name ?? t('common.notSet');
-  const fieldLabel = FIELD_OPTIONS.find((f) => f.value === cond.field)?.label ?? cond.field;
-  const opLabel = OP_OPTIONS.find((o) => o.value === cond.op)?.label ?? cond.op;
-
-  const trySave = async () => {
-    if (!cond.value.trim() && cond.op !== 'isIn' && cond.op !== 'isOut' && cond.op !== 'isEmpty') {
-      setValidation(t('rules.needCondition'));
-      return;
-    }
-    if (action.kind === 'setCategory' && !action.value.trim()) {
-      setValidation(t('rules.needActionValue'));
-      return;
-    }
-    setValidation(null);
-    setBusy(true);
-    try {
-      await onSave(draft, applyPast);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <RedesignShell><SafeAreaView testID="rule-editor" style={{ flex: 1, backgroundColor: theme.page }} edges={['top', 'bottom']}>
-      <StackTopBar title={blank ? t('rules.redesign.newTitle') : t('rules.editorTitle')} onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: sp.lg, gap: sp.lg, flexGrow: 1 }}>
-        {error ? <RedesignInlineError message={error} /> : null}
-        {validation ? <RedesignInlineError message={validation} /> : null}
-
-        <RedesignText variant="helper" tone="textSecondary">
-          {t('rules.redesign.whenTxn')}
-        </RedesignText>
-
-        <PickerField testID="rule-field" label={t('rules.redesign.field')} value={fieldLabel} onPress={() => setFieldOpen(true)} />
-        <PickerField testID="rule-op" label={t('rules.redesign.matches')} value={opLabel} onPress={() => setOpOpen(true)} />
-
-        {cond.op !== 'isIn' && cond.op !== 'isOut' && cond.op !== 'isEmpty' ? (
-          <RedesignField
-            testID="rule-value"
-            label={t('rules.redesign.text')}
-            value={cond.value}
-            onChangeText={(value) => setCond({ value })}
-            autoCapitalize="none"
-          />
-        ) : null}
-
-        <RedesignButton
-          testID="rule-add-condition"
-          kind="link"
-          label={t('rules.redesign.addCondition')}
-          onPress={() =>
-            setDraft((d) => ({
-              ...d,
-              conditions: [...d.conditions, { field: 'payee', op: 'contains', value: '' }],
-            }))
-          }
-        />
-
-        <RedesignText variant="helper" tone="textSecondary">
-          {t('rules.then')}
-        </RedesignText>
-
-        <PickerField
-          testID="rule-action-kind"
-          label={t('rules.redesign.set')}
-          value={t('rules.redesign.setValueCategory')}
-          onPress={() => setSetOpen(true)}
-        />
-        <PickerField testID="rule-action-value" label={t('rules.redesign.to')} value={categoryName} onPress={() => setToOpen(true)} />
-
-        <Pressable
-          testID="rule-apply-past"
-          accessibilityRole="switch"
-          accessibilityState={{ checked: applyPast }}
-          onPress={() => setApplyPast((v) => !v)}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            minHeight: density.minTarget,
-            gap: sp.md,
-          }}
-        >
-          <RedesignText style={{ flex: 1 }}>
-            {t('rules.redesign.applyPast', { count: changing.length })}
-          </RedesignText>
-          <View
-            style={{
-              width: 52,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: applyPast ? theme.primary : theme.border,
-              padding: 4,
-              justifyContent: 'center',
-            }}
-          >
+        {/* TAB 2: TAX & TITHE RULES */}
+        {activeTab === 'tax_tithe' && (
+          <View>
+            {/* Tithe Rule Card */}
             <View
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                backgroundColor: theme.surface,
-                alignSelf: applyPast ? 'flex-end' : 'flex-start',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              style={[
+                styles.configCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.lg,
+                  padding: spacing.lg,
+                  marginBottom: spacing.lg,
+                },
+              ]}
             >
-              {applyPast ? <RedesignIcon name="check" size={size['icon-sm']} color={theme.primary} /> : null}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                    Tithe & Spiritual Giving (Off-The-Top)
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
+                    Automatically sets aside religious tithes before distributing to living expenses
+                  </Text>
+                </View>
+                <Switch
+                  value={titheRule.enabled}
+                  onValueChange={(val) => updateTitheRule({ enabled: val })}
+                  trackColor={{ false: colors.borderSubtle, true: colors.primary }}
+                />
+              </View>
+
+              {titheRule.enabled && (
+                <View style={{ paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>
+                      Tithe Percentage:
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      {[10, 15, 20].map((rate) => (
+                        <TouchableOpacity
+                          key={rate}
+                          onPress={() => updateTitheRule({ ratePercentage: rate })}
+                          style={[
+                            styles.ratePill,
+                            {
+                              backgroundColor: titheRule.ratePercentage === rate ? colors.primaryLight : colors.surfaceSubtle,
+                              borderColor: titheRule.ratePercentage === rate ? colors.primary : colors.borderSubtle,
+                              borderRadius: radii.full,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: titheRule.ratePercentage === rate ? colors.primary : colors.textPrimary,
+                              fontFamily: typography.fonts.medium,
+                            }}
+                          >
+                            {rate}%
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>
+                      Calculation Base:
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => updateTitheRule({ base: 'gross' })}
+                        style={[
+                          styles.ratePill,
+                          {
+                            backgroundColor: titheRule.base === 'gross' ? colors.primaryLight : colors.surfaceSubtle,
+                            borderColor: titheRule.base === 'gross' ? colors.primary : colors.borderSubtle,
+                            borderRadius: radii.full,
+                          },
+                        ]}
+                      >
+                        <Text style={{ fontSize: 11, color: titheRule.base === 'gross' ? colors.primary : colors.textPrimary }}>
+                          Gross Income
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => updateTitheRule({ base: 'net_after_tax' })}
+                        style={[
+                          styles.ratePill,
+                          {
+                            backgroundColor: titheRule.base === 'net_after_tax' ? colors.primaryLight : colors.surfaceSubtle,
+                            borderColor: titheRule.base === 'net_after_tax' ? colors.primary : colors.borderSubtle,
+                            borderRadius: radii.full,
+                          },
+                        ]}
+                      >
+                        <Text style={{ fontSize: 11, color: titheRule.base === 'net_after_tax' ? colors.primary : colors.textPrimary }}>
+                          Net After Tax
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Tax Provision Card */}
+            <View
+              style={[
+                styles.configCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.lg,
+                  padding: spacing.lg,
+                  marginBottom: spacing.lg,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                    Tax Withholding / Self-Employed Provision
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
+                    Withhold tax provision from business & freelance income before splitting
+                  </Text>
+                </View>
+                <Switch
+                  value={taxRule.enabled}
+                  onValueChange={(val) => updateTaxRule({ enabled: val })}
+                  trackColor={{ false: colors.borderSubtle, true: colors.primary }}
+                />
+              </View>
+
+              {taxRule.enabled && (
+                <View style={{ paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>
+                      Tax Provision Rate:
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      {[5, 10, 15, 20].map((rate) => (
+                        <TouchableOpacity
+                          key={rate}
+                          onPress={() => updateTaxRule({ ratePercentage: rate })}
+                          style={[
+                            styles.ratePill,
+                            {
+                              backgroundColor: taxRule.ratePercentage === rate ? colors.primaryLight : colors.surfaceSubtle,
+                              borderColor: taxRule.ratePercentage === rate ? colors.primary : colors.borderSubtle,
+                              borderRadius: radii.full,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: taxRule.ratePercentage === rate ? colors.primary : colors.textPrimary,
+                              fontFamily: typography.fonts.medium,
+                            }}
+                          >
+                            {rate}%
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginBottom: 6 }}>
+                    Exempt Sources (Tax is NOT deducted from these):
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {['Employment (PAYE already deducted)', 'Gifts & Support', 'Government Grants'].map((source, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.exemptTag,
+                          {
+                            backgroundColor: colors.surfaceSubtle,
+                            borderColor: colors.borderSubtle,
+                            borderRadius: radii.full,
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                          },
+                        ]}
+                      >
+                        <Check size={11} color={colors.statusSuccess} style={{ marginRight: 4 }} />
+                        <Text style={{ fontSize: 11, color: colors.textPrimary }}>{source}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
           </View>
-        </Pressable>
+        )}
 
-        <RedesignButton testID="rule-delete" kind="link" label={t('rules.delete')} onPress={onDelete} />
+        {/* TAB 3: EARMARKED INFLOWS */}
+        {activeTab === 'earmarked' && (
+          <View>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: spacing.md,
+              }}
+            >
+              <View>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                  Earmarked Inflows (100% Pass-Through)
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
+                  When funds are meant for a specific bill or goal, bypass all splits and route 100% directly.
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setAddEarmarkVisible(true)}
+                style={[
+                  styles.addEarmarkBtn,
+                  { backgroundColor: colors.primary, borderRadius: radii.full, paddingHorizontal: spacing.md, paddingVertical: 6 },
+                ]}
+              >
+                <Plus size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: typography.fonts.semiBold }}>
+                  New Rule
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {earmarkedRules.map((rule) => (
+              <View
+                key={rule.id}
+                style={[
+                  styles.earmarkCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.borderSubtle,
+                    borderRadius: radii.lg,
+                    padding: spacing.md,
+                    marginBottom: spacing.sm,
+                  },
+                ]}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1, marginRight: spacing.sm }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Tag size={14} color={colors.primary} style={{ marginRight: 6 }} />
+                      <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                        {rule.name}
+                      </Text>
+                      <View
+                        style={[
+                          styles.passThroughBadge,
+                          { backgroundColor: colors.primaryLight, borderRadius: radii.full, marginLeft: 8, paddingHorizontal: 6, paddingVertical: 1 },
+                        ]}
+                      >
+                        <Text style={{ color: colors.primary, fontSize: 10, fontFamily: typography.fonts.semiBold }}>
+                          100% Direct
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 4 }}>
+                      When {rule.triggerType === 'keyword' ? 'note contains' : 'source is'}:{' '}
+                      <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold }}>
+                        "{rule.triggerValue}"
+                      </Text>{' '}
+                      → routes directly to{' '}
+                      <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold }}>
+                        {rule.targetCategory} ({rule.targetAccountType} account)
+                      </Text>
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Switch
+                      value={rule.active}
+                      onValueChange={() => toggleEarmarkedRule(rule.id)}
+                      trackColor={{ false: colors.borderSubtle, true: colors.primary }}
+                    />
+                    <TouchableOpacity onPress={() => deleteEarmarkedRule(rule.id)} style={{ padding: 4 }}>
+                      <Trash2 size={16} color={colors.statusDanger} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* TAB 4: SUB-ALLOCATION */}
+        {activeTab === 'sub_allocation' && (
+          <View>
+            <View style={{ marginBottom: spacing.md }}>
+              <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                Living & Needs Pillar Sub-Allocation
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
+                Sub-divide your primary Living expenses (50% pillar) into target budget envelope ratios.
+              </Text>
+            </View>
+
+            {subAllocation.items.map((item, idx) => (
+              <View
+                key={item.id}
+                style={[
+                  styles.subAllocCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.borderSubtle,
+                    borderRadius: radii.md,
+                    padding: spacing.md,
+                    marginBottom: spacing.xs,
+                  },
+                ]}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }}>
+                    {item.categoryName}
+                  </Text>
+                  <View
+                    style={[
+                      styles.subPctBadge,
+                      { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full, paddingHorizontal: 10, paddingVertical: 4 },
+                    ]}
+                  >
+                    <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 12 }}>
+                      {item.percentageOfPillar}% of Needs
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
 
-      <View style={{ padding: sp.lg, borderTopWidth: 1, borderColor: theme.border, backgroundColor: theme.surface }}>
-        <RedesignButton
-          testID="rule-save"
-          label={t('rules.redesign.saveRule')}
-          disabled={busy}
-          fullWidth
-          onPress={() => void trySave()}
-        />
-      </View>
-
-      <OptionSheet
-        visible={fieldOpen}
-        title={t('rules.redesign.field')}
-        options={FIELD_OPTIONS}
-        onClose={() => setFieldOpen(false)}
-        onPick={(value) => {
-          setCond({ field: value as RuleConditionField, value: '' });
-          setFieldOpen(false);
-        }}
+      {/* Sheet to Add Earmarked Inflow Rule */}
+      <AddEarmarkedRuleSheet
+        visible={addEarmarkVisible}
+        onClose={() => setAddEarmarkVisible(false)}
+        onSaveRule={addEarmarkedRule}
       />
-      <OptionSheet
-        visible={opOpen}
-        title={t('rules.redesign.matches')}
-        options={OP_OPTIONS}
-        onClose={() => setOpOpen(false)}
-        onPick={(value) => {
-          setCond({ op: value as RuleConditionOp });
-          setOpOpen(false);
-        }}
-      />
-      <OptionSheet
-        visible={setOpen}
-        title={t('rules.redesign.set')}
-        options={[{ value: 'setCategory', label: t('rules.redesign.setValueCategory') }]}
-        onClose={() => setSetOpen(false)}
-        onPick={() => {
-          setAction({ kind: 'setCategory' });
-          setSetOpen(false);
-        }}
-      />
-      <OptionSheet
-        visible={toOpen}
-        title={t('rules.redesign.to')}
-        options={categories.map((c) => ({ value: c.id, label: c.name }))}
-        onClose={() => setToOpen(false)}
-        onPick={(value) => {
-          setAction({ kind: 'setCategory', value });
-          setToOpen(false);
-        }}
-      />
-    </SafeAreaView></RedesignShell>
+    </View>
   );
 }
 
-function PickerField({
-  label,
-  value,
-  onPress,
-  testID,
-}: {
-  label: string;
-  value: string;
-  onPress: () => void;
-  testID?: string;
-}) {
-  return (
-    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress}>
-      <View style={{ gap: sp.xs }}>
-        <RedesignText variant="label">{label}</RedesignText>
-        <View
-          style={{
-            minHeight: size['control-lg'],
-            borderWidth: 1,
-            borderColor: theme.borderStrong,
-            borderRadius: shape['radius-md'],
-            paddingHorizontal: sp.md,
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: theme.surface,
-            gap: sp.sm,
-          }}
-        >
-          <RedesignText style={{ flex: 1 }}>{value}</RedesignText>
-          <RedesignIcon name="chevron-down" size={size['icon-lg']} color={theme.text} />
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-function OptionSheet({
-  visible,
-  title,
-  options,
-  onClose,
-  onPick,
-}: {
-  visible: boolean;
-  title: string;
-  options: { value: string; label: string }[];
-  onClose: () => void;
-  onPick: (value: string) => void;
-}) {
-  return (
-    <RedesignSheet visible={visible} title={title} onClose={onClose}>
-      {options.map((opt) => (
-        <Pressable
-          key={opt.value}
-          testID={`rule-option-${opt.value}`}
-          accessibilityRole="button"
-          onPress={() => onPick(opt.value)}
-          style={{ minHeight: density.minTarget, justifyContent: 'center' }}
-        >
-          <RedesignText>{opt.label}</RedesignText>
-        </Pressable>
-      ))}
-    </RedesignSheet>
-  );
-}
-
-export { RulesScreen as RedesignRulesScreen };
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backBtn: {},
+  screenTitle: {},
+  resetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  content: {
+    paddingBottom: 60,
+  },
+  simulatorCard: {
+    borderWidth: 1,
+  },
+  simulatorBadge: {},
+  quickPresetsRow: {},
+  simPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  resultsBox: {},
+  deductionPill: {},
+  simPillarsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  simPillarCard: {
+    flex: 1,
+    minWidth: 140,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  tabBar: {
+    flexDirection: 'row',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionHeader: {
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  presetCard: {
+    borderWidth: 1,
+  },
+  statusBanner: {
+    borderWidth: 1,
+  },
+  pillarRowCard: {
+    borderWidth: 1,
+  },
+  accountTag: {},
+  stepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stepBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pctDisplay: {
+    width: 48,
+    alignItems: 'center',
+  },
+  configCard: {
+    borderWidth: 1,
+  },
+  ratePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 1,
+  },
+  exemptTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  addEarmarkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  earmarkCard: {
+    borderWidth: 1,
+  },
+  passThroughBadge: {},
+  subAllocCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  subPctBadge: {},
+});

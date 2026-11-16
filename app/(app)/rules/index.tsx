@@ -1,5 +1,6 @@
-import { RulesScreen } from '@/features/rules/RulesScreen';
+import React from 'react';
+import { RulesScreen } from '../../../src/features/rules/RulesScreen';
 
-export default function RulesPage() {
+export default function RulesRoute() {
   return <RulesScreen />;
 }

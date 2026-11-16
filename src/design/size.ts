@@ -1,16 +1,31 @@
 import { useWindowDimensions } from 'react-native';
-import tokens from './tokens.json';
 
-export type SizeClass = 'phone' | 'tablet' | 'desktop' | 'wide';
+export const breakpoints = {
+  tablet: 768,
+  desktop: 1024,
+  wide: 1280,
+} as const;
 
-export function sizeClassFor(width: number): SizeClass {
-  if (width >= tokens.breakpoint.wide) return 'wide';
-  if (width >= tokens.breakpoint.desktop) return 'desktop';
-  if (width >= tokens.breakpoint.tablet) return 'tablet';
-  return 'phone';
-}
+export const maxContainerWidths = {
+  content: 1140,
+  formModal: 520,
+  sheetMax: 600,
+} as const;
 
-export function useSizeClass(): SizeClass {
-  const { width } = useWindowDimensions();
-  return sizeClassFor(width);
+export function useResponsive() {
+  const { width, height } = useWindowDimensions();
+
+  const isPhone = width < breakpoints.tablet;
+  const isTablet = width >= breakpoints.tablet && width < breakpoints.desktop;
+  const isDesktop = width >= breakpoints.desktop;
+  const isWide = width >= breakpoints.wide;
+
+  return {
+    width,
+    height,
+    isPhone,
+    isTablet,
+    isDesktop,
+    isWide,
+  };
 }

@@ -1,5 +1,6 @@
-import { BudgetScreen } from '@/features/budget/BudgetScreen';
+import React from 'react';
+import { BudgetScreen } from '../../../src/features/budget/BudgetScreen';
 
-export default function BudgetPage() {
+export default function BudgetRoute() {
   return <BudgetScreen />;
 }

@@ -1,3 +1,4 @@
+import '@/lib/cryptoPolyfill';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { v7 as uuidv7 } from 'uuid';

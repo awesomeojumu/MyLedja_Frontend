@@ -1,363 +1,257 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-
-import type { AppNotification } from '@/data/workspace/model';
-import { useWorkspace } from '@/data/workspace/WorkspaceProvider';
 import {
-  RedesignIcon,
-  RedesignChip,
-  RedesignInlineError,
-  RedesignSkeleton,
-  RedesignStackFrame,
-  RedesignText,
-} from '@/design/redesign';
-import { redesignLight as theme, redesignTokens as tokens } from '@/design/redesign/theme';
-import { useSizeClass } from '@/design/size';
-import { debtRows } from '@/features/debts/helpers';
-import { ChangePasswordSheet, useSecurityApi } from '@/features/settings/SecuritySheets';
-import { ledgerMessage, today } from '@/features/transactions/helpers';
-import { useToast } from '@/design/components';
-import { t, type TextKey } from '@/i18n';
+  ArrowLeft,
+  Bell,
+  CheckCircle2,
+  AlertTriangle,
+  ShieldAlert,
+  Calendar,
+  Check,
+} from 'lucide-react-native';
+import { useTheme } from '../../design';
+import { SecurityAlertSheet } from './SecurityAlertSheet';
 
-import {
-  groupNotifications,
-  mergeDerivedNotifications,
-  visibleNotifications,
-} from './helpers';
-import { syncLocalBillReminder } from './localPush';
-import { MatchBillSheet } from './MatchBillSheet';
-import { NotificationRow } from './NotificationRow';
-import { RecordDebtPaymentSheet } from './RecordDebtPaymentSheet';
-import { redesignEmptyCopy, redesignGroupLabel } from './redesignHelpers';
+interface NotificationItemUI {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+  type: 'bill' | 'budget' | 'security' | 'sync';
+}
 
-const sp = tokens.space;
-const shape = tokens.shape;
-const size = tokens.size;
-
-/**
- * Page 27 Notifications redesign (Figma Mobile Phone / Notifications `2:1140`,
- * Empty `13:6410`). Flagged via EXPO_PUBLIC_REDESIGN. No filter chips (absent in Figma phone).
- */
 export function NotificationsScreen() {
-  const { snapshot, repo } = useWorkspace();
+  const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
-  const toast = useToast();
-  const security = useSecurityApi();
-  const phone = useSizeClass() === 'phone';
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [matchTarget, setMatchTarget] = useState<AppNotification | null>(null);
-  const [debtPayTarget, setDebtPayTarget] = useState<{ notificationId: string; debtId: string; max: bigint } | null>(
-    null,
-  );
-  const [passwordOpen, setPasswordOpen] = useState(false);
-  const [filterTab, setFilterTab] = useState<'all' | 'action' | 'bills_debts' | 'insights'>('all');
-  const day = today();
 
-  const reload = useCallback(async () => {
-    await repo.refreshBillNotifications();
-  }, [repo]);
+  const [notifications, setNotifications] = useState<NotificationItemUI[]>([
+    {
+      id: 'n-1',
+      title: 'Bill Due Today: Spectranet Internet',
+      message: '₦22,000.00 is scheduled for payment today from GTBank.',
+      time: '2 hours ago',
+      read: false,
+      type: 'bill',
+    },
+    {
+      id: 'n-2',
+      title: 'Groceries Envelope at 88%',
+      message: 'You have spent ₦48,500 of your ₦80,000 envelope limit.',
+      time: 'Yesterday',
+      read: false,
+      type: 'budget',
+    },
+    {
+      id: 'n-3',
+      title: 'New Sign-In from Windows Edge',
+      message: 'Signed in from Lagos, Nigeria. Review if this was not you.',
+      time: '2 days ago',
+      read: true,
+      type: 'security',
+    },
+  ]);
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const [securitySheetVisible, setSecuritySheetVisible] = useState(false);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await reload();
-    } finally {
-      setRefreshing(false);
-    }
-  }, [reload]);
-
-  const items = useMemo(() => {
-    if (!snapshot) return null;
-    const merged = mergeDerivedNotifications(snapshot, snapshot.notifications, day);
-    return visibleNotifications(merged, day);
-  }, [snapshot, day]);
-
-  useEffect(() => {
-    if (!items) return;
-    for (const n of items) void syncLocalBillReminder(n);
-  }, [items]);
-
-  const filteredItems = useMemo(() => {
-    if (!items) return null;
-    if (filterTab === 'action') {
-      return items.filter(
-        (n) => n.action === 'mark_paid' || n.action === 'match' || n.action === 'record_payment' || n.category === 'security',
-      );
-    }
-    if (filterTab === 'bills_debts') {
-      return items.filter((n) => n.category === 'bills' || n.category === 'debts');
-    }
-    if (filterTab === 'insights') {
-      return items.filter((n) => n.category === 'budget' || n.category === 'goals');
-    }
-    return items;
-  }, [items, filterTab]);
-
-  const groups = filteredItems ? groupNotifications(filteredItems, day) : null;
-  const empty = redesignEmptyCopy();
-
-  const debtBalance = (debtId: string) => {
-    if (!snapshot) return 0n;
-    return debtRows(snapshot, 'all', day).find((r) => r.debt.id === debtId)?.balance ?? 0n;
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  const onSecurityNo = async (n: AppNotification) => {
-    try {
-      await security.signOutOthers();
-      toast.show(t('notifications.securityRevoked'));
-      setPasswordOpen(true);
-    } catch {
-      toast.show(t('notifications.securityRevoked'));
-      setPasswordOpen(true);
-    }
-    await repo.markNotificationRead(n.id);
-  };
-
-  const runPrimary = async (n: AppNotification) => {
-    setError(null);
-    switch (n.action) {
-      case 'mark_paid': {
-        if (!n.recurringId || !n.dueDate || !snapshot) return;
-        const bill = snapshot.recurring.find((r) => r.id === n.recurringId);
-        if (!bill) return;
-        const categoryId = bill.categoryId ?? snapshot.categories.find((c) => c.kind === 'expense')!.id;
-        const r = await repo.markBillPaid(n.recurringId, n.dueDate, {
-          accountId: bill.accountId,
-          categoryId,
-          amount: BigInt(bill.amountMinor),
-          date: day,
-        });
-        if (!r.ok) setError(ledgerMessage(r.error));
-        else await repo.markNotificationRead(n.id);
-        return;
-      }
-      case 'mark_received': {
-        await repo.markNotificationRead(n.id);
-        if (n.recurringId) router.push(`/income?occurrence=${n.recurringId}`);
-        else router.push('/income');
-        return;
-      }
-      case 'match':
-        setMatchTarget(n);
-        return;
-      case 'see_budget':
-        await repo.markNotificationRead(n.id);
-        router.push('/budget');
-        return;
-
-      case 'record_payment': {
-        if (!n.debtId) {
-          router.push('/debts');
-          return;
-        }
-        setDebtPayTarget({ notificationId: n.id, debtId: n.debtId, max: debtBalance(n.debtId) });
-        return;
-      }
-      default:
-        await repo.markNotificationRead(n.id);
+  const handleAction = (item: NotificationItemUI) => {
+    if (item.type === 'bill') {
+      router.push('/plan' as any);
+    } else if (item.type === 'budget') {
+      router.push('/budget' as any);
+    } else if (item.type === 'security') {
+      setSecuritySheetVisible(true);
     }
   };
 
-  const markAllRead = () => void repo.markAllNotificationsRead();
-
-  const trailing =
-    items && items.length > 0 ? (
-      <Pressable
-        testID="notifications-mark-all"
-        accessibilityRole="button"
-        accessibilityLabel={t('notifications.redesign.markAllRead')}
-        onPress={markAllRead}
-        style={{
-          minHeight: tokens.density.touch.minTarget,
-          paddingHorizontal: sp.sm,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <RedesignText variant="label" tone="primary" style={{ textDecorationLine: 'underline' }}>
-          {t('notifications.redesign.markAllRead')}
-        </RedesignText>
-      </Pressable>
-    ) : (
-      <View style={{ width: tokens.density.touch.minTarget }} />
-    );
-
-  const listBody = !groups ? (
-    <RedesignSkeleton height={120} testID="notifications-redesign-skeleton" />
-  ) : items!.length === 0 ? (
-    <View
-      testID="notifications-redesign-empty"
-      style={{
-        backgroundColor: theme.surface,
-        borderRadius: shape['radius-lg'],
-        borderWidth: 1,
-        borderColor: theme.border,
-        padding: sp.xl,
-        alignItems: 'center',
-        gap: sp.md,
-      }}
-    >
+  return (
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Top Header */}
       <View
-        style={{
-          width: size.avatar,
-          height: size.avatar,
-          borderRadius: size.avatar / 2,
-          backgroundColor: theme.surfaceMuted,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+        style={[
+          styles.headerBar,
+          {
+            borderBottomColor: colors.borderSubtle,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+          },
+        ]}
       >
-        <RedesignIcon name="bell" size={28} color={theme.text} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backBtn, { padding: spacing.xs }]}
+        >
+          <ArrowLeft size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text
+            style={[
+              styles.screenTitle,
+              {
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.lg,
+              },
+            ]}
+          >
+            Notifications
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+            }}
+          >
+            Alerts & Activity Updates
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={markAllRead}
+          style={[
+            styles.markReadBtn,
+            {
+              backgroundColor: colors.surfaceSubtle,
+              borderRadius: radii.full,
+              paddingHorizontal: spacing.sm,
+              paddingVertical: 5,
+            },
+          ]}
+        >
+          <Check size={14} color={colors.primary} />
+          <Text
+            style={{
+              color: colors.primary,
+              fontFamily: typography.fonts.medium,
+              fontSize: 12,
+              marginLeft: 4,
+            }}
+          >
+            Mark all read
+          </Text>
+        </TouchableOpacity>
       </View>
-      <RedesignText variant="headline" accessibilityRole="header" style={{ textAlign: 'center' }}>
-        {t(empty.title)}
-      </RedesignText>
-      <RedesignText tone="textSecondary" style={{ textAlign: 'center' }}>
-        {t(empty.body)}
-      </RedesignText>
-    </View>
-  ) : (
-    <View style={{ flex: 1, gap: sp.md }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sp.xs, paddingBottom: sp.xs }}>
-        {(
-          [
-            { key: 'all', labelKey: 'notifications.filter.all' },
-            { key: 'action', labelKey: 'notifications.filter.action' },
-            { key: 'bills_debts', labelKey: 'notifications.filter.billsDebts' },
-            { key: 'insights', labelKey: 'notifications.filter.insights' },
-          ] as const
-        ).map((f) => (
-          <RedesignChip
-            key={f.key}
-            testID={`notifications-filter-${f.key}`}
-            label={t(f.labelKey as TextKey)}
-            selected={filterTab === f.key}
-            onPress={() => setFilterTab(f.key)}
-          />
+
+      <ScrollView
+        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {notifications.map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            onPress={() => handleAction(item)}
+            style={[
+              styles.notifCard,
+              {
+                backgroundColor: item.read ? colors.surface : colors.primaryLight,
+                borderColor: item.read ? colors.borderSubtle : colors.primary,
+                borderRadius: radii.md,
+                padding: spacing.md,
+                marginBottom: spacing.md,
+              },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+              <View
+                style={[
+                  styles.iconWrap,
+                  {
+                    backgroundColor: colors.surface,
+                    borderRadius: radii.full,
+                    marginTop: 2,
+                  },
+                ]}
+              >
+                {item.type === 'bill' ? (
+                  <Calendar size={18} color={colors.primary} />
+                ) : item.type === 'budget' ? (
+                  <AlertTriangle size={18} color={colors.statusWarning} />
+                ) : (
+                  <ShieldAlert size={18} color={colors.statusDanger} />
+                )}
+              </View>
+
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.semiBold,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {item.title}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typography.sizes.xs,
+                    fontFamily: typography.fonts.regular,
+                    marginTop: 2,
+                    lineHeight: 18,
+                  }}
+                >
+                  {item.message}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textTertiary,
+                    fontSize: 10,
+                    fontFamily: typography.fonts.regular,
+                    marginTop: 6,
+                  }}
+                >
+                  {item.time}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
 
-      <ScrollView
-        testID="notifications-redesign-list"
-      refreshControl={phone ? <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} /> : undefined}
-      contentContainerStyle={{ gap: sp.lg, paddingBottom: sp.xxl }}
-    >
-      {(['today', 'week', 'earlier'] as const).map((key) => {
-        const rows = groups[key];
-        if (rows.length === 0) return null;
-        return (
-          <View key={key} style={{ gap: sp.sm }}>
-            <RedesignText variant="label" tone="textSecondary">
-              {t(redesignGroupLabel(key))}
-            </RedesignText>
-            {rows.map((n) => (
-              <NotificationRow
-                key={n.id}
-                notification={n}
-                today={day}
-                onPrimary={() => void runPrimary(n)}
-                onSecurityYes={() => void repo.markNotificationRead(n.id)}
-                onSecurityNo={() => void onSecurityNo(n)}
-                onDismiss={() => void repo.markNotificationRead(n.id)}
-              />
-            ))}
-          </View>
-        );
-      })}
-      <Pressable
-        testID="notifications-settings"
-        accessibilityRole="link"
-        accessibilityLabel={t('notifications.settingsLink')}
-        onPress={() => router.push('/settings/notifications')}
-        style={{
-          minHeight: tokens.density.touch.minTarget,
-          alignItems: 'center',
-          justifyContent: 'center',
-          alignSelf: 'center',
-          paddingHorizontal: sp.md,
-        }}
-      >
-        <RedesignText variant="label" tone="primary" style={{ textDecorationLine: 'underline' }}>
-          {t('notifications.settingsLink')}
-        </RedesignText>
-      </Pressable>
-    </ScrollView>
-    </View>
-  );
-
-  return (
-    <RedesignStackFrame
-      testID="redesign-notifications"
-      title={t('notifications.title')}
-      onBack={() => router.back()}
-      trailing={trailing}
-    >
-      {error ? <InlineErrorPad message={error} /> : null}
-      {listBody}
-      {matchTarget && snapshot ? (
-        <MatchBillSheet
-          notification={matchTarget}
-          snapshot={snapshot}
-          today={day}
-          onClose={() => setMatchTarget(null)}
-          onMatch={async (eventId) => {
-            if (!matchTarget.recurringId || !matchTarget.dueDate) return;
-            setError(null);
-            const r = await repo.matchBillToEvent(matchTarget.recurringId, matchTarget.dueDate, eventId);
-            if (!r.ok) setError(ledgerMessage(r.error));
-            else {
-              await repo.markNotificationRead(matchTarget.id);
-              setMatchTarget(null);
-            }
-          }}
-        />
-      ) : null}
-      {debtPayTarget && snapshot ? (
-        <RecordDebtPaymentSheet
-          max={debtPayTarget.max}
-          snapshot={snapshot}
-          debtId={debtPayTarget.debtId}
-          onClose={() => setDebtPayTarget(null)}
-          onSave={async (input) => {
-            setError(null);
-            const r = await repo.recordDebtPayment(debtPayTarget.debtId, {
-              accountId: input.accountId,
-              amount: input.principal,
-              date: input.date,
-              interest: input.interest,
-              overpayment: input.overpayment,
-            });
-            if (!r.ok) setError(ledgerMessage(r.error));
-            else {
-              await repo.markNotificationRead(debtPayTarget.notificationId);
-              setDebtPayTarget(null);
-            }
-          }}
-        />
-      ) : null}
-      <ChangePasswordSheet
-        visible={passwordOpen}
-        onClose={() => setPasswordOpen(false)}
-        guard={async (action) => {
-          await action();
-        }}
+      {/* Security Sheet */}
+      <SecurityAlertSheet
+        visible={securitySheetVisible}
+        onClose={() => setSecuritySheetVisible(false)}
+        deviceInfo="Windows Edge / Chrome"
+        location="Lagos, Nigeria"
+        timestamp="14 Nov 2026, 10:14 PM"
+        onSignOutOthers={() => {}}
       />
-    </RedesignStackFrame>
-  );
-}
-
-function InlineErrorPad({ message }: { message: string }) {
-  return (
-    <View style={{ marginBottom: sp.md }}>
-      <RedesignInlineError message={message} />
     </View>
   );
 }
 
-export { NotificationsScreen as RedesignNotificationsScreen };
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backBtn: {},
+  screenTitle: {},
+  markReadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  content: {
+    paddingBottom: 40,
+  },
+  notifCard: {
+    borderWidth: 1,
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

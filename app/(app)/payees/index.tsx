@@ -1,5 +1,6 @@
-import { PayeesScreen } from '@/features/payees/PayeesScreen';
+import React from 'react';
+import { PayeesScreen } from '../../../src/features/payees/PayeesScreen';
 
-export default function PayeesPage() {
+export default function PayeesRoute() {
   return <PayeesScreen />;
 }

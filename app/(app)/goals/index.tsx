@@ -1,5 +1,6 @@
-import { GoalsScreen } from '@/features/goals/GoalsScreen';
+import React from 'react';
+import { GoalsScreen } from '../../../src/features/goals/GoalsScreen';
 
-export default function GoalsPage() {
+export default function GoalsRoute() {
   return <GoalsScreen />;
 }
