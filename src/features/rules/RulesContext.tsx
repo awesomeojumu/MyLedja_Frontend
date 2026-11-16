@@ -6,6 +6,7 @@ import {
   TitheRuleConfig,
   EarmarkedRule,
   SubAllocationConfig,
+  SubAllocationItem,
   PRESET_USER_50_10_10_20_10,
   STANDARD_FRAMEWORK_PRESETS,
 } from '../../data/rulesModel';
@@ -39,6 +40,10 @@ export interface RulesContextType {
   toggleEarmarkedRule: (id: string) => void;
   deleteEarmarkedRule: (id: string) => void;
   updateSubAllocations: (items: SubAllocationConfig['items']) => void;
+  setCategorySubAllocation: (categoryName: string, percentage: number) => void;
+  setSubcategoryAllocation: (categoryName: string, subName: string, percentage: number) => void;
+  autoBalanceCategories: (categoryNames: string[]) => void;
+  getCategoryPercentage: (categoryName: string, fallbackPct?: number) => number;
   resetRulesToDefault: () => Promise<void>;
   simulateInflow: (
     amountMinor: bigint,
@@ -90,14 +95,27 @@ const DEFAULT_EARMARKED_RULES: EarmarkedRule[] = [
   },
 ];
 
+const DEFAULT_CATEGORY_PERCENTAGES: Record<string, number> = {
+  Housing: 35,
+  Food: 30,
+  Transportation: 15,
+  Utilities: 12,
+  Healthcare: 5,
+  'Personal Care': 3,
+};
+
 const DEFAULT_SUB_ALLOCATION: SubAllocationConfig = {
   enabled: true,
   parentPillarId: 'living_needs',
+  categoryPercentages: DEFAULT_CATEGORY_PERCENTAGES,
+  subcategoryPercentages: {},
   items: [
-    { id: 'sub-1', categoryName: 'Housing (Rent & Maintenance)', percentageOfPillar: 40 },
-    { id: 'sub-2', categoryName: 'Food & Groceries', percentageOfPillar: 30 },
-    { id: 'sub-3', categoryName: 'Transportation & Fuel', percentageOfPillar: 15 },
-    { id: 'sub-4', categoryName: 'Utilities & Power Bills', percentageOfPillar: 15 },
+    { id: 'sub-housing', categoryName: 'Housing', percentageOfPillar: 35 },
+    { id: 'sub-food', categoryName: 'Food', percentageOfPillar: 30 },
+    { id: 'sub-transport', categoryName: 'Transportation', percentageOfPillar: 15 },
+    { id: 'sub-utilities', categoryName: 'Utilities', percentageOfPillar: 12 },
+    { id: 'sub-health', categoryName: 'Healthcare', percentageOfPillar: 5 },
+    { id: 'sub-personal', categoryName: 'Personal Care', percentageOfPillar: 3 },
   ],
 };
 
@@ -224,6 +242,100 @@ export function RulesProvider({ children }: { children: React.ReactNode }) {
   const updateSubAllocations = (items: SubAllocationConfig['items']) => {
     setSubAllocation((prev) => {
       const next = { ...prev, items };
+      saveState(activeFramework, taxRule, titheRule, earmarkedRules, next);
+      return next;
+    });
+  };
+
+  const getCategoryPercentage = (categoryName: string, fallbackPct = 0): number => {
+    if (subAllocation.categoryPercentages && subAllocation.categoryPercentages[categoryName] !== undefined) {
+      return subAllocation.categoryPercentages[categoryName];
+    }
+    const foundItem = subAllocation.items?.find(
+      (it) => it.categoryName.toLowerCase() === categoryName.toLowerCase()
+    );
+    if (foundItem) return foundItem.percentageOfPillar;
+    return DEFAULT_CATEGORY_PERCENTAGES[categoryName] ?? fallbackPct;
+  };
+
+  const setCategorySubAllocation = (categoryName: string, percentage: number) => {
+    setSubAllocation((prev) => {
+      const currentMap = {
+        ...DEFAULT_CATEGORY_PERCENTAGES,
+        ...(prev.categoryPercentages || {}),
+      };
+      currentMap[categoryName] = Math.max(0, Math.min(100, Math.round(percentage)));
+
+      const existingItems = prev.items || [];
+      const itemIdx = existingItems.findIndex(
+        (it) => it.categoryName.toLowerCase() === categoryName.toLowerCase()
+      );
+      let updatedItems = [...existingItems];
+      if (itemIdx >= 0 && existingItems[itemIdx]) {
+        const current = existingItems[itemIdx]!;
+        updatedItems[itemIdx] = {
+          ...current,
+          percentageOfPillar: currentMap[categoryName],
+        };
+      } else {
+        updatedItems.push({
+          id: `sub-${categoryName.toLowerCase().replace(/\s+/g, '-')}`,
+          categoryName,
+          percentageOfPillar: currentMap[categoryName],
+        });
+      }
+
+      const next: SubAllocationConfig = {
+        ...prev,
+        categoryPercentages: currentMap,
+        items: updatedItems,
+      };
+      saveState(activeFramework, taxRule, titheRule, earmarkedRules, next);
+      return next;
+    });
+  };
+
+  const setSubcategoryAllocation = (categoryName: string, subName: string, percentage: number) => {
+    setSubAllocation((prev) => {
+      const subMap = { ...(prev.subcategoryPercentages || {}) };
+      const catSubs = { ...(subMap[categoryName] || {}) };
+      catSubs[subName] = Math.max(0, Math.min(100, Math.round(percentage)));
+      subMap[categoryName] = catSubs;
+
+      const next: SubAllocationConfig = {
+        ...prev,
+        subcategoryPercentages: subMap,
+      };
+      saveState(activeFramework, taxRule, titheRule, earmarkedRules, next);
+      return next;
+    });
+  };
+
+  const autoBalanceCategories = (categoryNames: string[]) => {
+    if (categoryNames.length === 0) return;
+    const count = categoryNames.length;
+    const baseShare = Math.floor(100 / count);
+    const remainder = 100 - baseShare * count;
+
+    const newMap: Record<string, number> = {};
+    const newItems: SubAllocationItem[] = [];
+
+    categoryNames.forEach((catName, idx) => {
+      const pct = idx === 0 ? baseShare + remainder : baseShare;
+      newMap[catName] = pct;
+      newItems.push({
+        id: `sub-${catName.toLowerCase().replace(/\s+/g, '-')}`,
+        categoryName: catName,
+        percentageOfPillar: pct,
+      });
+    });
+
+    setSubAllocation((prev) => {
+      const next: SubAllocationConfig = {
+        ...prev,
+        categoryPercentages: newMap,
+        items: newItems,
+      };
       saveState(activeFramework, taxRule, titheRule, earmarkedRules, next);
       return next;
     });
@@ -366,6 +478,10 @@ export function RulesProvider({ children }: { children: React.ReactNode }) {
     toggleEarmarkedRule,
     deleteEarmarkedRule,
     updateSubAllocations,
+    setCategorySubAllocation,
+    setSubcategoryAllocation,
+    autoBalanceCategories,
+    getCategoryPercentage,
     resetRulesToDefault,
     simulateInflow,
     isTotal100Percent,

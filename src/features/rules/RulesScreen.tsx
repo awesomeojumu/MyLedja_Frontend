@@ -12,24 +12,32 @@ import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
   Plus,
+  Minus,
   Zap,
   Sliders,
   ShieldCheck,
   Check,
+  CheckCircle2,
   RotateCcw,
   Sparkles,
   HelpCircle,
   Tag,
   AlertTriangle,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   TrendingUp,
   Receipt,
   Heart,
   Landmark,
   Trash2,
+  Settings,
+  Layers,
 } from 'lucide-react-native';
 import { useTheme, Button, CurrencyInput } from '../../design';
 import { useFinancialRules } from './RulesContext';
+import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
+import { AllocationPillar } from '../../data/rulesModel';
 import { AddEarmarkedRuleSheet } from './AddEarmarkedRuleSheet';
 import { formatNaira, parseAmount } from '../../money';
 
@@ -57,10 +65,60 @@ export function RulesScreen() {
     simulateInflow,
     totalPercentage,
     isTotal100Percent,
+    setCategorySubAllocation,
+    setSubcategoryAllocation,
+    autoBalanceCategories,
+    getCategoryPercentage,
   } = useFinancialRules();
+
+  const { activeExpenseCategories, enabledSubcategories } = useCategoryPreferences();
 
   const [activeTab, setActiveTab] = useState<RulesTab>('framework');
   const [addEarmarkVisible, setAddEarmarkVisible] = useState(false);
+  const [selectedPillarId, setSelectedPillarId] = useState<string>('living_needs');
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
+
+  const fallbackPillar: AllocationPillar = {
+    id: 'living_needs',
+    name: 'Living & Needs',
+    percentage: 50,
+    color: '#2563EB',
+    icon: 'Home',
+    purposeAccountType: 'operating',
+    description: 'Living expenses',
+    mappedExpenseCategories: ['Housing', 'Food', 'Transportation', 'Utilities', 'Healthcare'],
+  };
+
+  // Active pillar to sub-allocate
+  const selectedPillar: AllocationPillar = useMemo(() => {
+    return (
+      activeFramework.pillars.find((p) => p.id === selectedPillarId) ||
+      activeFramework.pillars.find(
+        (p) => p.id === 'living_needs' || p.id === 'living' || p.id === 'needs' || p.id === 'spending'
+      ) ||
+      activeFramework.pillars[0] ||
+      fallbackPillar
+    );
+  }, [activeFramework, selectedPillarId]);
+
+  // Target categories for the selected pillar (considering major selected categories in Settings)
+  const targetCategories = useMemo(() => {
+    if (!selectedPillar) return activeExpenseCategories;
+    const mapped = selectedPillar.mappedExpenseCategories || [];
+    const inPillar = activeExpenseCategories.filter((cat) =>
+      mapped.some((m) => m.toLowerCase() === cat.name.toLowerCase())
+    );
+    return inPillar.length > 0 ? inPillar : activeExpenseCategories;
+  }, [selectedPillar, activeExpenseCategories]);
+
+  // Total percentage allocated across target categories
+  const totalPillarAllocated = useMemo(() => {
+    return targetCategories.reduce((sum, cat) => {
+      return sum + getCategoryPercentage(cat.name, 0);
+    }, 0);
+  }, [targetCategories, getCategoryPercentage, subAllocation]);
+
+  const isPillarSubBalanced = totalPillarAllocated === 100;
 
   // Live Simulator State
   const [testAmountStr, setTestAmountStr] = useState('100,000.00');
@@ -1007,46 +1065,370 @@ export function RulesScreen() {
         {/* TAB 4: SUB-ALLOCATION */}
         {activeTab === 'sub_allocation' && (
           <View>
-            <View style={{ marginBottom: spacing.md }}>
-              <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                Living & Needs Pillar Sub-Allocation
-              </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
-                Sub-divide your primary Living expenses (50% pillar) into target budget envelope ratios.
-              </Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: spacing.md,
+              }}
+            >
+              <View style={{ flex: 1, marginRight: spacing.sm }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.semiBold,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {selectedPillar.name} Sub-Allocation ({selectedPillar.percentage}% Pillar)
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typography.sizes.xs,
+                    marginTop: 2,
+                  }}
+                >
+                  Target budget envelope ratios across your major categories and subcategories enabled in Settings.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => router.push('/settings')}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: radii.full,
+                  backgroundColor: colors.surfaceSubtle,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: colors.borderSubtle,
+                }}
+              >
+                <Settings size={12} color={colors.primary} style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 11, color: colors.primary, fontFamily: typography.fonts.medium }}>
+                  Settings
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {subAllocation.items.map((item, idx) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.subAllocCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.borderSubtle,
-                    borderRadius: radii.md,
-                    padding: spacing.md,
-                    marginBottom: spacing.xs,
-                  },
-                ]}
-              >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }}>
-                    {item.categoryName}
-                  </Text>
-                  <View
-                    style={[
-                      styles.subPctBadge,
-                      { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full, paddingHorizontal: 10, paddingVertical: 4 },
-                    ]}
-                  >
-                    <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 12 }}>
-                      {item.percentageOfPillar}% of Needs
-                    </Text>
-                  </View>
-                </View>
+            {/* Pillar Selector Pills */}
+            {activeFramework.pillars.length > 1 && (
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: spacing.md, flexWrap: 'wrap' }}>
+                {activeFramework.pillars.map((pillar) => {
+                  const isSelected = selectedPillar.id === pillar.id;
+                  return (
+                    <TouchableOpacity
+                      key={pillar.id}
+                      onPress={() => setSelectedPillarId(pillar.id)}
+                      style={[
+                        styles.pillarSelectPill,
+                        {
+                          backgroundColor: isSelected ? colors.primaryLight : colors.surface,
+                          borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                          borderRadius: radii.full,
+                          borderWidth: 1,
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: isSelected ? colors.primary : colors.textSecondary,
+                          fontFamily: isSelected
+                            ? typography.fonts.semiBold
+                            : typography.fonts.medium,
+                        }}
+                      >
+                        {pillar.name} ({pillar.percentage}%)
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-            ))}
+            )}
+
+            {/* Total Balance Status Card */}
+            <View
+              style={{
+                backgroundColor: isPillarSubBalanced ? colors.primaryLight : '#FEF3C7',
+                borderColor: isPillarSubBalanced ? colors.primary : '#F59E0B',
+                borderWidth: 1,
+                borderRadius: radii.md,
+                padding: spacing.md,
+                marginBottom: spacing.md,
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <View style={{ flex: 1, marginRight: spacing.sm }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  {isPillarSubBalanced ? (
+                    <CheckCircle2 size={15} color={colors.primary} style={{ marginRight: 6 }} />
+                  ) : (
+                    <AlertTriangle size={15} color="#D97706" style={{ marginRight: 6 }} />
+                  )}
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontFamily: typography.fonts.semiBold,
+                      color: isPillarSubBalanced ? colors.primary : '#B45309',
+                    }}
+                  >
+                    {isPillarSubBalanced
+                      ? 'Ratios Balanced at 100%'
+                      : `Total is ${totalPillarAllocated}% (${100 - totalPillarAllocated > 0 ? `${100 - totalPillarAllocated}% unallocated` : `${totalPillarAllocated - 100}% over`})`}
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: isPillarSubBalanced ? colors.textSecondary : '#92400E',
+                    marginTop: 2,
+                  }}
+                >
+                  {targetCategories.length} major active categories from your Settings are allocated below.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => autoBalanceCategories(targetCategories.map((c) => c.name))}
+                style={{
+                  backgroundColor: colors.surface,
+                  borderColor: isPillarSubBalanced ? colors.primary : '#D97706',
+                  borderWidth: 1,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: radii.full,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: typography.fonts.semiBold,
+                    color: isPillarSubBalanced ? colors.primary : '#B45309',
+                  }}
+                >
+                  Auto-Balance
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Target Major Categories from Settings */}
+            {targetCategories.map((cat) => {
+              const catPct = getCategoryPercentage(cat.name, 0);
+              const activeSubs = enabledSubcategories[cat.id] ?? cat.subcategories;
+              const isExpanded = expandedCategoryId === cat.id;
+              const incomeEquivalent = ((selectedPillar.percentage * catPct) / 100).toFixed(1);
+
+              return (
+                <View
+                  key={cat.id}
+                  style={[
+                    styles.subAllocCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.borderSubtle,
+                      borderRadius: radii.lg,
+                      padding: spacing.md,
+                      marginBottom: spacing.sm,
+                    },
+                  ]}
+                >
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <View style={{ flex: 1, marginRight: spacing.sm }}>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: typography.fonts.semiBold,
+                          fontSize: typography.sizes.bodySm,
+                        }}
+                      >
+                        {cat.name}
+                      </Text>
+
+                      <TouchableOpacity
+                        onPress={() =>
+                          setExpandedCategoryId(isExpanded ? null : cat.id)
+                        }
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginTop: 3,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.primary,
+                            fontSize: 11,
+                            fontFamily: typography.fonts.medium,
+                          }}
+                        >
+                          {activeSubs.length} active subcategories
+                        </Text>
+                        {isExpanded ? (
+                          <ChevronUp size={13} color={colors.primary} style={{ marginLeft: 3 }} />
+                        ) : (
+                          <ChevronDown size={13} color={colors.primary} style={{ marginLeft: 3 }} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Stepper Controls */}
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                          onPress={() => setCategorySubAllocation(cat.name, Math.max(0, catPct - 5))}
+                          style={[
+                            styles.stepBtn,
+                            {
+                              backgroundColor: colors.surfaceSubtle,
+                              borderRadius: radii.sm,
+                            },
+                          ]}
+                        >
+                          <Minus size={13} color={colors.textPrimary} />
+                        </TouchableOpacity>
+
+                        <View
+                          style={[
+                            styles.subPctBadge,
+                            {
+                              backgroundColor: colors.primaryLight,
+                              borderRadius: radii.full,
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              minWidth: 80,
+                              alignItems: 'center',
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              color: colors.primary,
+                              fontFamily: typography.fonts.semiBold,
+                              fontSize: 12,
+                            }}
+                          >
+                            {catPct}%
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          onPress={() => setCategorySubAllocation(cat.name, Math.min(100, catPct + 5))}
+                          style={[
+                            styles.stepBtn,
+                            {
+                              backgroundColor: colors.surfaceSubtle,
+                              borderRadius: radii.sm,
+                            },
+                          ]}
+                        >
+                          <Plus size={13} color={colors.textPrimary} />
+                        </TouchableOpacity>
+                      </View>
+
+                      <Text
+                        style={{
+                          color: colors.textTertiary,
+                          fontSize: 10,
+                          marginTop: 3,
+                        }}
+                      >
+                        {incomeEquivalent}% of total income
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Expandable Subcategories Drawer */}
+                  {isExpanded && (
+                    <View
+                      style={{
+                        marginTop: spacing.md,
+                        paddingTop: spacing.md,
+                        borderTopWidth: StyleSheet.hairlineWidth,
+                        borderTopColor: colors.borderSubtle,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: spacing.xs,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontFamily: typography.fonts.semiBold,
+                            color: colors.textSecondary,
+                            textTransform: 'uppercase',
+                            letterSpacing: 0.5,
+                          }}
+                        >
+                          Subcategories (Enabled in Settings):
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => router.push('/settings')}
+                          style={{ flexDirection: 'row', alignItems: 'center' }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              color: colors.primary,
+                              fontFamily: typography.fonts.medium,
+                            }}
+                          >
+                            Edit in Settings →
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {activeSubs.length === 0 ? (
+                        <Text style={{ fontSize: 11, color: colors.textTertiary, fontStyle: 'italic', marginVertical: 4 }}>
+                          No subcategories enabled in Settings. All expenses under this category share the main envelope.
+                        </Text>
+                      ) : (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                          {activeSubs.map((sub, sIdx) => (
+                            <View
+                              key={sIdx}
+                              style={{
+                                backgroundColor: colors.surfaceSubtle,
+                                borderColor: colors.borderSubtle,
+                                borderWidth: StyleSheet.hairlineWidth,
+                                borderRadius: radii.full,
+                                paddingHorizontal: 9,
+                                paddingVertical: 4,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <Check size={10} color={colors.primary} style={{ marginRight: 4 }} />
+                              <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                                {sub}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -1165,4 +1547,5 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   subPctBadge: {},
+  pillarSelectPill: {},
 });

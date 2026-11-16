@@ -42,16 +42,27 @@ export interface EarmarkedRule {
   active: boolean;
 }
 
+export interface SubcategoryAllocationItem {
+  name: string;
+  percentageOfCategory: number; // e.g. 70% of Housing
+}
+
 export interface SubAllocationItem {
   id: string;
+  categoryId?: string;
   categoryName: string;
   percentageOfPillar: number; // percentage of the parent pillar (e.g. 40% of Needs)
+  subAllocations?: SubcategoryAllocationItem[];
 }
 
 export interface SubAllocationConfig {
   enabled: boolean;
-  parentPillarId: string; // e.g. 'needs'
+  parentPillarId: string; // e.g. 'needs' or 'living_needs'
   items: SubAllocationItem[];
+  // Direct dictionary mapping of categoryName or categoryId -> percentage of pillar (0-100)
+  categoryPercentages?: Record<string, number>;
+  // Subcategory specific breakdown per category: categoryName -> subcategoryName -> percentage of category
+  subcategoryPercentages?: Record<string, Record<string, number>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +84,16 @@ export const PRESET_USER_50_10_10_20_10: AllocationFramework = {
       icon: 'Home',
       purposeAccountType: 'operating',
       description: 'Rent, food, groceries, fuel, electricity, daily bills & personal care',
-      mappedExpenseCategories: ['Housing', 'Food', 'Transportation', 'Utilities', 'Healthcare', 'Personal Care'],
+      mappedExpenseCategories: [
+        'Housing',
+        'Food',
+        'Transportation',
+        'Utilities',
+        'Healthcare',
+        'Personal Care',
+        'Communication & Technology',
+        'Education',
+      ],
     },
     {
       id: 'tithe_giving',
@@ -103,7 +123,7 @@ export const PRESET_USER_50_10_10_20_10: AllocationFramework = {
       icon: 'TrendingUp',
       purposeAccountType: 'investment',
       description: 'Stocks, mutual funds, real estate, capital assets & retirement',
-      mappedExpenseCategories: ['Savings & Investments'],
+      mappedExpenseCategories: ['Savings & Investments', 'Business & Professional'],
     },
     {
       id: 'charity_family',
@@ -113,7 +133,16 @@ export const PRESET_USER_50_10_10_20_10: AllocationFramework = {
       icon: 'Heart',
       purposeAccountType: 'operating',
       description: 'Family support, gifts, benevolence, welfare & community giving',
-      mappedExpenseCategories: ['Family', 'Miscellaneous'],
+      mappedExpenseCategories: [
+        'Family',
+        'Entertainment & Recreation',
+        'Clothing',
+        'Travel',
+        'Marriage & Relationships',
+        'Pets',
+        'Children',
+        'Miscellaneous',
+      ],
     },
   ],
 };
@@ -133,7 +162,16 @@ export const PRESET_CLASSIC_50_30_20: AllocationFramework = {
       icon: 'Home',
       purposeAccountType: 'operating',
       description: 'Housing, utilities, groceries, transport, healthcare & minimum debt payments',
-      mappedExpenseCategories: ['Housing', 'Food', 'Transportation', 'Utilities', 'Healthcare'],
+      mappedExpenseCategories: [
+        'Housing',
+        'Food',
+        'Transportation',
+        'Utilities',
+        'Healthcare',
+        'Personal Care',
+        'Communication & Technology',
+        'Financial Obligations',
+      ],
     },
     {
       id: 'wants',
@@ -143,7 +181,17 @@ export const PRESET_CLASSIC_50_30_20: AllocationFramework = {
       icon: 'Sparkles',
       purposeAccountType: 'operating',
       description: 'Dining out, entertainment, shopping, vacations & discretionary spending',
-      mappedExpenseCategories: ['Entertainment & Recreation', 'Clothing', 'Travel', 'Marriage & Relationships'],
+      mappedExpenseCategories: [
+        'Entertainment & Recreation',
+        'Clothing',
+        'Travel',
+        'Marriage & Relationships',
+        'Family',
+        'Education',
+        'Pets',
+        'Children',
+        'Miscellaneous',
+      ],
     },
     {
       id: 'savings',
@@ -153,7 +201,7 @@ export const PRESET_CLASSIC_50_30_20: AllocationFramework = {
       icon: 'PiggyBank',
       purposeAccountType: 'savings',
       description: 'Emergency fund contributions, stocks, mutual funds & wealth creation',
-      mappedExpenseCategories: ['Savings & Investments'],
+      mappedExpenseCategories: ['Savings & Investments', 'Spiritual & Religious', 'Business & Professional'],
     },
   ],
 };

@@ -8,6 +8,7 @@ export interface CurrencyInputProps {
   label?: string;
   error?: string;
   placeholder?: string;
+  compact?: boolean;
 }
 
 export function CurrencyInput({
@@ -16,6 +17,7 @@ export function CurrencyInput({
   label = 'Amount',
   error,
   placeholder = '0.00',
+  compact = false,
 }: CurrencyInputProps) {
   const { colors, typography, spacing, radii } = useTheme();
 
@@ -25,9 +27,11 @@ export function CurrencyInput({
     onChangeText(cleaned);
   };
 
+  const showLabel = Boolean(label) && !compact;
+
   return (
     <View style={styles.container}>
-      {label && (
+      {showLabel && (
         <Text
           style={[
             styles.label,
@@ -49,9 +53,10 @@ export function CurrencyInput({
           {
             backgroundColor: colors.surface,
             borderColor: error ? colors.statusDanger : colors.border,
-            borderRadius: radii.md,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
+            borderRadius: compact ? radii.sm : radii.md,
+            paddingHorizontal: compact ? spacing.sm : spacing.md,
+            paddingVertical: compact ? 4 : spacing.sm,
+            minHeight: compact ? 32 : undefined,
           },
         ]}
       >
@@ -60,9 +65,9 @@ export function CurrencyInput({
             styles.currencySymbol,
             {
               color: colors.primary,
-              fontFamily: typography.fonts.light,
-              fontSize: typography.sizes.heroSm,
-              marginRight: spacing.xs,
+              fontFamily: compact ? typography.fonts.medium : typography.fonts.light,
+              fontSize: compact ? 13 : typography.sizes.heroSm,
+              marginRight: compact ? 3 : spacing.xs,
             },
           ]}
         >
@@ -78,8 +83,8 @@ export function CurrencyInput({
             styles.input,
             {
               color: colors.textPrimary,
-              fontFamily: typography.fonts.light,
-              fontSize: typography.sizes.heroSm,
+              fontFamily: compact ? typography.fonts.medium : typography.fonts.light,
+              fontSize: compact ? 13 : typography.sizes.heroSm,
             },
           ]}
         />

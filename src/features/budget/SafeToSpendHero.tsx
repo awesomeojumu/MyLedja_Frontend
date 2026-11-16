@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { ChevronLeft, ChevronRight, ArrowLeftRight, AlertCircle, Sliders, CheckCircle2 } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, ArrowLeftRight, AlertCircle, Sliders, Pencil } from 'lucide-react-native';
 import { useTheme, Button } from '../../design';
+import { useResponsive } from '../../design/size';
 import { formatNaira } from '../../money';
 
 export interface SafeToSpendHeroProps {
@@ -16,6 +17,8 @@ export interface SafeToSpendHeroProps {
   onMoveMoney: () => void;
   onCoverOverspending: () => void;
   onOpenSetup: () => void;
+  onOpenCategoryBudgets?: () => void;
+  onOpenIncomeBudget?: () => void;
 }
 
 export function SafeToSpendHero({
@@ -30,32 +33,241 @@ export function SafeToSpendHero({
   onMoveMoney,
   onCoverOverspending,
   onOpenSetup,
+  onOpenCategoryBudgets,
+  onOpenIncomeBudget,
 }: SafeToSpendHeroProps) {
   const { colors, typography, spacing, radii } = useTheme();
+  const { isDesktop } = useResponsive();
 
   const remainingMinor = totalPlannedMinor - totalSpentMinor;
   const isOver = remainingMinor < 0n;
 
+  // DESKTOP: Compact side-by-side dashboard layout
+  if (isDesktop) {
+    return (
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.borderSubtle,
+            borderRadius: radii.lg,
+            padding: spacing.md,
+            marginBottom: spacing.sm + 2,
+          },
+        ]}
+      >
+        {/* Top Row: Month Navigation + Framework & Quick Actions */}
+        <View style={styles.topRow}>
+          <View style={styles.monthNav}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Previous month"
+              onPress={onPrevMonth}
+              style={[styles.arrowBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
+            >
+              <ChevronLeft size={14} color={colors.textPrimary} />
+            </TouchableOpacity>
+
+            <Text
+              style={[
+                styles.monthLabel,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: 13,
+                  marginHorizontal: 6,
+                },
+              ]}
+            >
+              {currentMonth}
+            </Text>
+
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Next month"
+              onPress={onNextMonth}
+              style={[styles.arrowBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
+            >
+              <ChevronRight size={14} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Framework Pill + Action Buttons */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <TouchableOpacity
+              onPress={onOpenSetup}
+              activeOpacity={0.7}
+              style={[
+                styles.frameworkPill,
+                {
+                  backgroundColor: colors.primaryLight,
+                  borderRadius: radii.full,
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                },
+              ]}
+            >
+              <Sliders size={11} color={colors.primary} style={{ marginRight: 3 }} />
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: 11,
+                  fontFamily: typography.fonts.semiBold,
+                }}
+              >
+                {frameworkName}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={onMoveMoney}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: radii.full,
+                backgroundColor: colors.surfaceSubtle,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: colors.borderSubtle,
+              }}
+            >
+              <ArrowLeftRight size={11} color={colors.textSecondary} style={{ marginRight: 3 }} />
+              <Text style={{ fontSize: 11, color: colors.textSecondary, fontFamily: typography.fonts.medium }}>
+                Move Money
+              </Text>
+            </TouchableOpacity>
+
+            {onOpenCategoryBudgets && (
+              <TouchableOpacity
+                onPress={onOpenCategoryBudgets}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: radii.full,
+                  backgroundColor: colors.surfaceSubtle,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: colors.borderSubtle,
+                }}
+              >
+                <Sliders size={11} color={colors.textSecondary} style={{ marginRight: 3 }} />
+                <Text style={{ fontSize: 11, color: colors.textSecondary, fontFamily: typography.fonts.medium }}>
+                  Category Budgets
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {overspentCount > 0 && (
+              <TouchableOpacity
+                onPress={onCoverOverspending}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: radii.full,
+                  backgroundColor: colors.statusDanger,
+                }}
+              >
+                <AlertCircle size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
+                <Text style={{ fontSize: 11, color: '#FFFFFF', fontFamily: typography.fonts.semiBold }}>
+                  Cover ({overspentCount})
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Middle Row: Safe to spend Hero number + Inline 3 Metrics */}
+        <View style={[styles.mainRow, { marginTop: spacing.xs + 2, paddingTop: spacing.xs + 2 }]}>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.medium,
+                fontSize: 11,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+              }}
+            >
+              {isOver ? 'Total Overbudget' : 'Safe to Spend This Month'}
+            </Text>
+            <Text
+              style={[
+                styles.amount,
+                {
+                  color: isOver ? colors.statusDanger : colors.primary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: 22,
+                  marginTop: 1,
+                },
+              ]}
+            >
+              {formatNaira(remainingMinor < 0n ? -remainingMinor : remainingMinor)}
+            </Text>
+          </View>
+
+          {/* 3 Inline metrics strip */}
+          <View style={[styles.metricsStrip, { borderColor: colors.borderSubtle }]}>
+            <TouchableOpacity
+              activeOpacity={onOpenIncomeBudget ? 0.7 : 1}
+              onPress={onOpenIncomeBudget}
+              style={styles.metricItem}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>Expected</Text>
+                {onOpenIncomeBudget && <Pencil size={9} color={colors.primary} />}
+              </View>
+              <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
+                {formatNaira(expectedIncomeMinor)}
+              </Text>
+            </TouchableOpacity>
+            <View style={[styles.metricSep, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>Planned</Text>
+              <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
+                {formatNaira(totalPlannedMinor)}
+              </Text>
+            </View>
+            <View style={[styles.metricSep, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>Spent</Text>
+              <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
+                {formatNaira(totalSpentMinor)}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // MOBILE: Spacious touch-friendly stacked card
   return (
     <View
       style={[
         styles.card,
         {
           backgroundColor: colors.surface,
-          borderColor: colors.border,
+          borderColor: colors.borderSubtle,
           borderRadius: radii.xl,
-          padding: spacing.xl,
-          marginBottom: spacing.lg,
+          padding: spacing.lg,
+          marginBottom: spacing.md,
         },
       ]}
     >
       {/* Month Navigator Header & Structure Badge */}
-      <View style={styles.monthRow}>
+      <View style={styles.mobileMonthRow}>
         <TouchableOpacity
           accessibilityRole="button"
           accessibilityLabel="Previous month"
           onPress={onPrevMonth}
-          style={[styles.arrowBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
+          style={[styles.mobileArrowBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
         >
           <ChevronLeft size={18} color={colors.textPrimary} />
         </TouchableOpacity>
@@ -74,7 +286,6 @@ export function SafeToSpendHero({
             {currentMonth}
           </Text>
 
-          {/* Interactive Framework Pill */}
           <TouchableOpacity
             onPress={onOpenSetup}
             activeOpacity={0.7}
@@ -108,23 +319,20 @@ export function SafeToSpendHero({
           accessibilityRole="button"
           accessibilityLabel="Next month"
           onPress={onNextMonth}
-          style={[styles.arrowBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
+          style={[styles.mobileArrowBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
         >
           <ChevronRight size={18} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
-      {/* Big Safe-to-Spend Balance */}
+      {/* Safe-to-Spend Balance */}
       <View style={{ alignItems: 'center', marginVertical: spacing.md }}>
         <Text
-          style={[
-            styles.subtitle,
-            {
-              color: colors.textSecondary,
-              fontFamily: typography.fonts.medium,
-              fontSize: typography.sizes.sm,
-            },
-          ]}
+          style={{
+            color: colors.textSecondary,
+            fontFamily: typography.fonts.medium,
+            fontSize: typography.sizes.sm,
+          }}
         >
           {isOver ? 'Total Overbudget' : 'Safe to Spend This Month'}
         </Text>
@@ -133,8 +341,8 @@ export function SafeToSpendHero({
             styles.amount,
             {
               color: isOver ? colors.statusDanger : colors.primary,
-              fontFamily: typography.fonts.light,
-              fontSize: typography.sizes.hero,
+              fontFamily: typography.fonts.semiBold,
+              fontSize: 30,
               marginTop: 4,
             },
           ]}
@@ -143,42 +351,39 @@ export function SafeToSpendHero({
         </Text>
       </View>
 
-      {/* Progress Breakdown Bar (Expected Income, Planned, Spent) */}
-      <View style={styles.metricsRow}>
-        <View style={styles.metric}>
-          <Text style={[styles.metricLabel, { color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs }]}>
-            Expected Income
-          </Text>
-          <Text style={[styles.metricValue, { color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }]}>
+      {/* 3 Metrics Row */}
+      <View style={[styles.mobileMetricsRow, { borderColor: colors.borderSubtle }]}>
+        <TouchableOpacity
+          activeOpacity={onOpenIncomeBudget ? 0.7 : 1}
+          onPress={onOpenIncomeBudget}
+          style={styles.metric}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Expected</Text>
+            {onOpenIncomeBudget && <Pencil size={10} color={colors.primary} />}
+          </View>
+          <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
             {formatNaira(expectedIncomeMinor)}
           </Text>
-        </View>
-
-        <View style={styles.metricDivider} />
-
+        </TouchableOpacity>
+        <View style={[styles.metricDivider, { backgroundColor: colors.borderSubtle }]} />
         <View style={styles.metric}>
-          <Text style={[styles.metricLabel, { color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs }]}>
-            Planned Budget
-          </Text>
-          <Text style={[styles.metricValue, { color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }]}>
+          <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Planned</Text>
+          <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
             {formatNaira(totalPlannedMinor)}
           </Text>
         </View>
-
-        <View style={styles.metricDivider} />
-
+        <View style={[styles.metricDivider, { backgroundColor: colors.borderSubtle }]} />
         <View style={styles.metric}>
-          <Text style={[styles.metricLabel, { color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs }]}>
-            Total Spent
-          </Text>
-          <Text style={[styles.metricValue, { color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }]}>
+          <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Spent</Text>
+          <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
             {formatNaira(totalSpentMinor)}
           </Text>
         </View>
       </View>
 
-      {/* Action Buttons & Overspending Warning */}
-      <View style={[styles.actionsRow, { marginTop: spacing.lg, gap: 8 }]}>
+      {/* Action Buttons */}
+      <View style={[styles.mobileActionsRow, { marginTop: spacing.md, gap: 8 }]}>
         <View style={{ flex: 1 }}>
           <Button
             label="Adjust Structure"
@@ -199,10 +404,22 @@ export function SafeToSpendHero({
           />
         </View>
 
+        {onOpenCategoryBudgets && (
+          <View style={{ flex: 1 }}>
+            <Button
+              label="Budgets"
+              onPress={onOpenCategoryBudgets}
+              variant="secondary"
+              size="md"
+              icon={<Sliders size={15} color={colors.primary} />}
+            />
+          </View>
+        )}
+
         {overspentCount > 0 && (
           <View style={{ flex: 1 }}>
             <Button
-              label={`Cover Overspent (${overspentCount})`}
+              label={`Cover (${overspentCount})`}
               onPress={onCoverOverspending}
               variant="danger"
               size="md"
@@ -220,31 +437,80 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     width: '100%',
   },
-  monthRow: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  monthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   arrowBtn: {
-    width: 32,
-    height: 32,
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   monthLabel: {},
   frameworkPill: {},
-  subtitle: {},
-  amount: {
-    letterSpacing: -0.8,
+  mainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  metricsRow: {
+  amount: {
+    letterSpacing: -0.5,
+  },
+  metricsStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  metricItem: {
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  metricLabel: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 1,
+  },
+  metricValue: {
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  metricSep: {
+    width: 1,
+    height: 18,
+  },
+  // Mobile styles
+  mobileMonthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mobileArrowBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileMetricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E5E7EB',
   },
   metric: {
     flex: 1,
@@ -253,13 +519,8 @@ const styles = StyleSheet.create({
   metricDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#E5E7EB',
   },
-  metricLabel: {
-    marginBottom: 2,
-  },
-  metricValue: {},
-  actionsRow: {
+  mobileActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },

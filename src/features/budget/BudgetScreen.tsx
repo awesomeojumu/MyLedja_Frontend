@@ -1,24 +1,54 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useTheme } from '../../design';
+import { useResponsive } from '../../design/size';
 import { Toast } from '../../design/components/Toast';
 import { SafeToSpendHero } from './SafeToSpendHero';
 import { CategoryEnvelopeRow, type CategoryEnvelope } from './CategoryEnvelopeRow';
 import { MoveMoneySheet } from './MoveMoneySheet';
 import { CoverOverspendingSheet } from './CoverOverspendingSheet';
 import { EditEnvelopeLimitSheet } from './EditEnvelopeLimitSheet';
-import { MonthBudgetSetupSheet, type MonthBudgetConfig } from './MonthBudgetSetupSheet';
+import { CategoryBudgetsSheet } from './CategoryBudgetsSheet';
+import { MonthBudgetSetupSheet, type MonthBudgetConfig, type ExpectedEarmark } from './MonthBudgetSetupSheet';
+import { IncomeProgressCard, type IncomeStreamItem } from './IncomeProgressCard';
+import { EditIncomeBudgetSheet, type IncomeCategoryConfig } from './EditIncomeBudgetSheet';
 import { useFinancialRules } from '../rules/RulesContext';
+import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
 import { STANDARD_FRAMEWORK_PRESETS } from '../../data/rulesModel';
 import { formatNaira } from '../../money';
+import { openKeyValue } from '../../data/kv';
+
+const STORAGE_KEY_SUB_LIMITS = 'pref:budget_subcategory_limits_v1';
+const STORAGE_KEY_INCOME_BUDGETS = 'pref:budget_income_budgets_v1';
 
 export function BudgetScreen() {
   const { colors, typography, spacing, radii } = useTheme();
-  const { activeFramework, frameworkPresets } = useFinancialRules();
+  const { isDesktop } = useResponsive();
+  const { activeFramework, frameworkPresets, getCategoryPercentage } = useFinancialRules();
+  const {
+    activeExpenseCategories,
+    activeIncomeCategories,
+    getSubcategoriesForExpense,
+    getSubcategoriesForIncome,
+  } = useCategoryPreferences();
 
   const [currentMonth, setCurrentMonth] = useState('November 2026');
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
+
+  // Sheets State
+  const [moveMoneyVisible, setMoveMoneyVisible] = useState(false);
+  const [coverOverspentVisible, setCoverOverspentVisible] = useState(false);
+  const [editLimitVisible, setEditLimitVisible] = useState(false);
+  const [categoryBudgetsVisible, setCategoryBudgetsVisible] = useState(false);
+  const [setupSheetVisible, setSetupSheetVisible] = useState(false);
+  const [incomeBudgetVisible, setIncomeBudgetVisible] = useState(false);
+  const [selectedEnvelope, setSelectedEnvelope] = useState<CategoryEnvelope | null>(null);
+
+  // Income category configs
+  const [incomeCategoryConfigs, setIncomeCategoryConfigs] = useState<
+    Record<string, IncomeCategoryConfig>
+  >({});
 
   // Month-specific budget structures
   const [monthConfigs, setMonthConfigs] = useState<Record<string, MonthBudgetConfig>>({
@@ -28,14 +58,7 @@ export function BudgetScreen() {
       frameworkId: 'user_50_10_10_20_10',
       titheEnabled: true,
       taxEnabled: false,
-      earmarkedInflows: [
-        {
-          id: 'earmark-nov-1',
-          name: 'Rent Contribution Gift',
-          amountMinor: 50000000n, // ₦500,000
-          targetCategory: 'Housing',
-        },
-      ],
+      earmarkedInflows: [],
     },
     'December 2026': {
       month: 'December 2026',
@@ -55,16 +78,152 @@ export function BudgetScreen() {
     },
   });
 
-  // Sheets State
-  const [moveMoneyVisible, setMoveMoneyVisible] = useState(false);
-  const [coverOverspentVisible, setCoverOverspentVisible] = useState(false);
-  const [editLimitVisible, setEditLimitVisible] = useState(false);
-  const [setupSheetVisible, setSetupSheetVisible] = useState(false);
-  const [selectedEnvelope, setSelectedEnvelope] = useState<CategoryEnvelope | null>(null);
+  // Subcategory custom limits: envId -> subcategoryName -> plannedMinor
+  const [subcategoryCustomLimits, setSubcategoryCustomLimits] = useState<
+    Record<string, Record<string, bigint>>
+  >({});
+
+  // Load stored subcategory limits and income budgets on mount
+  useEffect(() => {
+    async function loadStoredData() {
+      try {
+        const kv = openKeyValue('myledja');
+        const storedSub = await kv.get(STORAGE_KEY_SUB_LIMITS);
+        if (storedSub) {
+          const parsed = JSON.parse(storedSub) as Record<string, Record<string, string>>;
+          const restored: Record<string, Record<string, bigint>> = {};
+          Object.entries(parsed).forEach(([envId, subMap]) => {
+            if (subMap) {
+              restored[envId] = {};
+              Object.entries(subMap).forEach(([sub, val]) => {
+                restored[envId]![sub] = BigInt(val);
+              });
+            }
+          });
+          setSubcategoryCustomLimits(restored);
+        }
+
+        const storedInc = await kv.get(STORAGE_KEY_INCOME_BUDGETS);
+        if (storedInc) {
+          const parsed = JSON.parse(storedInc);
+          const restoredInc: Record<string, IncomeCategoryConfig> = {};
+          Object.entries(parsed).forEach(([id, item]: [string, any]) => {
+            const subBudgets: Record<string, bigint> = {};
+            if (item.subBudgets) {
+              Object.entries(item.subBudgets).forEach(([sub, val]) => {
+                subBudgets[sub] = BigInt(val as string);
+              });
+            }
+            restoredInc[id] = {
+              id: item.id,
+              name: item.name,
+              totalPlannedMinor: BigInt(item.totalPlannedMinor || '0'),
+              subBudgets,
+              isEarmarked: Boolean(item.isEarmarked),
+              targetExpenseCategory: item.targetExpenseCategory,
+            };
+          });
+          setIncomeCategoryConfigs(restoredInc);
+        }
+      } catch (err) {
+        console.warn('Failed to load stored budget limits', err);
+      }
+    }
+    loadStoredData();
+  }, []);
+
+  const saveSubcategoryLimits = async (data: Record<string, Record<string, bigint>>) => {
+    try {
+      const kv = openKeyValue('myledja');
+      const serializable: Record<string, Record<string, string>> = {};
+      Object.entries(data).forEach(([envId, subMap]) => {
+        if (subMap) {
+          serializable[envId] = {};
+          Object.entries(subMap).forEach(([sub, val]) => {
+            serializable[envId]![sub] = val.toString();
+          });
+        }
+      });
+      await kv.set([[STORAGE_KEY_SUB_LIMITS, JSON.stringify(serializable)]]);
+    } catch (err) {
+      console.warn('Failed to save subcategory limits', err);
+    }
+  };
+
+  const saveIncomeBudgets = async (data: Record<string, IncomeCategoryConfig>) => {
+    try {
+      const kv = openKeyValue('myledja');
+      const serializable: Record<string, any> = {};
+      Object.entries(data).forEach(([id, item]) => {
+        const subBudgets: Record<string, string> = {};
+        Object.entries(item.subBudgets).forEach(([sub, val]) => {
+          subBudgets[sub] = val.toString();
+        });
+        serializable[id] = {
+          id: item.id,
+          name: item.name,
+          totalPlannedMinor: item.totalPlannedMinor.toString(),
+          subBudgets,
+          isEarmarked: item.isEarmarked,
+          targetExpenseCategory: item.targetExpenseCategory,
+        };
+      });
+      await kv.set([[STORAGE_KEY_INCOME_BUDGETS, JSON.stringify(serializable)]]);
+    } catch (err) {
+      console.warn('Failed to save income budgets', err);
+    }
+  };
+
+  // Income Streams (from Settings active categories & custom budgets)
+  const incomeStreams: IncomeStreamItem[] = useMemo(() => {
+    return activeIncomeCategories.map((cat) => {
+      const saved = incomeCategoryConfigs[cat.id];
+      const subs = getSubcategoriesForIncome(cat.name);
+
+      let planned = 0n;
+      if (saved) {
+        if (saved.subBudgets && Object.keys(saved.subBudgets).length > 0) {
+          planned = Object.values(saved.subBudgets).reduce((sum, v) => sum + v, 0n);
+        } else {
+          planned = saved.totalPlannedMinor;
+        }
+      } else {
+        if (cat.name.toLowerCase() === 'employment') planned = 70000000n; // ₦700k
+        else if (cat.name.toLowerCase() === 'business') planned = 20000000n; // ₦200k
+        else if (cat.name.toLowerCase() === 'investments') planned = 10000000n; // ₦100k
+      }
+
+      let received = 0n;
+      if (cat.name.toLowerCase() === 'employment') received = planned;
+      else if (cat.name.toLowerCase() === 'business') received = (planned * 75n) / 100n;
+      else if (cat.name.toLowerCase() === 'investments') received = (planned * 50n) / 100n;
+
+      return {
+        id: cat.id,
+        name: cat.name,
+        expectedMinor: planned,
+        receivedMinor: received,
+        subcategories: subs,
+        subBudgets: saved?.subBudgets,
+        isEarmarked: saved?.isEarmarked,
+        targetExpenseCategory: saved?.targetExpenseCategory,
+      };
+    });
+  }, [activeIncomeCategories, incomeCategoryConfigs, getSubcategoriesForIncome]);
+
+  const { totalIncomeExpectedMinor, totalIncomeReceivedMinor } = useMemo(() => {
+    let exp = 0n;
+    let rec = 0n;
+    incomeStreams.forEach((s) => {
+      exp += s.expectedMinor;
+      rec += s.receivedMinor;
+    });
+    return { totalIncomeExpectedMinor: exp, totalIncomeReceivedMinor: rec };
+  }, [incomeStreams]);
 
   // Get or create current month config
   const currentConfig: MonthBudgetConfig = useMemo(() => {
-    return (
+    const raw =
       monthConfigs[currentMonth] || {
         month: currentMonth,
         expectedIncomeMinor: 100000000n,
@@ -72,9 +231,14 @@ export function BudgetScreen() {
         titheEnabled: true,
         taxEnabled: false,
         earmarkedInflows: [],
-      }
-    );
-  }, [monthConfigs, currentMonth, activeFramework]);
+      };
+
+    return {
+      ...raw,
+      expectedIncomeMinor:
+        totalIncomeExpectedMinor > 0n ? totalIncomeExpectedMinor : raw.expectedIncomeMinor,
+    };
+  }, [monthConfigs, currentMonth, activeFramework, totalIncomeExpectedMinor]);
 
   // Active framework for current month
   const activeMonthFramework = useMemo(() => {
@@ -102,77 +266,99 @@ export function BudgetScreen() {
       earmarkMap[em.targetCategory] = (earmarkMap[em.targetCategory] || 0n) + em.amountMinor;
     }
 
-    // 3. Generate envelopes for each pillar of the selected framework
+    // 3. Generate envelopes for each active category from Settings, mapped to its framework pillar
     const list: CategoryEnvelope[] = [];
+    const assignedCategoryNames = new Set<string>();
 
     activeMonthFramework.pillars.forEach((pillar) => {
       const pillarAllocated = (allocatableIncome * BigInt(pillar.percentage)) / 100n;
+      const mappedCategoryNames = pillar.mappedExpenseCategories || [];
 
-      if (pillar.id === 'living_needs' || pillar.id === 'living' || pillar.id === 'needs' || pillar.id === 'spending') {
-        // Sub-divide living into primary categories
-        const subShares = [
-          { name: 'Housing (Rent & Maintenance)', weight: 35n, spent: 4800000n },
-          { name: 'Food & Groceries', weight: 30n, spent: 6450000n },
-          { name: 'Transportation & Fuel', weight: 15n, spent: 4100000n },
-          { name: 'Electricity & Utilities', weight: 12n, spent: 3500000n },
-          { name: 'Healthcare & Personal Care', weight: 8n, spent: 1200000n },
-        ];
+      // Active categories from Settings that belong to this pillar
+      const pillarCategories = activeExpenseCategories.filter((cat) =>
+        mappedCategoryNames.some((m) => m.toLowerCase() === cat.name.toLowerCase())
+      );
 
-        subShares.forEach((sub, idx) => {
-          const basePlanned = (pillarAllocated * sub.weight) / 100n;
-          // Add any earmarked funds for Housing
-          const extraEarmark = sub.name.includes('Housing') ? (earmarkMap['Housing'] || 0n) : 0n;
+      if (pillarCategories.length > 0) {
+        pillarCategories.forEach((cat, idx) => {
+          assignedCategoryNames.add(cat.name.toLowerCase());
+
+          // Get category ratio / percentage of pillar
+          const defaultShare = Math.floor(100 / pillarCategories.length);
+          const catPct = BigInt(getCategoryPercentage(cat.name, defaultShare));
+          const basePlanned = (pillarAllocated * catPct) / 100n;
+          const extraEarmark = earmarkMap[cat.name] || 0n;
           const totalPlanned = basePlanned + extraEarmark;
 
-          const envId = `${currentMonth}-${pillar.id}-${idx}`;
+          // Realistic mock spent for illustration based on category weight
+          const mockSpent = (totalPlanned * BigInt(50 + ((idx * 13) % 40))) / 100n;
+          const activeSubs = getSubcategoriesForExpense(cat.name);
+
+          const envId = `${currentMonth}-${pillar.id}-${cat.id || idx}`;
+          const customSubBudgets = subcategoryCustomLimits[envId];
+          let envelopePlanned = totalPlanned;
+
+          if (customSubBudgets && Object.keys(customSubBudgets).length > 0) {
+            const subSum = Object.values(customSubBudgets).reduce((sum, v) => sum + v, 0n);
+            if (subSum > 0n) {
+              envelopePlanned = subSum + extraEarmark;
+            }
+          } else if (envelopeCustomLimits[envId] !== undefined) {
+            envelopePlanned = envelopeCustomLimits[envId];
+          }
+
           list.push({
             id: envId,
-            name: sub.name,
+            name: cat.name,
             group: `${pillar.name} (${pillar.percentage}%)`,
-            plannedMinor: envelopeCustomLimits[envId] ?? totalPlanned,
-            spentMinor: BigInt(sub.spent),
-          });
-        });
-      } else if (pillar.id === 'wants') {
-        const wantsSubs = [
-          { name: 'Dining Out & Takeaway', weight: 45n, spent: 1800000n },
-          { name: 'Entertainment & Streaming', weight: 30n, spent: 520000n },
-          { name: 'Shopping & Clothing', weight: 25n, spent: 2850000n },
-        ];
-        wantsSubs.forEach((sub, idx) => {
-          const basePlanned = (pillarAllocated * sub.weight) / 100n;
-          const envId = `${currentMonth}-${pillar.id}-${idx}`;
-          list.push({
-            id: envId,
-            name: sub.name,
-            group: `${pillar.name} (${pillar.percentage}%)`,
-            plannedMinor: envelopeCustomLimits[envId] ?? basePlanned,
-            spentMinor: BigInt(sub.spent),
+            plannedMinor: envelopePlanned,
+            spentMinor: mockSpent,
+            subcategories: activeSubs,
+            subBudgets: customSubBudgets,
           });
         });
       } else {
-        // Direct pillar envelopes (Tithe, Emergency, Investments, Charity)
+        // Fallback for pillars with no active categories mapped
         const envId = `${currentMonth}-${pillar.id}`;
-        let mockSpent = 0n;
-        if (pillar.id === 'tithe_giving' || pillar.name.includes('Tithe')) {
-          mockSpent = (pillarAllocated * 80n) / 100n;
-        } else if (pillar.id === 'emergency_savings' || pillar.name.includes('Emergency')) {
-          mockSpent = pillarAllocated; // 100% funded
-        } else if (pillar.id === 'wealth_investment' || pillar.name.includes('Investment')) {
-          mockSpent = (pillarAllocated * 50n) / 100n;
-        } else {
-          mockSpent = (pillarAllocated * 40n) / 100n;
-        }
-
         list.push({
           id: envId,
           name: pillar.name,
           group: `${pillar.name} (${pillar.percentage}%)`,
           plannedMinor: envelopeCustomLimits[envId] ?? pillarAllocated,
-          spentMinor: mockSpent,
+          spentMinor: 0n,
         });
       }
     });
+
+    // Check for any remaining active categories in Settings not explicitly mapped to a pillar
+    const unassignedCategories = activeExpenseCategories.filter(
+      (cat) => !assignedCategoryNames.has(cat.name.toLowerCase())
+    );
+
+    if (unassignedCategories.length > 0) {
+      unassignedCategories.forEach((cat, idx) => {
+        const envId = `${currentMonth}-other-${cat.id || idx}`;
+        const activeSubs = getSubcategoriesForExpense(cat.name);
+        const customSubBudgets = subcategoryCustomLimits[envId];
+        let defaultPlanned = 2500000n; // ₦25,000 default buffer
+        if (customSubBudgets && Object.keys(customSubBudgets).length > 0) {
+          const subSum = Object.values(customSubBudgets).reduce((sum, v) => sum + v, 0n);
+          if (subSum > 0n) defaultPlanned = subSum;
+        } else if (envelopeCustomLimits[envId] !== undefined) {
+          defaultPlanned = envelopeCustomLimits[envId];
+        }
+
+        list.push({
+          id: envId,
+          name: cat.name,
+          group: 'Additional Active Categories',
+          plannedMinor: defaultPlanned,
+          spentMinor: 0n,
+          subcategories: activeSubs,
+          subBudgets: customSubBudgets,
+        });
+      });
+    }
 
     return list;
   }, [
@@ -180,6 +366,8 @@ export function BudgetScreen() {
     currentConfig,
     activeMonthFramework,
     envelopeCustomLimits,
+    activeExpenseCategories,
+    getCategoryPercentage,
   ]);
 
   // Aggregate Totals
@@ -264,12 +452,58 @@ export function BudgetScreen() {
   };
 
   // Handle Update Limit
-  const handleSaveLimit = (id: string, newLimitMinor: bigint) => {
+  const handleSaveLimit = (
+    id: string,
+    newLimitMinor: bigint,
+    subcategoryLimits?: Record<string, bigint>
+  ) => {
     setEnvelopeCustomLimits((prev) => ({
       ...prev,
       [id]: newLimitMinor,
     }));
+    if (subcategoryLimits && Object.keys(subcategoryLimits).length > 0) {
+      setSubcategoryCustomLimits((prev) => {
+        const next = { ...prev, [id]: subcategoryLimits };
+        saveSubcategoryLimits(next);
+        return next;
+      });
+    }
     setToastMessage('Updated envelope planned amount');
+    setToastVisible(true);
+  };
+
+  // Handle Save Income Budgets
+  const handleSaveIncomeBudgets = (
+    totalExpectedMinor: bigint,
+    budgets: Record<string, IncomeCategoryConfig>
+  ) => {
+    setIncomeCategoryConfigs(budgets);
+    saveIncomeBudgets(budgets);
+
+    const updatedEarmarks: ExpectedEarmark[] = [];
+    Object.values(budgets).forEach((b) => {
+      if (b.isEarmarked && b.targetExpenseCategory && b.totalPlannedMinor > 0n) {
+        updatedEarmarks.push({
+          id: `earmark-${b.id}`,
+          name: `${b.name} Earmark`,
+          amountMinor: b.totalPlannedMinor,
+          targetCategory: b.targetExpenseCategory,
+        });
+      }
+    });
+
+    setMonthConfigs((prev) => ({
+      ...prev,
+      [currentMonth]: {
+        ...currentConfig,
+        expectedIncomeMinor:
+          totalExpectedMinor > 0n ? totalExpectedMinor : currentConfig.expectedIncomeMinor,
+        earmarkedInflows:
+          updatedEarmarks.length > 0 ? updatedEarmarks : currentConfig.earmarkedInflows,
+      },
+    }));
+
+    setToastMessage(`Updated expected income (${formatNaira(totalExpectedMinor)})`);
     setToastVisible(true);
   };
 
@@ -278,10 +512,12 @@ export function BudgetScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{
-          padding: spacing.lg,
-          paddingHorizontal: spacing.xl,
-          paddingBottom: 100,
+          padding: isDesktop ? spacing.md : spacing.md,
+          paddingHorizontal: isDesktop ? spacing.xl : spacing.md,
+          paddingBottom: isDesktop ? 40 : 80,
           width: '100%',
+          maxWidth: isDesktop ? 1040 : undefined,
+          alignSelf: isDesktop ? 'center' : undefined,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -298,19 +534,29 @@ export function BudgetScreen() {
           onMoveMoney={() => setMoveMoneyVisible(true)}
           onCoverOverspending={() => setCoverOverspentVisible(true)}
           onOpenSetup={() => setSetupSheetVisible(true)}
+          onOpenCategoryBudgets={() => setCategoryBudgetsVisible(true)}
+          onOpenIncomeBudget={() => setIncomeBudgetVisible(true)}
         />
 
-        {/* 2. Grouped Category Envelopes (Directly organized by active monthly framework pillars) */}
+        {/* 2. Expected Income Streams Card (Collapsible) */}
+        <IncomeProgressCard
+          streams={incomeStreams}
+          totalExpectedMinor={currentConfig.expectedIncomeMinor}
+          totalReceivedMinor={totalIncomeReceivedMinor}
+          onOpenEditIncome={() => setIncomeBudgetVisible(true)}
+        />
+
+        {/* 3. Grouped Category Envelopes (Directly organized by active monthly framework pillars) */}
         {groups.map(([groupName, groupEnvelopes]) => (
-          <View key={groupName} style={[styles.groupSection, { marginBottom: spacing.lg }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs }}>
+          <View key={groupName} style={[styles.groupSection, { marginBottom: spacing.md }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <Text
                 style={[
                   styles.groupTitle,
                   {
                     color: colors.textSecondary,
                     fontFamily: typography.fonts.semiBold,
-                    fontSize: typography.sizes.sm,
+                    fontSize: 11,
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,
                   },
@@ -325,8 +571,8 @@ export function BudgetScreen() {
                 styles.groupCard,
                 {
                   backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  borderRadius: radii.xl,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.lg,
                 },
               ]}
             >
@@ -373,7 +619,40 @@ export function BudgetScreen() {
         visible={editLimitVisible}
         onClose={() => setEditLimitVisible(false)}
         envelope={selectedEnvelope}
+        subcategories={
+          selectedEnvelope
+            ? (selectedEnvelope.subcategories && selectedEnvelope.subcategories.length > 0
+                ? selectedEnvelope.subcategories
+                : getSubcategoriesForExpense(selectedEnvelope.name))
+            : []
+        }
+        currentSubBudgets={
+          selectedEnvelope ? subcategoryCustomLimits[selectedEnvelope.id] : undefined
+        }
         onSaveLimit={handleSaveLimit}
+      />
+
+      <CategoryBudgetsSheet
+        visible={categoryBudgetsVisible}
+        onClose={() => setCategoryBudgetsVisible(false)}
+        envelopes={envelopes}
+        expectedIncomeMinor={currentConfig.expectedIncomeMinor}
+        onSaveBudgets={(updatedLimits) => {
+          setEnvelopeCustomLimits((prev) => ({
+            ...prev,
+            ...updatedLimits,
+          }));
+          setToastMessage('Saved category budgets successfully');
+          setToastVisible(true);
+        }}
+      />
+
+      <EditIncomeBudgetSheet
+        visible={incomeBudgetVisible}
+        onClose={() => setIncomeBudgetVisible(false)}
+        activeIncomeCategories={activeIncomeCategories}
+        currentIncomeBudgets={incomeCategoryConfigs}
+        onSaveIncomeBudgets={handleSaveIncomeBudgets}
       />
 
       {/* Toast Notification */}
