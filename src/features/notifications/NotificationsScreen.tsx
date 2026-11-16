@@ -12,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { SecurityAlertSheet } from './SecurityAlertSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 interface NotificationItemUI {
   id: string;
@@ -26,7 +27,10 @@ export function NotificationsScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
-  const [notifications, setNotifications] = useState<NotificationItemUI[]>([
+  // Live Database Hook
+  const { repo, notifications: dbNotifications } = useDatabaseData();
+
+  const [localNotifications, setLocalNotifications] = useState<NotificationItemUI[]>([
     {
       id: 'n-1',
       title: 'Bill Due Today: Spectranet Internet',
@@ -53,10 +57,31 @@ export function NotificationsScreen() {
     },
   ]);
 
+  const notifications: NotificationItemUI[] = React.useMemo(() => {
+    if (dbNotifications.length > 0) {
+      return dbNotifications.map((n) => ({
+        id: n.id,
+        title: n.title,
+        message: n.body || '',
+        time: n.createdAt ? new Date(n.createdAt).toLocaleDateString() : 'Recent',
+        read: n.read,
+        type: (n.category === 'bills' ? 'bill' : n.category === 'budget' ? 'budget' : 'sync') as
+          | 'bill'
+          | 'budget'
+          | 'security'
+          | 'sync',
+      }));
+    }
+    return localNotifications;
+  }, [dbNotifications, localNotifications]);
+
   const [securitySheetVisible, setSecuritySheetVisible] = useState(false);
 
   const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    if (repo) {
+      repo.markAllNotificationsRead().catch((e: unknown) => console.warn('Failed to mark all read in DB', e));
+    }
+    setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
   const handleAction = (item: NotificationItemUI) => {

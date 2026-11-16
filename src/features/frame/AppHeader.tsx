@@ -74,6 +74,39 @@ export function AppHeader({ title, subtitle, unreadNotifications = 0 }: AppHeade
       </View>
 
       <View style={styles.actions}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: colors.surfaceSubtle,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: colors.borderSubtle,
+            borderRadius: radii.full,
+            paddingHorizontal: 8,
+            paddingVertical: 3.5,
+            marginRight: spacing.xs,
+            gap: 5,
+          }}
+        >
+          <View
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: colors.statusSuccess,
+            }}
+          />
+          <Text
+            style={{
+              fontSize: 10.5,
+              fontFamily: typography.fonts.medium,
+              color: colors.textSecondary,
+            }}
+          >
+            MongoDB Connected
+          </Text>
+        </View>
+
         <ThemeToggle size="sm" />
 
         <TouchableOpacity

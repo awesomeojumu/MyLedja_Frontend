@@ -13,47 +13,53 @@ import {
 import { useTheme, useResponsive } from '../../src/design';
 import { DesktopSidebar } from '../../src/features/frame/DesktopSidebar';
 import { AppHeader } from '../../src/features/frame/AppHeader';
+import { useAuth } from '../../src/features/auth/AuthProvider';
+import { WorkspaceProvider } from '../../src/data/workspace/WorkspaceProvider';
 
 export default function AppLayout() {
   const { colors, typography } = useTheme();
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
+  const { workspaceId } = useAuth();
+  const activeWsId = workspaceId || '01a1d3f0-b2ae-7433-98e3-d2b16c4125b3';
 
   // Desktop & Large Tablet: Dual-pane with clean Sidebar + Top Header
   if (isDesktop && Platform.OS === 'web') {
     return (
-      <View style={[styles.desktopRoot, { backgroundColor: colors.background }]}>
-        <DesktopSidebar />
-        <View style={styles.desktopMainContent}>
-          <AppHeader />
-          <View style={[styles.desktopViewContainer, { backgroundColor: colors.background }]}>
-            <Tabs
-              screenOptions={{
-                headerShown: false,
-                tabBarStyle: { display: 'none' }, // Tab bar hidden on desktop
-              }}
-            >
-              <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
-              <Tabs.Screen name="transactions" options={{ title: 'Transactions' }} />
-              <Tabs.Screen name="budget" options={{ title: 'Budget' }} />
-              <Tabs.Screen name="accounts" options={{ title: 'Accounts' }} />
-              <Tabs.Screen name="more" options={{ title: 'More' }} />
-              <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
-              <Tabs.Screen name="cash-flow" options={{ title: 'Cash Flow' }} />
-              <Tabs.Screen name="health" options={{ title: 'Health Score' }} />
-              <Tabs.Screen name="debts" options={{ title: 'Debts' }} />
-              <Tabs.Screen name="goals" options={{ title: 'Goals' }} />
-              <Tabs.Screen name="income" options={{ title: 'Income' }} />
-              <Tabs.Screen name="investments" options={{ title: 'Investments' }} />
-              <Tabs.Screen name="notifications" options={{ title: 'Notifications' }} />
-              <Tabs.Screen name="payees" options={{ title: 'Payees' }} />
-              <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
-              <Tabs.Screen name="reports" options={{ title: 'Reports' }} />
-              <Tabs.Screen name="rules" options={{ title: 'Rules' }} />
-            </Tabs>
+      <WorkspaceProvider workspaceId={activeWsId}>
+        <View style={[styles.desktopRoot, { backgroundColor: colors.background }]}>
+          <DesktopSidebar />
+          <View style={styles.desktopMainContent}>
+            <AppHeader />
+            <View style={[styles.desktopViewContainer, { backgroundColor: colors.background }]}>
+              <Tabs
+                screenOptions={{
+                  headerShown: false,
+                  tabBarStyle: { display: 'none' }, // Tab bar hidden on desktop
+                }}
+              >
+                <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
+                <Tabs.Screen name="transactions" options={{ title: 'Transactions' }} />
+                <Tabs.Screen name="budget" options={{ title: 'Budget' }} />
+                <Tabs.Screen name="accounts" options={{ title: 'Accounts' }} />
+                <Tabs.Screen name="more" options={{ title: 'More' }} />
+                <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+                <Tabs.Screen name="cash-flow" options={{ title: 'Cash Flow' }} />
+                <Tabs.Screen name="health" options={{ title: 'Health Score' }} />
+                <Tabs.Screen name="debts" options={{ title: 'Debts' }} />
+                <Tabs.Screen name="goals" options={{ title: 'Goals' }} />
+                <Tabs.Screen name="income" options={{ title: 'Income' }} />
+                <Tabs.Screen name="investments" options={{ title: 'Investments' }} />
+                <Tabs.Screen name="notifications" options={{ title: 'Notifications' }} />
+                <Tabs.Screen name="payees" options={{ title: 'Payees' }} />
+                <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
+                <Tabs.Screen name="reports" options={{ title: 'Reports' }} />
+                <Tabs.Screen name="rules" options={{ title: 'Rules' }} />
+              </Tabs>
+            </View>
           </View>
         </View>
-      </View>
+      </WorkspaceProvider>
     );
   }
 
@@ -69,7 +75,8 @@ export default function AppLayout() {
 
   // Mobile & Small Screens: 5-Tab Bottom Navigation Bar
   return (
-    <View style={[styles.mobileRoot, { backgroundColor: colors.background }]}>
+    <WorkspaceProvider workspaceId={activeWsId}>
+      <View style={[styles.mobileRoot, { backgroundColor: colors.background }]}>
       <AppHeader />
       <Tabs
         screenOptions={{
@@ -148,6 +155,7 @@ export default function AppLayout() {
         <Tabs.Screen name="rules" options={{ title: 'Rules', tabBarItemStyle: { display: 'none' } }} />
       </Tabs>
     </View>
+    </WorkspaceProvider>
   );
 }
 

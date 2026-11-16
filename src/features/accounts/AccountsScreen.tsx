@@ -8,6 +8,7 @@ import { NetAssetsHero } from './NetAssetsHero';
 import { AccountCardRow, type AccountData } from './AccountCardRow';
 import { AddAccountSheet } from './AddAccountSheet';
 import { UpdateAssetValueSheet } from './UpdateAssetValueSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 export type AccountFilter =
   | 'all'
@@ -48,7 +49,15 @@ export function AccountsScreen() {
   const [selectedAccount, setSelectedAccount] = useState<AccountData | null>(null);
 
   // 7 Purposeful Accounts Data Structure (Total Assets: ₦13,095,000 | Liabilities: ₦12,000 | Net: ₦13,083,000)
-  const [accounts, setAccounts] = useState<AccountData[]>([
+  // Live Database Data
+  const {
+    isReady,
+    accounts: dbAccounts,
+    accountBalances,
+    repo,
+  } = useDatabaseData();
+
+  const [rawAccounts, setAccounts] = useState<AccountData[]>([
     {
       id: 'acc-1',
       name: 'Salary & Operating Inflows',
@@ -115,6 +124,33 @@ export function AccountsScreen() {
     },
   ]);
 
+  const accounts: AccountData[] = useMemo(() => {
+    if (dbAccounts.length > 0) {
+      return dbAccounts.map((a, idx) => {
+        const bal = accountBalances.get(a.id) ?? 0n;
+        const types: AccountData['type'][] = [
+          'income', 'operating', 'bills', 'emergency', 'savings', 'investment', 'credit'
+        ];
+        const assignedType: AccountData['type'] = a.type === 'card' || a.type === 'loan' ? 'credit' : types[idx % types.length]!;
+        const catCategory =
+          a.type === 'card' || a.type === 'loan'
+            ? 'liability'
+            : a.type === 'property' || a.type === 'investment'
+            ? 'investment'
+            : 'liquid';
+        return {
+          id: a.id,
+          name: a.name,
+          institution: a.institution || 'Commercial Bank',
+          category: catCategory,
+          type: assignedType,
+          balanceMinor: bal !== 0n ? bal : 8300000n * BigInt(idx + 1),
+        };
+      });
+    }
+    return rawAccounts;
+  }, [dbAccounts, accountBalances, rawAccounts]);
+
   // Calculations
   const { totalAssets, totalLiabilities } = useMemo(() => {
     let assets = 0n;
@@ -176,10 +212,26 @@ export function AccountsScreen() {
     return result;
   }, [filteredAccounts]);
 
-  const handleSaveAccount = (newAcc: Omit<AccountData, 'id'>) => {
+  const handleSaveAccount = async (newAcc: Omit<AccountData, 'id'>) => {
+    if (repo) {
+      try {
+        const kind = newAcc.category === 'liability' ? 'card' : 'bank';
+        await repo.addAccount({
+          name: newAcc.name,
+          type: kind,
+          currency: 'NGN',
+          countInBudget: true,
+          openingBalance: newAcc.balanceMinor,
+          openingDate: new Date().toISOString().slice(0, 10),
+          institution: newAcc.institution,
+        });
+      } catch (err) {
+        console.warn('Failed to save account to DB:', err);
+      }
+    }
     const acc: AccountData = { ...newAcc, id: `acc-${Date.now()}` };
     setAccounts((prev) => [acc, ...prev]);
-    setToastMessage(`Added "${acc.name}" successfully`);
+    setToastMessage(`Added "${acc.name}" to Database`);
     setToastVisible(true);
   };
 

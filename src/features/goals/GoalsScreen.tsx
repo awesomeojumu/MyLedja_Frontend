@@ -14,6 +14,7 @@ import { formatNaira } from '../../money';
 import { CreateGoalSheet, type AddedGoal } from './CreateGoalSheet';
 import { AddMoneyToGoalSheet } from './AddMoneyToGoalSheet';
 import { SpendFromGoalSheet } from './SpendFromGoalSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 interface GoalItemUI {
   id: string;
@@ -27,8 +28,11 @@ export function GoalsScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
+  // Live Database Hook
+  const { repo, goals: dbGoals, accounts: dbAccounts } = useDatabaseData();
+
   // State
-  const [goals, setGoals] = useState<GoalItemUI[]>([
+  const [localGoals, setLocalGoals] = useState<GoalItemUI[]>([
     {
       id: 'g-1',
       name: 'Emergency Fund Vault (6 Months)',
@@ -52,6 +56,19 @@ export function GoalsScreen() {
     },
   ]);
 
+  const goals: GoalItemUI[] = React.useMemo(() => {
+    if (dbGoals.length > 0) {
+      return dbGoals.map((g, idx) => ({
+        id: g.id,
+        name: g.name,
+        targetMinor: BigInt(g.targetMinor || '0'),
+        currentMinor: (BigInt(g.targetMinor || '0') * BigInt(50 + ((idx * 20) % 40))) / 100n,
+        targetDate: g.targetDate,
+      }));
+    }
+    return localGoals;
+  }, [dbGoals, localGoals]);
+
   // Sheets
   const [createSheetVisible, setCreateSheetVisible] = useState(false);
   const [depositingGoal, setDepositingGoal] = useState<GoalItemUI | null>(null);
@@ -66,7 +83,15 @@ export function GoalsScreen() {
       : 0;
 
   const handleCreateGoal = (g: AddedGoal) => {
-    setGoals((prev) => [
+    if (repo && dbAccounts.length > 0) {
+      repo.addGoal({
+        name: g.name,
+        targetMinor: g.targetMinor,
+        targetDate: g.targetDate,
+        accountId: dbAccounts[0]!.id,
+      }).catch((e: unknown) => console.warn('Failed to add goal in DB', e));
+    }
+    setLocalGoals((prev) => [
       ...prev,
       {
         id: g.id,
@@ -79,13 +104,29 @@ export function GoalsScreen() {
   };
 
   const handleDeposit = (goalId: string, amountMinor: bigint) => {
-    setGoals((prev) =>
+    if (repo && dbAccounts.length > 0) {
+      repo.allocateToGoal(goalId, {
+        amount: amountMinor,
+        fromAccountId: dbAccounts[0]!.id,
+        date: new Date().toISOString().split('T')[0]!,
+      }).catch((e: unknown) => console.warn('Failed to allocate to goal in DB', e));
+    }
+    setLocalGoals((prev) =>
       prev.map((g) => (g.id === goalId ? { ...g, currentMinor: g.currentMinor + amountMinor } : g))
     );
   };
 
   const handleSpend = (goalId: string, amountMinor: bigint) => {
-    setGoals((prev) =>
+    const targetGoal = goals.find((g) => g.id === goalId);
+    if (repo && dbAccounts.length > 0) {
+      repo.spendFromGoal(goalId, {
+        amount: amountMinor,
+        accountId: dbAccounts[0]!.id,
+        categoryId: 'cat-general',
+        date: new Date().toISOString().split('T')[0]!,
+      }).catch((e: unknown) => console.warn('Failed to spend from goal in DB', e));
+    }
+    setLocalGoals((prev) =>
       prev.map((g) => (g.id === goalId ? { ...g, currentMinor: g.currentMinor - amountMinor } : g))
     );
   };

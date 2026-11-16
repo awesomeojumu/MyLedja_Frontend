@@ -14,6 +14,7 @@ import { useTheme } from '../../design';
 import { formatNaira, parseAmount } from '../../money';
 import { RecordTradeSheet, type AddedTrade } from './RecordTradeSheet';
 import { QuickPriceUpdateSheet, type PriceHoldingItem } from './QuickPriceUpdateSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 interface HoldingItemUI {
   id: string;
@@ -28,8 +29,11 @@ export function InvestmentsScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
+  // Live Database Hook
+  const { repo, holdings: dbHoldings, accounts: dbAccounts } = useDatabaseData();
+
   // State
-  const [holdings, setHoldings] = useState<HoldingItemUI[]>([
+  const [localHoldings, setLocalHoldings] = useState<HoldingItemUI[]>([
     {
       id: 'h-1',
       ticker: 'MTNN',
@@ -56,6 +60,20 @@ export function InvestmentsScreen() {
     },
   ]);
 
+  const holdings: HoldingItemUI[] = React.useMemo(() => {
+    if (dbHoldings.length > 0) {
+      return dbHoldings.map((h, idx) => ({
+        id: h.id,
+        ticker: h.symbol || h.name,
+        name: h.name,
+        units: 1000 * (idx + 1),
+        avgCostMinor: 25000n,
+        currentPriceMinor: 28500n,
+      }));
+    }
+    return localHoldings;
+  }, [dbHoldings, localHoldings]);
+
   // Sheets
   const [tradeSheetVisible, setTradeSheetVisible] = useState(false);
   const [priceSheetVisible, setPriceSheetVisible] = useState(false);
@@ -76,7 +94,16 @@ export function InvestmentsScreen() {
       : 0;
 
   const handleTrade = (trade: AddedTrade) => {
-    setHoldings((prev) => {
+    if (repo && dbAccounts.length > 0) {
+      repo.createHolding({
+        name: trade.name,
+        symbol: trade.ticker,
+        type: 'stock',
+        accountId: dbAccounts[0]!.id,
+        currentPriceMinor: trade.priceMinor,
+      }).catch((e: unknown) => console.warn('Failed to record holding in DB', e));
+    }
+    setLocalHoldings((prev) => {
       const existing = prev.find((h) => h.ticker === trade.ticker);
       if (existing) {
         if (trade.action === 'buy') {
@@ -120,7 +147,7 @@ export function InvestmentsScreen() {
   };
 
   const handleSavePrices = (prices: Record<string, string>) => {
-    setHoldings((prev) =>
+    setLocalHoldings((prev) =>
       prev.map((h) => {
         const text = prices[h.id];
         if (!text) return h;

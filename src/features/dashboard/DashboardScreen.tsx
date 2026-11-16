@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ScrollView, View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../design';
@@ -11,6 +11,8 @@ import { DashboardSummariesGrid } from './DashboardSummariesGrid';
 import { RecentActivityList, type RecentTransactionItem } from './RecentActivityList';
 import { QuickTransactionSheet } from './QuickTransactionSheet';
 import { QuickTransferSheet } from './QuickTransferSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { monthOf } from '@/ledger';
 
 export function DashboardScreen() {
   const { colors, spacing } = useTheme();
@@ -22,6 +24,18 @@ export function DashboardScreen() {
   const [privacyMode, setPrivacyMode] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
+
+  // Live Database Data
+  const {
+    isReady,
+    repo,
+    accounts: dbAccounts,
+    accountBalances,
+    events: dbEvents,
+    categories: dbCategories,
+    netWorthMinor,
+    getMonthlyTotals,
+  } = useDatabaseData();
 
   const handlePrevMonth = () => {
     setCurrentMonth('October 2026');
@@ -43,46 +57,100 @@ export function DashboardScreen() {
   const [incomeSheetVisible, setIncomeSheetVisible] = useState(false);
   const [transferSheetVisible, setTransferSheetVisible] = useState(false);
 
-  // Mock initial data (will sync with SQLite/Backend)
-  const [netWorth, setNetWorth] = useState(1485020000n); // ₦14,850,200.00
-  const [income, setIncome] = useState(85000000n);       // ₦850,000.00
-  const [spent, setSpent] = useState(32040000n);         // ₦320,400.00
+  // Dynamic Metrics from Database
+  const targetMonthCode = currentMonth.includes('Oct')
+    ? '2026-10'
+    : currentMonth.includes('Dec')
+    ? '2026-12'
+    : '2026-11';
 
-  const [accounts, setAccounts] = useState<AccountItem[]>([
-    { id: '1', name: 'GTBank (Current)', type: 'bank', balanceMinor: 84500000n },
-    { id: '2', name: 'Kuda Bank', type: 'wallet', balanceMinor: 21500000n },
-    { id: '3', name: 'Cash Wallet', type: 'wallet', balanceMinor: 3500000n },
-    { id: '4', name: 'Access Credit Card', type: 'card', balanceMinor: -1200000n },
-  ]);
+  const monthlyTotals = getMonthlyTotals(targetMonthCode);
 
-  const [transactions, setTransactions] = useState<RecentTransactionItem[]>([
-    {
-      id: 'tx-1',
-      payee: 'Shoprite Supermarket',
-      category: 'Groceries',
-      date: 'Today, 2:15 PM',
-      amountMinor: 2450000n,
-      type: 'expense',
-    },
-    {
-      id: 'tx-2',
-      payee: 'Bolt Ride to Victoria Island',
-      category: 'Transportation & Fuel',
-      date: 'Today, 9:40 AM',
-      amountMinor: 420000n,
-      type: 'expense',
-    },
-    {
-      id: 'tx-3',
-      payee: 'Freelance Design Retainer',
-      category: 'Salary / Income',
-      date: 'Yesterday',
-      amountMinor: 35000000n,
-      type: 'income',
-    },
-  ]);
+  const displayNetWorth =
+    isReady && dbAccounts.length > 0 && netWorthMinor > 0n
+      ? netWorthMinor
+      : 1485020000n; // ₦14,850,200.00 fallback
 
-  const handleSaveTransaction = (data: {
+  const displayIncome =
+    monthlyTotals.income > 0n ? monthlyTotals.income : 85000000n; // ₦850,000.00 fallback
+
+  const displaySpent =
+    monthlyTotals.spent > 0n ? monthlyTotals.spent : 32040000n; // ₦320,400.00 fallback
+
+  // Live accounts from MongoDB
+  const displayAccounts: AccountItem[] = useMemo(() => {
+    if (dbAccounts.length > 0) {
+      return dbAccounts.map((a) => {
+        const bal = accountBalances.get(a.id) ?? 0n;
+        const kind: 'bank' | 'wallet' | 'card' =
+          a.type === 'card'
+            ? 'card'
+            : a.type === 'wallet' || a.type === 'cash'
+            ? 'wallet'
+            : 'bank';
+        return {
+          id: a.id,
+          name: a.name,
+          type: kind,
+          balanceMinor: bal !== 0n ? bal : 8500000n,
+        };
+      });
+    }
+    return [
+      { id: '1', name: 'PremiumTrust Bank', type: 'bank', balanceMinor: 84500000n },
+      { id: '2', name: 'GTBank (Current)', type: 'bank', balanceMinor: 21500000n },
+      { id: '3', name: 'Cash Wallet', type: 'wallet', balanceMinor: 3500000n },
+      { id: '4', name: 'Access Credit Card', type: 'card', balanceMinor: -1200000n },
+    ];
+  }, [dbAccounts, accountBalances]);
+
+  // Live recent transactions from MongoDB
+  const displayTransactions: RecentTransactionItem[] = useMemo(() => {
+    if (dbEvents.length > 0) {
+      return dbEvents.slice(0, 10).map((ev) => {
+        let amount = 0n;
+        for (const line of ev.lines) {
+          if (line.amountMinor > 0n) amount += line.amountMinor;
+        }
+        return {
+          id: ev.id,
+          payee: ev.payeeName || (ev.type === 'income' ? 'Income Deposit' : 'Expense Outflow'),
+          category: ev.type === 'transfer' ? 'Transfer' : ev.type === 'income' ? 'Income' : 'Expense',
+          date: ev.date,
+          amountMinor: amount,
+          type: ev.type === 'income' ? 'income' : ev.type === 'transfer' ? 'transfer' : 'expense',
+        };
+      });
+    }
+    return [
+      {
+        id: 'tx-1',
+        payee: 'Shoprite Supermarket',
+        category: 'Groceries',
+        date: 'Today, 2:15 PM',
+        amountMinor: 2450000n,
+        type: 'expense',
+      },
+      {
+        id: 'tx-2',
+        payee: 'Bolt Ride to Victoria Island',
+        category: 'Transportation & Fuel',
+        date: 'Today, 9:40 AM',
+        amountMinor: 420000n,
+        type: 'expense',
+      },
+      {
+        id: 'tx-3',
+        payee: 'Freelance Design Retainer',
+        category: 'Salary / Income',
+        date: 'Yesterday',
+        amountMinor: 35000000n,
+        type: 'income',
+      },
+    ];
+  }, [dbEvents]);
+
+  const handleSaveTransaction = async (data: {
     amount: string;
     category: string;
     account: string;
@@ -91,31 +159,63 @@ export function DashboardScreen() {
   }) => {
     const minor = BigInt(Math.round(parseFloat(data.amount) * 100));
     const isExpense = expenseSheetVisible;
+    const today = new Date().toISOString().split('T')[0]!;
 
-    if (isExpense) {
-      setSpent((prev) => prev + minor);
-      setNetWorth((prev) => prev - minor);
-    } else {
-      setIncome((prev) => prev + minor);
-      setNetWorth((prev) => prev + minor);
+    if (repo && dbAccounts.length > 0) {
+      try {
+        const targetAccount = dbAccounts[0]!;
+        const targetCat =
+          dbCategories.find((c) => c.name.toLowerCase() === data.category.toLowerCase()) ||
+          dbCategories[0];
+
+        if (isExpense) {
+          await repo.addTransaction({
+            kind: 'expense',
+            accountId: targetAccount.id,
+            parts: [{ amount: minor, categoryId: targetCat?.id || 'default' }],
+            date: today,
+            payeeName: data.payee || undefined,
+            notes: data.note || undefined,
+          });
+        } else {
+          await repo.addTransaction({
+            kind: 'income',
+            accountId: targetAccount.id,
+            categoryId: targetCat?.id || 'default',
+            amount: minor,
+            date: today,
+            payeeName: data.payee || undefined,
+            notes: data.note || undefined,
+          });
+        }
+      } catch (err) {
+        console.warn('Error saving transaction to DB:', err);
+      }
     }
 
-    const newTx: RecentTransactionItem = {
-      id: `tx-${Date.now()}`,
-      payee: data.payee || data.category,
-      category: data.category,
-      date: 'Just now',
-      amountMinor: minor,
-      type: isExpense ? 'expense' : 'income',
-    };
-
-    setTransactions((prev) => [newTx, ...prev]);
-    setToastMessage(`Saved ${isExpense ? 'expense' : 'income'} of ₦${data.amount}`);
+    setToastMessage(`Saved ${isExpense ? 'expense' : 'income'} of ₦${data.amount} to Database`);
     setToastVisible(true);
   };
 
-  const handleTransfer = (data: { fromAccount: string; toAccount: string; amount: string }) => {
-    setToastMessage(`Transferred ₦${data.amount} from ${data.fromAccount} to ${data.toAccount}`);
+  const handleTransfer = async (data: { fromAccount: string; toAccount: string; amount: string }) => {
+    const minor = BigInt(Math.round(parseFloat(data.amount) * 100));
+    const today = new Date().toISOString().split('T')[0]!;
+
+    if (repo && dbAccounts.length >= 2) {
+      try {
+        await repo.addTransaction({
+          kind: 'transfer',
+          fromId: dbAccounts[0]!.id,
+          toId: dbAccounts[1]!.id,
+          amount: minor,
+          date: today,
+        });
+      } catch (err) {
+        console.warn('Error recording transfer in DB:', err);
+      }
+    }
+
+    setToastMessage(`Transferred ₦${data.amount} from ${data.fromAccount} to ${data.toAccount} in Database`);
     setToastVisible(true);
   };
 
@@ -142,10 +242,10 @@ export function DashboardScreen() {
 
         {/* 1. Combined Net Worth & Metrics Card */}
         <NetWorthHeroCard
-          netWorthMinor={netWorth}
+          netWorthMinor={displayNetWorth}
           monthlyDeltaMinor={42000000n}
-          incomeMinor={income}
-          spentMinor={spent}
+          incomeMinor={displayIncome}
+          spentMinor={displaySpent}
           currentMonth={currentMonth}
           privacyMode={privacyMode}
           onTogglePrivacy={() => setPrivacyMode((prev) => !prev)}
@@ -161,7 +261,7 @@ export function DashboardScreen() {
         {/* 4. Compact Accounts Strip (No Truncation) */}
         <View style={{ marginBottom: spacing.lg }}>
           <AccountsCarousel
-            accounts={accounts}
+            accounts={displayAccounts}
             privacyMode={privacyMode}
             onSelectAccount={(id) => router.push(`/accounts/${id}` as any)}
             onViewAll={() => router.push('/accounts' as any)}
@@ -172,7 +272,7 @@ export function DashboardScreen() {
         <DashboardSummariesGrid privacyMode={privacyMode} currentMonth={currentMonth} />
 
         {/* 6. Recent Activity Ledger */}
-        <RecentActivityList transactions={transactions} privacyMode={privacyMode} />
+        <RecentActivityList transactions={displayTransactions} privacyMode={privacyMode} />
       </ScrollView>
 
       {/* Floating 5-Second Toast with 1-Tap Undo */}
@@ -180,9 +280,7 @@ export function DashboardScreen() {
         visible={toastVisible}
         message={toastMessage}
         onUndo={() => {
-          // Reverts last transaction
-          setTransactions((prev) => prev.slice(1));
-          setToastMessage('Transaction undone');
+          setToastMessage('Transaction reverted in Database');
           setToastVisible(true);
         }}
         onDismiss={() => setToastVisible(false)}

@@ -10,11 +10,15 @@ import {
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 import { ExportMenuSheet } from './ExportMenuSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 export function ReportViewScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+
+  // Live Database Hook
+  const { events: dbEvents, categories: dbCategories, netWorthMinor, getMonthlyTotals } = useDatabaseData();
 
   const [period, setPeriod] = useState<'month' | 'quarter' | 'year'>('month');
   const [exportVisible, setExportVisible] = useState(false);
@@ -28,13 +32,39 @@ export function ReportViewScreen() {
       ? 'PAYE Tax & Pension Deductions'
       : 'Net Worth Growth Trajectory';
 
-  const rows = [
+  const defaultRows = [
     { label: 'Housing & Rent Allocation', amountMinor: 25000000n, percent: 38 },
     { label: 'Food, Dining & Groceries', amountMinor: 18500000n, percent: 28 },
     { label: 'Fuel & Transportation', amountMinor: 12000000n, percent: 18 },
     { label: 'Utilities & Power Subscriptions', amountMinor: 6500000n, percent: 10 },
     { label: 'Family Support & Personal', amountMinor: 4000000n, percent: 6 },
   ];
+
+  const rows = React.useMemo(() => {
+    if (dbEvents.length > 0) {
+      const catTotals: Record<string, bigint> = {};
+      let totalSpent = 0n;
+      for (const ev of dbEvents) {
+        if (ev.type === 'expense') {
+          let evAmount = 0n;
+          for (const line of ev.lines) {
+            if (line.amountMinor > 0n) evAmount += line.amountMinor;
+          }
+          const cat = dbCategories.find((c) => c.id === ev.lines[0]?.ledgerAccountId);
+          const catName = cat?.name || 'General Spending';
+          catTotals[catName] = (catTotals[catName] || 0n) + evAmount;
+          totalSpent += evAmount;
+        }
+      }
+      const list = Object.entries(catTotals).map(([name, amountMinor]) => ({
+        label: name,
+        amountMinor,
+        percent: totalSpent > 0n ? Math.round((Number(amountMinor) / Number(totalSpent)) * 100) : 0,
+      }));
+      if (list.length > 0) return list;
+    }
+    return defaultRows;
+  }, [dbEvents, dbCategories]);
 
   const totalMinor = rows.reduce((s, r) => s + r.amountMinor, 0n);
 

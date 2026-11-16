@@ -25,10 +25,14 @@ import {
   type RecurringBillItem,
   DEFAULT_RECURRING_BILLS,
 } from './billsModel';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 export function PlanScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
+
+  // Live Database Hook
+  const { repo, accounts, categories } = useDatabaseData();
 
   // State
   const [bills, setBills] = useState<RecurringBillItem[]>(DEFAULT_RECURRING_BILLS);
@@ -64,12 +68,39 @@ export function PlanScreen() {
     ];
     setBills(updated);
     saveBillsToStorage(updated);
+
+    if (repo && accounts.length > 0) {
+      const targetCat = categories.find((c) => c.name.toLowerCase() === b.category.toLowerCase()) || categories[0];
+      repo.addRecurring({
+        kind: 'bill',
+        name: b.name,
+        amountMinor: b.amountMinor.toString(),
+        accountId: accounts[0]!.id,
+        categoryId: targetCat?.id,
+        rule: { every: 'month', on: b.dueDay || 1 },
+        startDate: '2026-11-01',
+      }).catch((e: unknown) => console.warn('Failed to sync schedule to DB', e));
+    }
   };
 
   const handleConfirmPaid = (billId: string) => {
     const updated = bills.map((b) => (b.id === billId ? { ...b, paid: true } : b));
     setBills(updated);
     saveBillsToStorage(updated);
+
+    const bill = bills.find((b) => b.id === billId);
+    if (bill && repo && accounts.length > 0) {
+      const today = new Date().toISOString().split('T')[0]!;
+      const targetCat = categories.find((c) => c.name.toLowerCase() === bill.category.toLowerCase()) || categories[0];
+      repo.addTransaction({
+        kind: 'expense',
+        accountId: accounts[0]!.id,
+        parts: [{ amount: bill.amountMinor, categoryId: targetCat?.id || 'default' }],
+        date: today,
+        payeeName: bill.name,
+        notes: `Paid recurring bill: ${bill.name} (${bill.cadence})`,
+      }).catch((e: unknown) => console.warn('Failed to record paid bill in DB', e));
+    }
   };
 
   const handleUnmarkPaid = (billId: string) => {

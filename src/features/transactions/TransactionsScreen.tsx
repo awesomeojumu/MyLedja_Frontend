@@ -9,83 +9,112 @@ import { TransactionDetailSheet } from './TransactionDetailSheet';
 import { BulkEditSheet } from './BulkEditSheet';
 import { FilterDrawerSheet, type FilterOptions } from './FilterDrawerSheet';
 import { ExportTransactionsPopup } from './ExportTransactionsPopup';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+
+const DEFAULT_TRANSACTIONS: LedgerTransaction[] = [
+  {
+    id: 'tx-101',
+    payee: 'Shoprite Supermarket',
+    category: 'Groceries',
+    account: 'PremiumTrust Bank',
+    date: '2026-11-16',
+    amountMinor: 2450000n,
+    type: 'expense',
+    isCleared: true,
+  },
+  {
+    id: 'tx-102',
+    payee: 'Bolt Ride to Victoria Island',
+    category: 'Transportation & Fuel',
+    account: 'GTBank (Current)',
+    date: '2026-11-16',
+    amountMinor: 420000n,
+    type: 'expense',
+    isCleared: true,
+  },
+  {
+    id: 'tx-103',
+    payee: 'Freelance Design Retainer',
+    category: 'Salary / Income',
+    account: 'PremiumTrust Bank',
+    date: '2026-11-15',
+    amountMinor: 35000000n,
+    type: 'income',
+    isCleared: true,
+  },
+  {
+    id: 'tx-104',
+    payee: 'ATM Cash Withdrawal',
+    category: 'Transfers',
+    account: 'Cash Wallet',
+    date: '2026-11-14',
+    amountMinor: 2000000n,
+    type: 'transfer',
+    isCleared: true,
+  },
+  {
+    id: 'tx-105',
+    payee: 'Eko Electricity Prepaid Meter',
+    category: 'Utilities & Bills',
+    account: 'GTBank (Current)',
+    date: '2026-11-12',
+    amountMinor: 1500000n,
+    type: 'expense',
+    isCleared: true,
+  },
+  {
+    id: 'tx-106',
+    payee: 'Netflix Monthly Subscription',
+    category: 'Entertainment',
+    account: 'Access Credit Card',
+    date: '2026-11-10',
+    amountMinor: 520000n,
+    type: 'expense',
+    isCleared: true,
+  },
+];
 
 export function TransactionsScreen() {
   const { colors, typography, spacing } = useTheme();
 
-  // Data State
-  const [transactions, setTransactions] = useState<LedgerTransaction[]>([
-    {
-      id: 'tx-101',
-      payee: 'Shoprite Supermarket',
-      category: 'Groceries',
-      account: 'GTBank (Current)',
-      date: '2026-11-16',
-      amountMinor: 2450000n,
-      type: 'expense',
-      isCleared: true,
-    },
-    {
-      id: 'tx-102',
-      payee: 'Bolt Ride to Victoria Island',
-      category: 'Transportation & Fuel',
-      account: 'Kuda Bank',
-      date: '2026-11-16',
-      amountMinor: 420000n,
-      type: 'expense',
-      isCleared: true,
-    },
-    {
-      id: 'tx-103',
-      payee: 'Freelance Design Retainer',
-      category: 'Salary / Income',
-      account: 'GTBank (Current)',
-      date: '2026-11-15',
-      amountMinor: 35000000n,
-      type: 'income',
-      isCleared: true,
-    },
-    {
-      id: 'tx-104',
-      payee: 'ATM Cash Withdrawal',
-      category: 'Transfers',
-      account: 'Cash Wallet',
-      date: '2026-11-14',
-      amountMinor: 2000000n,
-      type: 'transfer',
-      isCleared: true,
-    },
-    {
-      id: 'tx-105',
-      payee: 'Eko Electricity Prepaid Meter',
-      category: 'Utilities & Bills',
-      account: 'Kuda Bank',
-      date: '2026-11-12',
-      amountMinor: 1500000n,
-      type: 'expense',
-      isCleared: true,
-    },
-    {
-      id: 'tx-106',
-      payee: 'Netflix Monthly Subscription',
-      category: 'Entertainment',
-      account: 'Access Credit Card',
-      date: '2026-11-10',
-      amountMinor: 520000n,
-      type: 'expense',
-      isCleared: true,
-    },
-    {
-      id: 'tx-107',
-      payee: 'Unknown Corner POS',
-      category: 'Uncategorized',
-      account: 'GTBank (Current)',
-      date: '2026-11-08',
-      amountMinor: 185000n,
-      type: 'expense',
-      isCleared: false,
-    },
-  ]);
+  // Live Database Data
+  const {
+    isReady,
+    events: dbEvents,
+    accounts: dbAccounts,
+    categories: dbCategories,
+    repo,
+  } = useDatabaseData();
+
+  // Local overrides & deletions for instant feedback
+  const [localOverrides, setLocalOverrides] = useState<Record<string, Partial<LedgerTransaction>>>({});
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+
+  const transactions = useMemo(() => {
+    const baseList = dbEvents.length > 0
+      ? dbEvents.map((ev) => {
+          let amount = 0n;
+          for (const line of ev.lines) {
+            if (line.amountMinor > 0n) amount += line.amountMinor;
+          }
+          const acc = dbAccounts.find((a) => a.id === ev.lines[0]?.ledgerAccountId);
+          return {
+            id: ev.id,
+            payee: ev.payeeName || (ev.type === 'income' ? 'Income Inflow' : 'Expense Outflow'),
+            category: ev.type === 'transfer' ? 'Transfers' : ev.type === 'income' ? 'Income' : 'General Expense',
+            account: acc?.name || dbAccounts[0]?.name || 'Operating Account',
+            date: ev.date,
+            amountMinor: amount,
+            type: (ev.type === 'income' ? 'income' : ev.type === 'transfer' ? 'transfer' : 'expense') as 'income' | 'expense' | 'transfer',
+            isCleared: true,
+          };
+        })
+      : DEFAULT_TRANSACTIONS;
+
+    return baseList
+      .filter((tx) => !deletedIds.has(tx.id))
+      .map((tx) => (localOverrides[tx.id] ? { ...tx, ...localOverrides[tx.id] } : tx));
+  }, [dbEvents, dbAccounts, deletedIds, localOverrides]);
 
   // Filtering State
   const [searchQuery, setSearchQuery] = useState('');
@@ -148,9 +177,19 @@ export function TransactionsScreen() {
 
   // Bulk Categorize Handler
   const handleBulkCategorize = (newCategory: string) => {
-    setTransactions((prev) =>
-      prev.map((tx) => (selectedIds.has(tx.id) ? { ...tx, category: newCategory } : tx))
-    );
+    if (repo) {
+      const cat = dbCategories.find((c) => c.name.toLowerCase() === newCategory.toLowerCase());
+      if (cat) {
+        repo.bulkSetCategory(Array.from(selectedIds), cat.id).catch((e: unknown) => console.warn(e));
+      }
+    }
+    setLocalOverrides((prev) => {
+      const next = { ...prev };
+      selectedIds.forEach((id) => {
+        next[id] = { ...(next[id] || {}), category: newCategory };
+      });
+      return next;
+    });
     setToastMessage(`Categorized ${selectedIds.size} transactions to "${newCategory}"`);
     setToastVisible(true);
     setSelectedIds(new Set());
@@ -160,7 +199,11 @@ export function TransactionsScreen() {
   // Bulk Delete Handler
   const handleBulkDelete = () => {
     const count = selectedIds.size;
-    setTransactions((prev) => prev.filter((tx) => !selectedIds.has(tx.id)));
+    const today = new Date().toISOString().split('T')[0]!;
+    if (repo) {
+      repo.bulkDelete(Array.from(selectedIds), today).catch((e: unknown) => console.warn(e));
+    }
+    setDeletedIds((prev) => new Set([...prev, ...selectedIds]));
     setToastMessage(`Deleted ${count} transactions`);
     setToastVisible(true);
     setSelectedIds(new Set());
@@ -169,7 +212,11 @@ export function TransactionsScreen() {
 
   // Single Delete Handler
   const handleDeleteSingle = (id: string) => {
-    setTransactions((prev) => prev.filter((tx) => tx.id !== id));
+    const today = new Date().toISOString().split('T')[0]!;
+    if (repo) {
+      repo.deleteTransaction(id, today).catch((e: unknown) => console.warn(e));
+    }
+    setDeletedIds((prev) => new Set([...prev, id]));
     setToastMessage('Transaction deleted');
     setToastVisible(true);
   };

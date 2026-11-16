@@ -14,6 +14,7 @@ import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 import { RecordDebtSheet, type AddedDebt } from './RecordDebtSheet';
 import { QuickRepaymentSheet } from './QuickRepaymentSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 interface DebtItemUI {
   id: string;
@@ -29,10 +30,13 @@ export function DebtsScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
+  // Live Database Hook
+  const { repo, debts: dbDebts, accounts: dbAccounts } = useDatabaseData();
+
   const [activeTab, setActiveTab] = useState<'lent' | 'borrowed'>('lent');
 
   // State
-  const [debts, setDebts] = useState<DebtItemUI[]>([
+  const [localDebts, setLocalDebts] = useState<DebtItemUI[]>([
     {
       id: 'd-1',
       type: 'lent',
@@ -62,6 +66,21 @@ export function DebtsScreen() {
     },
   ]);
 
+  const debts: DebtItemUI[] = React.useMemo(() => {
+    if (dbDebts.length > 0) {
+      return dbDebts.map((d) => ({
+        id: d.id,
+        type: (d.direction === 'owedToMe' ? 'lent' : 'borrowed') as 'lent' | 'borrowed',
+        person: d.name,
+        originalMinor: 5000000n,
+        remainingMinor: 5000000n,
+        dueDate: d.nextDueDate,
+        notes: d.notes,
+      }));
+    }
+    return localDebts;
+  }, [dbDebts, localDebts]);
+
   // Sheets
   const [recordSheetVisible, setRecordSheetVisible] = useState(false);
   const [repayingDebt, setRepayingDebt] = useState<DebtItemUI | null>(null);
@@ -78,7 +97,18 @@ export function DebtsScreen() {
   const netDebtMinor = totalLentMinor - totalBorrowedMinor;
 
   const handleAddDebt = (newDebt: AddedDebt) => {
-    setDebts((prev) => [
+    if (repo && dbAccounts.length > 0) {
+      repo.openPersonDebt({
+        name: newDebt.person,
+        direction: newDebt.type === 'lent' ? 'owedToMe' : 'iOwe',
+        amount: newDebt.amountMinor,
+        date: new Date().toISOString().split('T')[0]!,
+        accountId: dbAccounts[0]!.id,
+        notes: newDebt.notes,
+        dueDate: newDebt.dueDate,
+      }).catch((e: unknown) => console.warn('Failed to open debt in DB', e));
+    }
+    setLocalDebts((prev) => [
       ...prev,
       {
         id: newDebt.id,
@@ -94,7 +124,14 @@ export function DebtsScreen() {
 
   const handleRecordRepayment = (amountMinor: bigint) => {
     if (!repayingDebt) return;
-    setDebts((prev) =>
+    if (repo && dbAccounts.length > 0) {
+      repo.recordDebtPayment(repayingDebt.id, {
+        date: new Date().toISOString().split('T')[0]!,
+        accountId: dbAccounts[0]!.id,
+        amount: amountMinor,
+      }).catch((e: unknown) => console.warn('Failed to record debt payment in DB', e));
+    }
+    setLocalDebts((prev) =>
       prev.map((d) => {
         if (d.id === repayingDebt.id) {
           const nextRemaining = d.remainingMinor - amountMinor;

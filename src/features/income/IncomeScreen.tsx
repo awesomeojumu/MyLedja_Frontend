@@ -14,6 +14,7 @@ import { useTheme, Button } from '../../design';
 import { formatNaira } from '../../money';
 import { AddIncomeSheet, type AddedIncomeStream } from './AddIncomeSheet';
 import { MatchDepositSheet } from './MatchDepositSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 interface IncomeStreamUI {
   id: string;
@@ -29,8 +30,16 @@ export function IncomeScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
+  // Live Database Hook
+  const {
+    repo,
+    incomeStreams: dbStreams,
+    accounts: dbAccounts,
+    categories: dbCategories,
+  } = useDatabaseData();
+
   // State
-  const [streams, setStreams] = useState<IncomeStreamUI[]>([
+  const [localStreams, setLocalStreams] = useState<IncomeStreamUI[]>([
     {
       id: 'str-1',
       name: 'Primary Tech Salary (Full-time)',
@@ -51,6 +60,21 @@ export function IncomeScreen() {
     },
   ]);
 
+  const streams: IncomeStreamUI[] = React.useMemo(() => {
+    if (dbStreams.length > 0) {
+      return dbStreams.map((s, idx) => ({
+        id: s.id,
+        name: s.name,
+        expectedMinor: BigInt(s.expectedMinor || '0'),
+        receivedMinor: idx === 0 ? BigInt(s.expectedMinor || '0') : 0n,
+        mode: 'net' as const,
+        payDay: s.rule?.on || 25,
+        status: idx === 0 ? ('received' as const) : ('pending' as const),
+      }));
+    }
+    return localStreams;
+  }, [dbStreams, localStreams]);
+
   // Sheets
   const [addSheetVisible, setAddSheetVisible] = useState(false);
   const [matchingStream, setMatchingStream] = useState<IncomeStreamUI | null>(null);
@@ -61,7 +85,18 @@ export function IncomeScreen() {
   const pendingTotalMinor = expectedTotalMinor - receivedTotalMinor;
 
   const handleAddStream = (newStream: AddedIncomeStream) => {
-    setStreams((prev) => [
+    if (repo && dbAccounts.length > 0) {
+      repo.addIncomeStream({
+        name: newStream.name,
+        kind: 'regular',
+        expectedMinor: newStream.expectedMinor.toString(),
+        accountId: dbAccounts[0]!.id,
+        categoryId: dbCategories[0]?.id || 'cat-income',
+        rule: { every: 'month', on: newStream.payDay },
+        countInBudget: true,
+      }).catch((e: unknown) => console.warn('Failed to save income stream to DB', e));
+    }
+    setLocalStreams((prev) => [
       ...prev,
       {
         ...newStream,
@@ -72,11 +107,20 @@ export function IncomeScreen() {
   };
 
   const handleLinkDeposit = (streamId: string) => {
-    setStreams((prev) =>
-      prev.map((s) =>
-        s.id === streamId
-          ? { ...s, receivedMinor: s.expectedMinor, status: 'received' }
-          : s
+    const s = streams.find((item) => item.id === streamId);
+    if (repo && s && dbAccounts.length > 0) {
+      const today = new Date().toISOString().split('T')[0]!;
+      repo.recordIncomeReceived(streamId, {
+        date: today,
+        accountId: dbAccounts[0]!.id,
+        amount: s.expectedMinor,
+      }).catch((e: unknown) => console.warn('Failed to record income received in DB', e));
+    }
+    setLocalStreams((prev) =>
+      prev.map((item) =>
+        item.id === streamId
+          ? { ...item, receivedMinor: item.expectedMinor, status: 'received' }
+          : item
       )
     );
   };

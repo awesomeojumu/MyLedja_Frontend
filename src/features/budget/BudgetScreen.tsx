@@ -22,6 +22,7 @@ import {
   getMonthlyEquivalentMinor,
   type RecurringBillItem,
 } from '../plan/billsModel';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 const STORAGE_KEY_SUB_LIMITS = 'pref:budget_subcategory_limits_v1';
 const STORAGE_KEY_INCOME_BUDGETS = 'pref:budget_income_budgets_v1';
@@ -40,6 +41,9 @@ export function BudgetScreen() {
   const [currentMonth, setCurrentMonth] = useState('November 2026');
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
+
+  // Live Database Hook
+  const { repo, categories: dbCategories } = useDatabaseData();
 
   // Sheets State
   const [moveMoneyVisible, setMoveMoneyVisible] = useState(false);
@@ -509,7 +513,7 @@ export function BudgetScreen() {
   };
 
   // Handle Update Limit
-  const handleSaveLimit = (
+  const handleSaveLimit = async (
     id: string,
     newLimitMinor: bigint,
     subcategoryLimits?: Record<string, bigint>
@@ -525,7 +529,21 @@ export function BudgetScreen() {
         return next;
       });
     }
-    setToastMessage('Updated envelope planned amount');
+
+    if (repo && selectedEnvelope) {
+      try {
+        const cat = dbCategories.find(
+          (c) => c.name.toLowerCase() === selectedEnvelope.name.toLowerCase()
+        );
+        if (cat) {
+          await repo.setAssigned(cat.id, '2026-11', newLimitMinor);
+        }
+      } catch (err) {
+        console.warn('Failed to assign category limit in DB:', err);
+      }
+    }
+
+    setToastMessage('Saved envelope planned amount to Database');
     setToastVisible(true);
   };
 

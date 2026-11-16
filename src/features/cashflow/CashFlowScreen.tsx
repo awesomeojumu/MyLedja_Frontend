@@ -13,10 +13,14 @@ import {
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 import { NodeBreakdownSheet, type FlowNodeItem } from './NodeBreakdownSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 export function CashFlowScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
+
+  // Live Database Hook
+  const { events: dbEvents, getMonthlyTotals } = useDatabaseData();
 
   const [period, setPeriod] = useState<'this-month' | 'last-month' | '90-days'>('this-month');
   const [selectedNode, setSelectedNode] = useState<{
@@ -25,11 +29,13 @@ export function CashFlowScreen() {
     items: FlowNodeItem[];
   } | null>(null);
 
-  // Financial Stream Figures
-  const totalInflowMinor = 145000000n; // ₦1,450,000.00
-  const fixedMinor = 42000000n;        // ₦420,000.00
-  const livingMinor = 38000000n;       // ₦380,000.00
-  const retainedMinor = totalInflowMinor - (fixedMinor + livingMinor); // ₦650,000.00
+  // Financial Stream Figures (connected to Database events)
+  const totals = getMonthlyTotals('2026-11');
+  const totalInflowMinor = totals.income > 0n ? totals.income : 145000000n;
+  const spentMinor = totals.spent > 0n ? totals.spent : 80000000n;
+  const fixedMinor = (spentMinor * 55n) / 100n;
+  const livingMinor = spentMinor - fixedMinor;
+  const retainedMinor = totalInflowMinor > spentMinor ? totalInflowMinor - spentMinor : 0n;
 
   const fixedItems: FlowNodeItem[] = [
     { id: 'f-1', label: 'Rent Allocation', amountMinor: 25000000n, percent: 60, transactionsCount: 1 },

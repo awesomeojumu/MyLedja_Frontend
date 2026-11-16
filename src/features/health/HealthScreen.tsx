@@ -14,6 +14,7 @@ import {
 import { useTheme } from '../../design';
 import { PillarFormulaSheet } from './PillarFormulaSheet';
 import { ShareHealthSummarySheet } from './ShareHealthSummarySheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 interface Pillar {
   id: string;
@@ -29,6 +30,9 @@ export function HealthScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
+  // Live Database Hook
+  const { netWorthMinor, debts: dbDebts, getMonthlyTotals } = useDatabaseData();
+
   const [activeTab, setActiveTab] = useState<'pillars' | 'simulator'>('pillars');
   const [selectedPillar, setSelectedPillar] = useState<Pillar | null>(null);
   const [shareVisible, setShareVisible] = useState(false);
@@ -36,12 +40,18 @@ export function HealthScreen() {
   // Stress simulator state
   const [incomeShockPct, setIncomeShockPct] = useState<number>(0);
 
+  // Compute live metrics from database
+  const monthly = getMonthlyTotals('2026-11');
+  const essentialSpending = monthly.spent > 0n ? monthly.spent : 50000000n;
+  const computedRunway = Number(netWorthMinor > 0n ? netWorthMinor / essentialSpending : 5n);
+  const baselineRunway = Math.max(1, Math.min(12, computedRunway || 5.2));
+
   const pillars: Pillar[] = [
     {
       id: 'p-runway',
       name: '1. Emergency Runway',
       score: 84,
-      metricLabel: '5.2 Months essential expenses covered',
+      metricLabel: `${baselineRunway} Months essential expenses covered`,
       explanation: 'Measures how many months you can sustain baseline fixed expenses without new income.',
       formula: 'Liquid Savings ÷ Essential Monthly Spending',
       recommendation: 'Target 6.0 months for complete financial independence in volatile economies.',
@@ -83,9 +93,6 @@ export function HealthScreen() {
       recommendation: 'Consider increasing inflation-resistant asset allocations over time.',
     },
   ];
-
-  // Base metrics for simulation
-  const baselineRunway = 5.2;
   const simulatedRunway =
     incomeShockPct === 100
       ? 5.2 // Pure savings only

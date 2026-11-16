@@ -11,13 +11,17 @@ import {
 import { useTheme, TextInput } from '../../design';
 import { EditPayeeSheet, type PayeeItem } from './EditPayeeSheet';
 import { MergePayeeSheet } from './MergePayeeSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 export function PayeesScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
+  // Live Database Hook
+  const { repo, payees: dbPayees, categories: dbCategories } = useDatabaseData();
+
   const [search, setSearch] = useState('');
-  const [payees, setPayees] = useState<PayeeItem[]>([
+  const [localPayees, setLocalPayees] = useState<PayeeItem[]>([
     {
       id: 'pay-1',
       name: 'Shoprite Lekki Mall',
@@ -55,6 +59,22 @@ export function PayeesScreen() {
     },
   ]);
 
+  const payees: PayeeItem[] = React.useMemo(() => {
+    if (dbPayees.length > 0) {
+      return dbPayees.map((p) => {
+        const cat = dbCategories.find((c) => c.id === p.defaultCategoryId);
+        return {
+          id: p.id,
+          name: p.name,
+          defaultCategory: cat?.name || 'General',
+          matchPattern: p.aliases?.[0] || p.name,
+          txCount: 1,
+        };
+      });
+    }
+    return localPayees;
+  }, [dbPayees, dbCategories, localPayees]);
+
   // Sheets
   const [editingPayee, setEditingPayee] = useState<PayeeItem | null>(null);
   const [mergingPayee, setMergingPayee] = useState<PayeeItem | null>(null);
@@ -67,7 +87,16 @@ export function PayeesScreen() {
 
   const handleSavePayee = (updated: { name: string; defaultCategory: string; matchPattern?: string }) => {
     if (!editingPayee) return;
-    setPayees((prev) =>
+    if (repo) {
+      const cat = dbCategories.find((c) => c.name.toLowerCase() === updated.defaultCategory.toLowerCase());
+      repo.updatePayee({
+        id: editingPayee.id,
+        name: updated.name,
+        defaultCategoryId: cat?.id,
+        aliases: updated.matchPattern ? [updated.matchPattern] : [],
+      }).catch((e: unknown) => console.warn('Failed to update payee in DB', e));
+    }
+    setLocalPayees((prev) =>
       prev.map((p) =>
         p.id === editingPayee.id
           ? {
@@ -83,7 +112,10 @@ export function PayeesScreen() {
 
   const handleMerge = (targetId: string) => {
     if (!mergingPayee) return;
-    setPayees((prev) =>
+    if (repo) {
+      repo.mergePayees(targetId, [mergingPayee.id]).catch((e: unknown) => console.warn('Failed to merge payees in DB', e));
+    }
+    setLocalPayees((prev) =>
       prev
         .filter((p) => p.id !== mergingPayee.id)
         .map((p) =>
