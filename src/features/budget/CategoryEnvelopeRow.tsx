@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Pencil, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Pencil, ChevronDown, ChevronUp, Calendar } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { useResponsive } from '../../design/size';
 import { formatNaira } from '../../money';
@@ -13,6 +13,8 @@ export interface CategoryEnvelope {
   spentMinor: bigint;
   subcategories?: string[];
   subBudgets?: Record<string, bigint>;
+  scheduledBillsMinor?: bigint;
+  subScheduledBills?: Record<string, bigint>;
 }
 
 export interface CategoryEnvelopeRowProps {
@@ -68,7 +70,7 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
         ]}
       >
         <View style={styles.topInfo}>
-          <View style={{ flex: 1, marginRight: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ flex: 1, marginRight: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <Text
               numberOfLines={1}
               style={{
@@ -79,6 +81,32 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
             >
               {envelope.name}
             </Text>
+
+            {envelope.scheduledBillsMinor !== undefined && envelope.scheduledBillsMinor > 0n && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: colors.primaryLight,
+                  borderRadius: radii.full,
+                  paddingHorizontal: 6,
+                  paddingVertical: 1.5,
+                  gap: 3,
+                }}
+              >
+                <Calendar size={9} color={colors.primary} />
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 9.5,
+                    fontFamily: typography.fonts.medium,
+                  }}
+                >
+                  {formatNaira(envelope.scheduledBillsMinor)} bill
+                </Text>
+              </View>
+            )}
+
             {envelope.subcategories && envelope.subcategories.length > 0 && (
               <TouchableOpacity
                 onPress={(e) => {
@@ -201,6 +229,7 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {envelope.subcategories.map((sub) => {
                 const subLimit = envelope.subBudgets?.[sub];
+                const subBill = envelope.subScheduledBills?.[sub];
                 return (
                   <View
                     key={sub}
@@ -220,6 +249,21 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
                       <Text style={{ fontSize: 10, color: colors.primary, fontFamily: typography.fonts.semiBold, marginLeft: 4 }}>
                         {formatNaira(subLimit)}
                       </Text>
+                    )}
+                    {subBill !== undefined && subBill > 0n && (
+                      <View
+                        style={{
+                          backgroundColor: colors.primaryLight,
+                          borderRadius: radii.xs,
+                          paddingHorizontal: 4,
+                          paddingVertical: 1,
+                          marginLeft: 4,
+                        }}
+                      >
+                        <Text style={{ fontSize: 9, color: colors.primary, fontFamily: typography.fonts.medium }}>
+                          bill: {formatNaira(subBill)}
+                        </Text>
+                      </View>
                     )}
                   </View>
                 );
@@ -247,18 +291,43 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
       ]}
     >
       <View style={styles.topInfo}>
-        <Text
-          numberOfLines={1}
-          style={{
-            color: colors.textPrimary,
-            fontFamily: typography.fonts.semiBold,
-            fontSize: typography.sizes.body,
-            flex: 1,
-            marginRight: spacing.sm,
-          }}
-        >
-          {envelope.name}
-        </Text>
+        <View style={{ flex: 1, marginRight: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              color: colors.textPrimary,
+              fontFamily: typography.fonts.semiBold,
+              fontSize: typography.sizes.body,
+            }}
+          >
+            {envelope.name}
+          </Text>
+
+          {envelope.scheduledBillsMinor !== undefined && envelope.scheduledBillsMinor > 0n && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: colors.primaryLight,
+                borderRadius: radii.full,
+                paddingHorizontal: 6,
+                paddingVertical: 1.5,
+                gap: 3,
+              }}
+            >
+              <Calendar size={10} color={colors.primary} />
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: 10,
+                  fontFamily: typography.fonts.medium,
+                }}
+              >
+                {formatNaira(envelope.scheduledBillsMinor)} bill
+              </Text>
+            </View>
+          )}
+        </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Text
@@ -382,6 +451,7 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {envelope.subcategories.map((sub) => {
               const subLimit = envelope.subBudgets?.[sub];
+              const subBill = envelope.subScheduledBills?.[sub];
               return (
                 <View
                   key={sub}
@@ -401,6 +471,21 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
                     <Text style={{ fontSize: 11, color: colors.primary, fontFamily: typography.fonts.semiBold, marginLeft: 4 }}>
                       {formatNaira(subLimit)}
                     </Text>
+                  )}
+                  {subBill !== undefined && subBill > 0n && (
+                    <View
+                      style={{
+                        backgroundColor: colors.primaryLight,
+                        borderRadius: radii.xs,
+                        paddingHorizontal: 4,
+                        paddingVertical: 1,
+                        marginLeft: 4,
+                      }}
+                    >
+                      <Text style={{ fontSize: 9.5, color: colors.primary, fontFamily: typography.fonts.medium }}>
+                        bill: {formatNaira(subBill)}
+                      </Text>
+                    </View>
                   )}
                 </View>
               );

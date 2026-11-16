@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -9,71 +9,45 @@ import {
   Sparkles,
   Clock,
   RotateCcw,
+  ArrowRight,
+  Layers,
+  Trash2,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 import { AddBillSheet, type AddedBill } from './AddBillSheet';
 import { MarkPaidSheet } from './MarkPaidSheet';
 import { RecurringSuggestionsPopup } from './RecurringSuggestionsPopup';
-
-interface PlanBillUI {
-  id: string;
-  name: string;
-  amountMinor: bigint;
-  dueDay: number;
-  cadence: 'monthly' | 'quarterly' | 'annual';
-  category: string;
-  paid: boolean;
-}
+import {
+  loadBillsFromStorage,
+  saveBillsToStorage,
+  getMonthlyEquivalentMinor,
+  type RecurringBillItem,
+  DEFAULT_RECURRING_BILLS,
+} from './billsModel';
 
 export function PlanScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
   // State
-  const [bills, setBills] = useState<PlanBillUI[]>([
-    {
-      id: 'b-1',
-      name: 'Ikeja Electric Prepaid Token',
-      amountMinor: 2500000n,
-      dueDay: 5,
-      cadence: 'monthly',
-      category: 'Utilities',
-      paid: true,
-    },
-    {
-      id: 'b-2',
-      name: 'Spectranet Unlimited Fiber Internet',
-      amountMinor: 2200000n,
-      dueDay: 18,
-      cadence: 'monthly',
-      category: 'Utilities',
-      paid: false,
-    },
-    {
-      id: 'b-3',
-      name: 'Apple Music Family & iCloud',
-      amountMinor: 140000n,
-      dueDay: 22,
-      cadence: 'monthly',
-      category: 'Subscriptions',
-      paid: false,
-    },
-    {
-      id: 'b-4',
-      name: 'Estate Security & Maintenance Levy',
-      amountMinor: 1500000n,
-      dueDay: 28,
-      cadence: 'monthly',
-      category: 'Housing',
-      paid: false,
-    },
-  ]);
+  const [bills, setBills] = useState<RecurringBillItem[]>(DEFAULT_RECURRING_BILLS);
+  const [loading, setLoading] = useState(true);
 
   // Sheets
   const [addSheetVisible, setAddSheetVisible] = useState(false);
   const [suggestSheetVisible, setSuggestSheetVisible] = useState(false);
-  const [payingBill, setPayingBill] = useState<PlanBillUI | null>(null);
+  const [payingBill, setPayingBill] = useState<RecurringBillItem | null>(null);
+
+  // Load from KV storage on mount
+  useEffect(() => {
+    async function init() {
+      const loaded = await loadBillsFromStorage();
+      setBills(loaded);
+      setLoading(false);
+    }
+    init();
+  }, []);
 
   // Totals
   const totalDueMinor = bills.reduce((sum, b) => sum + b.amountMinor, 0n);
@@ -81,25 +55,33 @@ export function PlanScreen() {
   const unpaidMinor = totalDueMinor - paidMinor;
 
   const handleAddBill = (b: AddedBill) => {
-    setBills((prev) => [
-      ...prev,
+    const updated: RecurringBillItem[] = [
+      ...bills,
       {
         ...b,
         paid: false,
       },
-    ]);
+    ];
+    setBills(updated);
+    saveBillsToStorage(updated);
   };
 
   const handleConfirmPaid = (billId: string) => {
-    setBills((prev) =>
-      prev.map((b) => (b.id === billId ? { ...b, paid: true } : b))
-    );
+    const updated = bills.map((b) => (b.id === billId ? { ...b, paid: true } : b));
+    setBills(updated);
+    saveBillsToStorage(updated);
   };
 
   const handleUnmarkPaid = (billId: string) => {
-    setBills((prev) =>
-      prev.map((b) => (b.id === billId ? { ...b, paid: false } : b))
-    );
+    const updated = bills.map((b) => (b.id === billId ? { ...b, paid: false } : b));
+    setBills(updated);
+    saveBillsToStorage(updated);
+  };
+
+  const handleDeleteBill = (billId: string) => {
+    const updated = bills.filter((b) => b.id !== billId);
+    setBills(updated);
+    saveBillsToStorage(updated);
   };
 
   return (
@@ -283,6 +265,75 @@ export function PlanScreen() {
           </View>
         </View>
 
+        {/* Connected to Budget Banner */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.push('/budget')}
+          style={[
+            styles.budgetLinkCard,
+            {
+              backgroundColor: colors.surfaceSubtle,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.md,
+              padding: spacing.md,
+              marginBottom: spacing.lg,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            },
+          ]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: spacing.sm }}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: radii.full,
+                backgroundColor: colors.primaryLight,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: spacing.sm,
+              }}
+            >
+              <Layers size={16} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: 13,
+                }}
+              >
+                Connected to Category Envelopes
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: typography.fonts.regular,
+                  fontSize: 11,
+                  marginTop: 1,
+                }}
+              >
+                Bills feed directly into your /budget subcategory planned allocations
+              </Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text
+              style={{
+                color: colors.primary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: 11.5,
+                marginRight: 3,
+              }}
+            >
+              Budget
+            </Text>
+            <ArrowRight size={13} color={colors.primary} />
+          </View>
+        </TouchableOpacity>
+
         {/* Schedule Calendar List */}
         <Text
           style={{
@@ -292,7 +343,7 @@ export function PlanScreen() {
             marginBottom: spacing.md,
           }}
         >
-          Upcoming Due Dates
+          Upcoming Due Dates & Subscriptions
         </Text>
 
         {bills.map((bill) => (
@@ -340,7 +391,7 @@ export function PlanScreen() {
                 </Text>
               </View>
 
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
+              <View style={{ flex: 1, marginLeft: spacing.md, marginRight: spacing.xs }}>
                 <Text
                   style={{
                     color: colors.textPrimary,
@@ -350,18 +401,41 @@ export function PlanScreen() {
                 >
                   {bill.name}
                 </Text>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: typography.sizes.xs,
-                    fontFamily: typography.fonts.regular,
-                  }}
-                >
-                  {bill.category} • Monthly
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 3 }}>
+                  <View
+                    style={{
+                      backgroundColor: colors.surfaceSubtle,
+                      borderRadius: radii.xs,
+                      paddingHorizontal: 5,
+                      paddingVertical: 1,
+                    }}
+                  >
+                    <Text style={{ fontSize: 9.5, color: colors.textSecondary, fontFamily: typography.fonts.medium }}>
+                      {bill.category}
+                    </Text>
+                  </View>
+                  {bill.subcategory && (
+                    <View
+                      style={{
+                        backgroundColor: colors.primaryLight,
+                        borderRadius: radii.xs,
+                        paddingHorizontal: 5,
+                        paddingVertical: 1,
+                      }}
+                    >
+                      <Text style={{ fontSize: 9.5, color: colors.primary, fontFamily: typography.fonts.medium }}>
+                        {bill.subcategory}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={{ fontSize: 9.5, color: colors.textTertiary, textTransform: 'capitalize' }}>
+                    • {bill.cadence}
+                    {bill.cadence !== 'monthly' ? ` (~${formatNaira(getMonthlyEquivalentMinor(bill))}/mo)` : ''}
+                  </Text>
+                </View>
               </View>
 
-              <View style={{ alignItems: 'flex-end' }}>
+              <View style={{ alignItems: 'flex-end', marginLeft: spacing.xs }}>
                 <Text
                   style={{
                     color: colors.textPrimary,
@@ -372,59 +446,67 @@ export function PlanScreen() {
                   {formatNaira(bill.amountMinor)}
                 </Text>
 
-                {bill.paid ? (
-                  <TouchableOpacity
-                    onPress={() => handleUnmarkPaid(bill.id)}
-                    style={[
-                      styles.paidPill,
-                      {
-                        backgroundColor: colors.statusSuccessLight,
-                        borderRadius: radii.full,
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        marginTop: 4,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                      },
-                    ]}
-                  >
-                    <CheckCircle2 size={10} color={colors.statusSuccess} />
-                    <Text
-                      style={{
-                        color: colors.statusSuccess,
-                        fontFamily: typography.fonts.medium,
-                        fontSize: 10,
-                        marginLeft: 2,
-                      }}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  {bill.paid ? (
+                    <TouchableOpacity
+                      onPress={() => handleUnmarkPaid(bill.id)}
+                      style={[
+                        styles.paidPill,
+                        {
+                          backgroundColor: colors.statusSuccessLight,
+                          borderRadius: radii.full,
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                        },
+                      ]}
                     >
-                      Paid
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    onPress={() => setPayingBill(bill)}
-                    style={[
-                      styles.markBtn,
-                      {
-                        backgroundColor: colors.primaryLight,
-                        borderRadius: radii.full,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        marginTop: 4,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        color: colors.primary,
-                        fontFamily: typography.fonts.semiBold,
-                        fontSize: 11,
-                      }}
+                      <CheckCircle2 size={10} color={colors.statusSuccess} />
+                      <Text
+                        style={{
+                          color: colors.statusSuccess,
+                          fontFamily: typography.fonts.medium,
+                          fontSize: 10,
+                          marginLeft: 2,
+                        }}
+                      >
+                        Paid
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => setPayingBill(bill)}
+                      style={[
+                        styles.markBtn,
+                        {
+                          backgroundColor: colors.primaryLight,
+                          borderRadius: radii.full,
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                        },
+                      ]}
                     >
-                      Mark Paid
-                    </Text>
+                      <Text
+                        style={{
+                          color: colors.primary,
+                          fontFamily: typography.fonts.semiBold,
+                          fontSize: 11,
+                        }}
+                      >
+                        Mark Paid
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    onPress={() => handleDeleteBill(bill.id)}
+                    style={{ padding: 3, opacity: 0.4 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Trash2 size={12} color={colors.textTertiary} />
                   </TouchableOpacity>
-                )}
+                </View>
               </View>
             </View>
           </View>
@@ -484,6 +566,9 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: 40,
+  },
+  budgetLinkCard: {
+    borderWidth: 1,
   },
   heroCard: {
     borderWidth: 1,

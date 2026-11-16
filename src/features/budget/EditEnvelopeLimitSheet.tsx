@@ -151,6 +151,19 @@ export function EditEnvelopeLimitSheet({
               >
                 {formatNaira(totalCalculatedMinor)}
               </Text>
+              {envelope.scheduledBillsMinor !== undefined && envelope.scheduledBillsMinor > 0n && (
+                <Text
+                  style={{
+                    fontSize: 10,
+                    color: totalCalculatedMinor < envelope.scheduledBillsMinor ? colors.statusWarning : colors.textSecondary,
+                    fontFamily: typography.fonts.medium,
+                    marginTop: 2,
+                  }}
+                >
+                  {totalCalculatedMinor < envelope.scheduledBillsMinor ? '⚠️ ' : '📅 '}
+                  Scheduled bills: {formatNaira(envelope.scheduledBillsMinor)}/mo
+                </Text>
+              )}
             </View>
 
             {subcategories.length > 0 && (
@@ -268,9 +281,25 @@ export function EditEnvelopeLimitSheet({
                       >
                         {sub}
                       </Text>
-                      <Text style={{ fontSize: 9.5, color: colors.textTertiary, marginTop: 0.5 }}>
-                        {subPct}% of {envelope.name}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 1 }}>
+                        <Text style={{ fontSize: 9.5, color: colors.textTertiary }}>
+                          {subPct}% of {envelope.name}
+                        </Text>
+                        {envelope.subScheduledBills?.[sub] !== undefined && envelope.subScheduledBills[sub] > 0n && (
+                          <View
+                            style={{
+                              backgroundColor: colors.primaryLight,
+                              borderRadius: radii.xs,
+                              paddingHorizontal: 4,
+                              paddingVertical: 1,
+                            }}
+                          >
+                            <Text style={{ fontSize: 9, color: colors.primary, fontFamily: typography.fonts.semiBold }}>
+                              Bill: {formatNaira(envelope.subScheduledBills[sub])}/mo
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
 
                     <View style={{ width: 125 }}>

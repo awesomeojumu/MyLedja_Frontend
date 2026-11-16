@@ -17,6 +17,11 @@ import { useCategoryPreferences } from '../categories/CategoryPreferencesContext
 import { STANDARD_FRAMEWORK_PRESETS } from '../../data/rulesModel';
 import { formatNaira } from '../../money';
 import { openKeyValue } from '../../data/kv';
+import {
+  loadBillsFromStorage,
+  getMonthlyEquivalentMinor,
+  type RecurringBillItem,
+} from '../plan/billsModel';
 
 const STORAGE_KEY_SUB_LIMITS = 'pref:budget_subcategory_limits_v1';
 const STORAGE_KEY_INCOME_BUDGETS = 'pref:budget_income_budgets_v1';
@@ -83,7 +88,10 @@ export function BudgetScreen() {
     Record<string, Record<string, bigint>>
   >({});
 
-  // Load stored subcategory limits and income budgets on mount
+  // Recurring bills loaded from Plan / KV storage
+  const [recurringBills, setRecurringBills] = useState<RecurringBillItem[]>([]);
+
+  // Load stored subcategory limits, income budgets, and recurring bills on mount
   useEffect(() => {
     async function loadStoredData() {
       try {
@@ -125,6 +133,9 @@ export function BudgetScreen() {
           });
           setIncomeCategoryConfigs(restoredInc);
         }
+
+        const loadedBills = await loadBillsFromStorage();
+        setRecurringBills(loadedBills);
       } catch (err) {
         console.warn('Failed to load stored budget limits', err);
       }
@@ -249,6 +260,22 @@ export function BudgetScreen() {
     return found;
   }, [currentConfig.frameworkId, frameworkPresets, activeFramework]);
 
+  // Map recurring bills by category and subcategory
+  const categoryScheduledBillsMap = useMemo(() => {
+    const map: Record<string, { totalMinor: bigint; subMap: Record<string, bigint> }> = {};
+    recurringBills.forEach((b) => {
+      const equiv = getMonthlyEquivalentMinor(b);
+      const catKey = b.category.toLowerCase().trim();
+      if (!map[catKey]) map[catKey] = { totalMinor: 0n, subMap: {} };
+      map[catKey]!.totalMinor += equiv;
+      if (b.subcategory) {
+        const subKey = b.subcategory.toLowerCase().trim();
+        map[catKey]!.subMap[subKey] = (map[catKey]!.subMap[subKey] || 0n) + equiv;
+      }
+    });
+    return map;
+  }, [recurringBills]);
+
   // Compute Envelopes dynamically based on current month's framework and expected income
   const [envelopeCustomLimits, setEnvelopeCustomLimits] = useState<Record<string, bigint>>({});
 
@@ -294,6 +321,18 @@ export function BudgetScreen() {
           const mockSpent = (totalPlanned * BigInt(50 + ((idx * 13) % 40))) / 100n;
           const activeSubs = getSubcategoriesForExpense(cat.name);
 
+          // Scheduled bills from /plan
+          const catKey = cat.name.toLowerCase().trim();
+          const billInfo = categoryScheduledBillsMap[catKey];
+          const scheduledBillsMinor = billInfo ? billInfo.totalMinor : 0n;
+          const subScheduledBills: Record<string, bigint> = {};
+          if (billInfo?.subMap) {
+            activeSubs.forEach((sub) => {
+              const val = billInfo.subMap[sub.toLowerCase().trim()];
+              if (val) subScheduledBills[sub] = val;
+            });
+          }
+
           const envId = `${currentMonth}-${pillar.id}-${cat.id || idx}`;
           const customSubBudgets = subcategoryCustomLimits[envId];
           let envelopePlanned = totalPlanned;
@@ -315,6 +354,8 @@ export function BudgetScreen() {
             spentMinor: mockSpent,
             subcategories: activeSubs,
             subBudgets: customSubBudgets,
+            scheduledBillsMinor,
+            subScheduledBills,
           });
         });
       } else {
@@ -340,6 +381,18 @@ export function BudgetScreen() {
         const envId = `${currentMonth}-other-${cat.id || idx}`;
         const activeSubs = getSubcategoriesForExpense(cat.name);
         const customSubBudgets = subcategoryCustomLimits[envId];
+
+        const catKey = cat.name.toLowerCase().trim();
+        const billInfo = categoryScheduledBillsMap[catKey];
+        const scheduledBillsMinor = billInfo ? billInfo.totalMinor : 0n;
+        const subScheduledBills: Record<string, bigint> = {};
+        if (billInfo?.subMap) {
+          activeSubs.forEach((sub) => {
+            const val = billInfo.subMap[sub.toLowerCase().trim()];
+            if (val) subScheduledBills[sub] = val;
+          });
+        }
+
         let defaultPlanned = 2500000n; // ₦25,000 default buffer
         if (customSubBudgets && Object.keys(customSubBudgets).length > 0) {
           const subSum = Object.values(customSubBudgets).reduce((sum, v) => sum + v, 0n);
@@ -356,6 +409,8 @@ export function BudgetScreen() {
           spentMinor: 0n,
           subcategories: activeSubs,
           subBudgets: customSubBudgets,
+          scheduledBillsMinor,
+          subScheduledBills,
         });
       });
     }
@@ -368,6 +423,8 @@ export function BudgetScreen() {
     envelopeCustomLimits,
     activeExpenseCategories,
     getCategoryPercentage,
+    subcategoryCustomLimits,
+    categoryScheduledBillsMap,
   ]);
 
   // Aggregate Totals
