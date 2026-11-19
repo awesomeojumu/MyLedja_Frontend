@@ -36,35 +36,7 @@ export function DebtsScreen() {
   const [activeTab, setActiveTab] = useState<'lent' | 'borrowed'>('lent');
 
   // State
-  const [localDebts, setLocalDebts] = useState<DebtItemUI[]>([
-    {
-      id: 'd-1',
-      type: 'lent',
-      person: 'Tunde Alabi (Colleague)',
-      originalMinor: 5000000n,
-      remainingMinor: 2500000n,
-      dueDate: '30 Nov 2026',
-      notes: 'Car maintenance loan',
-    },
-    {
-      id: 'd-2',
-      type: 'lent',
-      person: 'Amina Bello (Sister)',
-      originalMinor: 10000000n,
-      remainingMinor: 10000000n,
-      dueDate: '15 Dec 2026',
-      notes: 'University tuition support',
-    },
-    {
-      id: 'd-3',
-      type: 'borrowed',
-      person: 'Stanbic Quick Credit',
-      originalMinor: 30000000n,
-      remainingMinor: 12000000n,
-      dueDate: '25 Nov 2026',
-      notes: 'Monthly deduction at 2.5% rate',
-    },
-  ]);
+  const [localDebts, setLocalDebts] = useState<DebtItemUI[]>([]);
 
   const debts: DebtItemUI[] = React.useMemo(() => {
     if (dbDebts.length > 0) {
@@ -488,6 +460,69 @@ export function DebtsScreen() {
             </View>
           </TouchableOpacity>
         ))}
+
+        {filteredDebts.length === 0 && (
+          <View
+            style={[
+              styles.debtCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: radii.xl,
+                padding: spacing.xl,
+                alignItems: 'center',
+                marginTop: spacing.md,
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.md,
+                marginBottom: spacing.xs,
+              }}
+            >
+              {activeTab === 'lent' ? 'No money lent out' : 'No money borrowed'}
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.bodySm,
+                textAlign: 'center',
+                marginBottom: spacing.md,
+              }}
+            >
+              {activeTab === 'lent'
+                ? 'Track IOUs and loans given to friends, family, or colleagues.'
+                : 'Track loans, bank credit, and personal obligations you need to pay back.'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setRecordSheetVisible(true)}
+              activeOpacity={0.8}
+              style={[
+                styles.addBtn,
+                {
+                  backgroundColor: colors.primary,
+                  borderRadius: radii.lg,
+                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.sm + 2,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  color: '#FFFFFF',
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                + Record Debt
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Sheets */}

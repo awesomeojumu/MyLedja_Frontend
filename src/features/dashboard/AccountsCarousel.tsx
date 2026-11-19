@@ -69,77 +69,101 @@ export function AccountsCarousel({
         )}
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingRight: spacing.md }}
-        style={styles.carousel}
-      >
-        {accounts.map((acc) => {
-          const IconComponent = getIcon(acc.type);
-          const isNegative = acc.balanceMinor < 0n;
-          const formattedBalance = privacyMode ? '••••' : formatNaira(acc.balanceMinor);
+      {accounts.length === 0 ? (
+        <View
+          style={{
+            backgroundColor: colors.surfaceSubtle,
+            borderRadius: radii.md,
+            paddingVertical: spacing.sm,
+            paddingHorizontal: spacing.md,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderStyle: 'dashed',
+          }}
+        >
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+            }}
+          >
+            No accounts added yet. Tap See all to add an account.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingRight: spacing.md }}
+          style={styles.carousel}
+        >
+          {accounts.map((acc) => {
+            const IconComponent = getIcon(acc.type);
+            const isNegative = acc.balanceMinor < 0n;
+            const formattedBalance = privacyMode ? '••••' : formatNaira(acc.balanceMinor);
 
-          return (
-            <TouchableOpacity
-              key={acc.id}
-              onPress={() => onSelectAccount?.(acc.id)}
-              activeOpacity={0.7}
-              style={[
-                styles.pill,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  borderRadius: radii.full,
-                  paddingVertical: 7,
-                  paddingHorizontal: spacing.md,
-                  marginRight: spacing.xs + 2,
-                },
-              ]}
-            >
-              <View
+            return (
+              <TouchableOpacity
+                key={acc.id}
+                onPress={() => onSelectAccount?.(acc.id)}
+                activeOpacity={0.7}
                 style={[
-                  styles.iconWrap,
+                  styles.pill,
                   {
-                    backgroundColor: colors.primaryLight,
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
                     borderRadius: radii.full,
-                    marginRight: spacing.xs,
-                  },
-                ]}
-              >
-                <IconComponent size={12} color={colors.primary} />
-              </View>
-
-              <Text
-                style={[
-                  styles.accountName,
-                  {
-                    color: colors.textPrimary,
-                    fontFamily: typography.fonts.medium,
-                    fontSize: typography.sizes.xs,
+                    paddingVertical: 7,
+                    paddingHorizontal: spacing.md,
                     marginRight: spacing.xs + 2,
                   },
                 ]}
               >
-                {acc.name}
-              </Text>
+                <View
+                  style={[
+                    styles.iconWrap,
+                    {
+                      backgroundColor: colors.primaryLight,
+                      borderRadius: radii.full,
+                      marginRight: spacing.xs,
+                    },
+                  ]}
+                >
+                  <IconComponent size={12} color={colors.primary} />
+                </View>
 
-              <Text
-                style={[
-                  styles.balance,
-                  {
-                    color: isNegative ? colors.statusDanger : colors.textPrimary,
-                    fontFamily: typography.fonts.semiBold,
-                    fontSize: typography.sizes.xs,
-                  },
-                ]}
-              >
-                {formattedBalance}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+                <Text
+                  style={[
+                    styles.accountName,
+                    {
+                      color: colors.textPrimary,
+                      fontFamily: typography.fonts.medium,
+                      fontSize: typography.sizes.xs,
+                      marginRight: spacing.xs + 2,
+                    },
+                  ]}
+                >
+                  {acc.name}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.balance,
+                    {
+                      color: isNegative ? colors.statusDanger : colors.textPrimary,
+                      fontFamily: typography.fonts.semiBold,
+                      fontSize: typography.sizes.xs,
+                    },
+                  ]}
+                >
+                  {formattedBalance}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
     </View>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SlidersHorizontal, Check, X } from 'lucide-react-native';
+import { SlidersHorizontal, Check, X, Landmark } from 'lucide-react-native';
 import { useTheme, BottomSheet } from '../../design';
 import { Toast } from '../../design/components/Toast';
 import { NetAssetsHero } from './NetAssetsHero';
@@ -125,31 +125,28 @@ export function AccountsScreen() {
   ]);
 
   const accounts: AccountData[] = useMemo(() => {
-    if (dbAccounts.length > 0) {
-      return dbAccounts.map((a, idx) => {
-        const bal = accountBalances.get(a.id) ?? 0n;
-        const types: AccountData['type'][] = [
-          'income', 'operating', 'bills', 'emergency', 'savings', 'investment', 'credit'
-        ];
-        const assignedType: AccountData['type'] = a.type === 'card' || a.type === 'loan' ? 'credit' : types[idx % types.length]!;
-        const catCategory =
-          a.type === 'card' || a.type === 'loan'
-            ? 'liability'
-            : a.type === 'property' || a.type === 'investment'
-            ? 'investment'
-            : 'liquid';
-        return {
-          id: a.id,
-          name: a.name,
-          institution: a.institution || 'Commercial Bank',
-          category: catCategory,
-          type: assignedType,
-          balanceMinor: bal !== 0n ? bal : 8300000n * BigInt(idx + 1),
-        };
-      });
-    }
-    return rawAccounts;
-  }, [dbAccounts, accountBalances, rawAccounts]);
+    return dbAccounts.map((a, idx) => {
+      const bal = accountBalances.get(a.id) ?? 0n;
+      const types: AccountData['type'][] = [
+        'income', 'operating', 'bills', 'emergency', 'savings', 'investment', 'credit'
+      ];
+      const assignedType: AccountData['type'] = a.type === 'card' || a.type === 'loan' ? 'credit' : types[idx % types.length]!;
+      const catCategory =
+        a.type === 'card' || a.type === 'loan'
+          ? 'liability'
+          : a.type === 'property' || a.type === 'investment'
+          ? 'investment'
+          : 'liquid';
+      return {
+        id: a.id,
+        name: a.name,
+        institution: a.institution || 'Commercial Bank',
+        category: catCategory,
+        type: assignedType,
+        balanceMinor: bal,
+      };
+    });
+  }, [dbAccounts, accountBalances]);
 
   // Calculations
   const { totalAssets, totalLiabilities } = useMemo(() => {
@@ -250,10 +247,12 @@ export function AccountsScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{
-          padding: spacing.lg,
-          paddingHorizontal: spacing.xl,
+          padding: spacing.md,
+          paddingHorizontal: spacing.md,
           paddingBottom: 100,
           width: '100%',
+          maxWidth: 960,
+          alignSelf: 'center',
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -373,6 +372,78 @@ export function AccountsScreen() {
             </View>
           </View>
         ))}
+
+        {/* Empty state when no accounts exist */}
+        {accounts.length === 0 && (
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: radii.xl,
+              padding: spacing.xl,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: spacing.md,
+            }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: radii.full,
+                backgroundColor: colors.primaryLight,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: spacing.md,
+              }}
+            >
+              <Landmark size={24} color={colors.primary} />
+            </View>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.md,
+                marginBottom: spacing.xs,
+              }}
+            >
+              No accounts added yet
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.bodySm,
+                textAlign: 'center',
+                marginBottom: spacing.lg,
+                maxWidth: 320,
+              }}
+            >
+              Add your bank accounts, cash wallets, cards, and investments to organize your financial life.
+            </Text>
+            <TouchableOpacity
+              onPress={() => setAddSheetVisible(true)}
+              activeOpacity={0.8}
+              style={{
+                backgroundColor: colors.primary,
+                borderRadius: radii.lg,
+                paddingHorizontal: spacing.lg,
+                paddingVertical: spacing.sm + 2,
+              }}
+            >
+              <Text
+                style={{
+                  color: '#FFFFFF',
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                + Add Account
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Filter by Purpose Modal Sheet */}

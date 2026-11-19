@@ -35,7 +35,7 @@ export function PlanScreen() {
   const { repo, accounts, categories } = useDatabaseData();
 
   // State
-  const [bills, setBills] = useState<RecurringBillItem[]>(DEFAULT_RECURRING_BILLS);
+  const [bills, setBills] = useState<RecurringBillItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Sheets
@@ -542,6 +542,67 @@ export function PlanScreen() {
             </View>
           </View>
         ))}
+
+        {bills.length === 0 && (
+          <View
+            style={[
+              styles.billItem,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: radii.xl,
+                padding: spacing.xl,
+                alignItems: 'center',
+                marginTop: spacing.md,
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.md,
+                marginBottom: spacing.xs,
+              }}
+            >
+              No recurring bills scheduled
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.bodySm,
+                textAlign: 'center',
+                marginBottom: spacing.md,
+              }}
+            >
+              Track your electricity tokens, internet subscriptions, rent, estate dues, and streaming services.
+            </Text>
+            <TouchableOpacity
+              onPress={() => setAddSheetVisible(true)}
+              activeOpacity={0.8}
+              style={[
+                styles.addBtn,
+                {
+                  backgroundColor: colors.primary,
+                  borderRadius: radii.lg,
+                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.sm + 2,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  color: '#FFFFFF',
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                + Add Recurring Bill
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Sheets */}

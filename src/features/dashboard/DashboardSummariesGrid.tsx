@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react-native';
 import { useTheme, useResponsive } from '../../design';
 import { formatNaira } from '../../money';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 export interface DashboardSummariesGridProps {
   privacyMode: boolean;
@@ -26,23 +27,76 @@ export function DashboardSummariesGrid({
 
   const isWide = isDesktop || isTablet;
 
-  // Mock data matching master design spec
-  const budgetLeftMinor = 19960000n; // ₦199,600.00
-  const budgetTotalMinor = 52000000n; // ₦520,000.00
-  const budgetPercent = 62;
+  const {
+    assigns,
+    getMonthlyTotals,
+    recurring: dbRecurring,
+    debts: dbDebts,
+    goals: dbGoals,
+  } = useDatabaseData();
 
-  const upcomingBills = [
-    { name: 'DSTV Subscription', amountMinor: 2450000n, daysLeft: 3, isExpense: true },
-    { name: 'Freelance Inflow', amountMinor: 35000000n, daysLeft: 7, isExpense: false },
-  ];
+  const targetMonthCode = currentMonth.includes('Oct')
+    ? '2026-10'
+    : currentMonth.includes('Dec')
+    ? '2026-12'
+    : '2026-11';
 
-  const debtsOwedToYouMinor = 8500000n; // ₦85,000.00
-  const debtsYouOweMinor = 4000000n;    // ₦40,000.00
+  // Live Budget Calculation from Database Assigns
+  let budgetTotalMinor = 0n;
+  assigns.forEach((amount, key) => {
+    if (key.endsWith(`:${targetMonthCode}`)) {
+      budgetTotalMinor += amount;
+    }
+  });
+  const monthlyTotals = getMonthlyTotals(targetMonthCode);
+  const budgetSpentMinor = monthlyTotals.spent;
+  const budgetLeftMinor = budgetTotalMinor > budgetSpentMinor ? budgetTotalMinor - budgetSpentMinor : 0n;
+  const budgetPercent =
+    budgetTotalMinor > 0n
+      ? Math.min(100, Math.round(Number((budgetSpentMinor * 100n) / budgetTotalMinor)))
+      : 0;
 
-  const goals = [
-    { name: 'Emergency Fund', currentMinor: 62000000n, targetMinor: 100000000n, percent: 62 },
-    { name: 'Annual Rent 2027', currentMinor: 45000000n, targetMinor: 250000000n, percent: 18 },
-  ];
+  // Live Upcoming Bills from Database Recurring
+  const upcomingBills = useMemo(() => {
+    return dbRecurring.slice(0, 3).map((r) => {
+      const isExpense = r.kind !== 'income';
+      const minor = BigInt(r.amountMinor || '0');
+      return {
+        name: r.name,
+        amountMinor: minor,
+        daysLeft: r.rule?.on ? Math.max(1, r.rule.on - new Date().getDate()) : 7,
+        isExpense,
+      };
+    });
+  }, [dbRecurring]);
+
+  // Live Debts Owed from Database Debts
+  const { debtsOwedToYouMinor, debtsYouOweMinor } = useMemo(() => {
+    let owedToYou = 0n;
+    let youOwe = 0n;
+    for (const d of dbDebts) {
+      if (d.status !== 'open') continue;
+      const amt = BigInt(d.scheduleAmountMinor || d.creditMinor || '0');
+      if (d.direction === 'owedToMe') owedToYou += amt;
+      else youOwe += amt;
+    }
+    return { debtsOwedToYouMinor: owedToYou, debtsYouOweMinor: youOwe };
+  }, [dbDebts]);
+
+  // Live Savings Goals from Database Goals
+  const goals = useMemo(() => {
+    return dbGoals.slice(0, 3).map((g) => {
+      const target = BigInt(g.targetMinor || '1');
+      const cur = BigInt(g.scheduleAmountMinor || '0');
+      const pct = target > 0n ? Math.min(100, Math.round(Number((cur * 100n) / target))) : 0;
+      return {
+        name: g.name,
+        currentMinor: cur,
+        targetMinor: target,
+        percent: pct,
+      };
+    });
+  }, [dbGoals]);
 
   return (
     <View style={styles.container}>
@@ -101,46 +155,61 @@ export function DashboardSummariesGrid({
             <ChevronRight size={16} color={colors.textTertiary} />
           </View>
 
-          <View style={{ marginTop: spacing.sm }}>
-            <Text
-              style={[
-                styles.mainFigure,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: typography.sizes.lg,
-                },
-              ]}
-            >
-              {privacyMode ? '₦••••••••' : formatNaira(budgetLeftMinor)}{' '}
-              <Text style={{ fontSize: typography.sizes.xs, color: colors.textSecondary, fontFamily: typography.fonts.regular }}>
-                left of {privacyMode ? '••••' : formatNaira(budgetTotalMinor)}
+          {budgetTotalMinor === 0n ? (
+            <View style={{ marginTop: spacing.sm, paddingVertical: spacing.xs }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: typography.fonts.regular,
+                  fontSize: typography.sizes.xs,
+                }}
+              >
+                No budget planned for this month.
               </Text>
-            </Text>
-
-            {/* Progress Bar */}
-            <View style={[styles.progressBarTrack, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full, marginTop: spacing.xs }]}>
-              <View
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.xs,
+                  marginTop: 4,
+                }}
+              >
+                Tap to plan budgets →
+              </Text>
+            </View>
+          ) : (
+            <View style={{ marginTop: spacing.sm }}>
+              <Text
                 style={[
-                  styles.progressBarFill,
+                  styles.mainFigure,
                   {
-                    backgroundColor: colors.primary,
-                    width: `${budgetPercent}%`,
-                    borderRadius: radii.full,
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.semiBold,
+                    fontSize: typography.sizes.lg,
                   },
                 ]}
-              />
-            </View>
+              >
+                {privacyMode ? '₦••••••••' : formatNaira(budgetLeftMinor)}{' '}
+                <Text style={{ fontSize: typography.sizes.xs, color: colors.textSecondary, fontFamily: typography.fonts.regular }}>
+                  left of {privacyMode ? '••••' : formatNaira(budgetTotalMinor)}
+                </Text>
+              </Text>
 
-            <View style={styles.budgetMiniRows}>
-              <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs }}>
-                Food & Dining: 72% used
-              </Text>
-              <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs }}>
-                Transport: 88% used
-              </Text>
+              {/* Progress Bar */}
+              <View style={[styles.progressBarTrack, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full, marginTop: spacing.xs }]}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      backgroundColor: colors.primary,
+                      width: `${budgetPercent}%`,
+                      borderRadius: radii.full,
+                    },
+                  ]}
+                />
+              </View>
             </View>
-          </View>
+          )}
         </TouchableOpacity>
 
         {/* 2. Upcoming Bills & Plan Card */}
@@ -182,27 +251,51 @@ export function DashboardSummariesGrid({
           </View>
 
           <View style={{ marginTop: spacing.sm }}>
-            {upcomingBills.map((bill) => (
-              <View key={bill.name} style={[styles.billItem, { borderBottomColor: colors.borderSubtle }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.xs }}>
-                    {bill.name}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: 11, marginTop: 1 }}>
-                    Due in {bill.daysLeft} days
-                  </Text>
-                </View>
+            {upcomingBills.length === 0 ? (
+              <View style={{ paddingVertical: spacing.xs }}>
                 <Text
                   style={{
-                    color: bill.isExpense ? colors.textPrimary : colors.statusSuccess,
-                    fontFamily: typography.fonts.semiBold,
+                    color: colors.textSecondary,
+                    fontFamily: typography.fonts.regular,
                     fontSize: typography.sizes.xs,
                   }}
                 >
-                  {privacyMode ? '••••' : `${bill.isExpense ? '−' : '+'}${formatNaira(bill.amountMinor)}`}
+                  No upcoming bills scheduled.
+                </Text>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontFamily: typography.fonts.medium,
+                    fontSize: typography.sizes.xs,
+                    marginTop: 4,
+                  }}
+                >
+                  Tap to add bills & recurring →
                 </Text>
               </View>
-            ))}
+            ) : (
+              upcomingBills.map((bill) => (
+                <View key={bill.name} style={[styles.billItem, { borderBottomColor: colors.borderSubtle }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.xs }}>
+                      {bill.name}
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: 11, marginTop: 1 }}>
+                      Due in {bill.daysLeft} days
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      color: bill.isExpense ? colors.textPrimary : colors.statusSuccess,
+                      fontFamily: typography.fonts.semiBold,
+                      fontSize: typography.sizes.xs,
+                    }}
+                  >
+                    {privacyMode ? '••••' : `${bill.isExpense ? '−' : '+'}${formatNaira(bill.amountMinor)}`}
+                  </Text>
+                </View>
+              ))
+            )}
           </View>
         </TouchableOpacity>
 
@@ -320,30 +413,54 @@ export function DashboardSummariesGrid({
           </View>
 
           <View style={{ marginTop: spacing.sm }}>
-            {goals.map((goal, idx) => (
-              <View key={goal.name} style={{ marginTop: idx > 0 ? spacing.xs + 2 : 0 }}>
-                <View style={styles.goalRow}>
-                  <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.xs }}>
-                    {goal.name}
-                  </Text>
-                  <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs }}>
-                    {goal.percent}%
-                  </Text>
-                </View>
-                <View style={[styles.progressBarTrack, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full, marginTop: 4 }]}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      {
-                        backgroundColor: colors.primary,
-                        width: `${goal.percent}%`,
-                        borderRadius: radii.full,
-                      },
-                    ]}
-                  />
-                </View>
+            {goals.length === 0 ? (
+              <View style={{ paddingVertical: spacing.xs }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: typography.fonts.regular,
+                    fontSize: typography.sizes.xs,
+                  }}
+                >
+                  No savings goals created yet.
+                </Text>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontFamily: typography.fonts.medium,
+                    fontSize: typography.sizes.xs,
+                    marginTop: 4,
+                  }}
+                >
+                  Tap to create a goal →
+                </Text>
               </View>
-            ))}
+            ) : (
+              goals.map((goal, idx) => (
+                <View key={goal.name} style={{ marginTop: idx > 0 ? spacing.xs + 2 : 0 }}>
+                  <View style={styles.goalRow}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.xs }}>
+                      {goal.name}
+                    </Text>
+                    <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs }}>
+                      {goal.percent}%
+                    </Text>
+                  </View>
+                  <View style={[styles.progressBarTrack, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full, marginTop: 4 }]}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        {
+                          backgroundColor: colors.primary,
+                          width: `${goal.percent}%`,
+                          borderRadius: radii.full,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              ))
+            )}
           </View>
         </TouchableOpacity>
       </View>

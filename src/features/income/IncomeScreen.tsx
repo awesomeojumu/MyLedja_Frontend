@@ -39,26 +39,7 @@ export function IncomeScreen() {
   } = useDatabaseData();
 
   // State
-  const [localStreams, setLocalStreams] = useState<IncomeStreamUI[]>([
-    {
-      id: 'str-1',
-      name: 'Primary Tech Salary (Full-time)',
-      expectedMinor: 85000000n,
-      receivedMinor: 85000000n,
-      mode: 'net',
-      payDay: 25,
-      status: 'received',
-    },
-    {
-      id: 'str-2',
-      name: 'Consulting Retainer (Lagos Client)',
-      expectedMinor: 15000000n,
-      receivedMinor: 0n,
-      mode: 'net',
-      payDay: 30,
-      status: 'pending',
-    },
-  ]);
+  const [localStreams, setLocalStreams] = useState<IncomeStreamUI[]>([]);
 
   const streams: IncomeStreamUI[] = React.useMemo(() => {
     if (dbStreams.length > 0) {
@@ -425,6 +406,67 @@ export function IncomeScreen() {
             )}
           </View>
         ))}
+
+        {streams.length === 0 && (
+          <View
+            style={[
+              styles.streamCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: radii.xl,
+                padding: spacing.xl,
+                alignItems: 'center',
+                marginTop: spacing.md,
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.md,
+                marginBottom: spacing.xs,
+              }}
+            >
+              No income streams planned yet
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.bodySm,
+                textAlign: 'center',
+                marginBottom: spacing.md,
+              }}
+            >
+              Configure your expected salary, consulting retainers, and business inflows.
+            </Text>
+            <TouchableOpacity
+              onPress={() => setAddSheetVisible(true)}
+              activeOpacity={0.8}
+              style={[
+                styles.addBtn,
+                {
+                  backgroundColor: colors.primary,
+                  borderRadius: radii.lg,
+                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.sm + 2,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  color: '#FFFFFF',
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                + Add Income Stream
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Sheets */}

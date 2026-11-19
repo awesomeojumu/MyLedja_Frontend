@@ -66,88 +66,45 @@ export function DashboardScreen() {
 
   const monthlyTotals = getMonthlyTotals(targetMonthCode);
 
-  const displayNetWorth =
-    isReady && dbAccounts.length > 0 && netWorthMinor > 0n
-      ? netWorthMinor
-      : 1485020000n; // ₦14,850,200.00 fallback
-
-  const displayIncome =
-    monthlyTotals.income > 0n ? monthlyTotals.income : 85000000n; // ₦850,000.00 fallback
-
-  const displaySpent =
-    monthlyTotals.spent > 0n ? monthlyTotals.spent : 32040000n; // ₦320,400.00 fallback
+  const displayNetWorth = isReady ? netWorthMinor : 0n;
+  const displayIncome = monthlyTotals.income;
+  const displaySpent = monthlyTotals.spent;
 
   // Live accounts from MongoDB
   const displayAccounts: AccountItem[] = useMemo(() => {
-    if (dbAccounts.length > 0) {
-      return dbAccounts.map((a) => {
-        const bal = accountBalances.get(a.id) ?? 0n;
-        const kind: 'bank' | 'wallet' | 'card' =
-          a.type === 'card'
-            ? 'card'
-            : a.type === 'wallet' || a.type === 'cash'
-            ? 'wallet'
-            : 'bank';
-        return {
-          id: a.id,
-          name: a.name,
-          type: kind,
-          balanceMinor: bal !== 0n ? bal : 8500000n,
-        };
-      });
-    }
-    return [
-      { id: '1', name: 'PremiumTrust Bank', type: 'bank', balanceMinor: 84500000n },
-      { id: '2', name: 'GTBank (Current)', type: 'bank', balanceMinor: 21500000n },
-      { id: '3', name: 'Cash Wallet', type: 'wallet', balanceMinor: 3500000n },
-      { id: '4', name: 'Access Credit Card', type: 'card', balanceMinor: -1200000n },
-    ];
+    return dbAccounts.map((a) => {
+      const bal = accountBalances.get(a.id) ?? 0n;
+      const kind: 'bank' | 'wallet' | 'card' =
+        a.type === 'card'
+          ? 'card'
+          : a.type === 'wallet' || a.type === 'cash'
+          ? 'wallet'
+          : 'bank';
+      return {
+        id: a.id,
+        name: a.name,
+        type: kind,
+        balanceMinor: bal,
+      };
+    });
   }, [dbAccounts, accountBalances]);
 
   // Live recent transactions from MongoDB
   const displayTransactions: RecentTransactionItem[] = useMemo(() => {
-    if (dbEvents.length > 0) {
-      return dbEvents.slice(0, 10).map((ev) => {
-        let amount = 0n;
-        for (const line of ev.lines) {
-          if (line.amountMinor > 0n) amount += line.amountMinor;
-        }
-        return {
-          id: ev.id,
-          payee: ev.payeeName || (ev.type === 'income' ? 'Income Deposit' : 'Expense Outflow'),
-          category: ev.type === 'transfer' ? 'Transfer' : ev.type === 'income' ? 'Income' : 'Expense',
-          date: ev.date,
-          amountMinor: amount,
-          type: ev.type === 'income' ? 'income' : ev.type === 'transfer' ? 'transfer' : 'expense',
-        };
-      });
-    }
-    return [
-      {
-        id: 'tx-1',
-        payee: 'Shoprite Supermarket',
-        category: 'Groceries',
-        date: 'Today, 2:15 PM',
-        amountMinor: 2450000n,
-        type: 'expense',
-      },
-      {
-        id: 'tx-2',
-        payee: 'Bolt Ride to Victoria Island',
-        category: 'Transportation & Fuel',
-        date: 'Today, 9:40 AM',
-        amountMinor: 420000n,
-        type: 'expense',
-      },
-      {
-        id: 'tx-3',
-        payee: 'Freelance Design Retainer',
-        category: 'Salary / Income',
-        date: 'Yesterday',
-        amountMinor: 35000000n,
-        type: 'income',
-      },
-    ];
+    return dbEvents.slice(0, 10).map((ev) => {
+      let amount = 0n;
+      for (const line of ev.lines) {
+        if (line.amountMinor > 0n) amount += line.amountMinor;
+      }
+      return {
+        id: ev.id,
+        payee: ev.payeeName || (ev.type === 'income' ? 'Income Deposit' : 'Expense Outflow'),
+        category: ev.type === 'transfer' ? 'Transfer' : ev.type === 'income' ? 'Income' : 'Expense',
+        date: ev.date,
+        amountMinor: amount,
+        type: ev.type === 'income' ? 'income' : ev.type === 'transfer' ? 'transfer' : 'expense',
+      };
+    });
   }, [dbEvents]);
 
   const handleSaveTransaction = async (data: {
@@ -243,7 +200,7 @@ export function DashboardScreen() {
         {/* 1. Combined Net Worth & Metrics Card */}
         <NetWorthHeroCard
           netWorthMinor={displayNetWorth}
-          monthlyDeltaMinor={42000000n}
+          monthlyDeltaMinor={displayIncome - displaySpent}
           incomeMinor={displayIncome}
           spentMinor={displaySpent}
           currentMonth={currentMonth}

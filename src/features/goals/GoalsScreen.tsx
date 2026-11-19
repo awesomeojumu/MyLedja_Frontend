@@ -32,29 +32,7 @@ export function GoalsScreen() {
   const { repo, goals: dbGoals, accounts: dbAccounts } = useDatabaseData();
 
   // State
-  const [localGoals, setLocalGoals] = useState<GoalItemUI[]>([
-    {
-      id: 'g-1',
-      name: 'Emergency Fund Vault (6 Months)',
-      targetMinor: 300000000n, // ₦3,000,000.00
-      currentMinor: 185000000n, // ₦1,850,000.00
-      targetDate: '31 Mar 2027',
-    },
-    {
-      id: 'g-2',
-      name: 'Annual Apartment Rent Advance',
-      targetMinor: 150000000n, // ₦1,500,000.00
-      currentMinor: 95000000n,  // ₦950,000.00
-      targetDate: '30 Jun 2027',
-    },
-    {
-      id: 'g-3',
-      name: 'MacBook Pro M4 Workstation',
-      targetMinor: 280000000n, // ₦2,800,000.00
-      currentMinor: 220000000n, // ₦2,200,000.00
-      targetDate: '15 Dec 2026',
-    },
-  ]);
+  const [localGoals, setLocalGoals] = useState<GoalItemUI[]>([]);
 
   const goals: GoalItemUI[] = React.useMemo(() => {
     if (dbGoals.length > 0) {
@@ -466,6 +444,67 @@ export function GoalsScreen() {
             </View>
           );
         })}
+
+        {goals.length === 0 && (
+          <View
+            style={[
+              styles.goalCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: radii.xl,
+                padding: spacing.xl,
+                alignItems: 'center',
+                marginTop: spacing.md,
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.md,
+                marginBottom: spacing.xs,
+              }}
+            >
+              No savings goals created yet
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.bodySm,
+                textAlign: 'center',
+                marginBottom: spacing.md,
+              }}
+            >
+              Set targets for emergency funds, rent advances, vacation travel, or gadgets.
+            </Text>
+            <TouchableOpacity
+              onPress={() => setCreateSheetVisible(true)}
+              activeOpacity={0.8}
+              style={[
+                styles.addBtn,
+                {
+                  backgroundColor: colors.primary,
+                  borderRadius: radii.lg,
+                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.sm + 2,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  color: '#FFFFFF',
+                  fontFamily: typography.fonts.medium,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                + Create Savings Goal
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Sheets */}
