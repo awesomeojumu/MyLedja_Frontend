@@ -15,7 +15,11 @@ import { formatNaira } from '../../money';
 import { NodeBreakdownSheet, type FlowNodeItem } from './NodeBreakdownSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
-export function CashFlowScreen() {
+export interface CashFlowScreenProps {
+  showHeader?: boolean;
+}
+
+export function CashFlowScreen({ showHeader = true }: CashFlowScreenProps = {}) {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
@@ -54,49 +58,51 @@ export function CashFlowScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Top Header */}
-      <View
-        style={[
-          styles.headerBar,
-          {
-            borderBottomColor: colors.borderSubtle,
-            paddingHorizontal: spacing.lg,
-            paddingVertical: spacing.md,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backBtn, { padding: spacing.xs }]}
+      {showHeader && (
+        <View
+          style={[
+            styles.headerBar,
+            {
+              borderBottomColor: colors.borderSubtle,
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.md,
+            },
+          ]}
         >
-          <ArrowLeft size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: spacing.sm }}>
-          <Text
-            style={[
-              styles.screenTitle,
-              {
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: typography.sizes.lg,
-              },
-            ]}
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.backBtn, { padding: spacing.xs }]}
           >
-            Cash Flow Streams
-          </Text>
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontFamily: typography.fonts.regular,
-              fontSize: typography.sizes.xs,
-            }}
-          >
-            Income to Outflow Ribbon
-          </Text>
+            <ArrowLeft size={20} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: spacing.sm }}>
+            <Text
+              style={[
+                styles.screenTitle,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.lg,
+                },
+              ]}
+            >
+              Cash Flow Streams
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.xs,
+              }}
+            >
+              Income to Outflow Ribbon
+            </Text>
+          </View>
         </View>
-      </View>
+      )}
 
       <ScrollView
-        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
+        contentContainerStyle={[styles.content, { padding: showHeader ? spacing.lg : 0, paddingBottom: 60 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Period Filter Tabs */}
