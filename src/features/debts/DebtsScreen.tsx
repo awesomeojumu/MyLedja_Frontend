@@ -26,7 +26,11 @@ interface DebtItemUI {
   notes?: string;
 }
 
-export function DebtsScreen() {
+export interface DebtsScreenProps {
+  showHeader?: boolean;
+}
+
+export function DebtsScreen({ showHeader = true }: DebtsScreenProps = {}) {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
@@ -122,76 +126,99 @@ export function DebtsScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View
-        style={[
-          styles.headerBar,
-          {
-            borderBottomColor: colors.borderSubtle,
-            paddingHorizontal: spacing.lg,
-            paddingVertical: spacing.md,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backBtn, { padding: spacing.xs }]}
-        >
-          <ArrowLeft size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: spacing.sm }}>
-          <Text
-            style={[
-              styles.screenTitle,
-              {
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: typography.sizes.lg,
-              },
-            ]}
-          >
-            Debts & Lending
-          </Text>
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontFamily: typography.fonts.regular,
-              fontSize: typography.sizes.xs,
-            }}
-          >
-            Receivables & Borrowed Money
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          onPress={() => setRecordSheetVisible(true)}
+      {showHeader && (
+        <View
           style={[
-            styles.addBtn,
+            styles.headerBar,
             {
-              backgroundColor: colors.primary,
-              borderRadius: radii.full,
-              paddingHorizontal: spacing.sm,
-              paddingVertical: 4,
+              borderBottomColor: colors.borderSubtle,
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.md,
             },
           ]}
         >
-          <Plus size={14} color="#FFFFFF" />
-          <Text
-            style={{
-              color: '#FFFFFF',
-              fontFamily: typography.fonts.medium,
-              fontSize: 12,
-              marginLeft: 4,
-            }}
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.backBtn, { padding: spacing.xs }]}
           >
-            Record Debt
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <ArrowLeft size={20} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: spacing.sm }}>
+            <Text
+              style={[
+                styles.screenTitle,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.lg,
+                },
+              ]}
+            >
+              Debts & Lending
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.xs,
+              }}
+            >
+              Receivables & Borrowed Money
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => setRecordSheetVisible(true)}
+            style={[
+              styles.addBtn,
+              {
+                backgroundColor: colors.primary,
+                borderRadius: radii.full,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: 4,
+              },
+            ]}
+          >
+            <Plus size={14} color="#FFFFFF" />
+            <Text
+              style={{
+                color: '#FFFFFF',
+                fontFamily: typography.fonts.medium,
+                fontSize: 12,
+                marginLeft: 4,
+              }}
+            >
+              Record Debt
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <ScrollView
-        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
+        contentContainerStyle={[styles.content, { padding: showHeader ? spacing.lg : 0, paddingBottom: 60 }]}
         showsVerticalScrollIndicator={false}
       >
+        {!showHeader && (
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: spacing.sm }}>
+            <TouchableOpacity
+              onPress={() => setRecordSheetVisible(true)}
+              style={[
+                styles.addBtn,
+                {
+                  backgroundColor: colors.primary,
+                  borderRadius: radii.full,
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: 6,
+                },
+              ]}
+            >
+              <Plus size={14} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontFamily: typography.fonts.medium, fontSize: 12, marginLeft: 4 }}>
+                Record Debt
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {/* Net Debt Position Card */}
         <View
           style={[
