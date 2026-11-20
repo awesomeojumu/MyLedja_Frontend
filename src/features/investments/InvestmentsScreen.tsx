@@ -15,6 +15,10 @@ import {
   Shield,
   Briefcase,
   MapPin,
+  SlidersHorizontal,
+  ChevronDown,
+  Check,
+  X,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira, parseAmount } from '../../money';
@@ -79,6 +83,18 @@ export function InvestmentsScreen() {
   // State
   const [localHoldings, setLocalHoldings] = useState<HoldingItemUI[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+
+  const filterOptions: { id: string; label: string; icon: React.ComponentType<{ size: number; color: string }> }[] = [
+    { id: 'all', label: 'All Assets', icon: PieChart },
+    { id: 'stock', label: 'Stocks & Equities', icon: TrendingUp },
+    { id: 'realEstate', label: 'Real Estate & Land', icon: Building2 },
+    { id: 'fixedDeposit', label: 'Fixed Income & T-Bills', icon: Landmark },
+    { id: 'fund', label: 'Mutual Funds & ETFs', icon: PieChart },
+    { id: 'crypto', label: 'Crypto & Digital', icon: Coins },
+    { id: 'privateEquity', label: 'Business & Ventures', icon: Briefcase },
+    { id: 'preciousMetals', label: 'Precious Metals', icon: Shield },
+  ];
 
   const holdings: HoldingItemUI[] = React.useMemo(() => {
     if (dbHoldings.length > 0) {
@@ -362,8 +378,17 @@ export function InvestmentsScreen() {
           </View>
         </View>
 
-        {/* Holdings List Header & Category Filters */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+        {/* Holdings List Header & Single Filter Button */}
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: spacing.md,
+            position: 'relative',
+            zIndex: 30,
+          }}
+        >
           <Text
             style={{
               color: colors.textPrimary,
@@ -373,75 +398,152 @@ export function InvestmentsScreen() {
           >
             Assets & Holdings ({filteredHoldings.length})
           </Text>
-        </View>
 
-        {/* Filter Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: spacing.md }}
-          contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
-        >
-          {[
-            { id: 'all', label: 'All Assets', count: holdings.length },
-            { id: 'stock', label: 'Equities', count: holdings.filter((h) => h.type === 'stock').length },
-            { id: 'realEstate', label: 'Real Estate & Land', count: holdings.filter((h) => h.type === 'realEstate' || h.type === 'land').length },
-            { id: 'fixedDeposit', label: 'Fixed Income', count: holdings.filter((h) => h.type === 'fixedDeposit').length },
-            { id: 'fund', label: 'Funds & ETFs', count: holdings.filter((h) => h.type === 'fund').length },
-            { id: 'crypto', label: 'Crypto', count: holdings.filter((h) => h.type === 'crypto').length },
-            { id: 'privateEquity', label: 'Ventures', count: holdings.filter((h) => h.type === 'privateEquity').length },
-            { id: 'preciousMetals', label: 'Metals', count: holdings.filter((h) => h.type === 'preciousMetals').length },
-          ].map((cat) => {
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                onPress={() => setSelectedCategory(cat.id)}
+          {/* Single Filter Button */}
+          <View style={{ position: 'relative' }}>
+            <TouchableOpacity
+              onPress={() => setFilterMenuOpen((prev) => !prev)}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: selectedCategory !== 'all' ? colors.primaryLight : colors.surface,
+                borderColor: selectedCategory !== 'all' ? colors.primary : colors.borderSubtle,
+                borderWidth: selectedCategory !== 'all' ? 1.5 : 1,
+                borderRadius: radii.md,
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                gap: 6,
+              }}
+            >
+              <SlidersHorizontal
+                size={14}
+                color={selectedCategory !== 'all' ? colors.primary : colors.textSecondary}
+              />
+              <Text
                 style={{
-                  backgroundColor: isSelected ? colors.primary : colors.surface,
-                  borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                  borderWidth: 1,
-                  borderRadius: radii.full,
-                  paddingVertical: 5,
-                  paddingHorizontal: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
+                  color: selectedCategory !== 'all' ? colors.primary : colors.textPrimary,
+                  fontFamily: selectedCategory !== 'all' ? typography.fonts.semiBold : typography.fonts.medium,
+                  fontSize: 12,
                 }}
               >
-                <Text
-                  style={{
-                    color: isSelected ? '#FFFFFF' : colors.textPrimary,
-                    fontFamily: isSelected ? typography.fonts.semiBold : typography.fonts.medium,
-                    fontSize: 12,
+                {selectedCategory !== 'all'
+                  ? (filterOptions.find((f) => f.id === selectedCategory)?.label ?? 'Filter')
+                  : 'Filter'}
+              </Text>
+
+              {selectedCategory !== 'all' ? (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setSelectedCategory('all');
+                    setFilterMenuOpen(false);
                   }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ marginLeft: 2 }}
                 >
-                  {cat.label}
-                </Text>
-                {cat.count > 0 && (
-                  <View
-                    style={{
-                      backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : colors.surfaceSubtle,
-                      borderRadius: radii.full,
-                      paddingHorizontal: 6,
-                      paddingVertical: 1,
-                    }}
-                  >
-                    <Text
+                  <X size={13} color={colors.primary} />
+                </TouchableOpacity>
+              ) : (
+                <ChevronDown
+                  size={14}
+                  color={filterMenuOpen ? colors.primary : colors.textSecondary}
+                />
+              )}
+            </TouchableOpacity>
+
+            {/* Filter Menu Popover */}
+            {filterMenuOpen && (
+              <View
+                style={{
+                  position: 'absolute',
+                  top: 36,
+                  right: 0,
+                  width: 230,
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderWidth: 1,
+                  borderRadius: radii.md,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 10,
+                  elevation: 8,
+                  zIndex: 99,
+                  overflow: 'hidden',
+                }}
+              >
+                {filterOptions.map((opt, idx) => {
+                  const isSelected = selectedCategory === opt.id;
+                  const IconComp = opt.icon;
+                  const count =
+                    opt.id === 'all'
+                      ? holdings.length
+                      : opt.id === 'realEstate'
+                      ? holdings.filter((h) => h.type === 'realEstate' || h.type === 'land').length
+                      : holdings.filter((h) => h.type === opt.id).length;
+
+                  return (
+                    <TouchableOpacity
+                      key={opt.id}
+                      onPress={() => {
+                        setSelectedCategory(opt.id);
+                        setFilterMenuOpen(false);
+                      }}
                       style={{
-                        color: isSelected ? '#FFFFFF' : colors.textSecondary,
-                        fontSize: 10,
-                        fontFamily: typography.fonts.semiBold,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        backgroundColor: isSelected ? colors.primaryLight : 'transparent',
+                        borderBottomWidth: idx < filterOptions.length - 1 ? StyleSheet.hairlineWidth : 0,
+                        borderBottomColor: colors.borderSubtle,
                       }}
                     >
-                      {cat.count}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <IconComp size={14} color={isSelected ? colors.primary : colors.textSecondary} />
+                        <Text
+                          style={{
+                            color: isSelected ? colors.primary : colors.textPrimary,
+                            fontFamily: isSelected ? typography.fonts.semiBold : typography.fonts.regular,
+                            fontSize: 12,
+                          }}
+                        >
+                          {opt.label}
+                        </Text>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {count > 0 && (
+                          <View
+                            style={{
+                              backgroundColor: isSelected ? colors.primary : colors.surfaceSubtle,
+                              borderRadius: radii.full,
+                              paddingHorizontal: 6,
+                              paddingVertical: 1,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: isSelected ? '#FFFFFF' : colors.textSecondary,
+                                fontSize: 10,
+                                fontFamily: typography.fonts.semiBold,
+                              }}
+                            >
+                              {count}
+                            </Text>
+                          </View>
+                        )}
+                        {isSelected && <Check size={13} color={colors.primary} strokeWidth={2.5} />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        </View>
 
         {filteredHoldings.length === 0 ? (
           <View
