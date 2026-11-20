@@ -98,63 +98,6 @@ export function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Section 1: Profile & Workspace */}
-        <Text
-          style={[
-            styles.sectionHeading,
-            {
-              color: colors.textSecondary,
-              fontFamily: typography.fonts.medium,
-              fontSize: typography.sizes.xs,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              marginBottom: spacing.xs,
-            },
-          ]}
-        >
-          Database & Cloud Sync
-        </Text>
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.borderSubtle,
-              borderRadius: radii.lg,
-              padding: spacing.md,
-              marginBottom: spacing.lg,
-            },
-          ]}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
-              <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: 13 }}>
-                MongoDB Atlas Connected
-              </Text>
-            </View>
-            <View style={{ backgroundColor: '#10B98118', paddingHorizontal: 8, paddingVertical: 2, borderRadius: radii.full }}>
-              <Text style={{ color: '#10B981', fontSize: 11, fontFamily: typography.fonts.medium }}>
-                {syncStatus?.state === 'synced' ? 'Real-time Active' : (syncStatus?.state || 'Connected')}
-              </Text>
-            </View>
-          </View>
-          <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-            Cluster: planexi.b36hqe0.mongodb.net • Database: MyLedja
-          </Text>
-          <View style={{ height: 1, backgroundColor: colors.borderSubtle, marginVertical: spacing.sm }} />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ color: colors.textTertiary, fontSize: 11 }}>Workspace ID</Text>
-            <Text style={{ color: colors.textPrimary, fontSize: 11, fontFamily: typography.fonts.medium }}>
-              {user?.workspaceId ? `${user.workspaceId.slice(0, 8)}...` : '01a1d3f0...'}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-            <Text style={{ color: colors.textTertiary, fontSize: 11 }}>Synchronized Entities</Text>
-            <Text style={{ color: colors.textPrimary, fontSize: 11, fontFamily: typography.fonts.medium }}>
-              {snapshot ? `${snapshot.accounts.length} Accounts • ${snapshot.categories.length} Categories • ${snapshot.events.length} Events` : 'Synced'}
-            </Text>
-          </View>
-        </View>
 
         {/* Section 2: Profile & Workspace */}
         <Text

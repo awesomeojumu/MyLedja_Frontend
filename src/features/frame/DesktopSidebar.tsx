@@ -68,19 +68,6 @@ export function DesktopSidebar() {
         >
           MyLedja
         </Text>
-        <Text
-          style={[
-            styles.workspaceName,
-            {
-              color: colors.textSecondary,
-              fontFamily: typography.fonts.regular,
-              fontSize: typography.sizes.xs,
-              marginTop: spacing.xxs,
-            },
-          ]}
-        >
-          Workspace: {workspaceId ?? 'Personal'}
-        </Text>
       </View>
 
       {/* Navigation List */}
