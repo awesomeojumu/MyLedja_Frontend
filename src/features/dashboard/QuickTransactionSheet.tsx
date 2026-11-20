@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, CurrencyInput, TextInput, Dropdown, Button } from '../../design';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
 import { EXPENSE_TAXONOMY, INCOME_TAXONOMY } from '../../data/categoriesTaxonomy';
@@ -44,7 +44,6 @@ export function QuickTransactionSheet({
   const [amount, setAmount] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
-  const [showSubcategory, setShowSubcategory] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<string>('GTBank (Current)');
   const [payee, setPayee] = useState('');
   const [error, setError] = useState('');
@@ -54,11 +53,9 @@ export function QuickTransactionSheet({
     if (type === 'income') {
       setSelectedCategory(incomeOptions[0]?.value || 'Employment');
       setSelectedSubcategory('');
-      setShowSubcategory(false);
     } else {
       setSelectedCategory(expenseOptions[0]?.value || 'Food');
       setSelectedSubcategory('');
-      setShowSubcategory(false);
     }
   }, [type, visible, expenseOptions, incomeOptions]);
 
@@ -100,7 +97,6 @@ export function QuickTransactionSheet({
     setAmount('');
     setPayee('');
     setSelectedSubcategory('');
-    setShowSubcategory(false);
     onClose();
   };
 
@@ -122,68 +118,49 @@ export function QuickTransactionSheet({
           placeholder="0.00"
         />
 
-        {/* Step 2: Category & Account in 2-Column Responsive Row */}
-        <View style={[styles.twoColRow, { marginTop: spacing.sm }]}>
-          <View style={styles.col}>
-            <Dropdown
-              label={type === 'income' ? 'Income Category' : 'Expense Category'}
-              value={selectedCategory}
-              options={categoryOptions}
-              onSelect={(cat) => {
-                setSelectedCategory(cat);
-                setSelectedSubcategory('');
-              }}
-            />
-          </View>
+        {/* Step 2: Paid via (Account) comes BEFORE Category */}
+        <Dropdown
+          label={type === 'expense' ? 'Paid via' : 'Deposit into Account'}
+          value={selectedAccount}
+          options={DEFAULT_ACCOUNTS}
+          onSelect={setSelectedAccount}
+          containerStyle={{ marginTop: spacing.sm + 2 }}
+        />
 
-          <View style={styles.col}>
-            <Dropdown
-              label={type === 'expense' ? 'Paid via' : 'Deposit to'}
-              value={selectedAccount}
-              options={DEFAULT_ACCOUNTS}
-              onSelect={setSelectedAccount}
-            />
-          </View>
-        </View>
+        {/* Step 3: Expense / Income Category */}
+        <Dropdown
+          label={type === 'income' ? 'Income Category' : 'Expense Category'}
+          value={selectedCategory}
+          options={categoryOptions}
+          onSelect={(cat) => {
+            setSelectedCategory(cat);
+            setSelectedSubcategory('');
+          }}
+          containerStyle={{ marginTop: spacing.sm + 2 }}
+        />
 
-        {/* Optional Subcategory: Collapsed by default for a compact sheet */}
-        {(showSubcategory || selectedSubcategory) && subcategoryOptions.length > 0 ? (
-          <View style={{ marginTop: spacing.sm }}>
-            <Dropdown
-              label="Subcategory"
-              value={selectedSubcategory}
-              options={subcategoryOptions}
-              onSelect={setSelectedSubcategory}
-            />
-          </View>
-        ) : availableSubcategories.length > 0 ? (
-          <TouchableOpacity
-            onPress={() => setShowSubcategory(true)}
-            style={{ alignSelf: 'flex-start', marginTop: 4, paddingVertical: 2 }}
-          >
-            <Text
-              style={{
-                color: colors.primary,
-                fontFamily: typography.fonts.medium,
-                fontSize: 11.5,
-              }}
-            >
-              + Add Subcategory
-            </Text>
-          </TouchableOpacity>
-        ) : null}
+        {/* Step 4: Optional Subcategory Dropdown */}
+        {subcategoryOptions.length > 0 && (
+          <Dropdown
+            label="Subcategory (Optional)"
+            value={selectedSubcategory}
+            options={subcategoryOptions}
+            onSelect={setSelectedSubcategory}
+            containerStyle={{ marginTop: spacing.sm + 2 }}
+          />
+        )}
 
-        {/* Step 3: Description / Purpose of Payment */}
+        {/* Step 5: Description / Purpose of Payment */}
         <TextInput
           label={type === 'income' ? 'Description / Income Source' : 'Purpose / Description'}
           placeholder={type === 'income' ? 'e.g. Salary, Consulting fee, Dividend' : 'e.g. MTN Data, Lunch, Fuel, Supermarket'}
           value={payee}
           onChangeText={setPayee}
-          containerStyle={{ marginTop: spacing.sm }}
+          containerStyle={{ marginTop: spacing.sm + 2 }}
         />
 
-        {/* Step 4: Save & Finish */}
-        <View style={{ marginTop: spacing.md }}>
+        {/* Step 6: Save & Finish */}
+        <View style={{ marginTop: spacing.md + 2 }}>
           <Button
             label={type === 'expense' ? 'Save Expense' : 'Save Income'}
             onPress={handleSave}
@@ -198,11 +175,4 @@ export function QuickTransactionSheet({
 
 const styles = StyleSheet.create({
   form: { width: '100%' },
-  twoColRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  col: {
-    flex: 1,
-  },
 });
