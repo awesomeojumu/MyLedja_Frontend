@@ -46,7 +46,7 @@ import { DeleteAccountModal } from './DeleteAccountModal';
 import { CategoryPreferencesSheet } from './CategoryPreferencesSheet';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
 
-type SettingsTab = 'account' | 'preferences' | 'categories' | 'data';
+type SettingsTab = 'account' | 'categories' | 'preferences' | 'data';
 
 export function SettingsScreen() {
   const { colors, typography, spacing, radii, isDark, toggleTheme, setThemeMode, accent, setAccent } = useTheme();
@@ -92,8 +92,8 @@ export function SettingsScreen() {
 
   const tabs: Array<{ id: SettingsTab; label: string; icon: any }> = [
     { id: 'account', label: 'Account & Security', icon: User },
-    { id: 'preferences', label: 'Preferences', icon: Palette },
     { id: 'categories', label: 'Categories', icon: Sliders },
+    { id: 'preferences', label: 'Preferences', icon: Palette },
     { id: 'data', label: 'Data & Backup', icon: Database },
   ];
 
@@ -352,7 +352,7 @@ export function SettingsScreen() {
                       marginTop: 2,
                     }}
                   >
-                    {userEmail} • Connected via Google Auth
+                    {userEmail}
                   </Text>
                 </View>
               </View>
@@ -628,7 +628,106 @@ export function SettingsScreen() {
         )}
 
         {/* =========================================================================
-            TAB 2: PREFERENCES (THEME, COLORS, DENSITY, CURRENCY & FORMAT)
+            TAB 2: CATEGORIES & TAXONOMIES
+        ========================================================================== */}
+        {activeTab === 'categories' && (
+          <View>
+            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+              Transaction Category Taxonomies
+            </Text>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.xl,
+                  padding: spacing.lg,
+                  marginBottom: spacing.xl,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
+                <View
+                  style={[
+                    styles.iconCircle,
+                    {
+                      backgroundColor: colors.primaryLight,
+                      borderRadius: radii.full,
+                      width: 40,
+                      height: 40,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    },
+                  ]}
+                >
+                  <Sliders size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: spacing.md }}>
+                  <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md }}>
+                    Personalized Dropdown Manager
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
+                    Tailor which income streams, expense envelopes, and subcategories appear across your ledger forms.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Active counts summary */}
+              <View
+                style={[
+                  styles.countSummaryRow,
+                  {
+                    backgroundColor: colors.surfaceSubtle,
+                    borderRadius: radii.md,
+                    padding: spacing.md,
+                    marginBottom: spacing.lg,
+                    flexDirection: 'row',
+                    justifyContent: 'space-around',
+                  },
+                ]}
+              >
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 20 }}>
+                    {enabledIncomeIds.length}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+                    Income Streams
+                  </Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: colors.borderSubtle }} />
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 20 }}>
+                    {enabledExpenseIds.length}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+                    Expense Envelopes
+                  </Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: colors.borderSubtle }} />
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: colors.statusSuccess, fontFamily: typography.fonts.semiBold, fontSize: 20 }}>
+                    140+
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+                    Subcategories
+                  </Text>
+                </View>
+              </View>
+
+              <Button
+                label="Open Category Customizer"
+                onPress={() => setCategorySheetVisible(true)}
+                variant="primary"
+                size="md"
+                icon={<Sliders size={16} color="#FFFFFF" />}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* =========================================================================
+            TAB 3: PREFERENCES (THEME, COLORS, DENSITY, CURRENCY & FORMAT)
         ========================================================================== */}
         {activeTab === 'preferences' && (
           <View>
@@ -1045,105 +1144,6 @@ export function SettingsScreen() {
                   />
                 </View>
               </View>
-            </View>
-          </View>
-        )}
-
-        {/* =========================================================================
-            TAB 4: CATEGORIES & TAXONOMIES
-        ========================================================================== */}
-        {activeTab === 'categories' && (
-          <View>
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Transaction Category Taxonomies
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
-                <View
-                  style={[
-                    styles.iconCircle,
-                    {
-                      backgroundColor: colors.primaryLight,
-                      borderRadius: radii.full,
-                      width: 40,
-                      height: 40,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    },
-                  ]}
-                >
-                  <Sliders size={20} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1, marginLeft: spacing.md }}>
-                  <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md }}>
-                    Personalized Dropdown Manager
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
-                    Tailor which income streams, expense envelopes, and subcategories appear across your ledger forms.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Active counts summary */}
-              <View
-                style={[
-                  styles.countSummaryRow,
-                  {
-                    backgroundColor: colors.surfaceSubtle,
-                    borderRadius: radii.md,
-                    padding: spacing.md,
-                    marginBottom: spacing.lg,
-                    flexDirection: 'row',
-                    justifyContent: 'space-around',
-                  },
-                ]}
-              >
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 20 }}>
-                    {enabledIncomeIds.length}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-                    Income Streams
-                  </Text>
-                </View>
-                <View style={{ width: 1, backgroundColor: colors.borderSubtle }} />
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 20 }}>
-                    {enabledExpenseIds.length}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-                    Expense Envelopes
-                  </Text>
-                </View>
-                <View style={{ width: 1, backgroundColor: colors.borderSubtle }} />
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ color: colors.statusSuccess, fontFamily: typography.fonts.semiBold, fontSize: 20 }}>
-                    140+
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-                    Subcategories
-                  </Text>
-                </View>
-              </View>
-
-              <Button
-                label="Open Category Customizer"
-                onPress={() => setCategorySheetVisible(true)}
-                variant="primary"
-                size="md"
-                icon={<Sliders size={16} color="#FFFFFF" />}
-              />
             </View>
           </View>
         )}
