@@ -18,7 +18,6 @@ import {
   ShieldCheck,
   Fingerprint,
   Download,
-  LogOut,
   Trash2,
   ChevronRight,
   Briefcase,
@@ -37,7 +36,6 @@ import {
   FileSpreadsheet,
   FileJson,
   Smartphone,
-  Laptop,
   AlertTriangle,
   Mail,
   Calendar,
@@ -113,11 +111,6 @@ export function SettingsScreen() {
   const handleSaveGeneral = () => {
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    router.replace('/sign-in' as any);
   };
 
   const tabs: Array<{ id: SettingsTab; label: string; icon: any }> = [
@@ -1361,43 +1354,6 @@ export function SettingsScreen() {
                   <Download size={16} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
-            </View>
-
-            {/* Session Management & Sign Out */}
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Session Management
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md }}>
-                <Laptop size={20} color={colors.textPrimary} />
-                <View style={{ marginLeft: spacing.md }}>
-                  <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }}>
-                    Current Browser Session
-                  </Text>
-                  <Text style={{ color: colors.textTertiary, fontSize: 11 }}>
-                    Active • Chrome on Windows • Last active just now
-                  </Text>
-                </View>
-              </View>
-
-              <Button
-                label="Sign Out of MyLedja"
-                onPress={handleSignOut}
-                variant="secondary"
-                size="md"
-                icon={<LogOut size={16} color={colors.textPrimary} />}
-              />
             </View>
 
             {/* Danger Zone */}
