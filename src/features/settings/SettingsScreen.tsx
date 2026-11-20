@@ -20,7 +20,6 @@ import {
   Download,
   Trash2,
   ChevronRight,
-  Briefcase,
   Check,
   Sliders,
   Layers,
@@ -30,7 +29,6 @@ import {
   Bell,
   Database,
   Key,
-  Copy,
   Lock,
   RefreshCw,
   FileSpreadsheet,
@@ -49,7 +47,6 @@ import { ChangePasswordSheet } from './ChangePasswordSheet';
 import { DeleteAccountModal } from './DeleteAccountModal';
 import { CategoryPreferencesSheet } from './CategoryPreferencesSheet';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
-import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 type SettingsTab =
   | 'general'
@@ -65,17 +62,13 @@ export function SettingsScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
-  const { user, workspaceId, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { enabledIncomeIds, enabledExpenseIds } = useCategoryPreferences();
-  const { snapshot } = useDatabaseData();
-
-  const effectiveWorkspaceId = workspaceId || user?.workspaceId || snapshot?.workspaceId || '';
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
   // Form States
-  const [workspaceName, setWorkspaceName] = useState(user?.workspaceName || 'Personal Workspace');
   const [fullName, setFullName] = useState(user?.name || 'Awesome Ojumu');
   const [userEmail, setUserEmail] = useState(user?.email || 'ayobamiojumu@gmail.com');
   const [currency, setCurrency] = useState<'NGN' | 'USD' | 'GBP' | 'EUR'>('NGN');
@@ -100,13 +93,7 @@ export function SettingsScreen() {
   const [categorySheetVisible, setCategorySheetVisible] = useState(false);
 
   // Status feedback
-  const [copiedId, setCopiedId] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
-
-  const handleCopyId = () => {
-    setCopiedId(true);
-    setTimeout(() => setCopiedId(false), 2000);
-  };
 
   const handleSaveGeneral = () => {
     setSavedSuccess(true);
@@ -114,7 +101,7 @@ export function SettingsScreen() {
   };
 
   const tabs: Array<{ id: SettingsTab; label: string; icon: any }> = [
-    { id: 'general', label: 'Workspace', icon: Briefcase },
+    { id: 'general', label: 'Profile', icon: User },
     { id: 'regional', label: 'Currency & Format', icon: Globe },
     { id: 'appearance', label: 'Theme & Display', icon: Palette },
     { id: 'categories', label: 'Categories', icon: Sliders },
@@ -162,7 +149,7 @@ export function SettingsScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Workspace configuration, security, regional preferences & data management
+            Account settings, security, regional preferences & data management
           </Text>
         </View>
       </View>
@@ -302,13 +289,13 @@ export function SettingsScreen() {
           showsVerticalScrollIndicator={false}
         >
         {/* =========================================================================
-            TAB 1: WORKSPACE & PROFILE
+            TAB 1: PROFILE & ACCOUNT
         ========================================================================== */}
         {activeTab === 'general' && (
           <View>
             {/* User Profile Card */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Account Owner Profile
+              Account Profile
             </Text>
             <View
               style={[
@@ -366,7 +353,7 @@ export function SettingsScreen() {
                       ]}
                     >
                       <Text style={{ color: colors.primary, fontSize: 10, fontFamily: typography.fonts.semiBold }}>
-                        Workspace Owner
+                        Account Owner
                       </Text>
                     </View>
                   </View>
@@ -397,91 +384,15 @@ export function SettingsScreen() {
                   leftElement={<Mail size={16} color={colors.textTertiary} />}
                 />
               </View>
-            </View>
-
-            {/* Workspace Organization Details */}
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Workspace Details
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <TextInput
-                label="Workspace Legal Name"
-                value={workspaceName}
-                onChangeText={setWorkspaceName}
-                leftElement={<Briefcase size={16} color={colors.textTertiary} />}
-              />
-
-              <View
-                style={[
-                  styles.workspaceIdRow,
-                  {
-                    backgroundColor: colors.surfaceSubtle,
-                    borderRadius: radii.md,
-                    padding: spacing.md,
-                    marginTop: spacing.md,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  },
-                ]}
-              >
-                <View>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: typography.fonts.medium }}>
-                    WORKSPACE IDENTIFIER
-                  </Text>
-                  <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: 13, marginTop: 2 }}>
-                    {effectiveWorkspaceId || 'ws_personal'}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={handleCopyId}
-                  style={[
-                    styles.copyBtn,
-                    {
-                      backgroundColor: colors.surface,
-                      borderRadius: radii.sm,
-                      paddingHorizontal: spacing.sm,
-                      paddingVertical: 5,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      borderColor: colors.borderSubtle,
-                      borderWidth: 1,
-                    },
-                  ]}
-                >
-                  {copiedId ? (
-                    <>
-                      <Check size={13} color={colors.statusSuccess} />
-                      <Text style={{ color: colors.statusSuccess, fontSize: 11, marginLeft: 4 }}>Copied</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={13} color={colors.textSecondary} />
-                      <Text style={{ color: colors.textSecondary, fontSize: 11, marginLeft: 4 }}>Copy ID</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
 
               <View style={{ marginTop: spacing.lg, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
                 {savedSuccess && (
                   <Text style={{ color: colors.statusSuccess, fontSize: 12, marginRight: spacing.md, fontFamily: typography.fonts.medium }}>
-                    ✓ Settings saved successfully
+                    ✓ Profile updated successfully
                   </Text>
                 )}
                 <Button
-                  label="Save Workspace Changes"
+                  label="Save Profile Changes"
                   onPress={handleSaveGeneral}
                   variant="primary"
                   size="md"
@@ -1503,8 +1414,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rolePill: {},
-  workspaceIdRow: {},
-  copyBtn: {},
   currencyOption: {},
   currSymbolCircle: {},
   formatBtn: {},
