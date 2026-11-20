@@ -25,7 +25,6 @@ import {
   Layers,
   Coins,
   Palette,
-  Bell,
   Database,
   Key,
   Lock,
@@ -47,13 +46,7 @@ import { DeleteAccountModal } from './DeleteAccountModal';
 import { CategoryPreferencesSheet } from './CategoryPreferencesSheet';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
 
-type SettingsTab =
-  | 'general'
-  | 'preferences'
-  | 'categories'
-  | 'security'
-  | 'notifications'
-  | 'data';
+type SettingsTab = 'account' | 'preferences' | 'categories' | 'data';
 
 export function SettingsScreen() {
   const { colors, typography, spacing, radii, isDark, toggleTheme, setThemeMode, accent, setAccent } = useTheme();
@@ -64,7 +57,7 @@ export function SettingsScreen() {
   const { enabledIncomeIds, enabledExpenseIds } = useCategoryPreferences();
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('account');
 
   // Form States
   const [fullName, setFullName] = useState(user?.name || 'Awesome Ojumu');
@@ -98,11 +91,9 @@ export function SettingsScreen() {
   };
 
   const tabs: Array<{ id: SettingsTab; label: string; icon: any }> = [
-    { id: 'general', label: 'Profile', icon: User },
+    { id: 'account', label: 'Account & Security', icon: User },
     { id: 'preferences', label: 'Preferences', icon: Palette },
     { id: 'categories', label: 'Categories', icon: Sliders },
-    { id: 'security', label: 'Security & Access', icon: ShieldCheck },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'data', label: 'Data & Backup', icon: Database },
   ];
 
@@ -285,9 +276,9 @@ export function SettingsScreen() {
           showsVerticalScrollIndicator={false}
         >
         {/* =========================================================================
-            TAB 1: PROFILE & ACCOUNT
+            TAB 1: ACCOUNT & SECURITY
         ========================================================================== */}
-        {activeTab === 'general' && (
+        {activeTab === 'account' && (
           <View>
             {/* User Profile Card */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
@@ -394,6 +385,244 @@ export function SettingsScreen() {
                   size="md"
                 />
               </View>
+            </View>
+
+            {/* Password Management */}
+            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+              Password & Authentication
+            </Text>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.xl,
+                  padding: spacing.lg,
+                  marginBottom: spacing.xl,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: spacing.md }}>
+                  <View
+                    style={[
+                      styles.iconCircle,
+                      {
+                        backgroundColor: colors.primaryLight,
+                        borderRadius: radii.full,
+                        width: 36,
+                        height: 36,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      },
+                    ]}
+                  >
+                    <KeyRound size={18} color={colors.primary} />
+                  </View>
+                  <View style={{ marginLeft: spacing.md, flex: 1 }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                      Account Password
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
+                      Secured with end-to-end cryptographic hashing. Minimum 10 characters.
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setPasswordSheetVisible(true)}
+                  style={[
+                    styles.addBtn,
+                    {
+                      backgroundColor: colors.primaryLight,
+                      borderRadius: radii.full,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: 6,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 12 }}>
+                    Change Password
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Two-Factor Authentication */}
+            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+              Two-Factor Authentication (2FA)
+            </Text>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.xl,
+                  padding: spacing.lg,
+                  marginBottom: spacing.xl,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: spacing.md }}>
+                  <View
+                    style={[
+                      styles.iconCircle,
+                      {
+                        backgroundColor: twoFactorEnabled ? colors.statusSuccessLight : colors.surfaceSubtle,
+                        borderRadius: radii.full,
+                        width: 36,
+                        height: 36,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      },
+                    ]}
+                  >
+                    <Shield size={18} color={twoFactorEnabled ? colors.statusSuccess : colors.textSecondary} />
+                  </View>
+                  <View style={{ marginLeft: spacing.md, flex: 1 }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                      Authenticator App Verification
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
+                      {twoFactorEnabled ? 'Active • Requires 6-digit TOTP code on login' : 'Disabled • Protect against unauthorized access'}
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={twoFactorEnabled}
+                  onValueChange={(val) => {
+                    if (val) setTwoFactorVisible(true);
+                    else setTwoFactorEnabled(false);
+                  }}
+                  trackColor={{ false: colors.borderSubtle, true: colors.primary }}
+                />
+              </View>
+            </View>
+
+            {/* Passkeys */}
+            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+              FIDO2 Biometric Passkeys
+            </Text>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.xl,
+                  padding: spacing.lg,
+                  marginBottom: spacing.xl,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                  Registered Hardware Tokens
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setPasskeyVisible(true)}
+                  style={[
+                    styles.addBtn,
+                    {
+                      backgroundColor: colors.primaryLight,
+                      borderRadius: radii.full,
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: 4,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 11 }}>
+                    + Register Device
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {passkeys.length === 0 ? (
+                <View
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: colors.surfaceSubtle,
+                      borderColor: colors.borderSubtle,
+                      borderRadius: radii.lg,
+                      padding: spacing.xl,
+                      alignItems: 'center',
+                    },
+                  ]}
+                >
+                  <Fingerprint size={32} color={colors.textTertiary} />
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: typography.fonts.semiBold,
+                      fontSize: typography.sizes.bodySm,
+                      marginTop: spacing.sm,
+                    }}
+                  >
+                    No Biometric Passkeys Registered
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: typography.fonts.regular,
+                      fontSize: typography.sizes.xs,
+                      textAlign: 'center',
+                      marginTop: 2,
+                      maxWidth: 320,
+                    }}
+                  >
+                    Register Touch ID, Face ID, or Windows Hello for instant passwordless sign-in with your hardware security enclave.
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {passkeys.map((p, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.passkeyRow,
+                        {
+                          backgroundColor: colors.surfaceSubtle,
+                          borderRadius: radii.md,
+                          padding: spacing.md,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        },
+                      ]}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Fingerprint size={20} color={colors.primary} />
+                        <View style={{ marginLeft: spacing.md }}>
+                          <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }}>
+                            {p.name}
+                          </Text>
+                          <Text style={{ color: colors.textTertiary, fontSize: 11, marginTop: 1 }}>
+                            {p.enrolledAt}
+                          </Text>
+                        </View>
+                      </View>
+                      <View
+                        style={[
+                          styles.activeBadge,
+                          {
+                            backgroundColor: colors.statusSuccessLight,
+                            borderRadius: radii.full,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: colors.statusSuccess, fontSize: 10, fontFamily: typography.fonts.semiBold }}>
+                          Hardware Verified
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -743,6 +972,80 @@ export function SettingsScreen() {
                 </View>
               </View>
             </View>
+
+            {/* Financial Alerts & Notifications */}
+            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+              Financial Alerts & Notifications
+            </Text>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.xl,
+                  padding: spacing.lg,
+                  marginBottom: spacing.xl,
+                },
+              ]}
+            >
+              <View style={{ gap: 16 }}>
+                {/* Bill Reminders */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1, marginRight: spacing.md }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                      Upcoming Bill Due Reminders
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
+                      Receive proactive notifications 3 days and 1 day prior to scheduled subscription renewals.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={billReminders}
+                    onValueChange={setBillReminders}
+                    trackColor={{ false: colors.borderSubtle, true: colors.primary }}
+                  />
+                </View>
+
+                <View style={{ height: 1, backgroundColor: colors.borderSubtle }} />
+
+                {/* Budget Alerts */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1, marginRight: spacing.md }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                      Envelope Limit Threshold Warnings
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
+                      Alert when any category envelope exceeds 80% or 100% of planned monthly allocation.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={budgetAlerts}
+                    onValueChange={setBudgetAlerts}
+                    trackColor={{ false: colors.borderSubtle, true: colors.primary }}
+                  />
+                </View>
+
+                <View style={{ height: 1, backgroundColor: colors.borderSubtle }} />
+
+                {/* Weekly Digest */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1, marginRight: spacing.md }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                      Weekly Executive Cash Flow Digest
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
+                      Automated weekly summary of net cash retained, top spenders, and portfolio variance.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={weeklyDigest}
+                    onValueChange={setWeeklyDigest}
+                    trackColor={{ false: colors.borderSubtle, true: colors.primary }}
+                  />
+                </View>
+              </View>
+            </View>
           </View>
         )}
 
@@ -846,331 +1149,7 @@ export function SettingsScreen() {
         )}
 
         {/* =========================================================================
-            TAB 5: SECURITY & ACCESS
-        ========================================================================== */}
-        {activeTab === 'security' && (
-          <View>
-            {/* Password Management */}
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Password & Authentication
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: spacing.md }}>
-                  <View
-                    style={[
-                      styles.iconCircle,
-                      {
-                        backgroundColor: colors.primaryLight,
-                        borderRadius: radii.full,
-                        width: 36,
-                        height: 36,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      },
-                    ]}
-                  >
-                    <KeyRound size={18} color={colors.primary} />
-                  </View>
-                  <View style={{ marginLeft: spacing.md, flex: 1 }}>
-                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                      Account Password
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
-                      Secured with end-to-end cryptographic hashing. Minimum 10 characters.
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setPasswordSheetVisible(true)}
-                  style={[
-                    styles.addBtn,
-                    {
-                      backgroundColor: colors.primaryLight,
-                      borderRadius: radii.full,
-                      paddingHorizontal: spacing.md,
-                      paddingVertical: 6,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 12 }}>
-                    Change Password
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Two-Factor Authentication (2FA)
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: spacing.md }}>
-                  <View
-                    style={[
-                      styles.iconCircle,
-                      {
-                        backgroundColor: twoFactorEnabled ? colors.statusSuccessLight : colors.surfaceSubtle,
-                        borderRadius: radii.full,
-                        width: 36,
-                        height: 36,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      },
-                    ]}
-                  >
-                    <Shield size={18} color={twoFactorEnabled ? colors.statusSuccess : colors.textSecondary} />
-                  </View>
-                  <View style={{ marginLeft: spacing.md, flex: 1 }}>
-                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                      Authenticator App Verification
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
-                      {twoFactorEnabled ? 'Active • Requires 6-digit TOTP code on login' : 'Disabled • Protect against unauthorized access'}
-                    </Text>
-                  </View>
-                </View>
-                <Switch
-                  value={twoFactorEnabled}
-                  onValueChange={(val) => {
-                    if (val) setTwoFactorVisible(true);
-                    else setTwoFactorEnabled(false);
-                  }}
-                  trackColor={{ false: colors.borderSubtle, true: colors.primary }}
-                />
-              </View>
-            </View>
-
-            {/* Passkeys */}
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              FIDO2 Biometric Passkeys
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
-                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                  Registered Hardware Tokens
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setPasskeyVisible(true)}
-                  style={[
-                    styles.addBtn,
-                    {
-                      backgroundColor: colors.primaryLight,
-                      borderRadius: radii.full,
-                      paddingHorizontal: spacing.sm,
-                      paddingVertical: 4,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 11 }}>
-                    + Register Device
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {passkeys.length === 0 ? (
-                <View
-                  style={[
-                    styles.card,
-                    {
-                      backgroundColor: colors.surfaceSubtle,
-                      borderColor: colors.borderSubtle,
-                      borderRadius: radii.lg,
-                      padding: spacing.xl,
-                      alignItems: 'center',
-                    },
-                  ]}
-                >
-                  <Fingerprint size={32} color={colors.textTertiary} />
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: typography.fonts.semiBold,
-                      fontSize: typography.sizes.bodySm,
-                      marginTop: spacing.sm,
-                    }}
-                  >
-                    No Biometric Passkeys Registered
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontFamily: typography.fonts.regular,
-                      fontSize: typography.sizes.xs,
-                      textAlign: 'center',
-                      marginTop: 2,
-                      maxWidth: 320,
-                    }}
-                  >
-                    Register Touch ID, Face ID, or Windows Hello for instant passwordless sign-in with your hardware security enclave.
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ gap: 8 }}>
-                  {passkeys.map((p, idx) => (
-                    <View
-                      key={idx}
-                      style={[
-                        styles.passkeyRow,
-                        {
-                          backgroundColor: colors.surfaceSubtle,
-                          borderRadius: radii.md,
-                          padding: spacing.md,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        },
-                      ]}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Fingerprint size={20} color={colors.primary} />
-                        <View style={{ marginLeft: spacing.md }}>
-                          <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }}>
-                            {p.name}
-                          </Text>
-                          <Text style={{ color: colors.textTertiary, fontSize: 11, marginTop: 1 }}>
-                            {p.enrolledAt}
-                          </Text>
-                        </View>
-                      </View>
-                      <View
-                        style={[
-                          styles.activeBadge,
-                          {
-                            backgroundColor: colors.statusSuccessLight,
-                            borderRadius: radii.full,
-                            paddingHorizontal: 8,
-                            paddingVertical: 2,
-                          },
-                        ]}
-                      >
-                        <Text style={{ color: colors.statusSuccess, fontSize: 10, fontFamily: typography.fonts.semiBold }}>
-                          Hardware Verified
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* =========================================================================
-            TAB 6: NOTIFICATIONS & ALERTS
-        ========================================================================== */}
-        {activeTab === 'notifications' && (
-          <View>
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Financial Alerts & Notifications
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <View style={{ gap: 16 }}>
-                {/* Bill Reminders */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flex: 1, marginRight: spacing.md }}>
-                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                      Upcoming Bill Due Reminders
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
-                      Receive proactive notifications 3 days and 1 day prior to scheduled subscription renewals.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={billReminders}
-                    onValueChange={setBillReminders}
-                    trackColor={{ false: colors.borderSubtle, true: colors.primary }}
-                  />
-                </View>
-
-                <View style={{ height: 1, backgroundColor: colors.borderSubtle }} />
-
-                {/* Budget Alerts */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flex: 1, marginRight: spacing.md }}>
-                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                      Envelope Limit Threshold Warnings
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
-                      Alert when any category envelope exceeds 80% or 100% of planned monthly allocation.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={budgetAlerts}
-                    onValueChange={setBudgetAlerts}
-                    trackColor={{ false: colors.borderSubtle, true: colors.primary }}
-                  />
-                </View>
-
-                <View style={{ height: 1, backgroundColor: colors.borderSubtle }} />
-
-                {/* Weekly Digest */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flex: 1, marginRight: spacing.md }}>
-                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                      Weekly Executive Cash Flow Digest
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
-                      Automated weekly summary of net cash retained, top spenders, and portfolio variance.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={weeklyDigest}
-                    onValueChange={setWeeklyDigest}
-                    trackColor={{ false: colors.borderSubtle, true: colors.primary }}
-                  />
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* =========================================================================
-            TAB 7: DATA MANAGEMENT & DANGER ZONE
+            TAB 4: DATA MANAGEMENT & DANGER ZONE
         ========================================================================== */}
         {activeTab === 'data' && (
           <View>
