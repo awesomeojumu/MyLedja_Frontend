@@ -365,17 +365,6 @@ export function TransactionsScreen() {
               {netMinor >= 0n ? '+' : ''}{formatNaira(netMinor)}
             </Text>
           </View>
-
-          <View style={[styles.summaryDivider, { backgroundColor: colors.borderSubtle }]} />
-
-          <View style={styles.summaryColSmall}>
-            <Text style={{ color: colors.textTertiary, fontFamily: typography.fonts.medium, fontSize: 11 }}>
-              COUNT
-            </Text>
-            <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.sm + 1, marginTop: 2 }}>
-              {filteredTransactions.length}
-            </Text>
-          </View>
         </View>
 
         {/* Filter & Search Bar with All 5 Preset Tabs */}
