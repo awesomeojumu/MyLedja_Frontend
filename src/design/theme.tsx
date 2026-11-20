@@ -32,10 +32,38 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 const THEME_STORAGE_KEY = 'user_theme_mode';
 const ACCENT_STORAGE_KEY = 'user_theme_accent';
 
+function getInitialThemeMode(): ThemeMode {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const saved = window.localStorage.getItem(`myledja:${THEME_STORAGE_KEY}`);
+      if (saved === 'light' || saved === 'dark' || saved === 'system') {
+        return saved;
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  return 'light';
+}
+
+function getInitialAccent(): ThemeAccent {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const saved = window.localStorage.getItem(`myledja:${ACCENT_STORAGE_KEY}`);
+      if (saved && THEME_ACCENTS.some((a) => a.id === saved)) {
+        return saved as ThemeAccent;
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  return 'blue';
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemColorScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>('light'); // default Light theme
-  const [accent, setAccentState] = useState<ThemeAccent>('blue'); // default Cobalt Blue
+  const [mode, setModeState] = useState<ThemeMode>(getInitialThemeMode);
+  const [accent, setAccentState] = useState<ThemeAccent>(getInitialAccent);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -61,6 +89,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setThemeMode = (newMode: ThemeMode) => {
     setModeState(newMode);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(`myledja:${THEME_STORAGE_KEY}`, newMode);
+      } catch {
+        // Ignore storage errors
+      }
+    }
     try {
       const kv = openKeyValue('myledja');
       kv.set([[THEME_STORAGE_KEY, newMode]]);
@@ -71,6 +106,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setAccent = (newAccent: ThemeAccent) => {
     setAccentState(newAccent);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(`myledja:${ACCENT_STORAGE_KEY}`, newAccent);
+      } catch {
+        // Ignore storage errors
+      }
+    }
     try {
       const kv = openKeyValue('myledja');
       kv.set([[ACCENT_STORAGE_KEY, newAccent]]);
