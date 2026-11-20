@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Link2 } from 'lucide-react-native';
 import { useTheme, BottomSheet, CurrencyInput, TextInput, Dropdown, Button } from '../../design';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
 import { EXPENSE_TAXONOMY, INCOME_TAXONOMY } from '../../data/categoriesTaxonomy';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 export interface QuickTransactionSheetProps {
   visible: boolean;
@@ -14,6 +16,9 @@ export interface QuickTransactionSheetProps {
     account: string;
     payee: string;
     note: string;
+    linkType?: 'investment' | 'goal' | 'debt';
+    linkTargetId?: string;
+    linkTargetName?: string;
   }) => void;
 }
 
@@ -28,13 +33,28 @@ export function QuickTransactionSheet({
   type,
   onSave,
 }: QuickTransactionSheetProps) {
-  const { colors, typography, spacing } = useTheme();
+  const { colors, typography, spacing, radii } = useTheme();
   const {
     getExpenseOptions,
     getIncomeOptions,
     getSubcategoriesForExpense,
     getSubcategoriesForIncome,
   } = useCategoryPreferences();
+
+  // Live Database Lists for Smart Linking
+  const {
+    holdings: dbHoldings,
+    goals: dbGoals,
+    debts: dbDebts,
+    accounts: dbAccounts,
+  } = useDatabaseData();
+
+  const accountOptions = useMemo(() => {
+    if (dbAccounts.length > 0) {
+      return dbAccounts.map((a) => a.name);
+    }
+    return DEFAULT_ACCOUNTS;
+  }, [dbAccounts]);
 
   const expenseOptions = useMemo(() => getExpenseOptions(), [getExpenseOptions]);
   const incomeOptions = useMemo(() => getIncomeOptions(), [getIncomeOptions]);
@@ -47,6 +67,114 @@ export function QuickTransactionSheet({
   const [selectedAccount, setSelectedAccount] = useState<string>('GTBank (Current)');
   const [payee, setPayee] = useState('');
   const [error, setError] = useState('');
+
+  // Smart Link Detection
+  const isSavingsOrInvestment =
+    selectedCategory.toLowerCase().includes('savings') ||
+    selectedCategory.toLowerCase().includes('investment');
+
+  const isDebtOrLoan =
+    selectedCategory.toLowerCase().includes('obligation') ||
+    selectedCategory.toLowerCase().includes('debt') ||
+    selectedCategory.toLowerCase().includes('loan');
+
+  const subLower = selectedSubcategory.toLowerCase();
+  const isGoalSub =
+    subLower.includes('saving') ||
+    subLower.includes('emergency') ||
+    subLower.includes('vault') ||
+    subLower.includes('goal') ||
+    subLower.includes('contribution');
+
+  const isInvestmentSub =
+    subLower.includes('stock') ||
+    subLower.includes('bond') ||
+    subLower.includes('fund') ||
+    subLower.includes('invest') ||
+    subLower.includes('real estate') ||
+    subLower.includes('crypto') ||
+    subLower.includes('share') ||
+    subLower.includes('equity');
+
+  const [overrideLinkType, setOverrideLinkType] = useState<'investment' | 'goal' | null>(null);
+  const [selectedTargetId, setSelectedTargetId] = useState<string>('');
+
+  // Reset target when category changes
+  useEffect(() => {
+    setSelectedTargetId('');
+    setOverrideLinkType(null);
+  }, [selectedCategory, selectedSubcategory]);
+
+  const activeLinkType: 'investment' | 'goal' | 'debt' | null = useMemo(() => {
+    if (isDebtOrLoan) return 'debt';
+    if (isSavingsOrInvestment) {
+      if (overrideLinkType) return overrideLinkType;
+      if (isGoalSub) return 'goal';
+      if (isInvestmentSub) return 'investment';
+      return 'investment';
+    }
+    return null;
+  }, [isDebtOrLoan, isSavingsOrInvestment, isGoalSub, isInvestmentSub, overrideLinkType]);
+
+  // Target options per active link type
+  const targetOptions = useMemo(() => {
+    if (activeLinkType === 'investment') {
+      const dbList = dbHoldings.map((h) => ({
+        label: `${h.name} (${h.symbol || 'Asset'})`,
+        value: h.id,
+      }));
+      const defaults = [
+        { label: 'MTN Nigeria Plc (MTNN)', value: 'MTNN' },
+        { label: 'Guaranty Trust Holding (GTCO)', value: 'GTCO' },
+        { label: 'Airtel Africa Plc (AIRTELAFRI)', value: 'AIRTELAFRI' },
+        { label: 'Vanguard S&P 500 (VOO)', value: 'VOO' },
+      ].filter((d) => !dbList.some((existing) => existing.value === d.value));
+
+      return [
+        { label: 'None (Record as General Expense)', value: '' },
+        ...dbList,
+        ...defaults,
+      ];
+    }
+
+    if (activeLinkType === 'goal') {
+      const dbList = dbGoals.map((g) => ({
+        label: g.name,
+        value: g.id,
+      }));
+      const defaults = [
+        { label: 'Emergency Fund Vault (6 Months)', value: 'g-emergency' },
+        { label: 'Annual Apartment Rent Advance', value: 'g-rent' },
+        { label: 'MacBook Pro Workstation', value: 'g-macbook' },
+      ].filter((d) => !dbList.some((existing) => existing.value === d.value));
+
+      return [
+        { label: 'None (Record as General Expense)', value: '' },
+        ...dbList,
+        ...defaults,
+      ];
+    }
+
+    if (activeLinkType === 'debt') {
+      const dbList = dbDebts.map((d) => ({
+        label: `${d.name} (${d.direction === 'owedToMe' ? 'Lent' : 'Borrowed'})`,
+        value: d.id,
+      }));
+      const defaults = [
+        { label: 'Stanbic Quick Credit', value: 'd-stanbic' },
+        { label: 'Tunde Alabi (Colleague)', value: 'd-tunde' },
+        { label: 'Amina Bello (Sister)', value: 'd-amina' },
+      ].filter((d) => !dbList.some((existing) => existing.value === d.value));
+
+      return [
+        { label: 'None (Record as General Expense)', value: '' },
+        ...dbList,
+        ...defaults,
+      ];
+    }
+
+    return [];
+  }, [activeLinkType, dbHoldings, dbGoals, dbDebts]);
 
   // Synchronize default category when switching between Expense and Income
   useEffect(() => {
@@ -86,17 +214,24 @@ export function QuickTransactionSheet({
       ? `${selectedCategory}: ${selectedSubcategory}`
       : selectedCategory;
 
+    const chosenTarget = targetOptions.find((t) => t.value === selectedTargetId);
+
     onSave({
       amount,
       category: finalCategory || (type === 'income' ? 'Employment' : 'Food'),
-      account: selectedAccount || 'GTBank (Current)',
+      account: selectedAccount || accountOptions[0] || 'GTBank (Current)',
       payee: payee.trim(),
       note: '',
+      linkType: selectedTargetId ? (activeLinkType ?? undefined) : undefined,
+      linkTargetId: selectedTargetId || undefined,
+      linkTargetName: chosenTarget && chosenTarget.value ? chosenTarget.label : undefined,
     });
     // Reset and close
     setAmount('');
     setPayee('');
     setSelectedSubcategory('');
+    setSelectedTargetId('');
+    setOverrideLinkType(null);
     onClose();
   };
 
@@ -122,7 +257,7 @@ export function QuickTransactionSheet({
         <Dropdown
           label={type === 'expense' ? 'Paid via' : 'Deposit into Account'}
           value={selectedAccount}
-          options={DEFAULT_ACCOUNTS}
+          options={accountOptions}
           onSelect={setSelectedAccount}
           containerStyle={{ marginTop: spacing.sm + 2 }}
         />
@@ -150,6 +285,118 @@ export function QuickTransactionSheet({
           />
         )}
 
+        {/* Step 4b: Smart Link Target for Investments, Savings Goals, or Debts */}
+        {activeLinkType && (
+          <View
+            style={[
+              styles.smartLinkCard,
+              {
+                backgroundColor: colors.surfaceSubtle,
+                borderColor: colors.borderSubtle,
+                borderRadius: radii.md,
+                padding: spacing.sm,
+                marginTop: spacing.sm + 2,
+              },
+            ]}
+          >
+            {/* Header info & switcher */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 6,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Link2 size={13} color={colors.primary} />
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontFamily: typography.fonts.semiBold,
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {activeLinkType === 'investment'
+                    ? 'Smart Link: Investment Asset'
+                    : activeLinkType === 'goal'
+                    ? 'Smart Link: Savings Goal'
+                    : 'Smart Link: Debt / Loan Repayment'}
+                </Text>
+              </View>
+
+              {/* If Savings & Investments, allow 1-tap switcher between Investment and Goal */}
+              {isSavingsOrInvestment && (
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setOverrideLinkType('investment');
+                      setSelectedTargetId('');
+                    }}
+                    style={{
+                      paddingHorizontal: 7,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                      backgroundColor:
+                        activeLinkType === 'investment' ? colors.primary : colors.surface,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontFamily: typography.fonts.medium,
+                        color:
+                          activeLinkType === 'investment' ? '#fff' : colors.textSecondary,
+                      }}
+                    >
+                      Investment
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setOverrideLinkType('goal');
+                      setSelectedTargetId('');
+                    }}
+                    style={{
+                      paddingHorizontal: 7,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                      backgroundColor:
+                        activeLinkType === 'goal' ? colors.primary : colors.surface,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontFamily: typography.fonts.medium,
+                        color: activeLinkType === 'goal' ? '#fff' : colors.textSecondary,
+                      }}
+                    >
+                      Savings Goal
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            <Dropdown
+              label={
+                activeLinkType === 'investment'
+                  ? 'Target Portfolio Holding'
+                  : activeLinkType === 'goal'
+                  ? 'Target Savings Goal'
+                  : 'Target Debt to Repay'
+              }
+              value={selectedTargetId}
+              options={targetOptions}
+              onSelect={setSelectedTargetId}
+            />
+          </View>
+        )}
+
         {/* Step 5: Description / Purpose of Payment */}
         <TextInput
           label={type === 'income' ? 'Description / Income Source' : 'Purpose / Description'}
@@ -175,4 +422,7 @@ export function QuickTransactionSheet({
 
 const styles = StyleSheet.create({
   form: { width: '100%' },
+  smartLinkCard: {
+    borderWidth: 1,
+  },
 });
