@@ -733,7 +733,7 @@ export function SettingsScreen() {
           <View>
             {/* Color Theme & Appearance Card */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Interface Theme & Appearance
+              Theme & Appearance
             </Text>
             <View
               style={[
@@ -742,125 +742,116 @@ export function SettingsScreen() {
                   backgroundColor: colors.surface,
                   borderColor: colors.borderSubtle,
                   borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
+                  padding: spacing.md,
+                  marginBottom: spacing.md,
                 },
               ]}
             >
               {/* Light vs Dark Mode */}
-              <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity
                   onPress={() => setThemeMode('light')}
-                  style={[
-                    styles.themeCard,
-                    {
-                      borderColor: !isDark ? colors.primary : colors.borderSubtle,
-                      borderWidth: !isDark ? 2 : 1,
-                      backgroundColor: !isDark ? colors.primaryLight : colors.surfaceSubtle,
-                      borderRadius: radii.lg,
-                      padding: spacing.md,
-                      flex: 1,
-                      alignItems: 'center',
-                    },
-                  ]}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    borderColor: !isDark ? colors.primary : colors.borderSubtle,
+                    borderWidth: !isDark ? 2 : 1,
+                    backgroundColor: !isDark ? colors.primaryLight : colors.surfaceSubtle,
+                    borderRadius: radii.md,
+                    paddingVertical: 7,
+                    paddingHorizontal: 10,
+                  }}
                 >
-                  <Sun size={22} color={!isDark ? colors.primary : colors.textSecondary} />
+                  <Sun size={15} color={!isDark ? colors.primary : colors.textSecondary} />
                   <Text
                     style={{
                       color: !isDark ? colors.primary : colors.textPrimary,
                       fontFamily: typography.fonts.semiBold,
-                      fontSize: typography.sizes.bodySm,
-                      marginTop: 6,
+                      fontSize: typography.sizes.xs,
                     }}
                   >
                     Pure White
                   </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2, textAlign: 'center' }}>
-                    High contrast daylight theme
-                  </Text>
+                  {!isDark && <Check size={13} color={colors.primary} />}
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   onPress={() => setThemeMode('dark')}
-                  style={[
-                    styles.themeCard,
-                    {
-                      borderColor: isDark ? colors.primary : colors.borderSubtle,
-                      borderWidth: isDark ? 2 : 1,
-                      backgroundColor: isDark ? colors.primaryLight : colors.surfaceSubtle,
-                      borderRadius: radii.lg,
-                      padding: spacing.md,
-                      flex: 1,
-                      alignItems: 'center',
-                    },
-                  ]}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    borderColor: isDark ? colors.primary : colors.borderSubtle,
+                    borderWidth: isDark ? 2 : 1,
+                    backgroundColor: isDark ? colors.primaryLight : colors.surfaceSubtle,
+                    borderRadius: radii.md,
+                    paddingVertical: 7,
+                    paddingHorizontal: 10,
+                  }}
                 >
-                  <Moon size={22} color={isDark ? colors.primary : colors.textSecondary} />
+                  <Moon size={15} color={isDark ? colors.primary : colors.textSecondary} />
                   <Text
                     style={{
                       color: isDark ? colors.primary : colors.textPrimary,
                       fontFamily: typography.fonts.semiBold,
-                      fontSize: typography.sizes.bodySm,
-                      marginTop: 6,
+                      fontSize: typography.sizes.xs,
                     }}
                   >
                     Midnight Slate
                   </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2, textAlign: 'center' }}>
-                    Deep navy eye protection
-                  </Text>
+                  {isDark && <Check size={13} color={colors.primary} />}
                 </TouchableOpacity>
               </View>
 
               {/* Theme Colors (Accent Palettes) */}
-              <View style={{ marginTop: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
-                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginBottom: 2 }}>
+              <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs, marginBottom: 6 }}>
                   Theme Accent Color
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginBottom: spacing.md }}>
-                  Personalize the primary accent color across buttons, indicators, charts, and highlights.
-                </Text>
 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                   {THEME_ACCENTS.map((item) => {
                     const isSelected = accent === item.id;
                     return (
                       <TouchableOpacity
                         key={item.id}
                         onPress={() => setAccent(item.id)}
-                        style={[
-                          {
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: isSelected ? colors.surfaceSubtle : 'transparent',
-                            borderColor: isSelected ? item.swatch : colors.borderSubtle,
-                            borderWidth: isSelected ? 2 : 1,
-                            borderRadius: radii.full,
-                            paddingVertical: 6,
-                            paddingHorizontal: 12,
-                          },
-                        ]}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: isSelected ? colors.surfaceSubtle : 'transparent',
+                          borderColor: isSelected ? item.swatch : colors.borderSubtle,
+                          borderWidth: isSelected ? 2 : 1,
+                          borderRadius: radii.full,
+                          paddingVertical: 4,
+                          paddingHorizontal: 9,
+                        }}
                       >
                         <View
                           style={{
-                            width: 14,
-                            height: 14,
+                            width: 10,
+                            height: 10,
                             borderRadius: radii.full,
                             backgroundColor: item.swatch,
-                            marginRight: 8,
+                            marginRight: 5,
                           }}
                         />
                         <Text
                           style={{
                             color: isSelected ? colors.textPrimary : colors.textSecondary,
                             fontFamily: isSelected ? typography.fonts.semiBold : typography.fonts.medium,
-                            fontSize: 12,
+                            fontSize: 11,
                           }}
                         >
                           {item.name}
                         </Text>
                         {isSelected && (
-                          <Check size={12} color={item.swatch} style={{ marginLeft: 6 }} />
+                          <Check size={11} color={item.swatch} style={{ marginLeft: 4 }} />
                         )}
                       </TouchableOpacity>
                     );
@@ -869,68 +860,59 @@ export function SettingsScreen() {
               </View>
 
               {/* Interface Density */}
-              <View style={{ marginTop: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
-                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginBottom: 2 }}>
+              <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs, marginBottom: 6 }}>
                   Interface Density
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginBottom: spacing.md }}>
-                  Adjust spacing and touch target sizing across the application.
-                </Text>
 
-                <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
                     onPress={() => setUiDensity('comfortable')}
-                    style={[
-                      styles.densityCard,
-                      {
-                        borderColor: uiDensity === 'comfortable' ? colors.primary : colors.borderSubtle,
-                        borderWidth: uiDensity === 'comfortable' ? 2 : 1,
-                        backgroundColor: uiDensity === 'comfortable' ? colors.primaryLight : colors.surfaceSubtle,
-                        borderRadius: radii.lg,
-                        padding: spacing.md,
-                        flex: 1,
-                      },
-                    ]}
+                    style={{
+                      flex: 1,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderColor: uiDensity === 'comfortable' ? colors.primary : colors.borderSubtle,
+                      borderWidth: uiDensity === 'comfortable' ? 2 : 1,
+                      backgroundColor: uiDensity === 'comfortable' ? colors.primaryLight : colors.surfaceSubtle,
+                      borderRadius: radii.md,
+                      paddingVertical: 6,
+                      paddingHorizontal: 10,
+                    }}
                   >
                     <Text
                       style={{
                         color: uiDensity === 'comfortable' ? colors.primary : colors.textPrimary,
                         fontFamily: typography.fonts.semiBold,
-                        fontSize: typography.sizes.bodySm,
+                        fontSize: typography.sizes.xs,
                       }}
                     >
                       Comfortable
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-                      Standard padding and generous touch targets
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     onPress={() => setUiDensity('compact')}
-                    style={[
-                      styles.densityCard,
-                      {
-                        borderColor: uiDensity === 'compact' ? colors.primary : colors.borderSubtle,
-                        borderWidth: uiDensity === 'compact' ? 2 : 1,
-                        backgroundColor: uiDensity === 'compact' ? colors.primaryLight : colors.surfaceSubtle,
-                        borderRadius: radii.lg,
-                        padding: spacing.md,
-                        flex: 1,
-                      },
-                    ]}
+                    style={{
+                      flex: 1,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderColor: uiDensity === 'compact' ? colors.primary : colors.borderSubtle,
+                      borderWidth: uiDensity === 'compact' ? 2 : 1,
+                      backgroundColor: uiDensity === 'compact' ? colors.primaryLight : colors.surfaceSubtle,
+                      borderRadius: radii.md,
+                      paddingVertical: 6,
+                      paddingHorizontal: 10,
+                    }}
                   >
                     <Text
                       style={{
                         color: uiDensity === 'compact' ? colors.primary : colors.textPrimary,
                         fontFamily: typography.fonts.semiBold,
-                        fontSize: typography.sizes.bodySm,
+                        fontSize: typography.sizes.xs,
                       }}
                     >
                       High Density
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-                      Compact rows for high-volume ledger transactions
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -948,26 +930,23 @@ export function SettingsScreen() {
                   backgroundColor: colors.surface,
                   borderColor: colors.borderSubtle,
                   borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
+                  padding: spacing.md,
+                  marginBottom: spacing.md,
                 },
               ]}
             >
-              <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginBottom: 2 }}>
+              <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs, marginBottom: 6 }}>
                 Primary Ledger Currency
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginBottom: spacing.md }}>
-                Base currency for consolidated Net Worth, Budget envelopes, and statutory reports.
-              </Text>
 
-              {/* Compact 2x2 Grid of Currencies */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.lg }}>
+              {/* 4 Currencies in a Single Row */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                 {(
                   [
-                    { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', sub: 'Domestic Ledger' },
-                    { code: 'USD', name: 'US Dollar', symbol: '$', sub: 'International Holdings' },
-                    { code: 'GBP', name: 'British Pound', symbol: '£', sub: 'Foreign Accounts' },
-                    { code: 'EUR', name: 'Euro', symbol: '€', sub: 'Eurozone Inflows' },
+                    { code: 'NGN', name: 'Naira', symbol: '₦' },
+                    { code: 'USD', name: 'Dollar', symbol: '$' },
+                    { code: 'GBP', name: 'Pound', symbol: '£' },
+                    { code: 'EUR', name: 'Euro', symbol: '€' },
                   ] as const
                 ).map((c) => {
                   const isSelected = currency === c.code;
@@ -975,64 +954,41 @@ export function SettingsScreen() {
                     <TouchableOpacity
                       key={c.code}
                       onPress={() => setCurrency(c.code)}
-                      style={[
-                        {
-                          flex: 1,
-                          minWidth: '47%',
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
-                          borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                          borderWidth: isSelected ? 2 : 1,
-                          borderRadius: radii.lg,
-                          padding: spacing.md,
-                        },
-                      ]}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 5,
+                        backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
+                        borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                        borderWidth: isSelected ? 2 : 1,
+                        borderRadius: radii.md,
+                        paddingVertical: 7,
+                        paddingHorizontal: 6,
+                      }}
                     >
-                      <View
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: radii.full,
-                          backgroundColor: isSelected ? colors.primary : colors.borderSubtle,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: spacing.sm,
-                        }}
-                      >
-                        <Text style={{ color: isSelected ? '#FFFFFF' : colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: 14 }}>
-                          {c.symbol}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: isSelected ? colors.primary : colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                          {c.code}
-                        </Text>
-                        <Text style={{ color: colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
-                          {c.name}
-                        </Text>
-                      </View>
-                      {isSelected && <Check size={16} color={colors.primary} />}
+                      <Text style={{ color: isSelected ? colors.primary : colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: 12 }}>
+                        {c.symbol} {c.code}
+                      </Text>
+                      {isSelected && <Check size={12} color={colors.primary} />}
                     </TouchableOpacity>
                   );
                 })}
               </View>
 
               {/* Date & Calendar Formatting */}
-              <View style={{ paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
-                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginBottom: 2 }}>
+              <View style={{ paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs, marginBottom: 6 }}>
                   Date & Calendar Formatting
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginBottom: spacing.md }}>
-                  Select the timestamp format rendered across your transaction statements.
-                </Text>
 
-                <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   {(
                     [
-                      { id: 'DD/MM/YYYY', label: 'DD/MM/YYYY', sub: 'Standard (NG/UK)' },
-                      { id: 'YYYY-MM-DD', label: 'YYYY-MM-DD', sub: 'ISO 8601' },
-                      { id: 'MM/DD/YYYY', label: 'MM/DD/YYYY', sub: 'US Format' },
+                      { id: 'DD/MM/YYYY', label: 'DD/MM/YYYY' },
+                      { id: 'YYYY-MM-DD', label: 'YYYY-MM-DD' },
+                      { id: 'MM/DD/YYYY', label: 'MM/DD/YYYY' },
                     ] as const
                   ).map((f) => {
                     const isSelected = dateFormat === f.id;
@@ -1040,30 +996,26 @@ export function SettingsScreen() {
                       <TouchableOpacity
                         key={f.id}
                         onPress={() => setDateFormat(f.id)}
-                        style={[
-                          {
-                            flex: 1,
-                            backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
-                            borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                            borderWidth: isSelected ? 2 : 1,
-                            borderRadius: radii.md,
-                            paddingVertical: 10,
-                            paddingHorizontal: spacing.sm,
-                            alignItems: 'center',
-                          },
-                        ]}
+                        style={{
+                          flex: 1,
+                          backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
+                          borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                          borderWidth: isSelected ? 2 : 1,
+                          borderRadius: radii.md,
+                          paddingVertical: 7,
+                          paddingHorizontal: 6,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
                       >
                         <Text
                           style={{
                             color: isSelected ? colors.primary : colors.textPrimary,
                             fontFamily: typography.fonts.semiBold,
-                            fontSize: typography.sizes.xs,
+                            fontSize: 11,
                           }}
                         >
                           {f.label}
-                        </Text>
-                        <Text style={{ color: colors.textSecondary, fontSize: 10, marginTop: 2 }}>
-                          {f.sub}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1083,20 +1035,20 @@ export function SettingsScreen() {
                   backgroundColor: colors.surface,
                   borderColor: colors.borderSubtle,
                   borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
+                  padding: spacing.md,
+                  marginBottom: spacing.md,
                 },
               ]}
             >
-              <View style={{ gap: 16 }}>
+              <View style={{ gap: 10 }}>
                 {/* Bill Reminders */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flex: 1, marginRight: spacing.md }}>
-                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs }}>
                       Upcoming Bill Due Reminders
                     </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
-                      Receive proactive notifications 3 days and 1 day prior to scheduled subscription renewals.
+                    <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
+                      Alert 3 days and 1 day prior to scheduled subscription renewals
                     </Text>
                   </View>
                   <Switch
@@ -1111,11 +1063,11 @@ export function SettingsScreen() {
                 {/* Budget Alerts */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flex: 1, marginRight: spacing.md }}>
-                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs }}>
                       Envelope Limit Threshold Warnings
                     </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
-                      Alert when any category envelope exceeds 80% or 100% of planned monthly allocation.
+                    <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
+                      Alert when category spending reaches 80% or 100% of planned monthly allocation
                     </Text>
                   </View>
                   <Switch
@@ -1130,11 +1082,11 @@ export function SettingsScreen() {
                 {/* Weekly Digest */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flex: 1, marginRight: spacing.md }}>
-                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                      Weekly Executive Cash Flow Digest
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs }}>
+                      Weekly Cash Flow Digest
                     </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
-                      Automated weekly summary of net cash retained, top spenders, and portfolio variance.
+                    <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
+                      Weekly summary of net cash retained, top spenders, and portfolio variance
                     </Text>
                   </View>
                   <Switch
