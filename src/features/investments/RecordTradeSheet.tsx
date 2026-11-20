@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import {
   TrendingUp,
   Building2,
@@ -8,9 +8,16 @@ import {
   Coins,
   Shield,
   Briefcase,
-  MapPin,
 } from 'lucide-react-native';
-import { useTheme, BottomSheet, TextInput, CurrencyInput, Button } from '../../design';
+import {
+  useTheme,
+  BottomSheet,
+  TextInput,
+  CurrencyInput,
+  Button,
+  Dropdown,
+  type DropdownOption,
+} from '../../design';
 import { parseAmount } from '../../money';
 import type { HoldingType, HoldingUnitType } from '../../data/workspace/model';
 
@@ -36,6 +43,7 @@ interface RecordTradeSheetProps {
 export const INVESTMENT_CATEGORIES: {
   id: HoldingType;
   label: string;
+  subtitle: string;
   icon: React.ComponentType<{ size: number; color: string }>;
   defaultTicker: string;
   namePlaceholder: string;
@@ -48,6 +56,7 @@ export const INVESTMENT_CATEGORIES: {
   {
     id: 'stock',
     label: 'Stocks & Equities',
+    subtitle: 'NGX & Global public equities, shares',
     icon: TrendingUp,
     defaultTicker: 'STOCK',
     namePlaceholder: 'e.g. MTN Nigeria Plc, Apple Inc',
@@ -60,6 +69,7 @@ export const INVESTMENT_CATEGORIES: {
   {
     id: 'realEstate',
     label: 'Real Estate & Land',
+    subtitle: 'Land plots, residential & commercial property',
     icon: Building2,
     defaultTicker: 'PROP',
     namePlaceholder: 'e.g. 2 Plots at Epe, 3-Bed Lekki',
@@ -72,6 +82,7 @@ export const INVESTMENT_CATEGORIES: {
   {
     id: 'fixedDeposit',
     label: 'Fixed Income & T-Bills',
+    subtitle: 'Treasury bills, fixed deposits, sovereign bonds',
     icon: Landmark,
     defaultTicker: 'TBILL',
     namePlaceholder: 'e.g. 364-Day FGN Treasury Bill, GTCO FD',
@@ -84,6 +95,7 @@ export const INVESTMENT_CATEGORIES: {
   {
     id: 'fund',
     label: 'Mutual Funds & ETFs',
+    subtitle: 'Money market funds, index ETFs, balanced funds',
     icon: PieChart,
     defaultTicker: 'FUND',
     namePlaceholder: 'e.g. Stanbic Money Market, VOO ETF',
@@ -96,6 +108,7 @@ export const INVESTMENT_CATEGORIES: {
   {
     id: 'crypto',
     label: 'Crypto & Digital Assets',
+    subtitle: 'Bitcoin, Ethereum, digital tokens',
     icon: Coins,
     defaultTicker: 'BTC',
     namePlaceholder: 'e.g. Bitcoin, Ethereum',
@@ -108,6 +121,7 @@ export const INVESTMENT_CATEGORIES: {
   {
     id: 'preciousMetals',
     label: 'Precious Metals',
+    subtitle: 'Physical gold bullion, silver, commodities',
     icon: Shield,
     defaultTicker: 'GOLD',
     namePlaceholder: 'e.g. 24k Gold Bullion Bar',
@@ -120,6 +134,7 @@ export const INVESTMENT_CATEGORIES: {
   {
     id: 'privateEquity',
     label: 'Business & Ventures',
+    subtitle: 'SME equity, startup investments, syndicates',
     icon: Briefcase,
     defaultTicker: 'VENTURE',
     namePlaceholder: 'e.g. Agro-Allied Farm Enterprise',
@@ -132,6 +147,7 @@ export const INVESTMENT_CATEGORIES: {
   {
     id: 'pension',
     label: 'Retirement & Pension',
+    subtitle: 'RSA pension fund allocations',
     icon: Shield,
     defaultTicker: 'RSA',
     namePlaceholder: 'e.g. Stanbic RSA Pension Fund',
@@ -177,6 +193,16 @@ export function RecordTradeSheet({
       setTicker('');
     }
   };
+
+  const dropdownOptions: DropdownOption[] = INVESTMENT_CATEGORIES.map((cat) => {
+    const IconComp = cat.icon;
+    return {
+      label: cat.label,
+      value: cat.id,
+      subtitle: cat.subtitle,
+      icon: <IconComp size={16} color={colors.primary} />,
+    };
+  });
 
   const handleSave = () => {
     const finalName = name.trim();
@@ -285,63 +311,15 @@ export function RecordTradeSheet({
           </TouchableOpacity>
         </View>
 
-        {/* Investment Asset Class Selector */}
-        <Text
-          style={{
-            color: colors.textSecondary,
-            fontFamily: typography.fonts.semiBold,
-            fontSize: typography.sizes.xs,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            marginBottom: spacing.xs,
-          }}
-        >
-          Select Asset Class
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: spacing.md }}
-          contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
-        >
-          {INVESTMENT_CATEGORIES.map((cat) => {
-            const isSelected = category === cat.id;
-            const IconComponent = cat.icon;
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                onPress={() => handleCategorySelect(cat.id)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
-                  borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                  borderWidth: isSelected ? 2 : 1,
-                  borderRadius: radii.full,
-                  paddingVertical: 6,
-                  paddingHorizontal: 12,
-                  gap: 6,
-                }}
-              >
-                <IconComponent
-                  size={14}
-                  color={isSelected ? colors.primary : colors.textSecondary}
-                />
-                <Text
-                  style={{
-                    color: isSelected ? colors.primary : colors.textPrimary,
-                    fontFamily: isSelected
-                      ? typography.fonts.semiBold
-                      : typography.fonts.medium,
-                    fontSize: 12,
-                  }}
-                >
-                  {cat.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {/* Investment Asset Class Dropdown */}
+        <View style={{ marginBottom: spacing.md, zIndex: 10 }}>
+          <Dropdown
+            label="Asset Class"
+            value={category}
+            options={dropdownOptions}
+            onSelect={(val) => handleCategorySelect(val as HoldingType)}
+          />
+        </View>
 
         {/* Dynamic Fields based on Selected Asset Class */}
         {activeCategory.showTicker && (
