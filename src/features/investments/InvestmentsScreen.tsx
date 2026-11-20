@@ -153,7 +153,12 @@ export function InvestmentsScreen() {
       }).catch((e: unknown) => console.warn('Failed to record holding in DB', e));
     }
     setLocalHoldings((prev) => {
-      const existing = prev.find((h) => h.ticker === trade.ticker && h.name === trade.name);
+      const existing = prev.find(
+        (h) =>
+          (trade.holdingId && h.id === trade.holdingId) ||
+          h.ticker.toUpperCase() === trade.ticker.toUpperCase() ||
+          h.name.toLowerCase() === trade.name.toLowerCase()
+      );
       if (existing) {
         if (trade.action === 'buy') {
           const totalExistingCost =
@@ -161,7 +166,10 @@ export function InvestmentsScreen() {
           const newTradeCost =
             (trade.priceMinor * BigInt(Math.round(trade.units * 100))) / 100n;
           const nextUnits = existing.units + trade.units;
-          const nextAvg = (totalExistingCost + newTradeCost) / BigInt(Math.round(nextUnits));
+          const nextAvg =
+            nextUnits > 0
+              ? (totalExistingCost + newTradeCost) / BigInt(Math.round(nextUnits))
+              : existing.avgCostMinor;
 
           return prev.map((h) =>
             h.id === existing.id
@@ -175,8 +183,11 @@ export function InvestmentsScreen() {
           );
         } else {
           const nextUnits = Math.max(0, existing.units - trade.units);
+          if (nextUnits <= 0) {
+            return prev.filter((h) => h.id !== existing.id);
+          }
           return prev.map((h) =>
-            h.id === existing.id ? { ...h, units: nextUnits } : h
+            h.id === existing.id ? { ...h, units: nextUnits, currentPriceMinor: trade.priceMinor } : h
           );
         }
       } else {
@@ -698,6 +709,14 @@ export function InvestmentsScreen() {
         visible={tradeSheetVisible}
         onClose={() => setTradeSheetVisible(false)}
         onSave={handleTrade}
+        existingHoldings={holdings.map((h) => ({
+          id: h.id,
+          ticker: h.ticker,
+          name: h.name,
+          units: h.units,
+          type: h.type,
+          unitType: h.unitType,
+        }))}
       />
 
       <QuickPriceUpdateSheet

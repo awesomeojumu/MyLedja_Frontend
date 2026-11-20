@@ -32,12 +32,23 @@ export interface AddedTrade {
   priceMinor: bigint;
   feesMinor: bigint;
   location?: string;
+  holdingId?: string;
+}
+
+export interface ExistingHoldingOption {
+  id: string;
+  ticker: string;
+  name: string;
+  units: number;
+  type: HoldingType;
+  unitType?: HoldingUnitType;
 }
 
 interface RecordTradeSheetProps {
   visible: boolean;
   onClose: () => void;
   onSave: (trade: AddedTrade) => void;
+  existingHoldings?: ExistingHoldingOption[];
 }
 
 export const INVESTMENT_CATEGORIES: {
@@ -163,11 +174,13 @@ export function RecordTradeSheet({
   visible,
   onClose,
   onSave,
+  existingHoldings = [],
 }: RecordTradeSheetProps) {
   const { colors, typography, spacing, radii } = useTheme();
 
   const [category, setCategory] = useState<HoldingType>('stock');
   const [action, setAction] = useState<'buy' | 'sell'>('buy');
+  const [selectedHoldingId, setSelectedHoldingId] = useState<string>('');
   const [ticker, setTicker] = useState('');
   const [name, setName] = useState('');
   const [units, setUnits] = useState('');
@@ -191,6 +204,18 @@ export function RecordTradeSheet({
       setTicker(catConfig.defaultTicker);
     } else {
       setTicker('');
+    }
+  };
+
+  const handleSelectExisting = (holdingId: string) => {
+    setSelectedHoldingId(holdingId);
+    const found = existingHoldings.find((h) => h.id === holdingId);
+    if (found) {
+      setName(found.name);
+      setTicker(found.ticker);
+      setCategory(found.type);
+      if (found.unitType) setUnitType(found.unitType);
+      setUnits(String(found.units));
     }
   };
 
@@ -237,6 +262,7 @@ export function RecordTradeSheet({
       priceMinor: parsedPrice.minor,
       feesMinor: parsedFees.ok ? parsedFees.minor : 0n,
       location: location.trim() || undefined,
+      holdingId: selectedHoldingId || undefined,
     });
 
     setTicker('');
@@ -245,12 +271,17 @@ export function RecordTradeSheet({
     setPriceText('');
     setFeesText('0');
     setLocation('');
+    setSelectedHoldingId('');
     setError('');
     onClose();
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Record Investment">
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title={action === 'sell' ? 'Liquidate / Sell Asset' : 'Record Investment'}
+    >
       <View style={styles.container}>
         {/* Buy vs Sell Action Toggle */}
         <View
@@ -265,7 +296,10 @@ export function RecordTradeSheet({
           ]}
         >
           <TouchableOpacity
-            onPress={() => setAction('buy')}
+            onPress={() => {
+              setAction('buy');
+              setSelectedHoldingId('');
+            }}
             style={[
               {
                 backgroundColor: action === 'buy' ? colors.surface : 'transparent',
@@ -310,6 +344,22 @@ export function RecordTradeSheet({
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* When Selling, show Existing Holdings Dropdown if available */}
+        {action === 'sell' && existingHoldings.length > 0 && (
+          <View style={{ marginBottom: spacing.sm, zIndex: 20 }}>
+            <Dropdown
+              label="Select Existing Holding to Liquidate"
+              value={selectedHoldingId}
+              options={existingHoldings.map((h) => ({
+                label: `${h.name} (${h.units} ${h.unitType || 'units'} held)`,
+                value: h.id,
+                subtitle: `${h.ticker} • ${h.type}`,
+              }))}
+              onSelect={handleSelectExisting}
+            />
+          </View>
+        )}
 
         {/* Investment Asset Class Dropdown */}
         <View style={{ marginBottom: spacing.md, zIndex: 10 }}>
@@ -365,7 +415,7 @@ export function RecordTradeSheet({
         {/* Unit Type & Quantity */}
         <View style={{ marginBottom: spacing.sm }}>
           <TextInput
-            label={activeCategory.unitLabel}
+            label={action === 'sell' ? `Units to Sell (${activeCategory.unitLabel})` : activeCategory.unitLabel}
             placeholder={activeCategory.unitPlaceholder}
             value={units}
             onChangeText={setUnits}
@@ -376,7 +426,7 @@ export function RecordTradeSheet({
         {/* Price / Valuation */}
         <View style={{ marginBottom: spacing.sm }}>
           <CurrencyInput
-            label={activeCategory.priceLabel}
+            label={action === 'sell' ? 'Liquidation / Selling Price per Unit' : activeCategory.priceLabel}
             value={priceText}
             onChangeText={setPriceText}
           />
@@ -386,7 +436,9 @@ export function RecordTradeSheet({
         <View style={{ marginBottom: spacing.md }}>
           <CurrencyInput
             label={
-              category === 'realEstate'
+              action === 'sell'
+                ? 'Exit / Brokerage / Settlement Fees'
+                : category === 'realEstate'
                 ? 'Survey / Deed / Legal Fees'
                 : category === 'stock'
                 ? 'Brokerage / SEC / CSCS Fees'
@@ -398,7 +450,11 @@ export function RecordTradeSheet({
         </View>
 
         <Button
-          label={`Save ${activeCategory.label} Investment`}
+          label={
+            action === 'sell'
+              ? `Liquidate / Sell ${activeCategory.label}`
+              : `Save ${activeCategory.label} Investment`
+          }
           onPress={handleSave}
           variant="primary"
           size="lg"
