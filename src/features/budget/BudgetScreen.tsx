@@ -587,12 +587,10 @@ export function BudgetScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{
-          padding: isDesktop ? spacing.md : spacing.md,
-          paddingHorizontal: isDesktop ? spacing.xl : spacing.md,
-          paddingBottom: isDesktop ? 40 : 80,
+          padding: spacing.lg,
+          paddingHorizontal: spacing.xl,
+          paddingBottom: isDesktop ? 60 : 100,
           width: '100%',
-          maxWidth: isDesktop ? 1040 : undefined,
-          alignSelf: isDesktop ? 'center' : undefined,
         }}
         showsVerticalScrollIndicator={false}
       >
