@@ -41,11 +41,13 @@ import {
   AlertTriangle,
   Mail,
   Calendar,
+  KeyRound,
 } from 'lucide-react-native';
 import { useTheme, Button, TextInput } from '../../design';
 import { useAuth } from '../auth/AuthProvider';
 import { TwoFactorSetupSheet } from './TwoFactorSetupSheet';
 import { PasskeySheet } from './PasskeySheet';
+import { ChangePasswordSheet } from './ChangePasswordSheet';
 import { DeleteAccountModal } from './DeleteAccountModal';
 import { CategoryPreferencesSheet } from './CategoryPreferencesSheet';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
@@ -89,6 +91,7 @@ export function SettingsScreen() {
   const [weeklyDigest, setWeeklyDigest] = useState(false);
 
   // Security States
+  const [passwordSheetVisible, setPasswordSheetVisible] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [passkeys, setPasskeys] = useState<Array<{ name: string; enrolledAt: string }>>([]);
 
@@ -893,6 +896,67 @@ export function SettingsScreen() {
         ========================================================================== */}
         {activeTab === 'security' && (
           <View>
+            {/* Password Management */}
+            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+              Password & Authentication
+            </Text>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.xl,
+                  padding: spacing.lg,
+                  marginBottom: spacing.xl,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: spacing.md }}>
+                  <View
+                    style={[
+                      styles.iconCircle,
+                      {
+                        backgroundColor: colors.primaryLight,
+                        borderRadius: radii.full,
+                        width: 36,
+                        height: 36,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      },
+                    ]}
+                  >
+                    <KeyRound size={18} color={colors.primary} />
+                  </View>
+                  <View style={{ marginLeft: spacing.md, flex: 1 }}>
+                    <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                      Account Password
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
+                      Secured with end-to-end cryptographic hashing. Minimum 10 characters.
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setPasswordSheetVisible(true)}
+                  style={[
+                    styles.addBtn,
+                    {
+                      backgroundColor: colors.primaryLight,
+                      borderRadius: radii.full,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: 6,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 12 }}>
+                    Change Password
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
               Two-Factor Authentication (2FA)
             </Text>
@@ -1394,6 +1458,11 @@ export function SettingsScreen() {
       </View>
 
       {/* Sheets & Modals */}
+      <ChangePasswordSheet
+        visible={passwordSheetVisible}
+        onClose={() => setPasswordSheetVisible(false)}
+      />
+
       <TwoFactorSetupSheet
         visible={twoFactorVisible}
         onClose={() => setTwoFactorVisible(false)}
