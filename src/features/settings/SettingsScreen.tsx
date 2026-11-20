@@ -72,7 +72,6 @@ export function SettingsScreen() {
   const [currency, setCurrency] = useState<'NGN' | 'USD' | 'GBP' | 'EUR'>('NGN');
   const [dateFormat, setDateFormat] = useState<'DD/MM/YYYY' | 'YYYY-MM-DD' | 'MM/DD/YYYY'>('DD/MM/YYYY');
   const [uiDensity, setUiDensity] = useState<'comfortable' | 'compact'>('comfortable');
-  const [autoLockDuration, setAutoLockDuration] = useState<'5m' | '15m' | '1h' | 'never'>('15m');
 
   // Notification Toggles
   const [billReminders, setBillReminders] = useState(true);
@@ -1087,67 +1086,6 @@ export function SettingsScreen() {
                 </View>
               )}
             </View>
-
-            {/* Auto Lock Timeout */}
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Session Security & Auto-Lock
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.bodySm, marginBottom: spacing.md }}>
-                Automatically protect and lock your workspace ledger after periods of inactivity.
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {(
-                  [
-                    { id: '5m', label: '5 Minutes' },
-                    { id: '15m', label: '15 Minutes' },
-                    { id: '1h', label: '1 Hour' },
-                    { id: 'never', label: 'Never' },
-                  ] as const
-                ).map((t) => {
-                  const isSelected = autoLockDuration === t.id;
-                  return (
-                    <TouchableOpacity
-                      key={t.id}
-                      onPress={() => setAutoLockDuration(t.id)}
-                      style={[
-                        styles.autoLockBtn,
-                        {
-                          backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
-                          borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                          borderWidth: 1,
-                          borderRadius: radii.md,
-                          paddingVertical: 8,
-                          flex: 1,
-                          alignItems: 'center',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: isSelected ? colors.primary : colors.textPrimary,
-                          fontFamily: typography.fonts.medium,
-                          fontSize: 12,
-                        }}
-                      >
-                        {t.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
           </View>
         )}
 
@@ -1475,7 +1413,6 @@ const styles = StyleSheet.create({
   addBtn: {},
   passkeyRow: {},
   activeBadge: {},
-  autoLockBtn: {},
   exportOption: {},
   dangerCard: {},
   deleteActionBtn: {},
