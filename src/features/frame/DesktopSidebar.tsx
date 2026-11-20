@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import {
@@ -7,41 +7,66 @@ import {
   PieChart,
   Landmark,
   ArrowLeftRight,
-  HeartPulse,
   CalendarDays,
   CreditCard,
   PiggyBank,
   TrendingUp,
-  BarChart3,
   Users,
+  HeartPulse,
+  BarChart3,
   GitBranch,
   Settings,
+  LogOut,
+  ChevronsUpDown,
 } from 'lucide-react-native';
 
-import { useTheme, ThemeToggle } from '../../design';
+import { useTheme } from '../../design';
 import { useAuth } from '../auth/AuthProvider';
 
 export function DesktopSidebar() {
   const { colors, typography, spacing, radii } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
-  const { user, workspaceId } = useAuth();
+  const { user, signOut } = useAuth();
 
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // Main daily finance navigation list
   const navItems = [
     { label: 'Dashboard', route: '/', icon: Home },
     { label: 'Transactions', route: '/transactions', icon: Receipt },
     { label: 'Budget', route: '/budget', icon: PieChart },
     { label: 'Accounts', route: '/accounts', icon: Landmark },
     { label: 'Cash Flow', route: '/cash-flow', icon: ArrowLeftRight },
-    { label: 'Health Score', route: '/health', icon: HeartPulse },
     { label: 'Bills & Recurring', route: '/plan', icon: CalendarDays },
     { label: 'Debts & Loans', route: '/debts', icon: CreditCard },
     { label: 'Savings Goals', route: '/goals', icon: PiggyBank },
     { label: 'Investments', route: '/investments', icon: TrendingUp },
-    { label: 'Reports', route: '/reports', icon: BarChart3 },
     { label: 'Payees', route: '/payees', icon: Users },
-    { label: 'Rules', route: '/rules', icon: GitBranch },
   ];
+
+  // User account dropdown items
+  const dropdownItems = [
+    { label: 'Health Score', route: '/health', icon: HeartPulse },
+    { label: 'Reports', route: '/reports', icon: BarChart3 },
+    { label: 'Rules', route: '/rules', icon: GitBranch },
+    { label: 'Settings', route: '/settings', icon: Settings },
+  ];
+
+  const displayName = user?.name || 'Awesome Ojumu';
+  const displayEmail = user?.email || 'ayobamiojumu@gmail.com';
+
+  const initials = useMemo(() => {
+    if (displayName && displayName.trim()) {
+      const parts = displayName.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        return `${parts[0]![0]}${parts[1]![0]}`.toUpperCase();
+      }
+      return displayName.slice(0, 2).toUpperCase();
+    }
+    if (displayEmail) return displayEmail.slice(0, 2).toUpperCase();
+    return 'AO';
+  }, [displayName, displayEmail]);
 
   return (
     <View
@@ -117,64 +142,248 @@ export function DesktopSidebar() {
         </View>
       </ScrollView>
 
-      {/* Sidebar Footer */}
+      {/* Outside click backdrop when dropdown is open */}
+      {dropdownOpen && (
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setDropdownOpen(false)}
+          style={styles.backdrop}
+        />
+      )}
+
+      {/* Sidebar Footer with Name, Avatar, and Fitting Dropdown */}
       <View
         style={[
           styles.footerArea,
           {
             borderTopColor: colors.border,
-            padding: spacing.md,
+            padding: spacing.sm,
+            position: 'relative',
           },
         ]}
       >
-        <View style={styles.footerRow}>
-          <TouchableOpacity
-            onPress={() => router.push('/settings' as any)}
-            activeOpacity={0.7}
+        {/* Dropdown Menu Popover */}
+        {dropdownOpen && (
+          <View
             style={[
-              styles.settingsBtn,
+              styles.dropdownMenu,
               {
-                borderRadius: radii.md,
-                padding: spacing.sm,
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: radii.xl,
               },
             ]}
           >
-            <Settings size={18} color={colors.textSecondary} />
-            <Text
+            {/* Header inside Dropdown */}
+            <View
               style={[
-                styles.footerLabel,
+                styles.dropdownHeader,
                 {
-                  marginLeft: spacing.sm,
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.regular,
-                  fontSize: typography.sizes.sm,
+                  borderBottomColor: colors.borderSubtle,
+                  paddingBottom: spacing.sm,
+                  marginBottom: spacing.xs,
                 },
               ]}
             >
-              Settings
+              <View
+                style={[
+                  styles.avatarCircleSmall,
+                  {
+                    backgroundColor: colors.primaryLight,
+                  },
+                ]}
+              >
+                <Text style={[styles.avatarTextSmall, { color: colors.primary }]}>{initials}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: typography.fonts.semiBold,
+                    fontSize: typography.sizes.sm,
+                    color: colors.textPrimary,
+                  }}
+                >
+                  {displayName}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: typography.fonts.regular,
+                    fontSize: 11,
+                    color: colors.textSecondary,
+                    marginTop: 1,
+                  }}
+                >
+                  {displayEmail}
+                </Text>
+              </View>
+            </View>
+
+            {/* Menu Items: Health Score, Reports, Rules, Settings */}
+            <View style={{ paddingVertical: 2 }}>
+              {dropdownItems.map((item) => {
+                const isActive = pathname === item.route;
+                const IconComp = item.icon;
+
+                return (
+                  <TouchableOpacity
+                    key={item.route}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setDropdownOpen(false);
+                      router.push(item.route as any);
+                    }}
+                    style={[
+                      styles.dropdownItem,
+                      {
+                        borderRadius: radii.md,
+                        backgroundColor: isActive ? colors.primaryLight : 'transparent',
+                        paddingVertical: spacing.xs + 3,
+                        paddingHorizontal: spacing.sm,
+                        marginBottom: 2,
+                      },
+                    ]}
+                  >
+                    <IconComp
+                      size={16}
+                      color={isActive ? colors.primary : colors.textSecondary}
+                      strokeWidth={isActive ? 2.2 : 1.8}
+                    />
+                    <Text
+                      style={[
+                        styles.dropdownItemLabel,
+                        {
+                          fontFamily: isActive ? typography.fonts.medium : typography.fonts.regular,
+                          fontSize: typography.sizes.sm,
+                          color: isActive ? colors.primary : colors.textPrimary,
+                          marginLeft: spacing.sm,
+                        },
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Divider */}
+            <View
+              style={[
+                styles.menuDivider,
+                {
+                  backgroundColor: colors.borderSubtle,
+                  marginVertical: spacing.xs,
+                },
+              ]}
+            />
+
+            {/* Log Out Button */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={async () => {
+                setDropdownOpen(false);
+                await signOut();
+                router.replace('/(auth)/sign-in' as any);
+              }}
+              style={[
+                styles.dropdownItem,
+                {
+                  borderRadius: radii.md,
+                  paddingVertical: spacing.xs + 3,
+                  paddingHorizontal: spacing.sm,
+                },
+              ]}
+            >
+              <LogOut size={16} color={colors.statusDanger} strokeWidth={1.8} />
+              <Text
+                style={[
+                  styles.dropdownItemLabel,
+                  {
+                    fontFamily: typography.fonts.medium,
+                    fontSize: typography.sizes.sm,
+                    color: colors.statusDanger,
+                    marginLeft: spacing.sm,
+                  },
+                ]}
+              >
+                Log Out
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Profile Trigger Button */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => setDropdownOpen((prev) => !prev)}
+          style={[
+            styles.profileButton,
+            {
+              backgroundColor: dropdownOpen ? colors.surfaceSubtle : 'transparent',
+              borderRadius: radii.lg,
+              paddingVertical: spacing.xs + 2,
+              paddingHorizontal: spacing.xs + 4,
+            },
+          ]}
+        >
+          {/* Avatar */}
+          <View
+            style={[
+              styles.avatarCircle,
+              {
+                backgroundColor: colors.primaryLight,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.avatarText,
+                {
+                  color: colors.primary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: 12,
+                },
+              ]}
+            >
+              {initials}
             </Text>
-          </TouchableOpacity>
+          </View>
 
-          <ThemeToggle size="sm" />
-        </View>
-
-        {user && (
-          <View style={[styles.userBadge, { marginTop: spacing.sm }]}>
+          {/* Name & Email */}
+          <View style={{ flex: 1, marginLeft: spacing.sm }}>
             <Text
               numberOfLines={1}
               style={[
-                styles.userName,
+                styles.profileName,
                 {
-                  color: colors.textSecondary,
-                  fontFamily: typography.fonts.regular,
-                  fontSize: typography.sizes.xs,
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.xs + 1,
                 },
               ]}
             >
-              {user.email}
+              {displayName}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.profileEmail,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fonts.regular,
+                  fontSize: 11,
+                  marginTop: 1,
+                },
+              ]}
+            >
+              {displayEmail}
             </Text>
           </View>
-        )}
+
+          <ChevronsUpDown size={14} color={colors.textSecondary} style={{ marginLeft: 4 }} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -186,16 +395,13 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
     display: 'flex',
     flexDirection: 'column',
+    position: 'relative',
   },
   brandArea: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   brandTitle: {
     letterSpacing: -0.5,
-  },
-  workspaceName: {
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   navList: {
     flex: 1,
@@ -208,19 +414,68 @@ const styles = StyleSheet.create({
   footerArea: {
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  footerRow: {
+  profileButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    width: '100%',
   },
-  settingsBtn: {
+  avatarCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    letterSpacing: 0.5,
+  },
+  profileName: {},
+  profileEmail: {},
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 90,
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    bottom: '100%',
+    left: 8,
+    right: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    padding: 10,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 12,
+  },
+  dropdownHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  footerLabel: {},
-  userBadge: {
-    paddingHorizontal: 4,
+  avatarCircleSmall: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  userName: {},
+  avatarTextSmall: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dropdownItemLabel: {},
+  menuDivider: {
+    height: StyleSheet.hairlineWidth,
+  },
 });
