@@ -20,6 +20,7 @@ import { StatementAIPopup } from './StatementAIPopup';
 import { EditAccountPopup } from './EditAccountPopup';
 import { AccountEntrySheet } from './AccountEntrySheet';
 import { AccountBalanceChart } from './AccountBalanceChart';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 export interface AccountLedgerItem {
   id: string;
@@ -35,26 +36,18 @@ interface AccountDetailScreenProps {
   accountId: string;
 }
 
-const ACCOUNTS_DB: Record<
-  string,
-  { name: string; institution: string; type: string; balanceMinor: bigint; clearedMinor: bigint }
-> = {
-  '1': { name: 'GTBank (Current)', institution: 'Guaranty Trust Bank', type: 'Checking', balanceMinor: 84500000n, clearedMinor: 84000000n },
-  'acc-1': { name: 'Salary & Operating Account', institution: 'Guaranty Trust Bank', type: 'Checking', balanceMinor: 84500000n, clearedMinor: 84000000n },
-  '2': { name: 'Kuda Bank', institution: 'Kuda Microfinance Bank', type: 'Savings Pot', balanceMinor: 21500000n, clearedMinor: 21500000n },
-  'acc-2': { name: 'High-Yield Savings Pot', institution: 'Kuda Bank', type: 'Savings Pot', balanceMinor: 21500000n, clearedMinor: 21500000n },
-  '3': { name: 'Cash Wallet', institution: 'Physical Cash', type: 'Cash / Wallet', balanceMinor: 3500000n, clearedMinor: 3500000n },
-  'acc-3': { name: 'Emergency Physical Cash', institution: 'Cash Wallet', type: 'Physical Cash', balanceMinor: 3500000n, clearedMinor: 3500000n },
-  '4': { name: 'Access Credit Card', institution: 'Access Bank', type: 'Credit Card', balanceMinor: -1200000n, clearedMinor: -1200000n },
-  'acc-4': { name: 'Platinum Credit Card', institution: 'Access Bank', type: 'Credit Card', balanceMinor: -1200000n, clearedMinor: -1200000n },
-  '5': { name: 'Lekki Land Parcel Asset', institution: 'Real Estate / Property', type: 'Fixed Asset', balanceMinor: 1200000000n, clearedMinor: 1200000000n },
-  'acc-5': { name: 'Lekki Land Parcel Asset', institution: 'Real Estate / Property', type: 'Fixed Asset', balanceMinor: 1200000000n, clearedMinor: 1200000000n },
-};
-
 export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  const {
+    accounts: dbAccounts,
+    events: dbEvents,
+    payees: dbPayees,
+    categories: dbCategories,
+    accountBalances,
+  } = useDatabaseData();
 
   const nativeTopInset = Platform.select({
     ios: insets.top,
@@ -63,15 +56,13 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
   });
   const topPadding = Math.max(nativeTopInset, 16) + (nativeTopInset > 0 ? 6 : 8);
 
-  const matched = ACCOUNTS_DB[accountId] ?? ACCOUNTS_DB['acc-1']!;
+  const matched = dbAccounts.find((a) => a.id === accountId) || dbAccounts[0];
 
   // State
-  const [accountName, setAccountName] = useState(matched.name);
-  const [institution, setInstitution] = useState(matched.institution);
-  const [accountType, setAccountType] = useState(matched.type);
-  const [balanceMinor, setBalanceMinor] = useState<bigint>(matched.balanceMinor);
-  const [clearedBalanceMinor, setClearedBalanceMinor] = useState<bigint>(matched.clearedMinor);
   const [search, setSearch] = useState('');
+  const [customName, setAccountName] = useState<string | null>(null);
+  const [extraTx, setExtraTx] = useState<AccountLedgerItem[]>([]);
+  const [balanceDelta, setBalanceDelta] = useState<bigint>(0n);
 
   // Sheets
   const [csvSheetVisible, setCsvSheetVisible] = useState(false);
@@ -79,45 +70,37 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
   const [editPopupVisible, setEditPopupVisible] = useState(false);
   const [addTxVisible, setAddTxVisible] = useState(false);
 
-  // Mock ledger data
-  const [transactions, setTransactions] = useState<AccountLedgerItem[]>([
-    {
-      id: 'tx-1',
-      date: 'Today',
-      payee: 'Salary Deposit (Paystack)',
-      category: 'Income',
-      amountMinor: 85000000n,
-      type: 'inflow',
-      cleared: true,
-    },
-    {
-      id: 'tx-2',
-      date: 'Yesterday',
-      payee: 'Ikeja Electric Token',
-      category: 'Utilities',
-      amountMinor: 2500000n,
-      type: 'outflow',
-      cleared: true,
-    },
-    {
-      id: 'tx-3',
-      date: '14 Nov',
-      payee: 'Shoprite Lekki Mall',
-      category: 'Groceries',
-      amountMinor: 4850000n,
-      type: 'outflow',
-      cleared: true,
-    },
-    {
-      id: 'tx-4',
-      date: '12 Nov',
-      payee: 'Uber Trip VI to Ikeja',
-      category: 'Transport',
-      amountMinor: 750000n,
-      type: 'outflow',
-      cleared: false,
-    },
-  ]);
+  const accountName = customName ?? (matched?.name || 'Account');
+  const institution = matched?.type === 'bank' || matched?.type === 'savings' ? 'Bank Account' : matched?.type || 'Account';
+  const accountType = matched?.type || 'Asset';
+  const baseBalanceMinor = matched ? (accountBalances.get(matched.id) ?? 0n) : 0n;
+  const balanceMinor = baseBalanceMinor + balanceDelta;
+  const clearedBalanceMinor = balanceMinor;
+
+  // Real transactions from database
+  const transactions: AccountLedgerItem[] = React.useMemo(() => {
+    if (!matched) return extraTx;
+    const list: AccountLedgerItem[] = [...extraTx];
+    for (const ev of dbEvents) {
+      const line = ev.lines.find((l) => l.ledgerAccountId === matched.id);
+      if (!line) continue;
+      const isOutflow = ev.type === 'expense' || line.amountMinor < 0n;
+      const catLine = ev.lines.find((l) => l.ledgerAccountId && l.ledgerAccountId !== matched.id);
+      const cat = dbCategories.find((c) => c.id === catLine?.ledgerAccountId);
+      const payee = dbPayees.find((p) => p.id === ev.payeeId);
+
+      list.push({
+        id: ev.id,
+        date: ev.date,
+        payee: payee?.name || ev.notes || ev.payeeName || (isOutflow ? 'Expense' : 'Income'),
+        category: cat?.name || (isOutflow ? 'General Expense' : 'Income'),
+        amountMinor: line.amountMinor < 0n ? -line.amountMinor : line.amountMinor,
+        type: isOutflow ? 'outflow' : 'inflow',
+        cleared: ev.status === 'posted',
+      });
+    }
+    return list;
+  }, [matched, dbEvents, dbCategories, dbPayees, extraTx]);
 
   const filteredTx = transactions.filter(
     (tx) =>
@@ -125,29 +108,8 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
       tx.category.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleImportComplete = (count: number) => {
-    // Simulated newly imported transactions
-    const newItems: AccountLedgerItem[] = [
-      {
-        id: `imp-${Date.now()}-1`,
-        date: 'Today',
-        payee: 'TotalEnergies Fueling',
-        category: 'Transport',
-        amountMinor: 1800000n,
-        type: 'outflow',
-        cleared: true,
-      },
-      {
-        id: `imp-${Date.now()}-2`,
-        date: 'Today',
-        payee: 'Netflix Subscription',
-        category: 'Entertainment',
-        amountMinor: 500000n,
-        type: 'outflow',
-        cleared: true,
-      },
-    ];
-    setTransactions((prev) => [...newItems, ...prev]);
+  const handleImportComplete = (_count: number) => {
+    // Handled by ledger sync
   };
 
   return (
@@ -429,78 +391,92 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
           />
         </View>
 
-        {filteredTx.map((item) => (
-          <View
-            key={item.id}
-            style={[
-              styles.txRow,
-              {
-                borderBottomColor: colors.borderSubtle,
-                paddingVertical: spacing.md,
-              },
-            ]}
-          >
+        {filteredTx.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.bodySm,
+              }}
+            >
+              No transactions recorded for this account yet.
+            </Text>
+          </View>
+        ) : (
+          filteredTx.map((item) => (
             <View
+              key={item.id}
               style={[
-                styles.txIconWrap,
+                styles.txRow,
                 {
-                  backgroundColor:
-                    item.type === 'inflow' ? colors.primaryLight : colors.surfaceSubtle,
-                  borderRadius: radii.full,
+                  borderBottomColor: colors.borderSubtle,
+                  paddingVertical: spacing.md,
                 },
               ]}
             >
-              {item.type === 'inflow' ? (
-                <ArrowDownLeft size={16} color={colors.primary} />
-              ) : (
-                <ArrowUpRight size={16} color={colors.textSecondary} />
-              )}
-            </View>
+              <View
+                style={[
+                  styles.txIconWrap,
+                  {
+                    backgroundColor:
+                      item.type === 'inflow' ? colors.primaryLight : colors.surfaceSubtle,
+                    borderRadius: radii.full,
+                  },
+                ]}
+              >
+                {item.type === 'inflow' ? (
+                  <ArrowDownLeft size={16} color={colors.primary} />
+                ) : (
+                  <ArrowUpRight size={16} color={colors.textSecondary} />
+                )}
+              </View>
 
-            <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.medium,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                {item.payee}
-              </Text>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontFamily: typography.fonts.regular,
-                  fontSize: typography.sizes.xs,
-                }}
-              >
-                {item.date} • {item.category}
-              </Text>
-            </View>
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.medium,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {item.payee}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: typography.fonts.regular,
+                    fontSize: typography.sizes.xs,
+                  }}
+                >
+                  {item.date} • {item.category}
+                </Text>
+              </View>
 
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text
-                style={{
-                  color: item.type === 'inflow' ? colors.statusSuccess : colors.textPrimary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                {item.type === 'inflow' ? '+' : '-'}
-                {formatNaira(item.amountMinor)}
-              </Text>
-              <Text
-                style={{
-                  color: item.cleared ? colors.statusSuccess : colors.textTertiary,
-                  fontFamily: typography.fonts.regular,
-                  fontSize: 10,
-                }}
-              >
-                {item.cleared ? 'Cleared' : 'Uncleared'}
-              </Text>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text
+                  style={{
+                    color: item.type === 'inflow' ? colors.statusSuccess : colors.textPrimary,
+                    fontFamily: typography.fonts.semiBold,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {item.type === 'inflow' ? '+' : '-'}
+                  {formatNaira(item.amountMinor)}
+                </Text>
+                <Text
+                  style={{
+                    color: item.cleared ? colors.statusSuccess : colors.textTertiary,
+                    fontFamily: typography.fonts.regular,
+                    fontSize: 10,
+                  }}
+                >
+                  {item.cleared ? 'Cleared' : 'Uncleared'}
+                </Text>
+              </View>
             </View>
-          </View>
-        ))}
+          ))
+        )}
       </ScrollView>
 
       {/* Sheets & Popups */}
@@ -540,15 +516,13 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
             cleared: newEntry.cleared,
           };
 
-          setTransactions((prev) => [newTx, ...prev]);
+          setExtraTx((prev) => [newTx, ...prev]);
 
           // Dynamically adjust live balance
           if (isOutflow) {
-            setBalanceMinor((prev) => prev - newEntry.amountMinor);
-            setClearedBalanceMinor((prev) => prev - newEntry.amountMinor);
+            setBalanceDelta((prev) => prev - newEntry.amountMinor);
           } else {
-            setBalanceMinor((prev) => prev + newEntry.amountMinor);
-            setClearedBalanceMinor((prev) => prev + newEntry.amountMinor);
+            setBalanceDelta((prev) => prev + newEntry.amountMinor);
           }
           setAddTxVisible(false);
         }}

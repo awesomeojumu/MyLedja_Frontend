@@ -17,6 +17,7 @@ import { useCategoryPreferences } from '../categories/CategoryPreferencesContext
 import { STANDARD_FRAMEWORK_PRESETS } from '../../data/rulesModel';
 import { formatNaira } from '../../money';
 import { openKeyValue } from '../../data/kv';
+import { monthOf } from '@/ledger';
 import {
   loadBillsFromStorage,
   getMonthlyEquivalentMinor,
@@ -43,7 +44,7 @@ export function BudgetScreen() {
   const [toastVisible, setToastVisible] = useState(false);
 
   // Live Database Hook
-  const { repo, categories: dbCategories } = useDatabaseData();
+  const { repo, categories: dbCategories, events: dbEvents } = useDatabaseData();
 
   // Sheets State
   const [moveMoneyVisible, setMoveMoneyVisible] = useState(false);
@@ -63,7 +64,7 @@ export function BudgetScreen() {
   const [monthConfigs, setMonthConfigs] = useState<Record<string, MonthBudgetConfig>>({
     'November 2026': {
       month: 'November 2026',
-      expectedIncomeMinor: 100000000n, // ₦1,000,000
+      expectedIncomeMinor: 0n,
       frameworkId: 'user_50_10_10_20_10',
       titheEnabled: true,
       taxEnabled: false,
@@ -71,7 +72,7 @@ export function BudgetScreen() {
     },
     'December 2026': {
       month: 'December 2026',
-      expectedIncomeMinor: 150000000n, // ₦1,500,000
+      expectedIncomeMinor: 0n,
       frameworkId: 'wealth_builder_70_20_10',
       titheEnabled: true,
       taxEnabled: false,
@@ -79,7 +80,7 @@ export function BudgetScreen() {
     },
     'October 2026': {
       month: 'October 2026',
-      expectedIncomeMinor: 95000000n, // ₦950,000
+      expectedIncomeMinor: 0n,
       frameworkId: 'classic_50_30_20',
       titheEnabled: false,
       taxEnabled: false,
@@ -139,7 +140,14 @@ export function BudgetScreen() {
         }
 
         const loadedBills = await loadBillsFromStorage();
-        setRecurringBills(loadedBills);
+        const realBills = loadedBills.filter(
+          (b) =>
+            !b.id.startsWith('bill-mtn') &&
+            !b.id.startsWith('bill-ikeja') &&
+            !b.id.startsWith('bill-apple') &&
+            !b.id.startsWith('bill-estate')
+        );
+        setRecurringBills(realBills);
       } catch (err) {
         console.warn('Failed to load stored budget limits', err);
       }
@@ -202,29 +210,39 @@ export function BudgetScreen() {
         } else {
           planned = saved.totalPlannedMinor;
         }
-      } else {
-        if (cat.name.toLowerCase() === 'employment') planned = 70000000n; // ₦700k
-        else if (cat.name.toLowerCase() === 'business') planned = 20000000n; // ₦200k
-        else if (cat.name.toLowerCase() === 'investments') planned = 10000000n; // ₦100k
       }
 
-      let received = 0n;
-      if (cat.name.toLowerCase() === 'employment') received = planned;
-      else if (cat.name.toLowerCase() === 'business') received = (planned * 75n) / 100n;
-      else if (cat.name.toLowerCase() === 'investments') received = (planned * 50n) / 100n;
+      // Calculate real income received from Database events for this income category
+      let realReceived = 0n;
+      const targetMonthCode = currentMonth.includes('Oct')
+        ? '2026-10'
+        : currentMonth.includes('Dec')
+        ? '2026-12'
+        : '2026-11';
+
+      for (const ev of dbEvents) {
+        if (ev.status !== 'posted' || ev.type !== 'income') continue;
+        if (monthOf(ev.date) === targetMonthCode) {
+          for (const line of ev.lines) {
+            if (line.ledgerAccountId === cat.id && line.amountMinor > 0n) {
+              realReceived += line.amountMinor;
+            }
+          }
+        }
+      }
 
       return {
         id: cat.id,
         name: cat.name,
         expectedMinor: planned,
-        receivedMinor: received,
+        receivedMinor: realReceived,
         subcategories: subs,
         subBudgets: saved?.subBudgets,
         isEarmarked: saved?.isEarmarked,
         targetExpenseCategory: saved?.targetExpenseCategory,
       };
     });
-  }, [activeIncomeCategories, incomeCategoryConfigs, getSubcategoriesForIncome]);
+  }, [activeIncomeCategories, incomeCategoryConfigs, getSubcategoriesForIncome, dbEvents, currentMonth]);
 
   const { totalIncomeExpectedMinor, totalIncomeReceivedMinor } = useMemo(() => {
     let exp = 0n;
@@ -241,7 +259,7 @@ export function BudgetScreen() {
     const raw =
       monthConfigs[currentMonth] || {
         month: currentMonth,
-        expectedIncomeMinor: 100000000n,
+        expectedIncomeMinor: 0n,
         frameworkId: activeFramework.id,
         titheEnabled: true,
         taxEnabled: false,
@@ -321,8 +339,24 @@ export function BudgetScreen() {
           const extraEarmark = earmarkMap[cat.name] || 0n;
           const totalPlanned = basePlanned + extraEarmark;
 
-          // Realistic mock spent for illustration based on category weight
-          const mockSpent = (totalPlanned * BigInt(50 + ((idx * 13) % 40))) / 100n;
+          // Calculate real spent from live database events for this category
+          const targetMonthCode = currentMonth.includes('Oct')
+            ? '2026-10'
+            : currentMonth.includes('Dec')
+            ? '2026-12'
+            : '2026-11';
+
+          let realSpent = 0n;
+          for (const ev of dbEvents) {
+            if (ev.status !== 'posted' || ev.type !== 'expense') continue;
+            if (monthOf(ev.date) === targetMonthCode) {
+              for (const line of ev.lines) {
+                if (line.ledgerAccountId === cat.id && line.amountMinor > 0n) {
+                  realSpent += line.amountMinor;
+                }
+              }
+            }
+          }
           const activeSubs = getSubcategoriesForExpense(cat.name);
 
           // Scheduled bills from /plan
@@ -355,7 +389,7 @@ export function BudgetScreen() {
             name: cat.name,
             group: `${pillar.name} (${pillar.percentage}%)`,
             plannedMinor: envelopePlanned,
-            spentMinor: mockSpent,
+            spentMinor: realSpent,
             subcategories: activeSubs,
             subBudgets: customSubBudgets,
             scheduledBillsMinor,
@@ -397,7 +431,7 @@ export function BudgetScreen() {
           });
         }
 
-        let defaultPlanned = 2500000n; // ₦25,000 default buffer
+        let defaultPlanned = 0n;
         if (customSubBudgets && Object.keys(customSubBudgets).length > 0) {
           const subSum = Object.values(customSubBudgets).reduce((sum, v) => sum + v, 0n);
           if (subSum > 0n) defaultPlanned = subSum;
@@ -429,6 +463,7 @@ export function BudgetScreen() {
     getCategoryPercentage,
     subcategoryCustomLimits,
     categoryScheduledBillsMap,
+    dbEvents,
   ]);
 
   // Aggregate Totals

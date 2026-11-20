@@ -9,6 +9,7 @@ import {
   ChevronRight,
   User,
   Building,
+  CreditCard,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
@@ -36,35 +37,7 @@ export function DebtsScreen() {
   const [activeTab, setActiveTab] = useState<'lent' | 'borrowed'>('lent');
 
   // State
-  const [localDebts, setLocalDebts] = useState<DebtItemUI[]>([
-    {
-      id: 'd-1',
-      type: 'lent',
-      person: 'Tunde Alabi (Colleague)',
-      originalMinor: 5000000n,
-      remainingMinor: 2500000n,
-      dueDate: '30 Nov 2026',
-      notes: 'Car maintenance loan',
-    },
-    {
-      id: 'd-2',
-      type: 'lent',
-      person: 'Amina Bello (Sister)',
-      originalMinor: 10000000n,
-      remainingMinor: 10000000n,
-      dueDate: '15 Dec 2026',
-      notes: 'University tuition support',
-    },
-    {
-      id: 'd-3',
-      type: 'borrowed',
-      person: 'Stanbic Quick Credit',
-      originalMinor: 30000000n,
-      remainingMinor: 12000000n,
-      dueDate: '25 Nov 2026',
-      notes: 'Monthly deduction at 2.5% rate',
-    },
-  ]);
+  const [localDebts, setLocalDebts] = useState<DebtItemUI[]>([]);
 
   const debts: DebtItemUI[] = React.useMemo(() => {
     if (dbDebts.length > 0) {
@@ -72,8 +45,8 @@ export function DebtsScreen() {
         id: d.id,
         type: (d.direction === 'owedToMe' ? 'lent' : 'borrowed') as 'lent' | 'borrowed',
         person: d.name,
-        originalMinor: 5000000n,
-        remainingMinor: 5000000n,
+        originalMinor: BigInt(d.scheduleAmountMinor || d.creditMinor || '0'),
+        remainingMinor: BigInt(d.scheduleAmountMinor || d.creditMinor || '0'),
         dueDate: d.nextDueDate,
         notes: d.notes,
       }));
@@ -377,7 +350,42 @@ export function DebtsScreen() {
         </View>
 
         {/* Debt Cards */}
-        {filteredDebts.map((item) => (
+        {filteredDebts.length === 0 ? (
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.md,
+              padding: spacing.xl,
+              alignItems: 'center',
+              borderWidth: 1,
+            }}
+          >
+            <CreditCard size={32} color={colors.textTertiary} style={{ marginBottom: spacing.sm }} />
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: 14,
+                marginBottom: 4,
+              }}
+            >
+              {activeTab === 'lent' ? 'No Money Lent Recorded' : 'No Money Borrowed Recorded'}
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: 12,
+                textAlign: 'center',
+                maxWidth: 320,
+              }}
+            >
+              Tap "+ Record Debt" to track personal loans, credit balances, or money owed to you.
+            </Text>
+          </View>
+        ) : (
+          filteredDebts.map((item) => (
           <TouchableOpacity
             key={item.id}
             onPress={() => router.push(`/debts/${item.id}` as any)}
@@ -487,7 +495,7 @@ export function DebtsScreen() {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
-        ))}
+        )))}
       </ScrollView>
 
       {/* Sheets */}

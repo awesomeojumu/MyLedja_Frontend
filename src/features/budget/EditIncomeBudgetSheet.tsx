@@ -79,16 +79,8 @@ export function EditIncomeBudgetSheet({
           targetCategory: '',
         };
 
-        cat.subcategories.forEach((sub, idx) => {
-          if (cat.name.toLowerCase() === 'employment' && idx === 0) {
-            initialSubInputs[cat.id]![sub] = '700,000'; // ₦700k default salary
-          } else if (cat.name.toLowerCase() === 'business' && idx === 0) {
-            initialSubInputs[cat.id]![sub] = '200,000'; // ₦200k default business
-          } else if (cat.name.toLowerCase() === 'investments' && idx === 0) {
-            initialSubInputs[cat.id]![sub] = '100,000'; // ₦100k default investments
-          } else {
-            initialSubInputs[cat.id]![sub] = '';
-          }
+        cat.subcategories.forEach((sub) => {
+          initialSubInputs[cat.id]![sub] = '';
         });
       }
     });

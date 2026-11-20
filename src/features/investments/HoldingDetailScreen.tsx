@@ -13,6 +13,7 @@ import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 import { RecordDividendSheet } from './RecordDividendSheet';
 import { SellHoldingSheet } from './SellHoldingSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 interface HoldingDetailScreenProps {
   holdingId: string;
@@ -21,35 +22,29 @@ interface HoldingDetailScreenProps {
 export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
+  const { holdings: dbHoldings } = useDatabaseData();
+
+  const matched = dbHoldings.find((h) => h.id === holdingId || h.symbol === holdingId);
 
   // State
-  const [ticker, setTicker] = useState('MTNN');
-  const [name, setName] = useState('MTN Nigeria Communications Plc');
-  const [units, setUnits] = useState(4500);
-  const [avgCostMinor, setAvgCostMinor] = useState(22000n);       // ₦220.00
-  const [currentPriceMinor, setCurrentPriceMinor] = useState(27500n); // ₦275.00
+  const ticker = matched?.symbol || holdingId || 'Asset';
+  const name = matched?.name || 'Investment Holding';
+  const [units, setUnits] = useState(0);
+  const [avgCostMinor, setAvgCostMinor] = useState(0n);
+  const [currentPriceMinor, setCurrentPriceMinor] = useState(0n);
 
   // Sheets
   const [dividendVisible, setDividendVisible] = useState(false);
   const [sellVisible, setSellVisible] = useState(false);
 
-  // History
-  const [events, setEvents] = useState([
-    {
-      id: 'e-1',
-      date: '28 Oct 2026',
-      type: 'dividend',
-      description: 'Interim Dividend ₦5.40/share',
-      amountMinor: 2430000n, // ₦24,300.00
-    },
-    {
-      id: 'e-2',
-      date: '15 Aug 2026',
-      type: 'buy',
-      description: 'Bought 1,500 units @ ₦215.00',
-      amountMinor: 32250000n,
-    },
-  ]);
+  // Real events history
+  const [events, setEvents] = useState<Array<{
+    id: string;
+    date: string;
+    type: string;
+    description: string;
+    amountMinor: bigint;
+  }>>([]);
 
   const totalValueMinor =
     (currentPriceMinor * BigInt(Math.round(units * 100))) / 100n;
@@ -288,49 +283,63 @@ export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
           Activity Timeline
         </Text>
 
-        {events.map((ev) => (
-          <View
-            key={ev.id}
-            style={[
-              styles.eventRow,
-              {
-                borderBottomColor: colors.borderSubtle,
-                paddingVertical: spacing.md,
-              },
-            ]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.medium,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                {ev.description}
-              </Text>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: typography.sizes.xs,
-                }}
-              >
-                {ev.date}
-              </Text>
-            </View>
-
+        {events.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: spacing.lg }}>
             <Text
               style={{
-                color: ev.type === 'dividend' ? colors.statusSuccess : colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
                 fontSize: typography.sizes.bodySm,
               }}
             >
-              {ev.type === 'dividend' ? '+' : ''}
-              {formatNaira(ev.amountMinor)}
+              No trading or dividend history recorded for this holding yet.
             </Text>
           </View>
-        ))}
+        ) : (
+          events.map((ev) => (
+            <View
+              key={ev.id}
+              style={[
+                styles.eventRow,
+                {
+                  borderBottomColor: colors.borderSubtle,
+                  paddingVertical: spacing.md,
+                },
+              ]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.medium,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {ev.description}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typography.sizes.xs,
+                  }}
+                >
+                  {ev.date}
+                </Text>
+              </View>
+
+              <Text
+                style={{
+                  color: ev.type === 'dividend' ? colors.statusSuccess : colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                {ev.type === 'dividend' ? '+' : ''}
+                {formatNaira(ev.amountMinor)}
+              </Text>
+            </View>
+          ))
+        )}
       </ScrollView>
 
       {/* Sheets */}

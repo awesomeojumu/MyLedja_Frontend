@@ -34,10 +34,10 @@ export function PlanScreen() {
   const router = useRouter();
 
   // Live Database Hook
-  const { repo, accounts, categories } = useDatabaseData();
+  const { repo, accounts, categories, recurring: dbRecurring } = useDatabaseData();
 
   // State
-  const [bills, setBills] = useState<RecurringBillItem[]>(DEFAULT_RECURRING_BILLS);
+  const [localBills, setLocalBills] = useState<RecurringBillItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<'all' | 'unpaid' | 'paid'>('all');
 
@@ -50,11 +50,40 @@ export function PlanScreen() {
   useEffect(() => {
     async function init() {
       const loaded = await loadBillsFromStorage();
-      setBills(loaded);
+      // Purge any legacy mock bills
+      const realLoaded = loaded.filter(
+        (b) =>
+          !b.id.startsWith('bill-mtn') &&
+          !b.id.startsWith('bill-ikeja') &&
+          !b.id.startsWith('bill-apple') &&
+          !b.id.startsWith('bill-estate')
+      );
+      setLocalBills(realLoaded);
       setLoading(false);
     }
     init();
   }, []);
+
+  // Map live recurring bills from Database or local real entries
+  const bills: RecurringBillItem[] = useMemo(() => {
+    if (dbRecurring && dbRecurring.length > 0) {
+      return dbRecurring.map((r) => {
+        const cat = categories.find((c) => c.id === r.categoryId);
+        const day = r.rule?.on || 1;
+        const cadence: RecurringBillItem['cadence'] = 'monthly';
+        return {
+          id: r.id,
+          name: r.name,
+          amountMinor: BigInt(r.amountMinor || '0'),
+          dueDay: day,
+          cadence,
+          category: cat?.name || 'Utilities',
+          paid: false,
+        };
+      });
+    }
+    return localBills;
+  }, [dbRecurring, categories, localBills]);
 
   // Filtered lists
   const unpaidBills = useMemo(() => bills.filter((b) => !b.paid), [bills]);
@@ -67,13 +96,13 @@ export function PlanScreen() {
 
   const handleAddBill = (b: AddedBill) => {
     const updated: RecurringBillItem[] = [
-      ...bills,
+      ...localBills,
       {
         ...b,
         paid: false,
       },
     ];
-    setBills(updated);
+    setLocalBills(updated);
     saveBillsToStorage(updated);
 
     if (repo && accounts.length > 0) {
@@ -91,8 +120,8 @@ export function PlanScreen() {
   };
 
   const handleConfirmPaid = (billId: string) => {
-    const updated = bills.map((b) => (b.id === billId ? { ...b, paid: true } : b));
-    setBills(updated);
+    const updated = localBills.map((b) => (b.id === billId ? { ...b, paid: true } : b));
+    setLocalBills(updated);
     saveBillsToStorage(updated);
 
     const bill = bills.find((b) => b.id === billId);
@@ -111,14 +140,14 @@ export function PlanScreen() {
   };
 
   const handleUnmarkPaid = (billId: string) => {
-    const updated = bills.map((b) => (b.id === billId ? { ...b, paid: false } : b));
-    setBills(updated);
+    const updated = localBills.map((b) => (b.id === billId ? { ...b, paid: false } : b));
+    setLocalBills(updated);
     saveBillsToStorage(updated);
   };
 
   const handleDeleteBill = (billId: string) => {
-    const updated = bills.filter((b) => b.id !== billId);
-    setBills(updated);
+    const updated = localBills.filter((b) => b.id !== billId);
+    setLocalBills(updated);
     saveBillsToStorage(updated);
   };
 

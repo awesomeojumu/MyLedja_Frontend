@@ -38,7 +38,7 @@ export function IncomeProgressCard({
   const pct =
     totalExpectedMinor > 0n
       ? Math.min(100, Math.round(Number((totalReceivedMinor * 100n) / totalExpectedMinor)))
-      : 100;
+      : 0;
 
   const isFullyReceived = totalReceivedMinor >= totalExpectedMinor && totalExpectedMinor > 0n;
 

@@ -84,7 +84,7 @@ export function MonthBudgetSetupSheet({
 
   const handleApply = () => {
     const parsed = parseAmount(incomeStr);
-    const incomeMinor = parsed.ok ? parsed.minor : 100000000n; // Default ₦1,000,000
+    const incomeMinor = parsed.ok ? parsed.minor : 0n;
 
     onApplyConfig({
       month: currentMonth,

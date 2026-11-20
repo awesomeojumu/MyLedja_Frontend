@@ -13,6 +13,7 @@ import { useTheme, Button } from '../../design';
 import { formatNaira } from '../../money';
 import { ReminderMessageSheet } from './ReminderMessageSheet';
 import { RecordInstallmentSheet } from './RecordInstallmentSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 interface DebtDetailScreenProps {
   debtId: string;
@@ -21,27 +22,28 @@ interface DebtDetailScreenProps {
 export function DebtDetailScreen({ debtId }: DebtDetailScreenProps) {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
+  const { debts: dbDebts } = useDatabaseData();
+
+  const matched = dbDebts.find((d) => d.id === debtId) || dbDebts[0];
 
   // State
-  const [person, setPerson] = useState('Tunde Alabi (Colleague)');
-  const [type, setType] = useState<'lent' | 'borrowed'>('lent');
-  const [originalMinor, setOriginalMinor] = useState<bigint>(5000000n);
-  const [remainingMinor, setRemainingMinor] = useState<bigint>(2500000n);
-  const [dueDate, setDueDate] = useState('30 Nov 2026');
+  const person = matched?.name || 'Debt Contact';
+  const type: 'lent' | 'borrowed' = matched?.direction === 'owedToMe' ? 'lent' : 'borrowed';
+  const originalMinor = BigInt(matched?.scheduleAmountMinor || matched?.creditMinor || '0');
+  const [remainingMinor, setRemainingMinor] = useState<bigint>(originalMinor);
+  const dueDate = matched?.nextDueDate || 'No due date';
 
   // Sheets
   const [reminderVisible, setReminderVisible] = useState(false);
   const [installmentVisible, setInstallmentVisible] = useState(false);
 
   // Installment history
-  const [history, setHistory] = useState([
-    {
-      id: 'inst-1',
-      date: '10 Nov 2026',
-      amountMinor: 2500000n,
-      note: 'First installment via Kuda Bank',
-    },
-  ]);
+  const [history, setHistory] = useState<Array<{
+    id: string;
+    date: string;
+    amountMinor: bigint;
+    note: string;
+  }>>([]);
 
   const repaidMinor = originalMinor - remainingMinor;
   const percentRepaid =
@@ -269,60 +271,74 @@ export function DebtDetailScreen({ debtId }: DebtDetailScreenProps) {
           Payment Timeline
         </Text>
 
-        {history.map((item) => (
-          <View
-            key={item.id}
-            style={[
-              styles.historyRow,
-              {
-                borderBottomColor: colors.borderSubtle,
-                paddingVertical: spacing.md,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.historyIcon,
-                {
-                  backgroundColor: colors.primaryLight,
-                  borderRadius: radii.full,
-                },
-              ]}
-            >
-              <CheckCircle2 size={16} color={colors.primary} />
-            </View>
-
-            <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.medium,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                {item.note}
-              </Text>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: typography.sizes.xs,
-                }}
-              >
-                {item.date}
-              </Text>
-            </View>
-
+        {history.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
             <Text
               style={{
-                color: colors.statusSuccess,
-                fontFamily: typography.fonts.semiBold,
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
                 fontSize: typography.sizes.bodySm,
               }}
             >
-              +{formatNaira(item.amountMinor)}
+              No repayment installments recorded yet.
             </Text>
           </View>
-        ))}
+        ) : (
+          history.map((item) => (
+            <View
+              key={item.id}
+              style={[
+                styles.historyRow,
+                {
+                  borderBottomColor: colors.borderSubtle,
+                  paddingVertical: spacing.md,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.historyIcon,
+                  {
+                    backgroundColor: colors.primaryLight,
+                    borderRadius: radii.full,
+                  },
+                ]}
+              >
+                <CheckCircle2 size={16} color={colors.primary} />
+              </View>
+
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.medium,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {item.note}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typography.sizes.xs,
+                  }}
+                >
+                  {item.date}
+                </Text>
+              </View>
+
+              <Text
+                style={{
+                  color: colors.statusSuccess,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                +{formatNaira(item.amountMinor)}
+              </Text>
+            </View>
+          ))
+        )}
       </ScrollView>
 
       {/* Sheets */}

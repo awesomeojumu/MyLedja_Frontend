@@ -14,6 +14,7 @@ import { useTheme, Button, CurrencyInput } from '../../design';
 import { formatNaira, parseAmount } from '../../money';
 import { DiscrepancyAdjustmentSheet } from './DiscrepancyAdjustmentSheet';
 import { AddMissingTransactionSheet } from './AddMissingTransactionSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 interface ReconcileItem {
   id: string;
@@ -32,6 +33,10 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { accounts: dbAccounts, events: dbEvents, payees: dbPayees, accountBalances } = useDatabaseData();
+
+  const matchedAccount = dbAccounts.find((a) => a.id === accountId) || dbAccounts[0];
+  const currentBal = matchedAccount ? (accountBalances.get(matchedAccount.id) ?? 0n) : 0n;
 
   const nativeTopInset = Platform.select({
     ios: insets.top,
@@ -41,49 +46,26 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
   const topPadding = Math.max(nativeTopInset, 16) + (nativeTopInset > 0 ? 6 : 8);
 
   // State
-  const [statementText, setStatementText] = useState('1420000');
-  const [items, setItems] = useState<ReconcileItem[]>([
-    {
-      id: 'rec-1',
-      date: '14 Nov',
-      payee: 'Salary Deposit (Paystack)',
-      amountMinor: 85000000n,
-      type: 'inflow',
-      cleared: true,
-    },
-    {
-      id: 'rec-2',
-      date: '14 Nov',
-      payee: 'Ikeja Electric Token',
-      amountMinor: 2500000n,
-      type: 'outflow',
-      cleared: true,
-    },
-    {
-      id: 'rec-3',
-      date: '14 Nov',
-      payee: 'Shoprite Lekki Mall',
-      amountMinor: 4850000n,
-      type: 'outflow',
-      cleared: true,
-    },
-    {
-      id: 'rec-4',
-      date: '12 Nov',
-      payee: 'Uber Trip VI to Ikeja',
-      amountMinor: 750000n,
-      type: 'outflow',
-      cleared: false,
-    },
-    {
-      id: 'rec-5',
-      date: '10 Nov',
-      payee: 'SMS Alert Notification Fee',
-      amountMinor: 5000n,
-      type: 'outflow',
-      cleared: false,
-    },
-  ]);
+  const [statementText, setStatementText] = useState('');
+  const [items, setItems] = useState<ReconcileItem[]>(() => {
+    if (!matchedAccount) return [];
+    const list: ReconcileItem[] = [];
+    for (const ev of dbEvents) {
+      const line = ev.lines.find((l) => l.ledgerAccountId === matchedAccount.id);
+      if (!line) continue;
+      const isOutflow = ev.type === 'expense' || line.amountMinor < 0n;
+      const payee = dbPayees.find((p) => p.id === ev.payeeId);
+      list.push({
+        id: ev.id,
+        date: ev.date,
+        payee: payee?.name || ev.notes || ev.payeeName || (isOutflow ? 'Expense' : 'Income'),
+        amountMinor: line.amountMinor < 0n ? -line.amountMinor : line.amountMinor,
+        type: isOutflow ? 'outflow' : 'inflow',
+        cleared: ev.status === 'posted',
+      });
+    }
+    return list;
+  });
 
   // Sheets
   const [discrepancyVisible, setDiscrepancyVisible] = useState(false);
@@ -101,8 +83,8 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
     .filter((i) => i.cleared && i.type === 'outflow')
     .reduce((sum, i) => sum + i.amountMinor, 0n);
 
-  // Baseline cleared balance + net cleared
-  const clearedTotalMinor = 64350000n + clearedInflows - clearedOutflows;
+  // Live cleared ledger balance
+  const clearedTotalMinor = currentBal;
   const differenceMinor = statementMinor - clearedTotalMinor;
   const isBalanced = differenceMinor === 0n;
 
@@ -334,56 +316,70 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
           </TouchableOpacity>
         </View>
 
-        {items.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            onPress={() => toggleCleared(item.id)}
-            style={[
-              styles.itemRow,
-              {
-                borderBottomColor: colors.borderSubtle,
-                paddingVertical: spacing.md,
-              },
-            ]}
-          >
-            {item.cleared ? (
-              <CheckCircle2 size={22} color={colors.primary} />
-            ) : (
-              <Circle size={22} color={colors.textTertiary} />
-            )}
-
-            <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.medium,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                {item.payee}
-              </Text>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: typography.sizes.xs,
-                }}
-              >
-                {item.date}
-              </Text>
-            </View>
-
+        {items.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
             <Text
               style={{
-                color: item.type === 'inflow' ? colors.statusSuccess : colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
                 fontSize: typography.sizes.bodySm,
               }}
             >
-              {item.type === 'inflow' ? '+' : '-'}
-              {formatNaira(item.amountMinor)}
+              No ledger transactions found to reconcile for this account.
             </Text>
-          </TouchableOpacity>
-        ))}
+          </View>
+        ) : (
+          items.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              onPress={() => toggleCleared(item.id)}
+              style={[
+                styles.itemRow,
+                {
+                  borderBottomColor: colors.borderSubtle,
+                  paddingVertical: spacing.md,
+                },
+              ]}
+            >
+              {item.cleared ? (
+                <CheckCircle2 size={22} color={colors.primary} />
+              ) : (
+                <Circle size={22} color={colors.textTertiary} />
+              )}
+
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.medium,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {item.payee}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typography.sizes.xs,
+                  }}
+                >
+                  {item.date}
+                </Text>
+              </View>
+
+              <Text
+                style={{
+                  color: item.type === 'inflow' ? colors.statusSuccess : colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                {item.type === 'inflow' ? '+' : '-'}
+                {formatNaira(item.amountMinor)}
+              </Text>
+            </TouchableOpacity>
+          ))
+        )}
 
         <View style={{ marginTop: spacing.xl }}>
           <Button

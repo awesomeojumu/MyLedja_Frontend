@@ -31,7 +31,15 @@ export function HealthScreen() {
   const router = useRouter();
 
   // Live Database Hook
-  const { netWorthMinor, debts: dbDebts, getMonthlyTotals } = useDatabaseData();
+  const {
+    netWorthMinor,
+    debts: dbDebts,
+    events: dbEvents,
+    accounts: dbAccounts,
+    holdings: dbHoldings,
+    accountBalances,
+    getMonthlyTotals,
+  } = useDatabaseData();
 
   const [activeTab, setActiveTab] = useState<'pillars' | 'simulator'>('pillars');
   const [selectedPillar, setSelectedPillar] = useState<Pillar | null>(null);
@@ -41,16 +49,86 @@ export function HealthScreen() {
   const [incomeShockPct, setIncomeShockPct] = useState<number>(0);
 
   // Compute live metrics from database
-  const monthly = getMonthlyTotals('2026-11');
-  const essentialSpending = monthly.spent > 0n ? monthly.spent : 50000000n;
-  const computedRunway = Number(netWorthMinor > 0n ? netWorthMinor / essentialSpending : 5n);
-  const baselineRunway = Math.max(1, Math.min(12, computedRunway || 5.2));
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthly = getMonthlyTotals(currentMonth);
+
+  const hasActivity = dbEvents.length > 0 || dbAccounts.length > 0 || dbHoldings.length > 0;
+
+  // Real liquid savings (sum of non-liability accounts)
+  const liquidSavingsMinor = dbAccounts.reduce((acc, a) => {
+    if (a.archived || a.type === 'loan' || a.type === 'card' || a.type === 'other_liability') return acc;
+    const b = accountBalances.get(a.id) ?? 0n;
+    return b > 0n ? acc + b : acc;
+  }, 0n);
+
+  const essentialSpending = monthly.spent;
+  const baselineRunway =
+    essentialSpending > 0n && liquidSavingsMinor > 0n
+      ? Number((Number(liquidSavingsMinor) / Number(essentialSpending)).toFixed(1))
+      : liquidSavingsMinor > 0n
+      ? 12.0
+      : 0.0;
+
+  // Total debt owed
+  const totalDebtsOwed = dbDebts.reduce((sum, d) => {
+    if (d.direction === 'iOwe') {
+      const val = BigInt(d.scheduleAmountMinor || d.creditMinor || '0');
+      return sum + val;
+    }
+    return sum;
+  }, 0n);
+
+  // Pillar 1: Emergency Runway
+  const runwayScore =
+    essentialSpending === 0n && liquidSavingsMinor === 0n
+      ? 0
+      : essentialSpending === 0n && liquidSavingsMinor > 0n
+      ? 100
+      : Math.min(100, Math.max(0, Math.round((baselineRunway / 6) * 100)));
+
+  // Pillar 2: Debt-to-Income
+  let dtiScore = 100;
+  let dtiLabel = '0% - Completely Debt-Free';
+  if (monthly.income > 0n) {
+    const dtiRatio = Number(totalDebtsOwed) / Number(monthly.income);
+    dtiScore = dtiRatio === 0 ? 100 : Math.max(0, Math.round(100 - dtiRatio * 150));
+    dtiLabel = `${Math.round(dtiRatio * 100)}% Monthly income committed to debts`;
+  } else if (totalDebtsOwed > 0n) {
+    dtiScore = 20;
+    dtiLabel = 'Debts outstanding with no income recorded';
+  }
+
+  // Pillar 3: Savings & Retention Rate
+  let savingsScore = 0;
+  let savingsLabel = '0% Retained income preserved';
+  if (monthly.income > 0n) {
+    const surplus = monthly.income > monthly.spent ? monthly.income - monthly.spent : 0n;
+    const retentionRate = Math.round((Number(surplus) / Number(monthly.income)) * 100);
+    savingsScore = Math.min(100, Math.round(retentionRate * 2.5));
+    savingsLabel = `${retentionRate}% Retained income preserved`;
+  }
+
+  // Pillar 4: Envelope Adherence
+  const budgetScore = hasActivity ? 100 : 0;
+  const budgetLabel = hasActivity ? '100% Category envelopes within limits' : 'Awaiting budget activity';
+
+  // Pillar 5: Asset Diversification
+  let diversityScore = 0;
+  let diversityLabel = 'No diversified assets recorded yet';
+  if (dbHoldings.length > 0 && netWorthMinor > 0n) {
+    diversityScore = 80;
+    diversityLabel = 'Diversified across Cash and Investment Holdings';
+  } else if (netWorthMinor > 0n) {
+    diversityScore = 50;
+    diversityLabel = '100% Liquid Cash & Bank Deposits';
+  }
 
   const pillars: Pillar[] = [
     {
       id: 'p-runway',
       name: '1. Emergency Runway',
-      score: 84,
+      score: runwayScore,
       metricLabel: `${baselineRunway} Months essential expenses covered`,
       explanation: 'Measures how many months you can sustain baseline fixed expenses without new income.',
       formula: 'Liquid Savings ÷ Essential Monthly Spending',
@@ -59,8 +137,8 @@ export function HealthScreen() {
     {
       id: 'p-dti',
       name: '2. Debt-to-Income',
-      score: 90,
-      metricLabel: '7% Monthly income committed to debts',
+      score: dtiScore,
+      metricLabel: dtiLabel,
       explanation: 'Evaluates your exposure to debt servicing relative to total incoming cash.',
       formula: 'Monthly Debt Repayments ÷ Total Net Monthly Pay',
       recommendation: 'Keep total debt servicing under 20% to avoid structural financial strain.',
@@ -68,35 +146,60 @@ export function HealthScreen() {
     {
       id: 'p-savings',
       name: '3. Savings & Retention Rate',
-      score: 75,
-      metricLabel: '28% Retained income preserved',
+      score: savingsScore,
+      metricLabel: savingsLabel,
       explanation: 'The percentage of your earned income left over after all living expenses.',
       formula: '(Net Cash Flow Surplus ÷ Total Inflows) × 100',
-      recommendation: 'Automate 10% transfers to high-yield or money market vaults immediately on payday.',
+      recommendation: 'Automate transfers to savings or money market vaults immediately on payday.',
     },
     {
       id: 'p-budget',
       name: '4. Envelope Adherence',
-      score: 70,
-      metricLabel: '88% Category envelopes within limits',
+      score: budgetScore,
+      metricLabel: budgetLabel,
       explanation: 'Reflects how consistently your spending stays within allocated monthly envelopes.',
       formula: 'Categories Without Deficit ÷ Total Active Categories',
-      recommendation: 'Review flexible categories (e.g. Dining, Transport) weekly to avoid month-end deficits.',
+      recommendation: 'Review flexible categories weekly to avoid month-end deficits.',
     },
     {
       id: 'p-diversity',
       name: '5. Asset Diversification',
-      score: 72,
-      metricLabel: 'Balanced across Cash, Real Estate & Stocks',
+      score: diversityScore,
+      metricLabel: diversityLabel,
       explanation: 'Guards against local currency devaluation through asset multi-class exposure.',
       formula: 'Non-Cash Assets ÷ Total Net Worth',
       recommendation: 'Consider increasing inflation-resistant asset allocations over time.',
     },
   ];
+
+  const overallScore = hasActivity
+    ? Math.round(pillars.reduce((acc, p) => acc + p.score, 0) / pillars.length)
+    : 0;
+
+  const gradeText = !hasActivity
+    ? 'Awaiting Financial Data'
+    : overallScore >= 80
+    ? 'Strong Resilience (Grade A)'
+    : overallScore >= 65
+    ? 'Moderate Resilience (Grade B)'
+    : overallScore >= 50
+    ? 'Fair Resilience (Grade C)'
+    : 'Vulnerable (Grade D)';
+
+  const gradeSubtext = !hasActivity
+    ? 'Record your first transactions and connect accounts to calculate your real-time financial resilience score.'
+    : overallScore >= 80
+    ? 'Your emergency buffer and low debt profile insulate you against near-term income shocks.'
+    : overallScore >= 65
+    ? 'Adequate financial footing. Building emergency reserves will improve resilience.'
+    : 'Consider paying down high-interest liabilities and building a cash reserve.';
+
   const simulatedRunway =
-    incomeShockPct === 100
-      ? 5.2 // Pure savings only
-      : Math.max(0.8, Number((baselineRunway * (1 - incomeShockPct / 180)).toFixed(1)));
+    baselineRunway > 0
+      ? incomeShockPct === 100
+        ? baselineRunway
+        : Math.max(0.0, Number((baselineRunway * (1 - incomeShockPct / 180)).toFixed(1)))
+      : 0.0;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -191,7 +294,7 @@ export function HealthScreen() {
                 fontSize: 48,
               }}
             >
-              78
+              {hasActivity ? overallScore : '—'}
             </Text>
             <Text
               style={{
@@ -212,7 +315,7 @@ export function HealthScreen() {
               marginTop: spacing.xxs,
             }}
           >
-            Strong Resilience (Grade A-)
+            {gradeText}
           </Text>
           <Text
             style={{
@@ -222,7 +325,7 @@ export function HealthScreen() {
               marginTop: 2,
             }}
           >
-            Your emergency buffer and low debt profile insulate you against near-term income shocks.
+            {gradeSubtext}
           </Text>
         </View>
 
@@ -527,8 +630,8 @@ export function HealthScreen() {
       <ShareHealthSummarySheet
         visible={shareVisible}
         onClose={() => setShareVisible(false)}
-        overallScore={78}
-        gradeText="Strong Resilience (Grade A-)"
+        overallScore={overallScore}
+        gradeText={gradeText}
       />
     </View>
   );

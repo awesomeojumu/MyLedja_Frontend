@@ -39,40 +39,24 @@ export function IncomeScreen() {
   } = useDatabaseData();
 
   // State
-  const [localStreams, setLocalStreams] = useState<IncomeStreamUI[]>([
-    {
-      id: 'str-1',
-      name: 'Primary Tech Salary (Full-time)',
-      expectedMinor: 85000000n,
-      receivedMinor: 85000000n,
-      mode: 'net',
-      payDay: 25,
-      status: 'received',
-    },
-    {
-      id: 'str-2',
-      name: 'Consulting Retainer (Lagos Client)',
-      expectedMinor: 15000000n,
-      receivedMinor: 0n,
-      mode: 'net',
-      payDay: 30,
-      status: 'pending',
-    },
-  ]);
+  const [localStreams, setLocalStreams] = useState<IncomeStreamUI[]>([]);
 
   const streams: IncomeStreamUI[] = React.useMemo(() => {
-    if (dbStreams.length > 0) {
-      return dbStreams.map((s, idx) => ({
-        id: s.id,
-        name: s.name,
-        expectedMinor: BigInt(s.expectedMinor || '0'),
-        receivedMinor: idx === 0 ? BigInt(s.expectedMinor || '0') : 0n,
-        mode: 'net' as const,
-        payDay: s.rule?.on || 25,
-        status: idx === 0 ? ('received' as const) : ('pending' as const),
-      }));
+    const list: IncomeStreamUI[] = dbStreams.map((s) => ({
+      id: s.id,
+      name: s.name,
+      expectedMinor: BigInt(s.expectedMinor || '0'),
+      receivedMinor: 0n,
+      mode: 'net' as const,
+      payDay: s.rule?.on || 25,
+      status: 'pending' as const,
+    }));
+    for (const ls of localStreams) {
+      if (!list.some((item) => item.id === ls.id)) {
+        list.push(ls);
+      }
     }
-    return localStreams;
+    return list;
   }, [dbStreams, localStreams]);
 
   // Sheets
@@ -301,130 +285,175 @@ export function IncomeScreen() {
           Scheduled Income Streams
         </Text>
 
-        {streams.map((stream) => (
+        {streams.length === 0 ? (
           <View
-            key={stream.id}
             style={[
               styles.streamCard,
               {
                 backgroundColor: colors.surface,
                 borderColor: colors.borderSubtle,
                 borderRadius: radii.md,
-                padding: spacing.md,
-                marginBottom: spacing.md,
+                padding: spacing.xl,
+                alignItems: 'center',
+                justifyContent: 'center',
               },
             ]}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View
-                style={[
-                  styles.streamIcon,
-                  {
-                    backgroundColor: colors.primaryLight,
-                    borderRadius: radii.full,
-                  },
-                ]}
-              >
-                <Briefcase size={18} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontFamily: typography.fonts.medium,
-                    fontSize: typography.sizes.bodySm,
-                  }}
-                >
-                  {stream.name}
-                </Text>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: typography.sizes.xs,
-                    fontFamily: typography.fonts.regular,
-                  }}
-                >
-                  Expected on {stream.payDay}th • {stream.mode === 'net' ? 'Net Pay' : 'Gross'}
-                </Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontFamily: typography.fonts.semiBold,
-                    fontSize: typography.sizes.bodySm,
-                  }}
-                >
-                  {formatNaira(stream.expectedMinor)}
-                </Text>
+            <Briefcase size={32} color={colors.textTertiary} style={{ marginBottom: spacing.sm }} />
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.body,
+                marginBottom: 4,
+              }}
+            >
+              No Scheduled Income Streams
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.bodySm,
+                textAlign: 'center',
+                marginBottom: spacing.md,
+              }}
+            >
+              Add your salary, consulting retainer, or regular dividends to project monthly cash inflows.
+            </Text>
+            <Button
+              label="Add Income Stream"
+              variant="primary"
+              size="sm"
+              onPress={() => setAddSheetVisible(true)}
+            />
+          </View>
+        ) : (
+          streams.map((stream) => (
+            <View
+              key={stream.id}
+              style={[
+                styles.streamCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.md,
+                  padding: spacing.md,
+                  marginBottom: spacing.md,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View
                   style={[
-                    styles.statusPill,
+                    styles.streamIcon,
                     {
-                      backgroundColor:
-                        stream.status === 'received'
-                          ? colors.statusSuccessLight
-                          : colors.statusWarningLight,
+                      backgroundColor: colors.primaryLight,
                       borderRadius: radii.full,
-                      marginTop: 2,
                     },
                   ]}
                 >
+                  <Briefcase size={18} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: spacing.md }}>
                   <Text
                     style={{
-                      color:
-                        stream.status === 'received'
-                          ? colors.statusSuccess
-                          : colors.statusWarning,
+                      color: colors.textPrimary,
                       fontFamily: typography.fonts.medium,
-                      fontSize: 10,
+                      fontSize: typography.sizes.bodySm,
                     }}
                   >
-                    {stream.status === 'received' ? 'Received' : 'Pending'}
+                    {stream.name}
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: typography.sizes.xs,
+                      fontFamily: typography.fonts.regular,
+                    }}
+                  >
+                    Expected on {stream.payDay}th • {stream.mode === 'net' ? 'Net Pay' : 'Gross'}
                   </Text>
                 </View>
-              </View>
-            </View>
-
-            {stream.status === 'pending' && (
-              <View
-                style={{
-                  borderTopColor: colors.borderSubtle,
-                  borderTopWidth: StyleSheet.hairlineWidth,
-                  marginTop: spacing.md,
-                  paddingTop: spacing.sm,
-                  flexDirection: 'row',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <TouchableOpacity
-                  onPress={() => setMatchingStream(stream)}
-                  style={[
-                    styles.matchBtn,
-                    {
-                      backgroundColor: colors.surfaceSubtle,
-                      borderRadius: radii.full,
-                      paddingHorizontal: spacing.sm,
-                      paddingVertical: 4,
-                    },
-                  ]}
-                >
-                  <Link2 size={12} color={colors.primary} />
+                <View style={{ alignItems: 'flex-end' }}>
                   <Text
                     style={{
-                      color: colors.primary,
-                      fontSize: 11,
+                      color: colors.textPrimary,
                       fontFamily: typography.fonts.semiBold,
-                      marginLeft: 4,
+                      fontSize: typography.sizes.bodySm,
                     }}
                   >
-                    Match Deposit
+                    {formatNaira(stream.expectedMinor)}
                   </Text>
-                </TouchableOpacity>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      {
+                        backgroundColor:
+                          stream.status === 'received'
+                            ? colors.statusSuccessLight
+                            : colors.statusWarningLight,
+                        borderRadius: radii.full,
+                        marginTop: 2,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          stream.status === 'received'
+                            ? colors.statusSuccess
+                            : colors.statusWarning,
+                        fontFamily: typography.fonts.medium,
+                        fontSize: 10,
+                      }}
+                    >
+                      {stream.status === 'received' ? 'Received' : 'Pending'}
+                    </Text>
+                  </View>
+                </View>
               </View>
-            )}
-          </View>
-        ))}
+
+              {stream.status === 'pending' && (
+                <View
+                  style={{
+                    borderTopColor: colors.borderSubtle,
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    marginTop: spacing.md,
+                    paddingTop: spacing.sm,
+                    flexDirection: 'row',
+                    justifyContent: 'flex-end',
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => setMatchingStream(stream)}
+                    style={[
+                      styles.matchBtn,
+                      {
+                        backgroundColor: colors.surfaceSubtle,
+                        borderRadius: radii.full,
+                        paddingHorizontal: spacing.sm,
+                        paddingVertical: 4,
+                      },
+                    ]}
+                  >
+                    <Link2 size={12} color={colors.primary} />
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontSize: 11,
+                        fontFamily: typography.fonts.semiBold,
+                        marginLeft: 4,
+                      }}
+                    >
+                      Match Deposit
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ))
+        )}
       </ScrollView>
 
       {/* Sheets */}

@@ -30,12 +30,19 @@ export function CashFlowScreen() {
   } | null>(null);
 
   // Financial Stream Figures (connected to Database events)
-  const totals = getMonthlyTotals('2026-11');
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const totals = getMonthlyTotals(currentMonth);
   const totalInflowMinor = totals.income;
   const spentMinor = totals.spent;
   const fixedMinor = (spentMinor * 55n) / 100n;
   const livingMinor = spentMinor - fixedMinor;
   const retainedMinor = totalInflowMinor > spentMinor ? totalInflowMinor - spentMinor : 0n;
+
+  const surplusPct =
+    totalInflowMinor > 0n ? Math.round((Number(retainedMinor) / Number(totalInflowMinor)) * 100) : 0;
+  const fixedPct = spentMinor > 0n ? 55 : 0;
+  const livingPct = spentMinor > 0n ? 45 : 0;
 
   const fixedItems: FlowNodeItem[] = [];
   const livingItems: FlowNodeItem[] = [];
@@ -177,7 +184,7 @@ export function CashFlowScreen() {
               marginTop: spacing.xxs,
             }}
           >
-            45% of total income preserved for savings & investments
+            {surplusPct}% of total income preserved for savings & investments
           </Text>
         </View>
 
@@ -305,7 +312,7 @@ export function CashFlowScreen() {
                   fontSize: typography.sizes.xs,
                 }}
               >
-                Rent, utilities, subscriptions (29%)
+                Rent, utilities, subscriptions ({fixedPct}%)
               </Text>
             </View>
             <Text
@@ -369,7 +376,7 @@ export function CashFlowScreen() {
                   fontSize: typography.sizes.xs,
                 }}
               >
-                Food, transport, entertainment (26%)
+                Food, transport, entertainment ({livingPct}%)
               </Text>
             </View>
             <Text

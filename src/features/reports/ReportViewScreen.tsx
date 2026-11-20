@@ -32,14 +32,6 @@ export function ReportViewScreen() {
       ? 'PAYE Tax & Pension Deductions'
       : 'Net Worth Growth Trajectory';
 
-  const defaultRows = [
-    { label: 'Housing & Rent Allocation', amountMinor: 25000000n, percent: 38 },
-    { label: 'Food, Dining & Groceries', amountMinor: 18500000n, percent: 28 },
-    { label: 'Fuel & Transportation', amountMinor: 12000000n, percent: 18 },
-    { label: 'Utilities & Power Subscriptions', amountMinor: 6500000n, percent: 10 },
-    { label: 'Family Support & Personal', amountMinor: 4000000n, percent: 6 },
-  ];
-
   const rows = React.useMemo(() => {
     if (dbEvents.length > 0) {
       const catTotals: Record<string, bigint> = {};
@@ -56,14 +48,13 @@ export function ReportViewScreen() {
           totalSpent += evAmount;
         }
       }
-      const list = Object.entries(catTotals).map(([name, amountMinor]) => ({
+      return Object.entries(catTotals).map(([name, amountMinor]) => ({
         label: name,
         amountMinor,
         percent: totalSpent > 0n ? Math.round((Number(amountMinor) / Number(totalSpent)) * 100) : 0,
       }));
-      if (list.length > 0) return list;
     }
-    return defaultRows;
+    return [];
   }, [dbEvents, dbCategories]);
 
   const totalMinor = rows.reduce((s, r) => s + r.amountMinor, 0n);
@@ -229,7 +220,9 @@ export function ReportViewScreen() {
               marginTop: 2,
             }}
           >
-            Computed across 5 reporting segments
+            {rows.length > 0
+              ? `Computed across ${rows.length} reporting segments`
+              : 'Awaiting transaction data for this reporting period'}
           </Text>
         </View>
 
@@ -245,9 +238,34 @@ export function ReportViewScreen() {
           Segment Breakdown
         </Text>
 
-        {rows.map((row) => (
+        {rows.length === 0 ? (
           <View
-            key={row.label}
+            style={[
+              styles.breakdownRow,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.borderSubtle,
+                borderRadius: radii.md,
+                padding: spacing.xl,
+                alignItems: 'center',
+                justifyContent: 'center',
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.bodySm,
+              }}
+            >
+              No transactions recorded in this period.
+            </Text>
+          </View>
+        ) : (
+          rows.map((row) => (
+            <View
+              key={row.label}
             style={[
               styles.breakdownRow,
               {
@@ -314,7 +332,7 @@ export function ReportViewScreen() {
               {row.percent}% of total reported volume
             </Text>
           </View>
-        ))}
+        )))}
       </ScrollView>
 
       {/* Export Menu Sheet */}

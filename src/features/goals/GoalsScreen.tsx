@@ -29,45 +29,32 @@ export function GoalsScreen() {
   const router = useRouter();
 
   // Live Database Hook
-  const { repo, goals: dbGoals, accounts: dbAccounts } = useDatabaseData();
+  const { repo, goals: dbGoals, accounts: dbAccounts, allocations: dbAllocations } = useDatabaseData();
 
   // State
-  const [localGoals, setLocalGoals] = useState<GoalItemUI[]>([
-    {
-      id: 'g-1',
-      name: 'Emergency Fund Vault (6 Months)',
-      targetMinor: 300000000n, // ₦3,000,000.00
-      currentMinor: 185000000n, // ₦1,850,000.00
-      targetDate: '31 Mar 2027',
-    },
-    {
-      id: 'g-2',
-      name: 'Annual Apartment Rent Advance',
-      targetMinor: 150000000n, // ₦1,500,000.00
-      currentMinor: 95000000n,  // ₦950,000.00
-      targetDate: '30 Jun 2027',
-    },
-    {
-      id: 'g-3',
-      name: 'MacBook Pro M4 Workstation',
-      targetMinor: 280000000n, // ₦2,800,000.00
-      currentMinor: 220000000n, // ₦2,200,000.00
-      targetDate: '15 Dec 2026',
-    },
-  ]);
+  const [localGoals, setLocalGoals] = useState<GoalItemUI[]>([]);
 
   const goals: GoalItemUI[] = React.useMemo(() => {
     if (dbGoals.length > 0) {
-      return dbGoals.map((g, idx) => ({
-        id: g.id,
-        name: g.name,
-        targetMinor: BigInt(g.targetMinor || '0'),
-        currentMinor: (BigInt(g.targetMinor || '0') * BigInt(50 + ((idx * 20) % 40))) / 100n,
-        targetDate: g.targetDate,
-      }));
+      return dbGoals.map((g) => {
+        const currentSaved = dbAllocations
+          .filter((a) => a.goalId === g.id)
+          .reduce((sum, a) => {
+            const amt = BigInt(a.amountMinor || '0');
+            return a.kind === 'spend' ? sum - amt : sum + amt;
+          }, 0n);
+
+        return {
+          id: g.id,
+          name: g.name,
+          targetMinor: BigInt(g.targetMinor || '0'),
+          currentMinor: currentSaved > 0n ? currentSaved : 0n,
+          targetDate: g.targetDate,
+        };
+      });
     }
     return localGoals;
-  }, [dbGoals, localGoals]);
+  }, [dbGoals, dbAllocations, localGoals]);
 
   // Sheets
   const [createSheetVisible, setCreateSheetVisible] = useState(false);
@@ -303,7 +290,42 @@ export function GoalsScreen() {
           Active Goals ({goals.length})
         </Text>
 
-        {goals.map((g) => {
+        {goals.length === 0 ? (
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.md,
+              padding: spacing.xl,
+              alignItems: 'center',
+              borderWidth: 1,
+            }}
+          >
+            <Target size={32} color={colors.textTertiary} style={{ marginBottom: spacing.sm }} />
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: 14,
+                marginBottom: 4,
+              }}
+            >
+              No Savings Goals Yet
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: 12,
+                textAlign: 'center',
+                maxWidth: 320,
+              }}
+            >
+              Tap "+ New Goal" or allocate from a transaction to begin building your reserves.
+            </Text>
+          </View>
+        ) : (
+          goals.map((g) => {
           const pct =
             g.targetMinor > 0n
               ? Math.min(100, Math.round((Number(g.currentMinor) / Number(g.targetMinor)) * 100))
@@ -465,7 +487,7 @@ export function GoalsScreen() {
               </View>
             </View>
           );
-        })}
+        }))}
       </ScrollView>
 
       {/* Sheets */}

@@ -33,32 +33,7 @@ export function InvestmentsScreen() {
   const { repo, holdings: dbHoldings, accounts: dbAccounts } = useDatabaseData();
 
   // State
-  const [localHoldings, setLocalHoldings] = useState<HoldingItemUI[]>([
-    {
-      id: 'h-1',
-      ticker: 'MTNN',
-      name: 'MTN Nigeria Plc',
-      units: 4500,
-      avgCostMinor: 22000n, // ₦220.00
-      currentPriceMinor: 27500n, // ₦275.00
-    },
-    {
-      id: 'h-2',
-      ticker: 'GTCO',
-      name: 'Guaranty Trust Holding Co',
-      units: 12000,
-      avgCostMinor: 3800n, // ₦38.00
-      currentPriceMinor: 4950n, // ₦49.50
-    },
-    {
-      id: 'h-3',
-      ticker: 'AIRTELAFRI',
-      name: 'Airtel Africa Plc',
-      units: 800,
-      avgCostMinor: 185000n, // ₦1,850.00
-      currentPriceMinor: 215000n, // ₦2,150.00
-    },
-  ]);
+  const [localHoldings, setLocalHoldings] = useState<HoldingItemUI[]>([]);
 
   const holdings: HoldingItemUI[] = React.useMemo(() => {
     if (dbHoldings.length > 0) {
@@ -338,7 +313,42 @@ export function InvestmentsScreen() {
           Assets & Holdings ({holdings.length})
         </Text>
 
-        {holdings.map((h) => {
+        {holdings.length === 0 ? (
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.md,
+              padding: spacing.xl,
+              alignItems: 'center',
+              borderWidth: 1,
+            }}
+          >
+            <PieChart size={32} color={colors.textTertiary} style={{ marginBottom: spacing.sm }} />
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: 14,
+                marginBottom: 4,
+              }}
+            >
+              No Investment Holdings Yet
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: 12,
+                textAlign: 'center',
+                maxWidth: 320,
+              }}
+            >
+              Tap "+ Record Trade" or link an investment from a transaction to build your portfolio.
+            </Text>
+          </View>
+        ) : (
+          holdings.map((h) => {
           const itemValueMinor =
             (h.currentPriceMinor * BigInt(Math.round(h.units * 100))) / 100n;
           const itemCostMinor =
@@ -427,7 +437,7 @@ export function InvestmentsScreen() {
               </View>
             </TouchableOpacity>
           );
-        })}
+        }))}
       </ScrollView>
 
       {/* Sheets */}

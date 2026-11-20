@@ -16,6 +16,7 @@ import { EditCategorySheet } from './EditCategorySheet';
 import { DeleteCategorySheet } from './DeleteCategorySheet';
 import { MoveMoneySheet } from './MoveMoneySheet';
 import { QuickTransactionSheet } from '../dashboard/QuickTransactionSheet';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 interface CategoryDetailScreenProps {
   categoryId: string;
@@ -25,11 +26,49 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
-  // State
-  const [name, setName] = useState('Groceries & Foodstuffs');
-  const [group, setGroup] = useState('Daily Expenses');
-  const [targetMinor, setTargetMinor] = useState<bigint>(8000000n); // ₦80,000.00
-  const [spentMinor, setSpentMinor] = useState<bigint>(4850000n);   // ₦48,500.00
+  const {
+    categories: dbCategories,
+    events: dbEvents,
+    payees: dbPayees,
+    assigns,
+  } = useDatabaseData();
+
+  const matched = dbCategories.find((c) => c.id === categoryId) || dbCategories[0];
+
+  const [customTarget, setTargetMinor] = useState<bigint | null>(null);
+  const [customName, setName] = useState<string | null>(null);
+  const [customGroup, setGroup] = useState<string | null>(null);
+
+  const name = customName ?? (matched?.name || 'Category');
+  const group = customGroup ?? (matched?.group || 'Needs & Living Expenses');
+  const targetMinor = customTarget ?? (matched ? (assigns.get(matched.id) ?? 0n) : 0n);
+
+  // Real transactions from database
+  const transactions = React.useMemo(() => {
+    if (!matched) return [];
+    const list: Array<{
+      id: string;
+      date: string;
+      payee: string;
+      amountMinor: bigint;
+    }> = [];
+
+    for (const ev of dbEvents) {
+      if (ev.type !== 'expense' || ev.status !== 'posted') continue;
+      const line = ev.lines.find((l) => l.ledgerAccountId === matched.id);
+      if (!line) continue;
+      const payee = dbPayees.find((p) => p.id === ev.payeeId);
+      list.push({
+        id: ev.id,
+        date: ev.date,
+        payee: payee?.name || ev.notes || ev.payeeName || 'Expense',
+        amountMinor: line.amountMinor > 0n ? line.amountMinor : -line.amountMinor,
+      });
+    }
+    return list;
+  }, [matched, dbEvents, dbPayees]);
+
+  const spentMinor = transactions.reduce((sum, tx) => sum + tx.amountMinor, 0n);
 
   // Sheets
   const [targetSheetVisible, setTargetSheetVisible] = useState(false);
@@ -39,7 +78,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
   const [addTxVisible, setAddTxVisible] = useState(false);
 
   // Remaining
-  const remainingMinor = targetMinor - spentMinor;
+  const remainingMinor = targetMinor > spentMinor ? targetMinor - spentMinor : 0n;
   const percentSpent =
     targetMinor > 0n ? Math.min(100, Math.round((Number(spentMinor) / Number(targetMinor)) * 100)) : 0;
 
@@ -49,27 +88,6 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
       : percentSpent > 80
       ? colors.statusWarning
       : colors.primary;
-
-  const transactions = [
-    {
-      id: 'tx-1',
-      date: '14 Nov',
-      payee: 'Shoprite Lekki Mall',
-      amountMinor: 2450000n,
-    },
-    {
-      id: 'tx-2',
-      date: '10 Nov',
-      payee: 'Mile 12 Market Foodstuff',
-      amountMinor: 1800000n,
-    },
-    {
-      id: 'tx-3',
-      date: '04 Nov',
-      payee: 'Hubmart Supermarket',
-      amountMinor: 600000n,
-    },
-  ];
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -322,60 +340,74 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
           </TouchableOpacity>
         </View>
 
-        {transactions.map((tx) => (
-          <View
-            key={tx.id}
-            style={[
-              styles.txRow,
-              {
-                borderBottomColor: colors.borderSubtle,
-                paddingVertical: spacing.md,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.txIconWrap,
-                {
-                  backgroundColor: colors.surfaceSubtle,
-                  borderRadius: radii.full,
-                },
-              ]}
-            >
-              <ArrowUpRight size={16} color={colors.textSecondary} />
-            </View>
-
-            <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.medium,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                {tx.payee}
-              </Text>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: typography.sizes.xs,
-                }}
-              >
-                {tx.date}
-              </Text>
-            </View>
-
+        {transactions.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
             <Text
               style={{
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
                 fontSize: typography.sizes.bodySm,
               }}
             >
-              -{formatNaira(tx.amountMinor)}
+              No expenses recorded for this category yet.
             </Text>
           </View>
-        ))}
+        ) : (
+          transactions.map((tx) => (
+            <View
+              key={tx.id}
+              style={[
+                styles.txRow,
+                {
+                  borderBottomColor: colors.borderSubtle,
+                  paddingVertical: spacing.md,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.txIconWrap,
+                  {
+                    backgroundColor: colors.surfaceSubtle,
+                    borderRadius: radii.full,
+                  },
+                ]}
+              >
+                <ArrowUpRight size={16} color={colors.textSecondary} />
+              </View>
+
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.medium,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {tx.payee}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typography.sizes.xs,
+                  }}
+                >
+                  {tx.date}
+                </Text>
+              </View>
+
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.bodySm,
+                }}
+              >
+                -{formatNaira(tx.amountMinor)}
+              </Text>
+            </View>
+          ))
+        )}
       </ScrollView>
 
       {/* Sheets */}

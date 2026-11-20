@@ -88,7 +88,34 @@ export function AccountBalanceChart({ currentBalanceMinor, accountType }: Accoun
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(340);
 
-  const activeData = TIMEFRAME_DATA[selectedRange];
+  const activeData = React.useMemo(() => {
+    if (currentBalanceMinor === 0n) {
+      return {
+        points: [
+          { date: 'Start', balanceMinor: 0n },
+          { date: 'Today', balanceMinor: 0n },
+        ],
+        netDeltaMinor: 0n,
+        percent: '0.0%',
+        isPositive: true,
+      };
+    }
+    const raw = TIMEFRAME_DATA[selectedRange];
+    const latestRaw = raw.points[raw.points.length - 1]!.balanceMinor;
+    if (latestRaw === 0n) return raw;
+    const scaledPoints = raw.points.map((p) => ({
+      date: p.date,
+      balanceMinor: (p.balanceMinor * currentBalanceMinor) / latestRaw,
+    }));
+    const delta = currentBalanceMinor - scaledPoints[0]!.balanceMinor;
+    return {
+      points: scaledPoints,
+      netDeltaMinor: delta,
+      percent: raw.percent,
+      isPositive: delta >= 0n,
+    };
+  }, [currentBalanceMinor, selectedRange]);
+
   const points = activeData.points;
 
   // Selected point details (or fallback to latest)

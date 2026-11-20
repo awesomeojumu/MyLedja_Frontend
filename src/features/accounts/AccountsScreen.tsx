@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SlidersHorizontal, Check, X } from 'lucide-react-native';
+import { SlidersHorizontal, Check, X, Landmark } from 'lucide-react-native';
 import { useTheme, BottomSheet } from '../../design';
 import { Toast } from '../../design/components/Toast';
 import { NetAssetsHero } from './NetAssetsHero';
@@ -57,72 +57,7 @@ export function AccountsScreen() {
     repo,
   } = useDatabaseData();
 
-  const [rawAccounts, setAccounts] = useState<AccountData[]>([
-    {
-      id: 'acc-1',
-      name: 'Salary & Operating Inflows',
-      institution: 'PremiumTrust Bank',
-      category: 'liquid',
-      type: 'income',
-      balanceMinor: 85000000n, // ₦850,000.00
-    },
-    {
-      id: 'acc-2',
-      name: 'Daily Spending & Operations',
-      institution: 'GTBank',
-      category: 'liquid',
-      type: 'operating',
-      balanceMinor: 34500000n, // ₦345,000.00
-    },
-    {
-      id: 'acc-3',
-      name: 'Rent & Subscriptions',
-      institution: 'Zenith Bank',
-      category: 'liquid',
-      type: 'bills',
-      balanceMinor: 21000000n, // ₦210,000.00
-    },
-    {
-      id: 'acc-4',
-      name: 'Emergency Reserve Vault',
-      institution: 'Kuda Bank',
-      category: 'liquid',
-      type: 'emergency',
-      balanceMinor: 45000000n, // ₦450,000.00
-    },
-    {
-      id: 'acc-5',
-      name: 'Target Savings Pot',
-      institution: 'Stanbic IBTC',
-      category: 'liquid',
-      type: 'savings',
-      balanceMinor: 35000000n, // ₦350,000.00
-    },
-    {
-      id: 'acc-6',
-      name: 'Real Estate & Wealth Portfolio',
-      institution: 'Risevest & Lekki Property',
-      category: 'investment',
-      type: 'investment',
-      balanceMinor: 1050000000n, // ₦10,500,000.00
-    },
-    {
-      id: 'acc-7',
-      name: 'Annual Travel & Car Project',
-      institution: 'Access Bank',
-      category: 'liquid',
-      type: 'project',
-      balanceMinor: 39000000n, // ₦390,000.00
-    },
-    {
-      id: 'acc-8',
-      name: 'Platinum Credit Card',
-      institution: 'Access Bank',
-      category: 'liability',
-      type: 'credit',
-      balanceMinor: -1200000n, // -₦12,000.00
-    },
-  ]);
+  const [rawAccounts, setAccounts] = useState<AccountData[]>([]);
 
   const accounts: AccountData[] = useMemo(() => {
     if (dbAccounts.length > 0) {
@@ -144,7 +79,7 @@ export function AccountsScreen() {
           institution: a.institution || 'Commercial Bank',
           category: catCategory,
           type: assignedType,
-          balanceMinor: bal !== 0n ? bal : 8300000n * BigInt(idx + 1),
+          balanceMinor: bal,
         };
       });
     }
@@ -327,7 +262,42 @@ export function AccountsScreen() {
         </View>
 
         {/* Grouped Purposeful Account Cards */}
-        {groupedSections.map((sec) => (
+        {accounts.length === 0 ? (
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.md,
+              padding: spacing.xl,
+              alignItems: 'center',
+              borderWidth: 1,
+            }}
+          >
+            <Landmark size={32} color={colors.textTertiary} style={{ marginBottom: spacing.sm }} />
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: 14,
+                marginBottom: 4,
+              }}
+            >
+              No Accounts Added Yet
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: 12,
+                textAlign: 'center',
+                maxWidth: 320,
+              }}
+            >
+              Tap "+ Add Account" to link your commercial banks, mobile wallets, or credit cards.
+            </Text>
+          </View>
+        ) : (
+          groupedSections.map((sec) => (
           <View key={sec.key} style={[styles.section, { marginBottom: spacing.lg }]}>
             <Text
               style={[
@@ -372,7 +342,8 @@ export function AccountsScreen() {
               ))}
             </View>
           </View>
-        ))}
+        ))
+        )}
       </ScrollView>
 
       {/* Filter by Purpose Modal Sheet */}

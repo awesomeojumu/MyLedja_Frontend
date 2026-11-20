@@ -13,58 +13,7 @@ export interface RecurringBillItem {
 
 export const STORAGE_KEY_RECURRING_BILLS = 'pref:recurring_bills_v2';
 
-export const DEFAULT_RECURRING_BILLS: RecurringBillItem[] = [
-  {
-    id: 'bill-mtn-home',
-    name: 'MTN Home Data Subscription',
-    amountMinor: 3000000n, // ₦30,000 / month
-    dueDay: 1,
-    cadence: 'monthly',
-    category: 'Communication & Technology',
-    subcategory: 'Internet subscriptions',
-    paid: true,
-  },
-  {
-    id: 'bill-ikeja-electric',
-    name: 'Ikeja Electric Prepaid Token',
-    amountMinor: 2500000n, // ₦25,000 / month
-    dueDay: 5,
-    cadence: 'monthly',
-    category: 'Utilities',
-    subcategory: 'Electricity',
-    paid: true,
-  },
-  {
-    id: 'bill-apple-cloud',
-    name: 'Apple Cloud Space',
-    amountMinor: 1500000n, // ₦15,000 / month
-    dueDay: 12,
-    cadence: 'monthly',
-    category: 'Communication & Technology',
-    subcategory: 'Cloud storage',
-    paid: false,
-  },
-  {
-    id: 'bill-mtn-personal-quarterly',
-    name: 'MTN Personal Data (Quarterly)',
-    amountMinor: 4500000n, // ₦45,000 / quarter
-    dueDay: 15,
-    cadence: 'quarterly',
-    category: 'Communication & Technology',
-    subcategory: 'Data',
-    paid: false,
-  },
-  {
-    id: 'bill-estate-security',
-    name: 'Estate Security & Maintenance Levy',
-    amountMinor: 1500000n, // ₦15,000 / month
-    dueDay: 28,
-    cadence: 'monthly',
-    category: 'Housing',
-    subcategory: 'Security',
-    paid: false,
-  },
-];
+export const DEFAULT_RECURRING_BILLS: RecurringBillItem[] = [];
 
 /** Convert recurring bill cadence to monthly commitment weight */
 export function getMonthlyEquivalentMinor(bill: RecurringBillItem): bigint {

@@ -604,9 +604,40 @@ export function NetAssetsHero({
 
   const activeCategoryTrajectory =
     FILTER_TRAJECTORIES[activeFilter] ?? FILTER_TRAJECTORIES.all;
-  const activeTrend =
-    activeCategoryTrajectory.ranges[selectedRange] ??
-    activeCategoryTrajectory.ranges['1M'];
+
+  const netWorthMinor = totalAssetsMinor - totalLiabilitiesMinor;
+
+  const activeTrend = React.useMemo(() => {
+    if (totalAssetsMinor === 0n && totalLiabilitiesMinor === 0n) {
+      return {
+        points: [
+          { date: 'Start', amountMinor: 0n },
+          { date: 'Today', amountMinor: 0n },
+        ],
+        percent: '0.0%',
+        isPositive: true,
+        deltaMinor: 0n,
+      };
+    }
+    const raw =
+      activeCategoryTrajectory.ranges[selectedRange] ??
+      activeCategoryTrajectory.ranges['1M'];
+    const latestRaw = raw.points[raw.points.length - 1]!.amountMinor;
+    if (latestRaw === 0n) return raw;
+    const targetMinor = activeFilter === 'all' ? netWorthMinor : totalAssetsMinor;
+    const scaledPoints = raw.points.map((p) => ({
+      date: p.date,
+      amountMinor: targetMinor > 0n ? (p.amountMinor * targetMinor) / latestRaw : 0n,
+    }));
+    const delta = (scaledPoints[scaledPoints.length - 1]?.amountMinor ?? 0n) - (scaledPoints[0]?.amountMinor ?? 0n);
+    return {
+      points: scaledPoints,
+      deltaMinor: delta,
+      percent: raw.percent,
+      isPositive: delta >= 0n,
+    };
+  }, [totalAssetsMinor, totalLiabilitiesMinor, activeCategoryTrajectory, selectedRange, activeFilter, netWorthMinor]);
+
   const points = activeTrend.points;
 
   const currentPoint =
@@ -659,7 +690,6 @@ export function NetAssetsHero({
       ? coords[activePointIndex]
       : coords[coords.length - 1]!;
 
-  const netWorthMinor = totalAssetsMinor - totalLiabilitiesMinor;
   const displayedAmount =
     activeFilter === 'all'
       ? activePointIndex !== null
@@ -667,7 +697,7 @@ export function NetAssetsHero({
         : netWorthMinor
       : activePointIndex !== null
       ? currentPoint.amountMinor
-      : currentPoint.amountMinor;
+      : totalAssetsMinor;
 
   const strokeColor =
     activeFilter === 'liability' ? colors.statusDanger : colors.primary;

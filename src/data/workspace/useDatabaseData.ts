@@ -12,6 +12,7 @@ import type {
   TransactionRule,
   AppNotification,
   Holding,
+  GoalAllocation,
 } from './model';
 import type { TxEvent } from './repository';
 import { ledgerBalance, monthOf } from '@/ledger';
@@ -40,6 +41,7 @@ export function useDatabaseData() {
   );
   const payees: Payee[] = useMemo(() => snapshot?.payees || [], [snapshot?.payees]);
   const holdings: Holding[] = useMemo(() => snapshot?.holdings || [], [snapshot?.holdings]);
+  const allocations: GoalAllocation[] = useMemo(() => snapshot?.allocations || [], [snapshot?.allocations]);
 
   // Account balances map: accountId -> balanceMinor
   const accountBalances = useMemo(() => {
@@ -101,6 +103,7 @@ export function useDatabaseData() {
     notifications,
     payees,
     holdings,
+    allocations,
     accountBalances,
     netWorthMinor,
     getMonthlyTotals,
