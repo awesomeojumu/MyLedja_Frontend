@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bell } from 'lucide-react-native';
 import { useTheme, ThemeToggle, useResponsive } from '../../design';
@@ -15,7 +15,65 @@ export function AppHeader({ title, subtitle, unreadNotifications = 0 }: AppHeade
   const { colors, typography, spacing, radii } = useTheme();
   const { isDesktop } = useResponsive();
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
+
+  // Dynamically resolve page title from active route when not explicitly overridden
+  const routeMeta = useMemo(() => {
+    if (title) return { title, subtitle };
+
+    const path = pathname || '/';
+    if (path === '/' || path === '') {
+      return { title: 'Dashboard' };
+    }
+    if (path.startsWith('/transactions')) {
+      return { title: 'Transactions' };
+    }
+    if (path.startsWith('/budget')) {
+      return { title: 'Budget' };
+    }
+    if (path.startsWith('/accounts')) {
+      return { title: 'Accounts' };
+    }
+    if (path.startsWith('/plan')) {
+      return { title: 'Bills & Recurring' };
+    }
+    if (path.startsWith('/debts')) {
+      return { title: 'Debts & Loans' };
+    }
+    if (path.startsWith('/goals')) {
+      return { title: 'Savings Goals' };
+    }
+    if (path.startsWith('/investments')) {
+      return { title: 'Investments' };
+    }
+    if (path.startsWith('/health')) {
+      return { title: 'Health Score' };
+    }
+    if (path.startsWith('/reports')) {
+      return { title: 'Reports' };
+    }
+    if (path.startsWith('/rules')) {
+      return { title: 'Rules' };
+    }
+    if (path.startsWith('/settings')) {
+      return { title: 'Settings' };
+    }
+    if (path.startsWith('/notifications')) {
+      return { title: 'Notifications' };
+    }
+    if (path.startsWith('/income')) {
+      return { title: 'Income Plan' };
+    }
+    if (path.startsWith('/cash-flow')) {
+      return { title: 'Cash Flow' };
+    }
+    if (path.startsWith('/payees')) {
+      return { title: 'Payees' };
+    }
+
+    return { title: 'MyLedja' };
+  }, [title, subtitle, pathname]);
 
   // On iOS and Android, make sure there is generous room for the status bar, notch, dynamic island,
   // and system swipe-down gestures (control center / notification shade).
@@ -55,9 +113,9 @@ export function AppHeader({ title, subtitle, unreadNotifications = 0 }: AppHeade
             },
           ]}
         >
-          {title ?? 'MyLedja'}
+          {routeMeta.title}
         </Text>
-        {subtitle ? (
+        {routeMeta.subtitle ? (
           <Text
             style={[
               styles.subtitle,
@@ -68,7 +126,7 @@ export function AppHeader({ title, subtitle, unreadNotifications = 0 }: AppHeade
               },
             ]}
           >
-            {subtitle}
+            {routeMeta.subtitle}
           </Text>
         ) : null}
       </View>
