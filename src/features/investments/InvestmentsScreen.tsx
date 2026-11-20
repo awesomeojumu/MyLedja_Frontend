@@ -288,7 +288,7 @@ export function InvestmentsScreen() {
               marginLeft: 4,
             }}
           >
-            Record Trade
+            Record Investment
           </Text>
         </TouchableOpacity>
       </View>
@@ -578,7 +578,7 @@ export function InvestmentsScreen() {
                 maxWidth: 320,
               }}
             >
-              Tap "+ Record Trade" to acquire Stocks, Real Estate, Fixed Deposits, Funds, or Crypto.
+              Tap "+ Record Investment" to acquire Stocks, Real Estate, Fixed Deposits, Funds, or Crypto.
             </Text>
           </View>
         ) : (

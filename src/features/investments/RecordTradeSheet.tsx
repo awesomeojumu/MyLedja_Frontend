@@ -250,7 +250,7 @@ export function RecordTradeSheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Record Investment / Asset">
+    <BottomSheet visible={visible} onClose={onClose} title="Record Investment">
       <View style={styles.container}>
         {/* Buy vs Sell Action Toggle */}
         <View
@@ -398,7 +398,7 @@ export function RecordTradeSheet({
         </View>
 
         <Button
-          label={`Save ${activeCategory.label} Trade`}
+          label={`Save ${activeCategory.label} Investment`}
           onPress={handleSave}
           variant="primary"
           size="lg"
