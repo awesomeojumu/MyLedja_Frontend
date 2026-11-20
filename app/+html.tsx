@@ -17,6 +17,15 @@ export default function Root({ children }: PropsWithChildren) {
               padding: 0;
               background-color: #FFFFFF;
             }
+            /* Eliminate native browser focus outline rectangles */
+            input, textarea, select, button {
+              outline: none !important;
+            }
+            input:focus, textarea:focus, select:focus, button:focus,
+            input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
+              outline: none !important;
+              box-shadow: none !important;
+            }
           `
         }} />
       </head>
