@@ -195,13 +195,13 @@ export function DatePicker({
             borderColor: error ? colors.statusDanger : isOpen ? colors.primary : colors.border,
             borderWidth: isOpen || error ? 1.5 : 1,
             borderRadius: radii.md,
-            paddingHorizontal: spacing.md,
+            paddingHorizontal: spacing.sm + 4,
           },
         ]}
       >
         <View style={styles.selectedContent}>
           <CalendarIcon
-            size={16}
+            size={15}
             color={value ? colors.primary : colors.textSecondary}
             style={{ marginRight: 8 }}
           />
@@ -212,7 +212,7 @@ export function DatePicker({
               {
                 color: value ? colors.textPrimary : colors.textTertiary,
                 fontFamily: value ? typography.fonts.medium : typography.fonts.regular,
-                fontSize: typography.sizes.md,
+                fontSize: typography.sizes.sm,
               },
             ]}
           >
@@ -228,10 +228,10 @@ export function DatePicker({
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <X size={15} color={colors.textSecondary} />
+            <X size={14} color={colors.textSecondary} />
           </TouchableOpacity>
         ) : (
-          <View style={{ width: 15 }} />
+          <View style={{ width: 14 }} />
         )}
       </TouchableOpacity>
 
@@ -243,9 +243,9 @@ export function DatePicker({
             {
               backgroundColor: colors.surfaceElevated,
               borderColor: colors.borderSubtle,
-              borderRadius: radii.lg,
-              marginTop: spacing.xs,
-              padding: spacing.md,
+              borderRadius: radii.md,
+              marginTop: 4,
+              padding: 8,
             },
           ]}
         >
@@ -255,14 +255,14 @@ export function DatePicker({
               onPress={handlePrevMonth}
               style={[styles.navBtn, { borderColor: colors.borderSubtle, borderRadius: radii.sm }]}
             >
-              <ChevronLeft size={16} color={colors.textPrimary} />
+              <ChevronLeft size={14} color={colors.textPrimary} />
             </TouchableOpacity>
 
             <Text
               style={{
                 color: colors.textPrimary,
                 fontFamily: typography.fonts.semiBold,
-                fontSize: 14,
+                fontSize: 13,
               }}
             >
               {MONTH_NAMES[viewMonth]} {viewYear}
@@ -272,7 +272,7 @@ export function DatePicker({
               onPress={handleNextMonth}
               style={[styles.navBtn, { borderColor: colors.borderSubtle, borderRadius: radii.sm }]}
             >
-              <ChevronRight size={16} color={colors.textPrimary} />
+              <ChevronRight size={14} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
@@ -289,8 +289,8 @@ export function DatePicker({
                 key={shortcut.label}
                 onPress={() => handleQuickAdd(shortcut.months)}
                 style={{
-                  paddingVertical: 3,
-                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  paddingHorizontal: 7,
                   backgroundColor: colors.surfaceSubtle,
                   borderRadius: radii.full,
                 }}
@@ -298,7 +298,7 @@ export function DatePicker({
                 <Text
                   style={{
                     color: colors.textSecondary,
-                    fontSize: 11,
+                    fontSize: 10,
                     fontFamily: typography.fonts.medium,
                   }}
                 >
@@ -333,7 +333,7 @@ export function DatePicker({
               const dayNum = prevMonthDays - firstDayIndex + idx + 1;
               return (
                 <View key={`prev-${idx}`} style={styles.dayCell}>
-                  <Text style={[styles.dayText, { color: colors.textTertiary, opacity: 0.35 }]}>
+                  <Text style={[styles.dayText, { color: colors.textTertiary, opacity: 0.3 }]}>
                     {dayNum}
                   </Text>
                 </View>
@@ -351,36 +351,40 @@ export function DatePicker({
                 <TouchableOpacity
                   key={`cur-${dayNum}`}
                   onPress={() => handleSelectDay(dayNum)}
-                  style={[
-                    styles.dayCell,
-                    isSelected && {
-                      backgroundColor: colors.primary,
-                      borderRadius: radii.full,
-                    },
-                    !isSelected && isToday && {
-                      borderColor: colors.primary,
-                      borderWidth: 1,
-                      borderRadius: radii.full,
-                    },
-                  ]}
+                  style={styles.dayCell}
                 >
-                  <Text
+                  <View
                     style={[
-                      styles.dayText,
-                      {
-                        color: isSelected
-                          ? '#FFFFFF'
-                          : isToday
-                          ? colors.primary
-                          : colors.textPrimary,
-                        fontFamily: isSelected || isToday
-                          ? typography.fonts.semiBold
-                          : typography.fonts.regular,
+                      styles.dayInner,
+                      isSelected && {
+                        backgroundColor: colors.primary,
+                        borderRadius: radii.full,
+                      },
+                      !isSelected && isToday && {
+                        borderColor: colors.primary,
+                        borderWidth: 1,
+                        borderRadius: radii.full,
                       },
                     ]}
                   >
-                    {dayNum}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.dayText,
+                        {
+                          color: isSelected
+                            ? '#FFFFFF'
+                            : isToday
+                            ? colors.primary
+                            : colors.textPrimary,
+                          fontFamily: isSelected || isToday
+                            ? typography.fonts.semiBold
+                            : typography.fonts.regular,
+                        },
+                      ]}
+                    >
+                      {dayNum}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -417,7 +421,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   trigger: {
-    height: 48,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -426,7 +430,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 6,
   },
   selectedText: {
     flex: 1,
@@ -434,21 +438,21 @@ const styles = StyleSheet.create({
   calendarPopover: {
     borderWidth: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
     zIndex: 50,
   },
   navHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 5,
   },
   navBtn: {
-    width: 28,
-    height: 28,
+    width: 24,
+    height: 24,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -456,20 +460,20 @@ const styles = StyleSheet.create({
   shortcutsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
-    paddingBottom: 8,
+    marginBottom: 5,
+    paddingBottom: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E7EB',
   },
   weekdaysRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 2,
   },
   weekdayText: {
-    width: 32,
+    width: `${100 / 7}%`,
     textAlign: 'center',
-    fontSize: 11,
+    fontSize: 10,
   },
   daysGrid: {
     flexDirection: 'row',
@@ -477,13 +481,19 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     width: `${100 / 7}%`,
-    height: 32,
+    height: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 2,
+    marginVertical: 1,
+  },
+  dayInner: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dayText: {
-    fontSize: 12,
+    fontSize: 11,
   },
   errorText: {},
 });

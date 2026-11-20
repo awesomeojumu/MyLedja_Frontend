@@ -55,7 +55,7 @@ export function CreateGoalSheet({
   return (
     <BottomSheet visible={visible} onClose={onClose} title="Create Savings Goal">
       <View style={styles.container}>
-        <View style={{ marginBottom: spacing.md }}>
+        <View style={{ marginBottom: spacing.sm }}>
           <TextInput
             label="Goal Name"
             placeholder="e.g. New Mac M4, December Detty December, House Rent"
@@ -69,7 +69,7 @@ export function CreateGoalSheet({
           />
         </View>
 
-        <View style={{ marginBottom: spacing.md }}>
+        <View style={{ marginBottom: spacing.sm }}>
           <CurrencyInput
             label="Target Amount"
             value={amountText}
@@ -77,7 +77,7 @@ export function CreateGoalSheet({
           />
         </View>
 
-        <View style={{ marginBottom: spacing.lg, zIndex: 20 }}>
+        <View style={{ marginBottom: spacing.md, zIndex: 20 }}>
           <DatePicker
             label="Target Date (Optional)"
             placeholder="Select target date..."
@@ -90,7 +90,7 @@ export function CreateGoalSheet({
           label="Create Goal"
           onPress={handleSave}
           variant="primary"
-          size="lg"
+          size="md"
         />
       </View>
     </BottomSheet>
@@ -99,6 +99,6 @@ export function CreateGoalSheet({
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: 20,
+    paddingBottom: 4,
   },
 });

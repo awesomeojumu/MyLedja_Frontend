@@ -75,7 +75,7 @@ export function RecordDebtSheet({
               backgroundColor: colors.surfaceSubtle,
               borderRadius: radii.md,
               padding: 3,
-              marginBottom: spacing.md,
+              marginBottom: spacing.sm,
             },
           ]}
         >
@@ -86,7 +86,7 @@ export function RecordDebtSheet({
               {
                 backgroundColor: type === 'lent' ? colors.surface : 'transparent',
                 borderRadius: radii.sm,
-                paddingVertical: 8,
+                paddingVertical: 5,
                 flex: 1,
                 alignItems: 'center',
               },
@@ -110,7 +110,7 @@ export function RecordDebtSheet({
               {
                 backgroundColor: type === 'borrowed' ? colors.surface : 'transparent',
                 borderRadius: radii.sm,
-                paddingVertical: 8,
+                paddingVertical: 5,
                 flex: 1,
                 alignItems: 'center',
               },
@@ -128,7 +128,7 @@ export function RecordDebtSheet({
           </TouchableOpacity>
         </View>
 
-        <View style={{ marginBottom: spacing.md }}>
+        <View style={{ marginBottom: spacing.sm }}>
           <TextInput
             label={type === 'lent' ? 'Borrower Name / Who took it?' : 'Lender Name / Who lent you?'}
             placeholder="e.g. Tunde Alabi, Stanbic Quick Loan"
@@ -142,7 +142,7 @@ export function RecordDebtSheet({
           />
         </View>
 
-        <View style={{ marginBottom: spacing.md }}>
+        <View style={{ marginBottom: spacing.sm }}>
           <CurrencyInput
             label="Total Principal Amount"
             value={amountText}
@@ -150,7 +150,7 @@ export function RecordDebtSheet({
           />
         </View>
 
-        <View style={{ marginBottom: spacing.md, zIndex: 20 }}>
+        <View style={{ marginBottom: spacing.sm, zIndex: 20 }}>
           <DatePicker
             label="Expected Repayment Date (Optional)"
             placeholder="Select repayment date..."
@@ -159,7 +159,7 @@ export function RecordDebtSheet({
           />
         </View>
 
-        <View style={{ marginBottom: spacing.lg }}>
+        <View style={{ marginBottom: spacing.md }}>
           <TextInput
             label="Notes (Optional)"
             placeholder="e.g. Urgent car repair loan, interest-free"
@@ -172,7 +172,7 @@ export function RecordDebtSheet({
           label="Save Debt Record"
           onPress={handleSave}
           variant="primary"
-          size="lg"
+          size="md"
         />
       </View>
     </BottomSheet>
@@ -181,7 +181,7 @@ export function RecordDebtSheet({
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: 20,
+    paddingBottom: 4,
   },
   typeToggle: {
     flexDirection: 'row',
