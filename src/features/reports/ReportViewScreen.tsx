@@ -22,7 +22,6 @@ export function ReportViewScreen() {
     events: dbEvents,
     categories: dbCategories,
     accounts: dbAccounts,
-    payees: dbPayees,
     accountBalances,
     netWorthMinor,
   } = useDatabaseData();
@@ -33,47 +32,6 @@ export function ReportViewScreen() {
   // Determine report details and compute specific metrics
   const reportConfig = React.useMemo(() => {
     switch (id) {
-      case 'top-merchants': {
-        const title = 'Top Payees & Merchants';
-        const subtitle = 'Highest volume counterparties and merchant fees';
-        const heroLabel = 'Total Merchant Expenses';
-        const segmentHeader = 'Merchant & Vendor Breakdown';
-
-        const payeeMap: Record<string, bigint> = {};
-        let totalExpense = 0n;
-
-        for (const ev of dbEvents) {
-          if (ev.type === 'expense') {
-            let evAmount = 0n;
-            for (const line of ev.lines) {
-              if (line.amountMinor > 0n) evAmount += line.amountMinor;
-            }
-            const payee = dbPayees.find((p) => p.id === (ev as any).payeeId);
-            const name = payee?.name || ev.payeeName || ev.notes || 'Unspecified Vendor';
-            payeeMap[name] = (payeeMap[name] || 0n) + evAmount;
-            totalExpense += evAmount;
-          }
-        }
-
-        const items = Object.entries(payeeMap)
-          .sort((a, b) => (b[1] > a[1] ? 1 : -1))
-          .map(([name, amountMinor]) => ({
-            label: name,
-            amountMinor,
-            percent: totalExpense > 0n ? Math.round((Number(amountMinor) / Number(totalExpense)) * 100) : 0,
-          }));
-
-        return {
-          title,
-          subtitle,
-          heroLabel,
-          heroAmountMinor: totalExpense,
-          segmentHeader,
-          rows: items,
-          unitLabel: 'of merchant expenses',
-        };
-      }
-
       case 'spending-category': {
         const title = 'Monthly Spending by Category';
         const subtitle = 'Envelope expense distributions and category weights';
@@ -130,7 +88,7 @@ export function ReportViewScreen() {
           for (const line of ev.lines) {
             if (line.amountMinor > 0n) evAmount += line.amountMinor;
           }
-          if (ev.type === 'income') totalIncome += evAmount;
+          if (ev.type === 'income' || ev.type === 'salary_gross') totalIncome += evAmount;
           else if (ev.type === 'expense') totalExpense += evAmount;
         }
 
@@ -176,6 +134,23 @@ export function ReportViewScreen() {
         let totalStatutory = 0n;
 
         for (const ev of dbEvents) {
+          if (ev.status !== 'posted') continue;
+          // 1. Payroll gross salary deductions
+          if (ev.type === 'salary_gross') {
+            for (const line of ev.lines) {
+              const acc = dbAccounts.find((a) => a.id === line.ledgerAccountId);
+              if (acc?.type === 'pension') {
+                const amt = line.amountMinor > 0n ? line.amountMinor : -line.amountMinor;
+                statutoryMap['Pension (RSA Contribution)'] = (statutoryMap['Pension (RSA Contribution)'] || 0n) + amt;
+                totalStatutory += amt;
+              } else if (line.ledgerAccountId.includes('tax') || line.ledgerAccountId.includes('taxes')) {
+                const amt = line.amountMinor > 0n ? line.amountMinor : -line.amountMinor;
+                statutoryMap['PAYE Income Tax'] = (statutoryMap['PAYE Income Tax'] || 0n) + amt;
+                totalStatutory += amt;
+              }
+            }
+          }
+          // 2. Direct expense transactions categorized to taxes, pensions, tithes, levies
           if (ev.type === 'expense') {
             for (const line of ev.lines) {
               const cat = dbCategories.find((c) => c.id === line.ledgerAccountId);
@@ -248,7 +223,7 @@ export function ReportViewScreen() {
         };
       }
     }
-  }, [id, dbEvents, dbCategories, dbAccounts, dbPayees, accountBalances, netWorthMinor]);
+  }, [id, dbEvents, dbCategories, dbAccounts, accountBalances, netWorthMinor]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>

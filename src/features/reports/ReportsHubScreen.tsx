@@ -8,7 +8,6 @@ import {
   PieChart,
   TrendingUp,
   Receipt,
-  Users,
   ChevronRight,
   FileSpreadsheet,
 } from 'lucide-react-native';
@@ -54,13 +53,6 @@ export function ReportsHubScreen() {
       description: 'Detailed statement of Nigerian PAYE, pension contributions and NHF.',
       category: 'Tax & Compliance',
       icon: Receipt,
-    },
-    {
-      id: 'top-merchants',
-      title: 'Top Payees & Merchants',
-      description: 'Highest volume counterparties, supermarket visits, and transport fees.',
-      category: 'Vendors',
-      icon: Users,
     },
   ];
 
