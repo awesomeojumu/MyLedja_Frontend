@@ -65,9 +65,6 @@ export function AppHeader({ title, subtitle, unreadNotifications = 0 }: AppHeade
     if (path.startsWith('/income')) {
       return { title: 'Income Plan' };
     }
-    if (path.startsWith('/cash-flow')) {
-      return { title: 'Cash Flow' };
-    }
     if (path.startsWith('/payees')) {
       return { title: 'Payees' };
     }

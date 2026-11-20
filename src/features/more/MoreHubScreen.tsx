@@ -43,14 +43,6 @@ export function MoreHubScreen() {
   const tools: ToolItem[] = [
     // 1. Planning & Health
     {
-      id: 'cash-flow',
-      title: 'Cash Flow',
-      subtitle: 'Interactive income-to-expense flows and surplus tracking',
-      route: '/cash-flow',
-      icon: ArrowLeftRight,
-      group: 'planning',
-    },
-    {
       id: 'health',
       title: 'Financial Health Score',
       subtitle: '0–100 score, 5 pillar ratings, and runway stress test',
