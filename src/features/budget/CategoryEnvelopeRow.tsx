@@ -34,7 +34,7 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
   const percentage =
     envelope.plannedMinor > 0n
       ? Number((envelope.spentMinor * 100n) / envelope.plannedMinor)
-      : 100;
+      : 0;
 
   const progressClamped = Math.min(percentage, 100);
 
@@ -47,6 +47,10 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
     barColor = colors.statusDanger;
     statusText = `Over by ${formatNaira(-remainingMinor)}`;
     statusColor = colors.statusDanger;
+  } else if (envelope.plannedMinor === 0n && envelope.spentMinor === 0n) {
+    barColor = 'transparent';
+    statusText = `${formatNaira(0n)} left`;
+    statusColor = colors.textSecondary;
   } else if (percentage >= 80) {
     barColor = colors.statusWarning;
     statusText = `Near limit (${formatNaira(remainingMinor)} left)`;
