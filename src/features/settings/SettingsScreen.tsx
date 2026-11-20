@@ -62,9 +62,11 @@ type SettingsTab =
 export function SettingsScreen() {
   const { colors, typography, spacing, radii, isDark, toggleTheme } = useTheme();
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, workspaceId, signOut } = useAuth();
   const { enabledIncomeIds, enabledExpenseIds } = useCategoryPreferences();
   const { snapshot } = useDatabaseData();
+
+  const effectiveWorkspaceId = workspaceId || user?.workspaceId || snapshot?.workspaceId || '';
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -85,10 +87,7 @@ export function SettingsScreen() {
 
   // Security States
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [passkeys, setPasskeys] = useState<Array<{ name: string; enrolledAt: string }>>([
-    { name: 'iPhone 15 Pro (Face ID & Secure Enclave)', enrolledAt: 'Added 12 Nov 2026' },
-    { name: 'Windows Hello (Biometric TPM)', enrolledAt: 'Added 18 Nov 2026' },
-  ]);
+  const [passkeys, setPasskeys] = useState<Array<{ name: string; enrolledAt: string }>>([]);
 
   // Sheets & Modals
   const [twoFactorVisible, setTwoFactorVisible] = useState(false);
@@ -370,7 +369,7 @@ export function SettingsScreen() {
                     WORKSPACE IDENTIFIER
                   </Text>
                   <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: 13, marginTop: 2 }}>
-                    ws_live_094821a7c4e
+                    {effectiveWorkspaceId || 'ws_personal'}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -908,51 +907,90 @@ export function SettingsScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={{ gap: 8 }}>
-                {passkeys.map((p, idx) => (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.passkeyRow,
-                      {
-                        backgroundColor: colors.surfaceSubtle,
-                        borderRadius: radii.md,
-                        padding: spacing.md,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                      },
-                    ]}
+              {passkeys.length === 0 ? (
+                <View
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: colors.surfaceSubtle,
+                      borderColor: colors.borderSubtle,
+                      borderRadius: radii.lg,
+                      padding: spacing.xl,
+                      alignItems: 'center',
+                    },
+                  ]}
+                >
+                  <Fingerprint size={32} color={colors.textTertiary} />
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: typography.fonts.semiBold,
+                      fontSize: typography.sizes.bodySm,
+                      marginTop: spacing.sm,
+                    }}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Fingerprint size={20} color={colors.primary} />
-                      <View style={{ marginLeft: spacing.md }}>
-                        <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }}>
-                          {p.name}
-                        </Text>
-                        <Text style={{ color: colors.textTertiary, fontSize: 11, marginTop: 1 }}>
-                          {p.enrolledAt}
-                        </Text>
-                      </View>
-                    </View>
+                    No Biometric Passkeys Registered
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: typography.fonts.regular,
+                      fontSize: typography.sizes.xs,
+                      textAlign: 'center',
+                      marginTop: 2,
+                      maxWidth: 320,
+                    }}
+                  >
+                    Register Touch ID, Face ID, or Windows Hello for instant passwordless sign-in with your hardware security enclave.
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {passkeys.map((p, idx) => (
                     <View
+                      key={idx}
                       style={[
-                        styles.activeBadge,
+                        styles.passkeyRow,
                         {
-                          backgroundColor: colors.statusSuccessLight,
-                          borderRadius: radii.full,
-                          paddingHorizontal: 8,
-                          paddingVertical: 2,
+                          backgroundColor: colors.surfaceSubtle,
+                          borderRadius: radii.md,
+                          padding: spacing.md,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
                         },
                       ]}
                     >
-                      <Text style={{ color: colors.statusSuccess, fontSize: 10, fontFamily: typography.fonts.semiBold }}>
-                        Hardware Verified
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Fingerprint size={20} color={colors.primary} />
+                        <View style={{ marginLeft: spacing.md }}>
+                          <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }}>
+                            {p.name}
+                          </Text>
+                          <Text style={{ color: colors.textTertiary, fontSize: 11, marginTop: 1 }}>
+                            {p.enrolledAt}
+                          </Text>
+                        </View>
+                      </View>
+                      <View
+                        style={[
+                          styles.activeBadge,
+                          {
+                            backgroundColor: colors.statusSuccessLight,
+                            borderRadius: radii.full,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: colors.statusSuccess, fontSize: 10, fontFamily: typography.fonts.semiBold }}>
+                          Hardware Verified
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                ))}
-              </View>
+                  ))}
+                </View>
+              )}
             </View>
 
             {/* Auto Lock Timeout */}
