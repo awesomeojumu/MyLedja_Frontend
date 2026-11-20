@@ -47,9 +47,6 @@ export function AppHeader({ title, subtitle, unreadNotifications = 0 }: AppHeade
     if (path.startsWith('/investments')) {
       return { title: 'Investments' };
     }
-    if (path.startsWith('/health')) {
-      return { title: 'Health Score' };
-    }
     if (path.startsWith('/reports')) {
       return { title: 'Reports' };
     }

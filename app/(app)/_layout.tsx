@@ -44,7 +44,6 @@ export default function AppLayout() {
                 <Tabs.Screen name="accounts" options={{ title: 'Accounts' }} />
                 <Tabs.Screen name="more" options={{ title: 'More' }} />
                 <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
-                <Tabs.Screen name="health" options={{ title: 'Health Score' }} />
                 <Tabs.Screen name="debts" options={{ title: 'Debts' }} />
                 <Tabs.Screen name="goals" options={{ title: 'Goals' }} />
                 <Tabs.Screen name="income" options={{ title: 'Income' }} />
@@ -141,7 +140,6 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarItemStyle: { display: 'none' } }} />
-        <Tabs.Screen name="health" options={{ title: 'Health Score', tabBarItemStyle: { display: 'none' } }} />
         <Tabs.Screen name="debts" options={{ title: 'Debts', tabBarItemStyle: { display: 'none' } }} />
         <Tabs.Screen name="goals" options={{ title: 'Goals', tabBarItemStyle: { display: 'none' } }} />
         <Tabs.Screen name="income" options={{ title: 'Income', tabBarItemStyle: { display: 'none' } }} />

@@ -10,7 +10,6 @@ import {
   CreditCard,
   PiggyBank,
   TrendingUp,
-  HeartPulse,
   BarChart3,
   GitBranch,
   Settings,
@@ -43,7 +42,6 @@ export function DesktopSidebar() {
 
   // User account dropdown items
   const dropdownItems = [
-    { label: 'Health Score', route: '/health', icon: HeartPulse },
     { label: 'Reports', route: '/reports', icon: BarChart3 },
     { label: 'Rules', route: '/rules', icon: GitBranch },
     { label: 'Settings', route: '/settings', icon: Settings },

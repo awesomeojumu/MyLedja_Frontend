@@ -3,7 +3,6 @@ import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   ArrowLeftRight,
-  HeartPulse,
   TrendingUp,
   CalendarDays,
   CreditCard,
@@ -41,15 +40,7 @@ export function MoreHubScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const tools: ToolItem[] = [
-    // 1. Planning & Health
-    {
-      id: 'health',
-      title: 'Financial Health Score',
-      subtitle: '0–100 score, 5 pillar ratings, and runway stress test',
-      route: '/health',
-      icon: HeartPulse,
-      group: 'planning',
-    },
+    // 1. Planning & Income
     {
       id: 'income',
       title: 'Income Planning',
