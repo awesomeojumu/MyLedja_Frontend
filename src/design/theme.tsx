@@ -1,6 +1,15 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { useColorScheme } from 'react-native';
-import { lightColors, darkColors, type ColorTheme, typography, spacing, radii } from './tokens';
+import {
+  lightColors,
+  darkColors,
+  type ColorTheme,
+  typography,
+  spacing,
+  radii,
+  type ThemeAccent,
+  THEME_ACCENTS,
+} from './tokens';
 import { openKeyValue } from '../data/kv';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -8,33 +17,41 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 interface ThemeContextType {
   mode: ThemeMode;
   isDark: boolean;
+  accent: ThemeAccent;
   colors: ColorTheme;
   typography: typeof typography;
   spacing: typeof spacing;
   radii: typeof radii;
   setThemeMode: (mode: ThemeMode) => void;
+  setAccent: (accent: ThemeAccent) => void;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
 const THEME_STORAGE_KEY = 'user_theme_mode';
+const ACCENT_STORAGE_KEY = 'user_theme_accent';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemColorScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>('light'); // default Light theme
+  const [accent, setAccentState] = useState<ThemeAccent>('blue'); // default Cobalt Blue
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     async function loadSavedTheme() {
       try {
         const kv = openKeyValue('myledja');
-        const saved = await kv.get(THEME_STORAGE_KEY);
-        if (saved === 'light' || saved === 'dark' || saved === 'system') {
-          setModeState(saved);
+        const savedMode = await kv.get(THEME_STORAGE_KEY);
+        if (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system') {
+          setModeState(savedMode);
+        }
+        const savedAccent = await kv.get(ACCENT_STORAGE_KEY);
+        if (savedAccent && THEME_ACCENTS.some((a) => a.id === savedAccent)) {
+          setAccentState(savedAccent as ThemeAccent);
         }
       } catch {
-        // Fallback to light
+        // Fallback to light and cobalt blue
       } finally {
         setIsLoaded(true);
       }
@@ -52,6 +69,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const setAccent = (newAccent: ThemeAccent) => {
+    setAccentState(newAccent);
+    try {
+      const kv = openKeyValue('myledja');
+      kv.set([[ACCENT_STORAGE_KEY, newAccent]]);
+    } catch {
+      // Ignore storage errors
+    }
+  };
+
   const isDark = useMemo(() => {
     if (mode === 'system') return systemColorScheme === 'dark';
     return mode === 'dark';
@@ -62,21 +89,29 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
 
   const colors = useMemo(() => {
-    return isDark ? darkColors : lightColors;
-  }, [isDark]);
+    const base = isDark ? darkColors : lightColors;
+    const accentDef = THEME_ACCENTS.find((a) => a.id === accent) ?? THEME_ACCENTS[0]!;
+    const overrides = isDark ? accentDef.dark : accentDef.light;
+    return {
+      ...base,
+      ...overrides,
+    };
+  }, [isDark, accent]);
 
   const value = useMemo(
     () => ({
       mode,
       isDark,
+      accent,
       colors,
       typography,
       spacing,
       radii,
       setThemeMode,
+      setAccent,
       toggleTheme,
     }),
-    [mode, isDark, colors]
+    [mode, isDark, accent, colors]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -89,11 +124,13 @@ export function useTheme(): ThemeContextType {
     return {
       mode: 'light',
       isDark: false,
+      accent: 'blue',
       colors: lightColors,
       typography,
       spacing,
       radii,
       setThemeMode: () => {},
+      setAccent: () => {},
       toggleTheme: () => {},
     };
   }

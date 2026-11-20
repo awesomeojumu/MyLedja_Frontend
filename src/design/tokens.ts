@@ -162,3 +162,151 @@ export const darkColors: ColorTheme = {
   // Overlay
   overlay: 'rgba(0, 0, 0, 0.7)',
 };
+
+export type ThemeAccent = 'blue' | 'emerald' | 'violet' | 'rose' | 'amber' | 'teal';
+
+export interface AccentColorPalette {
+  primary: string;
+  primaryHover: string;
+  primaryLight: string;
+  primaryBorder: string;
+  borderFocus: string;
+  textLink: string;
+}
+
+export interface ThemeAccentOption {
+  id: ThemeAccent;
+  name: string;
+  swatch: string;
+  light: AccentColorPalette;
+  dark: AccentColorPalette;
+}
+
+export const THEME_ACCENTS: ThemeAccentOption[] = [
+  {
+    id: 'blue',
+    name: 'Cobalt Blue',
+    swatch: '#2563EB',
+    light: {
+      primary: '#2563EB',
+      primaryHover: '#1D4ED8',
+      primaryLight: '#EFF6FF',
+      primaryBorder: '#BFDBFE',
+      borderFocus: '#2563EB',
+      textLink: '#2563EB',
+    },
+    dark: {
+      primary: '#3B82F6',
+      primaryHover: '#60A5FA',
+      primaryLight: '#1E3A8A33',
+      primaryBorder: '#2563EB',
+      borderFocus: '#60A5FA',
+      textLink: '#60A5FA',
+    },
+  },
+  {
+    id: 'emerald',
+    name: 'Emerald Green',
+    swatch: '#059669',
+    light: {
+      primary: '#059669',
+      primaryHover: '#047857',
+      primaryLight: '#ECFDF5',
+      primaryBorder: '#A7F3D0',
+      borderFocus: '#059669',
+      textLink: '#059669',
+    },
+    dark: {
+      primary: '#10B981',
+      primaryHover: '#34D399',
+      primaryLight: '#064E3B33',
+      primaryBorder: '#059669',
+      borderFocus: '#34D399',
+      textLink: '#34D399',
+    },
+  },
+  {
+    id: 'violet',
+    name: 'Royal Violet',
+    swatch: '#7C3AED',
+    light: {
+      primary: '#7C3AED',
+      primaryHover: '#6D28D9',
+      primaryLight: '#F5F3FF',
+      primaryBorder: '#DDD6FE',
+      borderFocus: '#7C3AED',
+      textLink: '#7C3AED',
+    },
+    dark: {
+      primary: '#8B5CF6',
+      primaryHover: '#A78BFA',
+      primaryLight: '#4C1D9533',
+      primaryBorder: '#7C3AED',
+      borderFocus: '#A78BFA',
+      textLink: '#A78BFA',
+    },
+  },
+  {
+    id: 'rose',
+    name: 'Rose Crimson',
+    swatch: '#E11D48',
+    light: {
+      primary: '#E11D48',
+      primaryHover: '#BE123C',
+      primaryLight: '#FFF1F2',
+      primaryBorder: '#FECDD3',
+      borderFocus: '#E11D48',
+      textLink: '#E11D48',
+    },
+    dark: {
+      primary: '#F43F5E',
+      primaryHover: '#FB7185',
+      primaryLight: '#88133733',
+      primaryBorder: '#E11D48',
+      borderFocus: '#FB7185',
+      textLink: '#FB7185',
+    },
+  },
+  {
+    id: 'amber',
+    name: 'Amber Gold',
+    swatch: '#D97706',
+    light: {
+      primary: '#D97706',
+      primaryHover: '#B45309',
+      primaryLight: '#FFFBEB',
+      primaryBorder: '#FDE68A',
+      borderFocus: '#D97706',
+      textLink: '#D97706',
+    },
+    dark: {
+      primary: '#F59E0B',
+      primaryHover: '#FBBF24',
+      primaryLight: '#78350F33',
+      primaryBorder: '#D97706',
+      borderFocus: '#FBBF24',
+      textLink: '#FBBF24',
+    },
+  },
+  {
+    id: 'teal',
+    name: 'Ocean Teal',
+    swatch: '#0D9488',
+    light: {
+      primary: '#0D9488',
+      primaryHover: '#0F766E',
+      primaryLight: '#F0FDFA',
+      primaryBorder: '#99F6E4',
+      borderFocus: '#0D9488',
+      textLink: '#0D9488',
+    },
+    dark: {
+      primary: '#14B8A6',
+      primaryHover: '#2DD4BF',
+      primaryLight: '#134E4A33',
+      primaryBorder: '#0D9488',
+      borderFocus: '#2DD4BF',
+      textLink: '#2DD4BF',
+    },
+  },
+];

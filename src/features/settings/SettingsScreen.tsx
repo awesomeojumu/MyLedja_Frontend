@@ -23,7 +23,6 @@ import {
   Check,
   Sliders,
   Layers,
-  Globe,
   Coins,
   Palette,
   Bell,
@@ -39,7 +38,7 @@ import {
   Calendar,
   KeyRound,
 } from 'lucide-react-native';
-import { useTheme, Button, TextInput } from '../../design';
+import { useTheme, Button, TextInput, THEME_ACCENTS } from '../../design';
 import { useAuth } from '../auth/AuthProvider';
 import { TwoFactorSetupSheet } from './TwoFactorSetupSheet';
 import { PasskeySheet } from './PasskeySheet';
@@ -50,15 +49,14 @@ import { useCategoryPreferences } from '../categories/CategoryPreferencesContext
 
 type SettingsTab =
   | 'general'
-  | 'regional'
-  | 'appearance'
+  | 'preferences'
   | 'categories'
   | 'security'
   | 'notifications'
   | 'data';
 
 export function SettingsScreen() {
-  const { colors, typography, spacing, radii, isDark, toggleTheme } = useTheme();
+  const { colors, typography, spacing, radii, isDark, toggleTheme, setThemeMode, accent, setAccent } = useTheme();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
@@ -102,8 +100,7 @@ export function SettingsScreen() {
 
   const tabs: Array<{ id: SettingsTab; label: string; icon: any }> = [
     { id: 'general', label: 'Profile', icon: User },
-    { id: 'regional', label: 'Currency & Format', icon: Globe },
-    { id: 'appearance', label: 'Theme & Display', icon: Palette },
+    { id: 'preferences', label: 'Preferences', icon: Palette },
     { id: 'categories', label: 'Categories', icon: Sliders },
     { id: 'security', label: 'Security & Access', icon: ShieldCheck },
     { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -403,12 +400,13 @@ export function SettingsScreen() {
         )}
 
         {/* =========================================================================
-            TAB 2: REGIONAL & CURRENCY PREFERENCES
+            TAB 2: PREFERENCES (THEME, COLORS, DENSITY, CURRENCY & FORMAT)
         ========================================================================== */}
-        {activeTab === 'regional' && (
+        {activeTab === 'preferences' && (
           <View>
+            {/* Color Theme & Appearance Card */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Primary Ledger Currency
+              Interface Theme & Appearance
             </Text>
             <View
               style={[
@@ -422,17 +420,227 @@ export function SettingsScreen() {
                 },
               ]}
             >
-              <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.bodySm, marginBottom: spacing.md }}>
-                Choose the base currency for consolidated Net Worth, Budget envelopes, and statutory reports.
+              {/* Light vs Dark Mode */}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => setThemeMode('light')}
+                  style={[
+                    styles.themeCard,
+                    {
+                      borderColor: !isDark ? colors.primary : colors.borderSubtle,
+                      borderWidth: !isDark ? 2 : 1,
+                      backgroundColor: !isDark ? colors.primaryLight : colors.surfaceSubtle,
+                      borderRadius: radii.lg,
+                      padding: spacing.md,
+                      flex: 1,
+                      alignItems: 'center',
+                    },
+                  ]}
+                >
+                  <Sun size={22} color={!isDark ? colors.primary : colors.textSecondary} />
+                  <Text
+                    style={{
+                      color: !isDark ? colors.primary : colors.textPrimary,
+                      fontFamily: typography.fonts.semiBold,
+                      fontSize: typography.sizes.bodySm,
+                      marginTop: 6,
+                    }}
+                  >
+                    Pure White
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2, textAlign: 'center' }}>
+                    High contrast daylight theme
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setThemeMode('dark')}
+                  style={[
+                    styles.themeCard,
+                    {
+                      borderColor: isDark ? colors.primary : colors.borderSubtle,
+                      borderWidth: isDark ? 2 : 1,
+                      backgroundColor: isDark ? colors.primaryLight : colors.surfaceSubtle,
+                      borderRadius: radii.lg,
+                      padding: spacing.md,
+                      flex: 1,
+                      alignItems: 'center',
+                    },
+                  ]}
+                >
+                  <Moon size={22} color={isDark ? colors.primary : colors.textSecondary} />
+                  <Text
+                    style={{
+                      color: isDark ? colors.primary : colors.textPrimary,
+                      fontFamily: typography.fonts.semiBold,
+                      fontSize: typography.sizes.bodySm,
+                      marginTop: 6,
+                    }}
+                  >
+                    Midnight Slate
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2, textAlign: 'center' }}>
+                    Deep navy eye protection
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Theme Colors (Accent Palettes) */}
+              <View style={{ marginTop: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginBottom: 2 }}>
+                  Theme Accent Color
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginBottom: spacing.md }}>
+                  Personalize the primary accent color across buttons, indicators, charts, and highlights.
+                </Text>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  {THEME_ACCENTS.map((item) => {
+                    const isSelected = accent === item.id;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        onPress={() => setAccent(item.id)}
+                        style={[
+                          {
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: isSelected ? colors.surfaceSubtle : 'transparent',
+                            borderColor: isSelected ? item.swatch : colors.borderSubtle,
+                            borderWidth: isSelected ? 2 : 1,
+                            borderRadius: radii.full,
+                            paddingVertical: 6,
+                            paddingHorizontal: 12,
+                          },
+                        ]}
+                      >
+                        <View
+                          style={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: radii.full,
+                            backgroundColor: item.swatch,
+                            marginRight: 8,
+                          }}
+                        />
+                        <Text
+                          style={{
+                            color: isSelected ? colors.textPrimary : colors.textSecondary,
+                            fontFamily: isSelected ? typography.fonts.semiBold : typography.fonts.medium,
+                            fontSize: 12,
+                          }}
+                        >
+                          {item.name}
+                        </Text>
+                        {isSelected && (
+                          <Check size={12} color={item.swatch} style={{ marginLeft: 6 }} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Interface Density */}
+              <View style={{ marginTop: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginBottom: 2 }}>
+                  Interface Density
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginBottom: spacing.md }}>
+                  Adjust spacing and touch target sizing across the application.
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => setUiDensity('comfortable')}
+                    style={[
+                      styles.densityCard,
+                      {
+                        borderColor: uiDensity === 'comfortable' ? colors.primary : colors.borderSubtle,
+                        borderWidth: uiDensity === 'comfortable' ? 2 : 1,
+                        backgroundColor: uiDensity === 'comfortable' ? colors.primaryLight : colors.surfaceSubtle,
+                        borderRadius: radii.lg,
+                        padding: spacing.md,
+                        flex: 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: uiDensity === 'comfortable' ? colors.primary : colors.textPrimary,
+                        fontFamily: typography.fonts.semiBold,
+                        fontSize: typography.sizes.bodySm,
+                      }}
+                    >
+                      Comfortable
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+                      Standard padding and generous touch targets
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setUiDensity('compact')}
+                    style={[
+                      styles.densityCard,
+                      {
+                        borderColor: uiDensity === 'compact' ? colors.primary : colors.borderSubtle,
+                        borderWidth: uiDensity === 'compact' ? 2 : 1,
+                        backgroundColor: uiDensity === 'compact' ? colors.primaryLight : colors.surfaceSubtle,
+                        borderRadius: radii.lg,
+                        padding: spacing.md,
+                        flex: 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: uiDensity === 'compact' ? colors.primary : colors.textPrimary,
+                        fontFamily: typography.fonts.semiBold,
+                        fontSize: typography.sizes.bodySm,
+                      }}
+                    >
+                      High Density
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+                      Compact rows for high-volume ledger transactions
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* Regional & Formatting */}
+            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+              Regional Currency & Date Formatting
+            </Text>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.xl,
+                  padding: spacing.lg,
+                  marginBottom: spacing.xl,
+                },
+              ]}
+            >
+              <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginBottom: 2 }}>
+                Primary Ledger Currency
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginBottom: spacing.md }}>
+                Base currency for consolidated Net Worth, Budget envelopes, and statutory reports.
               </Text>
 
-              <View style={{ gap: 10 }}>
+              {/* Compact 2x2 Grid of Currencies */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.lg }}>
                 {(
                   [
-                    { code: 'NGN', symbol: '₦', name: 'Nigerian Naira (NGN)', desc: 'Primary Domestic Ledger Currency' },
-                    { code: 'USD', symbol: '$', name: 'US Dollar (USD)', desc: 'Domiciliary & International Holdings' },
-                    { code: 'GBP', symbol: '£', name: 'British Pound (GBP)', desc: 'Offshore & Foreign Accounts' },
-                    { code: 'EUR', symbol: '€', name: 'Euro (EUR)', desc: 'Eurozone Inflows & Portfolios' },
+                    { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', sub: 'Domestic Ledger' },
+                    { code: 'USD', name: 'US Dollar', symbol: '$', sub: 'International Holdings' },
+                    { code: 'GBP', name: 'British Pound', symbol: '£', sub: 'Foreign Accounts' },
+                    { code: 'EUR', name: 'Euro', symbol: '€', sub: 'Eurozone Inflows' },
                   ] as const
                 ).map((c) => {
                   const isSelected = currency === c.code;
@@ -441,256 +649,99 @@ export function SettingsScreen() {
                       key={c.code}
                       onPress={() => setCurrency(c.code)}
                       style={[
-                        styles.currencyOption,
                         {
-                          backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
-                          borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                          borderWidth: 1,
-                          borderRadius: radii.lg,
-                          padding: spacing.md,
+                          flex: 1,
+                          minWidth: '47%',
                           flexDirection: 'row',
                           alignItems: 'center',
-                          justifyContent: 'space-between',
-                        },
-                      ]}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <View
-                          style={[
-                            styles.currSymbolCircle,
-                            {
-                              backgroundColor: isSelected ? colors.primary : colors.surface,
-                              borderRadius: radii.full,
-                              width: 32,
-                              height: 32,
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={{
-                              color: isSelected ? '#FFFFFF' : colors.textPrimary,
-                              fontFamily: typography.fonts.semiBold,
-                              fontSize: 14,
-                            }}
-                          >
-                            {c.symbol}
-                          </Text>
-                        </View>
-                        <View style={{ marginLeft: spacing.md }}>
-                          <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                            {c.name}
-                          </Text>
-                          <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
-                            {c.desc}
-                          </Text>
-                        </View>
-                      </View>
-                      {isSelected && <Check size={18} color={colors.primary} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Date Format */}
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Date & Calendar Formatting
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {(['DD/MM/YYYY', 'YYYY-MM-DD', 'MM/DD/YYYY'] as const).map((fmt) => {
-                  const isSelected = dateFormat === fmt;
-                  return (
-                    <TouchableOpacity
-                      key={fmt}
-                      onPress={() => setDateFormat(fmt)}
-                      style={[
-                        styles.formatBtn,
-                        {
                           backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
                           borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                          borderWidth: 1,
-                          borderRadius: radii.md,
-                          paddingVertical: 10,
-                          paddingHorizontal: 12,
-                          flex: 1,
-                          alignItems: 'center',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: isSelected ? colors.primary : colors.textPrimary,
-                          fontFamily: typography.fonts.medium,
-                          fontSize: 12,
-                        }}
-                      >
-                        {fmt}
-                      </Text>
-                      <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>
-                        {fmt === 'DD/MM/YYYY' ? 'Standard (NG/UK)' : fmt === 'YYYY-MM-DD' ? 'ISO 8601' : 'US Format'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* =========================================================================
-            TAB 3: THEME & DISPLAY
-        ========================================================================== */}
-        {activeTab === 'appearance' && (
-          <View>
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Color Theme
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                {/* Light Theme Card */}
-                <TouchableOpacity
-                  onPress={() => {
-                    if (isDark) toggleTheme();
-                  }}
-                  style={[
-                    styles.themeCard,
-                    {
-                      backgroundColor: !isDark ? colors.primaryLight : colors.surfaceSubtle,
-                      borderColor: !isDark ? colors.primary : colors.borderSubtle,
-                      borderWidth: 2,
-                      borderRadius: radii.lg,
-                      padding: spacing.md,
-                      flex: 1,
-                      alignItems: 'center',
-                    },
-                  ]}
-                >
-                  <Sun size={24} color={!isDark ? colors.primary : colors.textSecondary} />
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: typography.fonts.semiBold,
-                      fontSize: typography.sizes.bodySm,
-                      marginTop: 8,
-                    }}
-                  >
-                    Pure White
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, textAlign: 'center', marginTop: 2 }}>
-                    High contrast daylight theme
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Dark Theme Card */}
-                <TouchableOpacity
-                  onPress={() => {
-                    if (!isDark) toggleTheme();
-                  }}
-                  style={[
-                    styles.themeCard,
-                    {
-                      backgroundColor: isDark ? colors.primaryLight : colors.surfaceSubtle,
-                      borderColor: isDark ? colors.primary : colors.borderSubtle,
-                      borderWidth: 2,
-                      borderRadius: radii.lg,
-                      padding: spacing.md,
-                      flex: 1,
-                      alignItems: 'center',
-                    },
-                  ]}
-                >
-                  <Moon size={24} color={isDark ? colors.primary : colors.textSecondary} />
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: typography.fonts.semiBold,
-                      fontSize: typography.sizes.bodySm,
-                      marginTop: 8,
-                    }}
-                  >
-                    Midnight Slate
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, textAlign: 'center', marginTop: 2 }}>
-                    Deep navy eye protection
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* UI Density */}
-            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Interface Density
-            </Text>
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.xl,
-                  padding: spacing.lg,
-                  marginBottom: spacing.xl,
-                },
-              ]}
-            >
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                {(
-                  [
-                    { id: 'comfortable', title: 'Comfortable', desc: 'Standard padding and generous touch targets' },
-                    { id: 'compact', title: 'High Density', desc: 'Compact rows for high-volume ledger transactions' },
-                  ] as const
-                ).map((d) => {
-                  const isSelected = uiDensity === d.id;
-                  return (
-                    <TouchableOpacity
-                      key={d.id}
-                      onPress={() => setUiDensity(d.id)}
-                      style={[
-                        styles.densityCard,
-                        {
-                          backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
-                          borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                          borderWidth: 1,
+                          borderWidth: isSelected ? 2 : 1,
                           borderRadius: radii.lg,
                           padding: spacing.md,
-                          flex: 1,
                         },
                       ]}
                     >
-                      <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                        {d.title}
-                      </Text>
-                      <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4 }}>
-                        {d.desc}
-                      </Text>
+                      <View
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: radii.full,
+                          backgroundColor: isSelected ? colors.primary : colors.borderSubtle,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: spacing.sm,
+                        }}
+                      >
+                        <Text style={{ color: isSelected ? '#FFFFFF' : colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: 14 }}>
+                          {c.symbol}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: isSelected ? colors.primary : colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
+                          {c.code}
+                        </Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
+                          {c.name}
+                        </Text>
+                      </View>
+                      {isSelected && <Check size={16} color={colors.primary} />}
                     </TouchableOpacity>
                   );
                 })}
+              </View>
+
+              {/* Date & Calendar Formatting */}
+              <View style={{ paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginBottom: 2 }}>
+                  Date & Calendar Formatting
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginBottom: spacing.md }}>
+                  Select the timestamp format rendered across your transaction statements.
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {(
+                    [
+                      { id: 'DD/MM/YYYY', label: 'DD/MM/YYYY', sub: 'Standard (NG/UK)' },
+                      { id: 'YYYY-MM-DD', label: 'YYYY-MM-DD', sub: 'ISO 8601' },
+                      { id: 'MM/DD/YYYY', label: 'MM/DD/YYYY', sub: 'US Format' },
+                    ] as const
+                  ).map((f) => {
+                    const isSelected = dateFormat === f.id;
+                    return (
+                      <TouchableOpacity
+                        key={f.id}
+                        onPress={() => setDateFormat(f.id)}
+                        style={[
+                          {
+                            flex: 1,
+                            backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
+                            borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                            borderWidth: isSelected ? 2 : 1,
+                            borderRadius: radii.md,
+                            paddingVertical: 10,
+                            paddingHorizontal: spacing.sm,
+                            alignItems: 'center',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color: isSelected ? colors.primary : colors.textPrimary,
+                            fontFamily: typography.fonts.semiBold,
+                            fontSize: typography.sizes.xs,
+                          }}
+                        >
+                          {f.label}
+                        </Text>
+                        <Text style={{ color: colors.textSecondary, fontSize: 10, marginTop: 2 }}>
+                          {f.sub}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
             </View>
           </View>
