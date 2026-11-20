@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
   Plus,
-  RefreshCw,
   TrendingUp,
   TrendingDown,
   ChevronRight,
@@ -23,7 +22,6 @@ import {
 import { useTheme } from '../../design';
 import { formatNaira, parseAmount } from '../../money';
 import { RecordTradeSheet, type AddedTrade } from './RecordTradeSheet';
-import { QuickPriceUpdateSheet, type PriceHoldingItem } from './QuickPriceUpdateSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import type { HoldingType, HoldingUnitType } from '../../data/workspace/model';
 
@@ -123,7 +121,6 @@ export function InvestmentsScreen() {
 
   // Sheets
   const [tradeSheetVisible, setTradeSheetVisible] = useState(false);
-  const [priceSheetVisible, setPriceSheetVisible] = useState(false);
 
   // Totals calculation
   const totalCostMinor = holdings.reduce(
@@ -209,17 +206,6 @@ export function InvestmentsScreen() {
     });
   };
 
-  const handleSavePrices = (prices: Record<string, string>) => {
-    setLocalHoldings((prev) =>
-      prev.map((h) => {
-        const text = prices[h.id];
-        if (!text) return h;
-        const parsed = parseAmount(text);
-        return parsed.ok ? { ...h, currentPriceMinor: parsed.minor } : h;
-      })
-    );
-  };
-
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Top Header */}
@@ -262,21 +248,6 @@ export function InvestmentsScreen() {
             Equities & Asset Holdings
           </Text>
         </View>
-
-        <TouchableOpacity
-          onPress={() => setPriceSheetVisible(true)}
-          style={[
-            styles.headerIconBtn,
-            {
-              backgroundColor: colors.surfaceSubtle,
-              borderRadius: radii.full,
-              padding: spacing.xs,
-              marginRight: spacing.xs,
-            },
-          ]}
-        >
-          <RefreshCw size={16} color={colors.primary} />
-        </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setTradeSheetVisible(true)}
@@ -717,17 +688,6 @@ export function InvestmentsScreen() {
           type: h.type,
           unitType: h.unitType,
         }))}
-      />
-
-      <QuickPriceUpdateSheet
-        visible={priceSheetVisible}
-        onClose={() => setPriceSheetVisible(false)}
-        holdings={holdings.map((h) => ({
-          id: h.id,
-          ticker: h.ticker,
-          currentPriceMinor: h.currentPriceMinor,
-        }))}
-        onSavePrices={handleSavePrices}
       />
     </View>
   );
