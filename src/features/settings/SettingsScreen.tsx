@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -62,6 +63,8 @@ type SettingsTab =
 export function SettingsScreen() {
   const { colors, typography, spacing, radii, isDark, toggleTheme } = useTheme();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
   const { user, workspaceId, signOut } = useAuth();
   const { enabledIncomeIds, enabledExpenseIds } = useCategoryPreferences();
   const { snapshot } = useDatabaseData();
@@ -168,67 +171,140 @@ export function SettingsScreen() {
         </View>
       </View>
 
-      {/* Horizontal Segmented Navigation Tabs */}
-      <View
-        style={[
-          styles.tabsRow,
-          {
-            borderBottomColor: colors.borderSubtle,
-            backgroundColor: colors.surface,
-            paddingHorizontal: spacing.lg,
-          },
-        ]}
-      >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingVertical: 10 }}
-        >
-          {tabs.map((tab) => {
-            const IconComp = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                onPress={() => setActiveTab(tab.id)}
-                style={[
-                  styles.tabPill,
-                  {
-                    backgroundColor: isActive ? colors.primaryLight : 'transparent',
-                    borderColor: isActive ? colors.primary : 'transparent',
-                    borderWidth: 1,
-                    borderRadius: radii.full,
-                    paddingHorizontal: spacing.md,
-                    paddingVertical: 7,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                  },
-                ]}
-              >
-                <IconComp
-                  size={15}
-                  color={isActive ? colors.primary : colors.textSecondary}
-                />
-                <Text
-                  style={{
-                    color: isActive ? colors.primary : colors.textSecondary,
-                    fontFamily: isActive ? typography.fonts.semiBold : typography.fonts.medium,
-                    fontSize: typography.sizes.xs,
-                    marginLeft: 6,
-                  }}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+      {/* Body: Desktop 2-column with Settings Sidebar vs Mobile single-column */}
+      <View style={[styles.bodyLayout, isDesktop ? styles.desktopBody : styles.mobileBody]}>
+        {/* Settings Sidebar (Desktop) */}
+        {isDesktop ? (
+          <View
+            style={[
+              styles.settingsSidebar,
+              {
+                width: 250,
+                borderRightColor: colors.borderSubtle,
+                borderRightWidth: 1,
+                backgroundColor: colors.surface,
+                paddingVertical: spacing.lg,
+                paddingHorizontal: spacing.sm,
+              },
+            ]}
+          >
+            <View style={{ gap: 4 }}>
+              {tabs.map((tab) => {
+                const IconComp = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <TouchableOpacity
+                    key={tab.id}
+                    onPress={() => setActiveTab(tab.id)}
+                    style={[
+                      styles.sidebarItem,
+                      {
+                        backgroundColor: isActive ? colors.primaryLight : 'transparent',
+                        borderRadius: radii.md,
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      },
+                    ]}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <IconComp
+                        size={17}
+                        color={isActive ? colors.primary : colors.textSecondary}
+                      />
+                      <Text
+                        style={{
+                          color: isActive ? colors.primary : colors.textPrimary,
+                          fontFamily: isActive ? typography.fonts.semiBold : typography.fonts.medium,
+                          fontSize: typography.sizes.bodySm,
+                          marginLeft: 10,
+                        }}
+                      >
+                        {tab.label}
+                      </Text>
+                    </View>
+                    {isActive && (
+                      <View
+                        style={{
+                          width: 3,
+                          height: 16,
+                          borderRadius: 2,
+                          backgroundColor: colors.primary,
+                        }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        ) : (
+          /* Mobile horizontal pill strip */
+          <View
+            style={[
+              styles.tabsRow,
+              {
+                borderBottomColor: colors.borderSubtle,
+                backgroundColor: colors.surface,
+                paddingHorizontal: spacing.lg,
+              },
+            ]}
+          >
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingVertical: 10 }}
+            >
+              {tabs.map((tab) => {
+                const IconComp = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <TouchableOpacity
+                    key={tab.id}
+                    onPress={() => setActiveTab(tab.id)}
+                    style={[
+                      styles.tabPill,
+                      {
+                        backgroundColor: isActive ? colors.primaryLight : 'transparent',
+                        borderColor: isActive ? colors.primary : 'transparent',
+                        borderWidth: 1,
+                        borderRadius: radii.full,
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: 7,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      },
+                    ]}
+                  >
+                    <IconComp
+                      size={15}
+                      color={isActive ? colors.primary : colors.textSecondary}
+                    />
+                    <Text
+                      style={{
+                        color: isActive ? colors.primary : colors.textSecondary,
+                        fontFamily: isActive ? typography.fonts.semiBold : typography.fonts.medium,
+                        fontSize: typography.sizes.xs,
+                        marginLeft: 6,
+                      }}
+                    >
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
-        showsVerticalScrollIndicator={false}
-      >
+        {/* Content Pane */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.content, { padding: spacing.xl, maxWidth: isDesktop ? 860 : undefined }]}
+          showsVerticalScrollIndicator={false}
+        >
         {/* =========================================================================
             TAB 1: WORKSPACE & PROFILE
         ========================================================================== */}
@@ -1315,6 +1391,7 @@ export function SettingsScreen() {
           </View>
         )}
       </ScrollView>
+      </View>
 
       {/* Sheets & Modals */}
       <TwoFactorSetupSheet
@@ -1364,6 +1441,19 @@ const styles = StyleSheet.create({
   },
   backBtn: {},
   screenTitle: {},
+  bodyLayout: {
+    flex: 1,
+  },
+  desktopBody: {
+    flexDirection: 'row',
+  },
+  mobileBody: {
+    flexDirection: 'column',
+  },
+  settingsSidebar: {
+    height: '100%',
+  },
+  sidebarItem: {},
   tabsRow: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
