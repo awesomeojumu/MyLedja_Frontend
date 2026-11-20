@@ -10,7 +10,6 @@ import {
   CreditCard,
   PiggyBank,
   TrendingUp,
-  Users,
   HeartPulse,
   BarChart3,
   GitBranch,
@@ -40,7 +39,6 @@ export function DesktopSidebar() {
     { label: 'Debts & Loans', route: '/debts', icon: CreditCard },
     { label: 'Savings Goals', route: '/goals', icon: PiggyBank },
     { label: 'Investments', route: '/investments', icon: TrendingUp },
-    { label: 'Payees', route: '/payees', icon: Users },
   ];
 
   // User account dropdown items

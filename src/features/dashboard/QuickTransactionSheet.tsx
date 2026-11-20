@@ -150,10 +150,10 @@ export function QuickTransactionSheet({
           containerStyle={{ marginTop: spacing.md }}
         />
 
-        {/* Optional Payee / Source */}
+        {/* Description / Purpose of Payment */}
         <TextInput
-          label={type === 'income' ? 'Payer / Source (Optional)' : 'Payee / Merchant (Optional)'}
-          placeholder={type === 'income' ? 'e.g. Employer, Client, Tenant' : 'e.g. Bolt, Shoprite, Netflix'}
+          label={type === 'income' ? 'Description / Income Source (Optional)' : 'Description / Purpose of Payment (Optional)'}
+          placeholder={type === 'income' ? 'e.g. Salary, Consulting fee, Dividend' : 'e.g. MTN Data, Lunch, Fuel, Supermarket'}
           value={payee}
           onChangeText={setPayee}
           containerStyle={{ marginTop: spacing.md }}

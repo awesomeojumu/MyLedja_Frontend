@@ -81,7 +81,7 @@ export function TransactionDetailSheet({
         <View style={[styles.detailsGroup, { marginTop: spacing.lg }]}>
           <View style={[styles.detailRow, { paddingVertical: spacing.sm }]}>
             <Text style={[styles.detailLabel, { color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.bodySm }]}>
-              Payee
+              Description / Purpose
             </Text>
             <Text style={[styles.detailValue, { color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }]}>
               {transaction.payee || 'None'}
