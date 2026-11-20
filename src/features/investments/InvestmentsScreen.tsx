@@ -9,20 +9,64 @@ import {
   TrendingDown,
   ChevronRight,
   PieChart,
+  Building2,
+  Landmark,
+  Coins,
+  Shield,
+  Briefcase,
+  MapPin,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira, parseAmount } from '../../money';
 import { RecordTradeSheet, type AddedTrade } from './RecordTradeSheet';
 import { QuickPriceUpdateSheet, type PriceHoldingItem } from './QuickPriceUpdateSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import type { HoldingType, HoldingUnitType } from '../../data/workspace/model';
 
 interface HoldingItemUI {
   id: string;
   ticker: string;
   name: string;
+  type: HoldingType;
+  unitType?: HoldingUnitType;
   units: number;
   avgCostMinor: bigint;
   currentPriceMinor: bigint;
+  location?: string;
+}
+
+function getAssetTypeMeta(type: HoldingType) {
+  switch (type) {
+    case 'realEstate':
+    case 'land':
+      return { label: 'Real Estate', icon: Building2, color: '#059669' };
+    case 'fixedDeposit':
+      return { label: 'Fixed Income', icon: Landmark, color: '#D97706' };
+    case 'crypto':
+      return { label: 'Crypto', icon: Coins, color: '#7C3AED' };
+    case 'fund':
+      return { label: 'Mutual Fund', icon: PieChart, color: '#2563EB' };
+    case 'preciousMetals':
+      return { label: 'Precious Metals', icon: Shield, color: '#E11D48' };
+    case 'privateEquity':
+      return { label: 'Business Venture', icon: Briefcase, color: '#0D9488' };
+    case 'pension':
+      return { label: 'Retirement', icon: Shield, color: '#4B5563' };
+    case 'stock':
+    default:
+      return { label: 'Equities', icon: TrendingUp, color: '#2563EB' };
+  }
+}
+
+function formatUnits(units: number, unitType?: HoldingUnitType, type?: HoldingType) {
+  if (unitType === 'plots' || type === 'land') return `${units} plot${units > 1 ? 's' : ''}`;
+  if (unitType === 'acres') return `${units} acre${units > 1 ? 's' : ''}`;
+  if (unitType === 'sqm') return `${units} sqm`;
+  if (unitType === 'grams') return `${units}g`;
+  if (unitType === 'ounces') return `${units} oz`;
+  if (unitType === 'shares' || type === 'stock') return `${units.toLocaleString()} sh`;
+  if (unitType === 'lumpSum' || type === 'fixedDeposit') return `${units.toLocaleString()} lot${units > 1 ? 's' : ''}`;
+  return `${units.toLocaleString()} units`;
 }
 
 export function InvestmentsScreen() {
@@ -34,6 +78,7 @@ export function InvestmentsScreen() {
 
   // State
   const [localHoldings, setLocalHoldings] = useState<HoldingItemUI[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const holdings: HoldingItemUI[] = React.useMemo(() => {
     if (dbHoldings.length > 0) {
@@ -41,13 +86,24 @@ export function InvestmentsScreen() {
         id: h.id,
         ticker: h.symbol || h.name,
         name: h.name,
+        type: h.type || 'stock',
+        unitType: h.unitType,
         units: 1000 * (idx + 1),
         avgCostMinor: 25000n,
         currentPriceMinor: 28500n,
+        location: h.location,
       }));
     }
     return localHoldings;
   }, [dbHoldings, localHoldings]);
+
+  const filteredHoldings = React.useMemo(() => {
+    if (selectedCategory === 'all') return holdings;
+    if (selectedCategory === 'realEstate') {
+      return holdings.filter((h) => h.type === 'realEstate' || h.type === 'land');
+    }
+    return holdings.filter((h) => h.type === selectedCategory);
+  }, [holdings, selectedCategory]);
 
   // Sheets
   const [tradeSheetVisible, setTradeSheetVisible] = useState(false);
@@ -73,13 +129,15 @@ export function InvestmentsScreen() {
       repo.createHolding({
         name: trade.name,
         symbol: trade.ticker,
-        type: 'stock',
+        type: trade.type,
         accountId: dbAccounts[0]!.id,
         currentPriceMinor: trade.priceMinor,
+        unitType: trade.unitType,
+        location: trade.location,
       }).catch((e: unknown) => console.warn('Failed to record holding in DB', e));
     }
     setLocalHoldings((prev) => {
-      const existing = prev.find((h) => h.ticker === trade.ticker);
+      const existing = prev.find((h) => h.ticker === trade.ticker && h.name === trade.name);
       if (existing) {
         if (trade.action === 'buy') {
           const totalExistingCost =
@@ -112,9 +170,12 @@ export function InvestmentsScreen() {
             id: `h-${Date.now()}`,
             ticker: trade.ticker,
             name: trade.name,
+            type: trade.type,
+            unitType: trade.unitType,
             units: trade.units,
             avgCostMinor: trade.priceMinor,
             currentPriceMinor: trade.priceMinor,
+            location: trade.location,
           },
         ];
       }
@@ -301,19 +362,88 @@ export function InvestmentsScreen() {
           </View>
         </View>
 
-        {/* Holdings List */}
-        <Text
-          style={{
-            color: colors.textPrimary,
-            fontFamily: typography.fonts.semiBold,
-            fontSize: typography.sizes.md,
-            marginBottom: spacing.md,
-          }}
-        >
-          Assets & Holdings ({holdings.length})
-        </Text>
+        {/* Holdings List Header & Category Filters */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: typography.fonts.semiBold,
+              fontSize: typography.sizes.md,
+            }}
+          >
+            Assets & Holdings ({filteredHoldings.length})
+          </Text>
+        </View>
 
-        {holdings.length === 0 ? (
+        {/* Filter Pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: spacing.md }}
+          contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+        >
+          {[
+            { id: 'all', label: 'All Assets', count: holdings.length },
+            { id: 'stock', label: 'Equities', count: holdings.filter((h) => h.type === 'stock').length },
+            { id: 'realEstate', label: 'Real Estate & Land', count: holdings.filter((h) => h.type === 'realEstate' || h.type === 'land').length },
+            { id: 'fixedDeposit', label: 'Fixed Income', count: holdings.filter((h) => h.type === 'fixedDeposit').length },
+            { id: 'fund', label: 'Funds & ETFs', count: holdings.filter((h) => h.type === 'fund').length },
+            { id: 'crypto', label: 'Crypto', count: holdings.filter((h) => h.type === 'crypto').length },
+            { id: 'privateEquity', label: 'Ventures', count: holdings.filter((h) => h.type === 'privateEquity').length },
+            { id: 'preciousMetals', label: 'Metals', count: holdings.filter((h) => h.type === 'preciousMetals').length },
+          ].map((cat) => {
+            const isSelected = selectedCategory === cat.id;
+            return (
+              <TouchableOpacity
+                key={cat.id}
+                onPress={() => setSelectedCategory(cat.id)}
+                style={{
+                  backgroundColor: isSelected ? colors.primary : colors.surface,
+                  borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                  borderWidth: 1,
+                  borderRadius: radii.full,
+                  paddingVertical: 5,
+                  paddingHorizontal: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <Text
+                  style={{
+                    color: isSelected ? '#FFFFFF' : colors.textPrimary,
+                    fontFamily: isSelected ? typography.fonts.semiBold : typography.fonts.medium,
+                    fontSize: 12,
+                  }}
+                >
+                  {cat.label}
+                </Text>
+                {cat.count > 0 && (
+                  <View
+                    style={{
+                      backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : colors.surfaceSubtle,
+                      borderRadius: radii.full,
+                      paddingHorizontal: 6,
+                      paddingVertical: 1,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: isSelected ? '#FFFFFF' : colors.textSecondary,
+                        fontSize: 10,
+                        fontFamily: typography.fonts.semiBold,
+                      }}
+                    >
+                      {cat.count}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {filteredHoldings.length === 0 ? (
           <View
             style={{
               backgroundColor: colors.surface,
@@ -333,7 +463,9 @@ export function InvestmentsScreen() {
                 marginBottom: 4,
               }}
             >
-              No Investment Holdings Yet
+              {selectedCategory === 'all'
+                ? 'No Investment Holdings Yet'
+                : 'No Holdings in this Category'}
             </Text>
             <Text
               style={{
@@ -344,100 +476,119 @@ export function InvestmentsScreen() {
                 maxWidth: 320,
               }}
             >
-              Tap "+ Record Trade" or link an investment from a transaction to build your portfolio.
+              Tap "+ Record Trade" to acquire Stocks, Real Estate, Fixed Deposits, Funds, or Crypto.
             </Text>
           </View>
         ) : (
-          holdings.map((h) => {
-          const itemValueMinor =
-            (h.currentPriceMinor * BigInt(Math.round(h.units * 100))) / 100n;
-          const itemCostMinor =
-            (h.avgCostMinor * BigInt(Math.round(h.units * 100))) / 100n;
-          const itemGainMinor = itemValueMinor - itemCostMinor;
+          filteredHoldings.map((h) => {
+            const itemValueMinor =
+              (h.currentPriceMinor * BigInt(Math.round(h.units * 100))) / 100n;
+            const itemCostMinor =
+              (h.avgCostMinor * BigInt(Math.round(h.units * 100))) / 100n;
+            const itemGainMinor = itemValueMinor - itemCostMinor;
+            const meta = getAssetTypeMeta(h.type);
+            const IconComponent = meta.icon;
 
-          return (
-            <TouchableOpacity
-              key={h.id}
-              onPress={() => router.push(`/investments/${h.id}` as any)}
-              style={[
-                styles.holdingCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.borderSubtle,
-                  borderRadius: radii.md,
-                  padding: spacing.md,
-                  marginBottom: spacing.md,
-                },
-              ]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View
-                  style={[
-                    styles.tickerBadge,
-                    {
-                      backgroundColor: colors.primaryLight,
-                      borderRadius: radii.md,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: colors.primary,
-                      fontFamily: typography.fonts.semiBold,
-                      fontSize: 12,
-                    }}
+            return (
+              <TouchableOpacity
+                key={h.id}
+                onPress={() => router.push(`/investments/${h.id}` as any)}
+                style={[
+                  styles.holdingCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.borderSubtle,
+                    borderRadius: radii.md,
+                    padding: spacing.md,
+                    marginBottom: spacing.md,
+                  },
+                ]}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View
+                    style={[
+                      styles.tickerBadge,
+                      {
+                        backgroundColor: colors.primaryLight,
+                        borderRadius: radii.md,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 40,
+                        height: 40,
+                      },
+                    ]}
                   >
-                    {h.ticker.slice(0, 4)}
-                  </Text>
-                </View>
+                    <IconComponent size={20} color={colors.primary} />
+                  </View>
 
-                <View style={{ flex: 1, marginLeft: spacing.md }}>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: typography.fonts.semiBold,
-                      fontSize: typography.sizes.bodySm,
-                    }}
-                  >
-                    {h.ticker}
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: typography.sizes.xs,
-                      fontFamily: typography.fonts.regular,
-                    }}
-                  >
-                    {h.units.toLocaleString()} units • {formatNaira(h.currentPriceMinor)}/sh
-                  </Text>
-                </View>
+                  <View style={{ flex: 1, marginLeft: spacing.md }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: typography.fonts.semiBold,
+                          fontSize: typography.sizes.bodySm,
+                        }}
+                      >
+                        {h.name}
+                      </Text>
+                      <View
+                        style={{
+                          backgroundColor: colors.surfaceSubtle,
+                          borderRadius: radii.sm,
+                          paddingHorizontal: 6,
+                          paddingVertical: 1,
+                        }}
+                      >
+                        <Text style={{ color: colors.textSecondary, fontSize: 10, fontFamily: typography.fonts.medium }}>
+                          {meta.label}
+                        </Text>
+                      </View>
+                    </View>
 
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: typography.fonts.semiBold,
-                      fontSize: typography.sizes.bodySm,
-                    }}
-                  >
-                    {formatNaira(itemValueMinor)}
-                  </Text>
-                  <Text
-                    style={{
-                      color: itemGainMinor >= 0n ? colors.statusSuccess : colors.statusDanger,
-                      fontSize: 11,
-                      fontFamily: typography.fonts.medium,
-                    }}
-                  >
-                    {itemGainMinor >= 0n ? '+' : ''}
-                    {formatNaira(itemGainMinor)}
-                  </Text>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: typography.sizes.xs,
+                        fontFamily: typography.fonts.regular,
+                        marginTop: 2,
+                      }}
+                    >
+                      {formatUnits(h.units, h.unitType, h.type)}
+                      {h.type === 'stock' || h.type === 'crypto' || h.type === 'fund'
+                        ? ` • ${formatNaira(h.currentPriceMinor)}/unit`
+                        : ''}
+                      {h.location ? ` • 📍 ${h.location}` : ''}
+                    </Text>
+                  </View>
+
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontFamily: typography.fonts.semiBold,
+                        fontSize: typography.sizes.bodySm,
+                      }}
+                    >
+                      {formatNaira(itemValueMinor)}
+                    </Text>
+                    <Text
+                      style={{
+                        color: itemGainMinor >= 0n ? colors.statusSuccess : colors.statusDanger,
+                        fontSize: 11,
+                        fontFamily: typography.fonts.medium,
+                      }}
+                    >
+                      {itemGainMinor >= 0n ? '+' : ''}
+                      {formatNaira(itemGainMinor)}
+                    </Text>
+                  </View>
+                  <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 6 }} />
                 </View>
-                <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 6 }} />
-              </View>
-            </TouchableOpacity>
-          );
-        }))}
+              </TouchableOpacity>
+            );
+          })
+        )}
       </ScrollView>
 
       {/* Sheets */}
