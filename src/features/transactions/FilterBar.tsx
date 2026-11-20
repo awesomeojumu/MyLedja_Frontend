@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Search, SlidersHorizontal, Download, CheckSquare } from 'lucide-react-native';
 import { useTheme, TextInput } from '../../design';
 
-export type FilterPreset = 'all' | 'this-month' | 'uncategorized' | 'transfers';
+export type FilterPreset = 'all' | 'expense' | 'income' | 'transfers' | 'uncategorized';
 
 export interface FilterBarProps {
   searchQuery: string;
@@ -15,6 +15,14 @@ export interface FilterBarProps {
   onOpenFilterDrawer: () => void;
   onOpenExport: () => void;
 }
+
+const PRESET_TABS: { id: FilterPreset; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'expense', label: 'Expenses' },
+  { id: 'income', label: 'Income' },
+  { id: 'transfers', label: 'Transfers' },
+  { id: 'uncategorized', label: 'Uncategorized' },
+];
 
 export function FilterBar({
   searchQuery,
@@ -38,36 +46,49 @@ export function FilterBar({
         leftElement={<Search size={18} color={colors.textTertiary} />}
       />
 
-      {/* Preset Pill and Action Icons */}
+      {/* Preset Pills and Action Icons */}
       <View style={[styles.controlsRow, { marginTop: spacing.sm }]}>
-        {/* Only "All" Pill */}
-        <TouchableOpacity
-          onPress={() => onSelectPreset('all')}
-          activeOpacity={0.7}
-          style={[
-            styles.presetChip,
-            {
-              backgroundColor: activePreset === 'all' ? colors.primaryLight : colors.surfaceSubtle,
-              borderColor: activePreset === 'all' ? colors.primary : colors.border,
-              borderRadius: radii.full,
-              paddingHorizontal: spacing.md + 2,
-              paddingVertical: spacing.xs + 2,
-            },
-          ]}
+        {/* Quick Filter Tabs */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: spacing.xs, alignItems: 'center' }}
+          style={{ flex: 1, marginRight: spacing.sm }}
         >
-          <Text
-            style={[
-              styles.chipText,
-              {
-                color: activePreset === 'all' ? colors.primary : colors.textPrimary,
-                fontFamily: activePreset === 'all' ? typography.fonts.semiBold : typography.fonts.regular,
-                fontSize: typography.sizes.sm,
-              },
-            ]}
-          >
-            All
-          </Text>
-        </TouchableOpacity>
+          {PRESET_TABS.map((tab) => {
+            const isSelected = activePreset === tab.id;
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                onPress={() => onSelectPreset(tab.id)}
+                activeOpacity={0.7}
+                style={[
+                  styles.presetChip,
+                  {
+                    backgroundColor: isSelected ? colors.primaryLight : colors.surfaceSubtle,
+                    borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                    borderRadius: radii.full,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.xs + 2,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    {
+                      color: isSelected ? colors.primary : colors.textSecondary,
+                      fontFamily: isSelected ? typography.fonts.semiBold : typography.fonts.medium,
+                      fontSize: typography.sizes.xs + 1,
+                    },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         {/* Action Icons: Filter, Import/Export, Check Multi-select */}
         <View style={styles.actionButtons}>

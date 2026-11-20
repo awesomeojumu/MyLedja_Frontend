@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
-import { useTheme } from '../../design';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { Plus, Receipt, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react-native';
+import { useTheme, Button } from '../../design';
 import { Toast } from '../../design/components/Toast';
+import { formatNaira } from '../../money';
 import { TransactionRow, type LedgerTransaction } from './TransactionRow';
 import { FilterBar, type FilterPreset } from './FilterBar';
 import { FloatingBulkActionBar } from './FloatingBulkActionBar';
@@ -9,73 +11,11 @@ import { TransactionDetailSheet } from './TransactionDetailSheet';
 import { BulkEditSheet } from './BulkEditSheet';
 import { FilterDrawerSheet, type FilterOptions } from './FilterDrawerSheet';
 import { ExportTransactionsPopup } from './ExportTransactionsPopup';
+import { QuickTransactionSheet } from '../dashboard/QuickTransactionSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
-const DEFAULT_TRANSACTIONS: LedgerTransaction[] = [
-  {
-    id: 'tx-101',
-    payee: 'Shoprite Supermarket',
-    category: 'Groceries',
-    account: 'PremiumTrust Bank',
-    date: '2026-11-16',
-    amountMinor: 2450000n,
-    type: 'expense',
-    isCleared: true,
-  },
-  {
-    id: 'tx-102',
-    payee: 'Bolt Ride to Victoria Island',
-    category: 'Transportation & Fuel',
-    account: 'GTBank (Current)',
-    date: '2026-11-16',
-    amountMinor: 420000n,
-    type: 'expense',
-    isCleared: true,
-  },
-  {
-    id: 'tx-103',
-    payee: 'Freelance Design Retainer',
-    category: 'Salary / Income',
-    account: 'PremiumTrust Bank',
-    date: '2026-11-15',
-    amountMinor: 35000000n,
-    type: 'income',
-    isCleared: true,
-  },
-  {
-    id: 'tx-104',
-    payee: 'ATM Cash Withdrawal',
-    category: 'Transfers',
-    account: 'Cash Wallet',
-    date: '2026-11-14',
-    amountMinor: 2000000n,
-    type: 'transfer',
-    isCleared: true,
-  },
-  {
-    id: 'tx-105',
-    payee: 'Eko Electricity Prepaid Meter',
-    category: 'Utilities & Bills',
-    account: 'GTBank (Current)',
-    date: '2026-11-12',
-    amountMinor: 1500000n,
-    type: 'expense',
-    isCleared: true,
-  },
-  {
-    id: 'tx-106',
-    payee: 'Netflix Monthly Subscription',
-    category: 'Entertainment',
-    account: 'Access Credit Card',
-    date: '2026-11-10',
-    amountMinor: 520000n,
-    type: 'expense',
-    isCleared: true,
-  },
-];
-
 export function TransactionsScreen() {
-  const { colors, typography, spacing } = useTheme();
+  const { colors, typography, spacing, radii } = useTheme();
 
   // Live Database Data
   const {
@@ -90,26 +30,29 @@ export function TransactionsScreen() {
   const [localOverrides, setLocalOverrides] = useState<Record<string, Partial<LedgerTransaction>>>({});
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
 
+  // Quick Add Transaction Sheet State
+  const [addTxSheetVisible, setAddTxSheetVisible] = useState(false);
+  const [addTxType, setAddTxType] = useState<'expense' | 'income'>('expense');
+
+  // Transactions mapped from database
   const transactions = useMemo(() => {
-    const baseList = dbEvents.length > 0
-      ? dbEvents.map((ev) => {
-          let amount = 0n;
-          for (const line of ev.lines) {
-            if (line.amountMinor > 0n) amount += line.amountMinor;
-          }
-          const acc = dbAccounts.find((a) => a.id === ev.lines[0]?.ledgerAccountId);
-          return {
-            id: ev.id,
-            payee: ev.payeeName || (ev.type === 'income' ? 'Income Inflow' : 'Expense Outflow'),
-            category: ev.type === 'transfer' ? 'Transfers' : ev.type === 'income' ? 'Income' : 'General Expense',
-            account: acc?.name || dbAccounts[0]?.name || 'Operating Account',
-            date: ev.date,
-            amountMinor: amount,
-            type: (ev.type === 'income' ? 'income' : ev.type === 'transfer' ? 'transfer' : 'expense') as 'income' | 'expense' | 'transfer',
-            isCleared: true,
-          };
-        })
-      : DEFAULT_TRANSACTIONS;
+    const baseList = dbEvents.map((ev) => {
+      let amount = 0n;
+      for (const line of ev.lines) {
+        if (line.amountMinor > 0n) amount += line.amountMinor;
+      }
+      const acc = dbAccounts.find((a) => a.id === ev.lines[0]?.ledgerAccountId);
+      return {
+        id: ev.id,
+        payee: ev.payeeName || (ev.type === 'income' ? 'Income Inflow' : 'Expense Outflow'),
+        category: ev.type === 'transfer' ? 'Transfers' : ev.type === 'income' ? 'Income' : 'General Expense',
+        account: acc?.name || dbAccounts[0]?.name || 'Operating Account',
+        date: ev.date,
+        amountMinor: amount,
+        type: (ev.type === 'income' ? 'income' : ev.type === 'transfer' ? 'transfer' : 'expense') as 'income' | 'expense' | 'transfer',
+        isCleared: true,
+      };
+    });
 
     return baseList
       .filter((tx) => !deletedIds.has(tx.id))
@@ -154,8 +97,10 @@ export function TransactionsScreen() {
       }
 
       // 2. Preset filter
-      if (activePreset === 'uncategorized' && tx.category !== 'Uncategorized') return false;
+      if (activePreset === 'expense' && tx.type !== 'expense') return false;
+      if (activePreset === 'income' && tx.type !== 'income') return false;
       if (activePreset === 'transfers' && tx.type !== 'transfer') return false;
+      if (activePreset === 'uncategorized' && tx.category !== 'Uncategorized') return false;
 
       // 3. Drawer filters
       if (filterOptions.account !== 'All Accounts' && tx.account !== filterOptions.account) return false;
@@ -165,6 +110,53 @@ export function TransactionsScreen() {
     });
   }, [transactions, searchQuery, activePreset, filterOptions]);
 
+  // Dynamic Summary Metrics
+  const { totalInflowMinor, totalOutflowMinor, netMinor } = useMemo(() => {
+    let inflow = 0n;
+    let outflow = 0n;
+    for (const tx of filteredTransactions) {
+      if (tx.type === 'income') inflow += tx.amountMinor;
+      else if (tx.type === 'expense') outflow += tx.amountMinor;
+    }
+    return {
+      totalInflowMinor: inflow,
+      totalOutflowMinor: outflow,
+      netMinor: inflow - outflow,
+    };
+  }, [filteredTransactions]);
+
+  // Timeline Grouping by Date
+  const groupedSections = useMemo(() => {
+    const groups: { date: string; title: string; items: LedgerTransaction[]; dayTotalMinor: bigint }[] = [];
+    const todayStr = new Date().toISOString().split('T')[0]!;
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0]!;
+
+    for (const tx of filteredTransactions) {
+      let g = groups.find((grp) => grp.date === tx.date);
+      if (!g) {
+        let title = tx.date;
+        if (tx.date === todayStr) title = 'Today';
+        else if (tx.date === yesterdayStr) title = 'Yesterday';
+        else {
+          try {
+            const d = new Date(tx.date);
+            title = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+          } catch {
+            title = tx.date;
+          }
+        }
+        g = { date: tx.date, title, items: [], dayTotalMinor: 0n };
+        groups.push(g);
+      }
+      g.items.push(tx);
+      if (tx.type === 'expense') g.dayTotalMinor += tx.amountMinor;
+      else if (tx.type === 'income') g.dayTotalMinor -= tx.amountMinor;
+    }
+    return groups;
+  }, [filteredTransactions]);
+
   // Select item toggle
   const handleToggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -173,6 +165,55 @@ export function TransactionsScreen() {
       else next.add(id);
       return next;
     });
+  };
+
+  // Add Transaction Handler
+  const handleSaveTransaction = async (data: {
+    amount: string;
+    category: string;
+    account: string;
+    payee: string;
+    note: string;
+  }) => {
+    const minor = BigInt(Math.round(parseFloat(data.amount) * 100));
+    const isExpense = addTxType === 'expense';
+    const today = new Date().toISOString().split('T')[0]!;
+
+    if (repo && dbAccounts.length > 0) {
+      try {
+        const targetAccount = dbAccounts.find((a) => a.name === data.account) || dbAccounts[0]!;
+        const targetCat =
+          dbCategories.find((c) => c.name.toLowerCase() === data.category.toLowerCase()) ||
+          dbCategories[0];
+
+        if (isExpense) {
+          await repo.addTransaction({
+            kind: 'expense',
+            accountId: targetAccount.id,
+            parts: [{ amount: minor, categoryId: targetCat?.id || 'default' }],
+            date: today,
+            payeeName: data.payee || undefined,
+            notes: data.note || undefined,
+          });
+        } else {
+          await repo.addTransaction({
+            kind: 'income',
+            accountId: targetAccount.id,
+            categoryId: targetCat?.id || 'default',
+            amount: minor,
+            date: today,
+            payeeName: data.payee || undefined,
+            notes: data.note || undefined,
+          });
+        }
+      } catch (err) {
+        console.warn('Error saving transaction to DB:', err);
+      }
+    }
+
+    setToastMessage(`Saved ${isExpense ? 'expense' : 'income'} of ₦${data.amount} to Database`);
+    setToastVisible(true);
+    setAddTxSheetVisible(false);
   };
 
   // Bulk Categorize Handler
@@ -224,22 +265,120 @@ export function TransactionsScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.inner, { padding: spacing.lg, paddingHorizontal: spacing.xl, width: '100%' }]}>
-        {/* Header Title */}
-        <Text
+        {/* Header Row: Title & Action */}
+        <View style={[styles.headerRow, { marginBottom: spacing.md }]}>
+          <View>
+            <Text
+              style={[
+                styles.pageTitle,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.xl,
+                },
+              ]}
+            >
+              Transactions Ledger
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontFamily: typography.fonts.regular,
+                fontSize: typography.sizes.xs,
+                marginTop: 2,
+              }}
+            >
+              Track, organize and review all financial movements
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Button
+              label="+ Income"
+              variant="secondary"
+              size="sm"
+              onPress={() => {
+                setAddTxType('income');
+                setAddTxSheetVisible(true);
+              }}
+            />
+            <Button
+              label="+ Expense"
+              variant="primary"
+              size="sm"
+              onPress={() => {
+                setAddTxType('expense');
+                setAddTxSheetVisible(true);
+              }}
+            />
+          </View>
+        </View>
+
+        {/* Dynamic Summary Strip */}
+        <View
           style={[
-            styles.pageTitle,
+            styles.summaryStrip,
             {
-              color: colors.textPrimary,
-              fontFamily: typography.fonts.semiBold,
-              fontSize: typography.sizes.xl,
-              marginBottom: spacing.xs,
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSubtle,
+              borderRadius: radii.xl,
+              paddingVertical: spacing.sm + 4,
+              paddingHorizontal: spacing.md,
+              marginBottom: spacing.md,
             },
           ]}
         >
-          Transactions Ledger
-        </Text>
+          <View style={styles.summaryCol}>
+            <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: 11 }}>
+              INFLOW
+            </Text>
+            <Text style={{ color: colors.statusSuccess, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.sm + 1, marginTop: 2 }}>
+              +{formatNaira(totalInflowMinor)}
+            </Text>
+          </View>
 
-        {/* Filter & Search Bar */}
+          <View style={[styles.summaryDivider, { backgroundColor: colors.borderSubtle }]} />
+
+          <View style={styles.summaryCol}>
+            <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: 11 }}>
+              OUTFLOW
+            </Text>
+            <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.sm + 1, marginTop: 2 }}>
+              -{formatNaira(totalOutflowMinor)}
+            </Text>
+          </View>
+
+          <View style={[styles.summaryDivider, { backgroundColor: colors.borderSubtle }]} />
+
+          <View style={styles.summaryCol}>
+            <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: 11 }}>
+              NET CASH
+            </Text>
+            <Text
+              style={{
+                color: netMinor >= 0n ? colors.primary : colors.statusDanger,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.sm + 1,
+                marginTop: 2,
+              }}
+            >
+              {netMinor >= 0n ? '+' : ''}{formatNaira(netMinor)}
+            </Text>
+          </View>
+
+          <View style={[styles.summaryDivider, { backgroundColor: colors.borderSubtle }]} />
+
+          <View style={styles.summaryColSmall}>
+            <Text style={{ color: colors.textTertiary, fontFamily: typography.fonts.medium, fontSize: 11 }}>
+              COUNT
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.sm + 1, marginTop: 2 }}>
+              {filteredTransactions.length}
+            </Text>
+          </View>
+        </View>
+
+        {/* Filter & Search Bar with All 5 Preset Tabs */}
         <FilterBar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -254,40 +393,116 @@ export function TransactionsScreen() {
           onOpenExport={() => setExportPopupVisible(true)}
         />
 
-        {/* Transactions List */}
-        <FlatList
-          data={filteredTransactions}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 120 }}
-          renderItem={({ item }) => (
-            <TransactionRow
-              transaction={item}
-              isSelectionMode={isSelectionMode}
-              isSelected={selectedIds.has(item.id)}
-              privacyMode={false}
-              onPress={() => {
-                setSelectedTx(item);
-                setDetailSheetVisible(true);
-              }}
-              onToggleSelect={() => handleToggleSelect(item.id)}
-            />
-          )}
-          ListEmptyComponent={
-            <View style={[styles.emptyContainer, { paddingVertical: spacing.huge }]}>
-              <Text
-                style={{
+        {/* Timeline Grouped Transactions List */}
+        {groupedSections.length === 0 ? (
+          <View style={[styles.emptyContainer, { paddingVertical: spacing.huge }]}>
+            <View
+              style={[
+                styles.emptyIconCircle,
+                {
+                  backgroundColor: colors.surfaceSubtle,
+                  borderRadius: radii.full,
+                  marginBottom: spacing.sm,
+                },
+              ]}
+            >
+              <Receipt size={28} color={colors.textTertiary} />
+            </View>
+            <Text
+              style={[
+                styles.emptyTitle,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.md,
+                },
+              ]}
+            >
+              No transactions recorded yet
+            </Text>
+            <Text
+              style={[
+                styles.emptySubtitle,
+                {
                   color: colors.textSecondary,
                   fontFamily: typography.fonts.regular,
-                  fontSize: typography.sizes.body,
+                  fontSize: typography.sizes.xs + 1,
+                  marginTop: 4,
                   textAlign: 'center',
-                }}
-              >
-                No transactions match your filters.
-              </Text>
-            </View>
-          }
-        />
+                },
+              ]}
+            >
+              Log an expense or income to track your activity in this ledger.
+            </Text>
+            <Button
+              label="+ Record First Transaction"
+              variant="primary"
+              size="sm"
+              style={{ marginTop: spacing.md }}
+              onPress={() => {
+                setAddTxType('expense');
+                setAddTxSheetVisible(true);
+              }}
+            />
+          </View>
+        ) : (
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+            {groupedSections.map((group) => (
+              <View key={group.date} style={{ marginBottom: spacing.md }}>
+                {/* Date Group Header */}
+                <View style={[styles.dateHeaderRow, { marginBottom: spacing.xs }]}>
+                  <Text
+                    style={[
+                      styles.dateHeaderTitle,
+                      {
+                        color: colors.textSecondary,
+                        fontFamily: typography.fonts.semiBold,
+                        fontSize: typography.sizes.xs,
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
+                      },
+                    ]}
+                  >
+                    {group.title}
+                  </Text>
+                  {group.dayTotalMinor > 0n && (
+                    <Text style={{ color: colors.textTertiary, fontFamily: typography.fonts.regular, fontSize: 11 }}>
+                      Spent: {formatNaira(group.dayTotalMinor)}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Group Card Rows */}
+                <View
+                  style={[
+                    styles.groupCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.borderSubtle,
+                      borderRadius: radii.xl,
+                      overflow: 'hidden',
+                    },
+                  ]}
+                >
+                  {group.items.map((item) => (
+                    <TransactionRow
+                      key={item.id}
+                      transaction={item}
+                      isSelectionMode={isSelectionMode}
+                      isSelected={selectedIds.has(item.id)}
+                      privacyMode={false}
+                      onPress={() => {
+                        setSelectedTx(item);
+                        setDetailSheetVisible(true);
+                      }}
+                      onToggleSelect={() => handleToggleSelect(item.id)}
+                    />
+                  ))}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       {/* Floating Bulk Action Bar */}
@@ -299,6 +514,14 @@ export function TransactionsScreen() {
           setSelectedIds(new Set());
           setIsSelectionMode(false);
         }}
+      />
+
+      {/* Quick Add Transaction Sheet */}
+      <QuickTransactionSheet
+        visible={addTxSheetVisible}
+        onClose={() => setAddTxSheetVisible(false)}
+        type={addTxType}
+        onSave={handleSaveTransaction}
       />
 
       {/* Popups & Sheets */}
@@ -351,11 +574,52 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   pageTitle: {
     letterSpacing: -0.3,
+  },
+  summaryStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+  },
+  summaryCol: {
+    flex: 1,
+    paddingHorizontal: 6,
+  },
+  summaryColSmall: {
+    paddingHorizontal: 8,
+    alignItems: 'flex-end',
+  },
+  summaryDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 28,
+  },
+  dateHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  dateHeaderTitle: {},
+  groupCard: {
+    borderWidth: 1,
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
   },
+  emptyIconCircle: {
+    width: 60,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {},
+  emptySubtitle: {},
 });

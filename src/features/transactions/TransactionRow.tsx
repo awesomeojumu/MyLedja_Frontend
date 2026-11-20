@@ -1,6 +1,18 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Check } from 'lucide-react-native';
+import {
+  Check,
+  ShoppingBag,
+  Car,
+  Zap,
+  Tv,
+  Heart,
+  Coffee,
+  Briefcase,
+  ArrowLeftRight,
+  Tag,
+  ArrowDownLeft,
+} from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 
@@ -47,6 +59,41 @@ export function TransactionRow({
     ? '••••'
     : `${sign}${formatNaira(transaction.amountMinor)}`;
 
+  // Visual Category Badge Icon & Color
+  const getCategoryBadge = () => {
+    if (isIncome) {
+      return { Icon: Briefcase, bg: '#ECFDF5', color: '#10B981' };
+    }
+    if (isTransfer) {
+      return { Icon: ArrowLeftRight, bg: '#EFF6FF', color: '#3B82F6' };
+    }
+    const cat = (transaction.category || '').toLowerCase();
+    const payee = (transaction.payee || '').toLowerCase();
+
+    if (cat.includes('grocer') || cat.includes('food') || cat.includes('supermarket') || payee.includes('shoprite')) {
+      return { Icon: ShoppingBag, bg: '#FEF3C7', color: '#D97706' };
+    }
+    if (cat.includes('transport') || cat.includes('fuel') || cat.includes('ride') || payee.includes('bolt') || payee.includes('uber')) {
+      return { Icon: Car, bg: '#F3E8FF', color: '#9333EA' };
+    }
+    if (cat.includes('util') || cat.includes('bill') || cat.includes('electric') || payee.includes('electric')) {
+      return { Icon: Zap, bg: '#FEE2E2', color: '#EF4444' };
+    }
+    if (cat.includes('entertain') || cat.includes('subscript') || payee.includes('netflix') || payee.includes('dstv')) {
+      return { Icon: Tv, bg: '#EDE9FE', color: '#7C3AED' };
+    }
+    if (cat.includes('health') || cat.includes('med') || cat.includes('pharmacy')) {
+      return { Icon: Heart, bg: '#FFE4E6', color: '#E11D48' };
+    }
+    if (cat.includes('dine') || cat.includes('restaurant') || cat.includes('caf')) {
+      return { Icon: Coffee, bg: '#FFEDD5', color: '#EA580C' };
+    }
+    return { Icon: Tag, bg: colors.surfaceSubtle, color: colors.textSecondary };
+  };
+
+  const badge = getCategoryBadge();
+  const IconComp = badge.Icon;
+
   return (
     <TouchableOpacity
       activeOpacity={0.7}
@@ -56,7 +103,7 @@ export function TransactionRow({
         {
           backgroundColor: isSelected ? colors.primaryLight : colors.surface,
           borderBottomColor: colors.borderSubtle,
-          paddingVertical: spacing.md,
+          paddingVertical: spacing.sm + 4,
           paddingHorizontal: spacing.md,
         },
       ]}
@@ -72,13 +119,27 @@ export function TransactionRow({
               borderColor: isSelected ? colors.primary : colors.border,
               backgroundColor: isSelected ? colors.primary : colors.surfaceElevated,
               borderRadius: radii.sm,
-              marginRight: spacing.md,
+              marginRight: spacing.sm,
             },
           ]}
         >
           {isSelected && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
         </TouchableOpacity>
       )}
+
+      {/* Visual Category / Merchant Icon Badge */}
+      <View
+        style={[
+          styles.iconBadge,
+          {
+            backgroundColor: badge.bg,
+            borderRadius: radii.md,
+            marginRight: spacing.sm + 2,
+          },
+        ]}
+      >
+        <IconComp size={17} color={badge.color} strokeWidth={2} />
+      </View>
 
       {/* Main Info */}
       <View style={styles.leftCol}>
@@ -89,7 +150,7 @@ export function TransactionRow({
             {
               color: colors.textPrimary,
               fontFamily: typography.fonts.medium,
-              fontSize: typography.sizes.body,
+              fontSize: typography.sizes.bodySm + 1,
             },
           ]}
         >
@@ -105,7 +166,7 @@ export function TransactionRow({
                 borderColor: colors.borderSubtle,
                 borderRadius: radii.xs,
                 paddingHorizontal: spacing.xs + 2,
-                paddingVertical: spacing.xxs,
+                paddingVertical: 1,
               },
             ]}
           >
@@ -115,7 +176,7 @@ export function TransactionRow({
                 {
                   color: colors.textSecondary,
                   fontFamily: typography.fonts.regular,
-                  fontSize: typography.sizes.xs,
+                  fontSize: 11,
                 },
               ]}
             >
@@ -129,7 +190,7 @@ export function TransactionRow({
               {
                 color: colors.textTertiary,
                 fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.xs,
+                fontSize: 11,
                 marginLeft: spacing.xs,
               },
             ]}
@@ -139,15 +200,15 @@ export function TransactionRow({
         </View>
       </View>
 
-      {/* Amount and Status */}
+      {/* Amount and Date */}
       <View style={styles.rightCol}>
         <Text
           style={[
             styles.amount,
             {
               color: amountColor,
-              fontFamily: typography.fonts.medium,
-              fontSize: typography.sizes.body,
+              fontFamily: typography.fonts.semiBold,
+              fontSize: typography.sizes.bodySm + 1,
             },
           ]}
         >
@@ -159,7 +220,7 @@ export function TransactionRow({
             {
               color: colors.textTertiary,
               fontFamily: typography.fonts.regular,
-              fontSize: typography.sizes.xs,
+              fontSize: 11,
               marginTop: 2,
             },
           ]}
@@ -184,6 +245,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1.5,
   },
+  iconBadge: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   leftCol: {
     flex: 1,
     marginRight: 12,
@@ -194,7 +261,7 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 3,
   },
   categoryPill: {
     borderWidth: 1,
