@@ -153,6 +153,7 @@ export function DesktopSidebar() {
             borderTopColor: colors.border,
             padding: spacing.sm,
             position: 'relative',
+            zIndex: 100,
           },
         ]}
       >
@@ -225,8 +226,8 @@ export function DesktopSidebar() {
                     key={item.route}
                     activeOpacity={0.7}
                     onPress={() => {
-                      setDropdownOpen(false);
                       router.push(item.route as any);
+                      setDropdownOpen(false);
                     }}
                     style={[
                       styles.dropdownItem,
@@ -407,6 +408,7 @@ const styles = StyleSheet.create({
   navLabel: {},
   footerArea: {
     borderTopWidth: StyleSheet.hairlineWidth,
+    zIndex: 100,
   },
   profileButton: {
     flexDirection: 'row',
@@ -431,7 +433,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 90,
+    zIndex: 40,
   },
   dropdownMenu: {
     position: 'absolute',
@@ -441,7 +443,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     padding: 10,
-    zIndex: 100,
+    zIndex: 110,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.12,
