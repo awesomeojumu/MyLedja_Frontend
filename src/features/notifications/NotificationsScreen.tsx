@@ -30,7 +30,32 @@ export function NotificationsScreen() {
   // Live Database Hook
   const { repo, notifications: dbNotifications } = useDatabaseData();
 
-  const [localNotifications, setLocalNotifications] = useState<NotificationItemUI[]>([]);
+  const [localNotifications, setLocalNotifications] = useState<NotificationItemUI[]>([
+    {
+      id: 'n-1',
+      title: 'Bill Due Today: Spectranet Internet',
+      message: '₦22,000.00 is scheduled for payment today from GTBank.',
+      time: '2 hours ago',
+      read: false,
+      type: 'bill',
+    },
+    {
+      id: 'n-2',
+      title: 'Groceries Envelope at 88%',
+      message: 'You have spent ₦48,500 of your ₦80,000 envelope limit.',
+      time: 'Yesterday',
+      read: false,
+      type: 'budget',
+    },
+    {
+      id: 'n-3',
+      title: 'New Sign-In from Windows Edge',
+      message: 'Signed in from Lagos, Nigeria. Review if this was not you.',
+      time: '2 days ago',
+      read: true,
+      type: 'security',
+    },
+  ]);
 
   const notifications: NotificationItemUI[] = React.useMemo(() => {
     if (dbNotifications.length > 0) {
@@ -212,43 +237,6 @@ export function NotificationsScreen() {
             </View>
           </TouchableOpacity>
         ))}
-
-        {notifications.length === 0 && (
-          <View
-            style={[
-              styles.notifCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.borderSubtle,
-                borderRadius: radii.xl,
-                padding: spacing.xl,
-                alignItems: 'center',
-                marginTop: spacing.md,
-              },
-            ]}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: typography.sizes.md,
-                marginBottom: spacing.xs,
-              }}
-            >
-              No new notifications
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.bodySm,
-                textAlign: 'center',
-              }}
-            >
-              You're completely up to date! Bill due dates, budget envelope warnings, and sync updates will appear here.
-            </Text>
-          </View>
-        )}
       </ScrollView>
 
       {/* Security Sheet */}

@@ -6,6 +6,12 @@ import {
   Receipt,
   PieChart,
   Landmark,
+  ArrowLeftRight,
+  HeartPulse,
+  CalendarDays,
+  CreditCard,
+  PiggyBank,
+  TrendingUp,
   BarChart3,
   Users,
   GitBranch,
@@ -21,59 +27,20 @@ export function DesktopSidebar() {
   const router = useRouter();
   const { user, workspaceId } = useAuth();
 
-  // Primary 5 Unified Hubs
-  const primaryHubs = [
-    {
-      label: 'Dashboard',
-      route: '/',
-      icon: Home,
-      isActive: (path: string) => path === '/' || path === '/index',
-    },
-    {
-      label: 'Ledger',
-      route: '/transactions',
-      icon: Receipt,
-      isActive: (path: string) => path === '/transactions',
-    },
-    {
-      label: 'Planning',
-      route: '/budget',
-      icon: PieChart,
-      isActive: (path: string) =>
-        path === '/budget' ||
-        path === '/plan' ||
-        path === '/debts' ||
-        path === '/goals' ||
-        path === '/income',
-    },
-    {
-      label: 'Accounts & Wealth',
-      route: '/accounts',
-      icon: Landmark,
-      isActive: (path: string) => path === '/accounts' || path === '/investments',
-    },
-    {
-      label: 'Analytics & Reports',
-      route: '/reports',
-      icon: BarChart3,
-      isActive: (path: string) => path === '/reports' || path === '/cash-flow' || path === '/health',
-    },
-  ];
-
-  // Secondary Tools
-  const secondaryTools = [
-    {
-      label: 'Payees',
-      route: '/payees',
-      icon: Users,
-      isActive: (path: string) => path === '/payees',
-    },
-    {
-      label: 'Rules & Automation',
-      route: '/rules',
-      icon: GitBranch,
-      isActive: (path: string) => path === '/rules',
-    },
+  const navItems = [
+    { label: 'Dashboard', route: '/', icon: Home },
+    { label: 'Transactions', route: '/transactions', icon: Receipt },
+    { label: 'Budget', route: '/budget', icon: PieChart },
+    { label: 'Accounts', route: '/accounts', icon: Landmark },
+    { label: 'Cash Flow', route: '/cash-flow', icon: ArrowLeftRight },
+    { label: 'Health Score', route: '/health', icon: HeartPulse },
+    { label: 'Bills & Recurring', route: '/plan', icon: CalendarDays },
+    { label: 'Debts & Loans', route: '/debts', icon: CreditCard },
+    { label: 'Savings Goals', route: '/goals', icon: PiggyBank },
+    { label: 'Investments', route: '/investments', icon: TrendingUp },
+    { label: 'Reports', route: '/reports', icon: BarChart3 },
+    { label: 'Payees', route: '/payees', icon: Users },
+    { label: 'Rules', route: '/rules', icon: GitBranch },
   ];
 
   return (
@@ -119,27 +86,8 @@ export function DesktopSidebar() {
       {/* Navigation List */}
       <ScrollView style={styles.navList} showsVerticalScrollIndicator={false}>
         <View style={{ paddingVertical: spacing.sm, paddingHorizontal: spacing.sm }}>
-          {/* Main Financial Hubs */}
-          <Text
-            style={[
-              styles.sectionHeader,
-              {
-                color: colors.textTertiary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: 10,
-                letterSpacing: 0.8,
-                paddingHorizontal: spacing.md,
-                paddingTop: spacing.xs,
-                paddingBottom: spacing.xxs,
-                textTransform: 'uppercase',
-              },
-            ]}
-          >
-            Core Modules
-          </Text>
-
-          {primaryHubs.map((item) => {
-            const isActive = item.isActive(pathname);
+          {navItems.map((item) => {
+            const isActive = pathname === item.route;
             const IconComponent = item.icon;
 
             return (
@@ -168,77 +116,7 @@ export function DesktopSidebar() {
                     styles.navLabel,
                     {
                       marginLeft: spacing.md,
-                      fontFamily: isActive ? typography.fonts.semiBold : typography.fonts.regular,
-                      fontSize: typography.sizes.bodySm,
-                      color: isActive ? colors.primary : colors.textPrimary,
-                    },
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-
-          {/* Divider */}
-          <View
-            style={{
-              height: StyleSheet.hairlineWidth,
-              backgroundColor: colors.borderSubtle,
-              marginVertical: spacing.sm,
-              marginHorizontal: spacing.md,
-            }}
-          />
-
-          {/* Secondary Tools */}
-          <Text
-            style={[
-              styles.sectionHeader,
-              {
-                color: colors.textTertiary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: 10,
-                letterSpacing: 0.8,
-                paddingHorizontal: spacing.md,
-                paddingBottom: spacing.xxs,
-                textTransform: 'uppercase',
-              },
-            ]}
-          >
-            Tools & Setup
-          </Text>
-
-          {secondaryTools.map((item) => {
-            const isActive = item.isActive(pathname);
-            const IconComponent = item.icon;
-
-            return (
-              <TouchableOpacity
-                key={item.route}
-                onPress={() => router.push(item.route as any)}
-                activeOpacity={0.7}
-                style={[
-                  styles.navItem,
-                  {
-                    borderRadius: radii.md,
-                    paddingVertical: spacing.sm + 2,
-                    paddingHorizontal: spacing.md,
-                    marginBottom: spacing.xxs,
-                    backgroundColor: isActive ? colors.primaryLight : 'transparent',
-                  },
-                ]}
-              >
-                <IconComponent
-                  size={18}
-                  color={isActive ? colors.primary : colors.textSecondary}
-                  strokeWidth={isActive ? 2.2 : 1.8}
-                />
-                <Text
-                  style={[
-                    styles.navLabel,
-                    {
-                      marginLeft: spacing.md,
-                      fontFamily: isActive ? typography.fonts.semiBold : typography.fonts.regular,
+                      fontFamily: isActive ? typography.fonts.medium : typography.fonts.regular,
                       fontSize: typography.sizes.bodySm,
                       color: isActive ? colors.primary : colors.textPrimary,
                     },
@@ -335,7 +213,6 @@ const styles = StyleSheet.create({
   navList: {
     flex: 1,
   },
-  sectionHeader: {},
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',

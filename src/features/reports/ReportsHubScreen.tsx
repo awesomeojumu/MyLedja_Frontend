@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -13,8 +13,6 @@ import {
   FileSpreadsheet,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
-import { CashFlowScreen } from '../cashflow/CashFlowScreen';
-import { HealthScreen } from '../health/HealthScreen';
 
 interface ReportCardItem {
   id: string;
@@ -27,8 +25,6 @@ interface ReportCardItem {
 export function ReportsHubScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
-
-  const [analyticsTab, setAnalyticsTab] = useState<'reports' | 'cashflow' | 'health'>('reports');
 
   const standardReports: ReportCardItem[] = [
     {
@@ -138,76 +134,19 @@ export function ReportsHubScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { padding: spacing.lg, paddingBottom: 60 }]}
+        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Analytics Hub Unified Segmented Switcher */}
-        <View
+        <Text
           style={{
-            flexDirection: 'row',
-            backgroundColor: colors.surfaceSubtle,
-            borderRadius: radii.full,
-            padding: 3,
+            color: colors.textPrimary,
+            fontFamily: typography.fonts.semiBold,
+            fontSize: typography.sizes.md,
             marginBottom: spacing.md,
-            borderWidth: 1,
-            borderColor: colors.borderSubtle,
           }}
         >
-          {[
-            { id: 'reports', label: 'Reports Library' },
-            { id: 'cashflow', label: 'Cash Flow Streams' },
-            { id: 'health', label: 'Health Score' },
-          ].map((tab) => {
-            const isActive = analyticsTab === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                onPress={() => setAnalyticsTab(tab.id as any)}
-                activeOpacity={0.7}
-                style={{
-                  flex: 1,
-                  paddingVertical: 7,
-                  borderRadius: radii.full,
-                  backgroundColor: isActive ? colors.surface : 'transparent',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  shadowColor: isActive ? '#000000' : 'transparent',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: isActive ? 0.08 : 0,
-                  shadowRadius: 2,
-                  elevation: isActive ? 1 : 0,
-                }}
-              >
-                <Text
-                  style={{
-                    color: isActive ? colors.primary : colors.textSecondary,
-                    fontFamily: isActive ? typography.fonts.semiBold : typography.fonts.medium,
-                    fontSize: 11.5,
-                  }}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {analyticsTab === 'cashflow' && <CashFlowScreen showHeader={false} />}
-
-        {analyticsTab === 'health' && <HealthScreen showHeader={false} />}
-
-        {analyticsTab === 'reports' && (
-          <View>
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: typography.sizes.md,
-                marginBottom: spacing.md,
-              }}
-            >
-              Standard Reports Library
-            </Text>
+          Standard Reports Library
+        </Text>
 
         {standardReports.map((report) => {
           const IconComp = report.icon;
@@ -289,8 +228,6 @@ export function ReportsHubScreen() {
             </TouchableOpacity>
           );
         })}
-          </View>
-        )}
       </ScrollView>
     </View>
   );

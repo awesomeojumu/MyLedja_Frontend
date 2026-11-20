@@ -15,11 +15,7 @@ import { formatNaira } from '../../money';
 import { NodeBreakdownSheet, type FlowNodeItem } from './NodeBreakdownSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
-export interface CashFlowScreenProps {
-  showHeader?: boolean;
-}
-
-export function CashFlowScreen({ showHeader = true }: CashFlowScreenProps = {}) {
+export function CashFlowScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
@@ -35,74 +31,76 @@ export function CashFlowScreen({ showHeader = true }: CashFlowScreenProps = {}) 
 
   // Financial Stream Figures (connected to Database events)
   const totals = getMonthlyTotals('2026-11');
-  const totalInflowMinor = totals.income;
-  const spentMinor = totals.spent;
+  const totalInflowMinor = totals.income > 0n ? totals.income : 145000000n;
+  const spentMinor = totals.spent > 0n ? totals.spent : 80000000n;
   const fixedMinor = (spentMinor * 55n) / 100n;
   const livingMinor = spentMinor - fixedMinor;
   const retainedMinor = totalInflowMinor > spentMinor ? totalInflowMinor - spentMinor : 0n;
 
-  const fixedItems: FlowNodeItem[] = spentMinor > 0n ? [
-    { id: 'f-1', label: 'Rent Allocation', amountMinor: (spentMinor * 30n) / 100n, percent: 55, transactionsCount: 1 },
-    { id: 'f-2', label: 'Electricity & Utilities', amountMinor: (spentMinor * 15n) / 100n, percent: 27, transactionsCount: 1 },
-    { id: 'f-3', label: 'Health Insurance', amountMinor: (spentMinor * 10n) / 100n, percent: 18, transactionsCount: 1 },
-  ] : [];
+  const fixedItems: FlowNodeItem[] = [
+    { id: 'f-1', label: 'Rent Allocation', amountMinor: 25000000n, percent: 60, transactionsCount: 1 },
+    { id: 'f-2', label: 'Electricity & Utilities', amountMinor: 9000000n, percent: 21, transactionsCount: 3 },
+    { id: 'f-3', label: 'Health Insurance', amountMinor: 8000000n, percent: 19, transactionsCount: 1 },
+  ];
 
-  const livingItems: FlowNodeItem[] = spentMinor > 0n ? [
-    { id: 'l-1', label: 'General Living Expenses', amountMinor: livingMinor, percent: 100, transactionsCount: 1 },
-  ] : [];
+  const livingItems: FlowNodeItem[] = [
+    { id: 'l-1', label: 'Food & Groceries', amountMinor: 18500000n, percent: 49, transactionsCount: 14 },
+    { id: 'l-2', label: 'Fuel & Transportation', amountMinor: 12000000n, percent: 32, transactionsCount: 8 },
+    { id: 'l-3', label: 'Entertainment & Dining', amountMinor: 7500000n, percent: 19, transactionsCount: 4 },
+  ];
 
-  const inflowItems: FlowNodeItem[] = totalInflowMinor > 0n ? [
-    { id: 'i-1', label: 'Earned & Other Inflows', amountMinor: totalInflowMinor, percent: 100, transactionsCount: 1 },
-  ] : [];
+  const inflowItems: FlowNodeItem[] = [
+    { id: 'i-1', label: 'Primary Salary', amountMinor: 125000000n, percent: 86, transactionsCount: 1 },
+    { id: 'i-2', label: 'Consulting & Freelance', amountMinor: 15000000n, percent: 10, transactionsCount: 2 },
+    { id: 'i-3', label: 'Dividends & Interest', amountMinor: 5000000n, percent: 4, transactionsCount: 3 },
+  ];
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Top Header */}
-      {showHeader && (
-        <View
-          style={[
-            styles.headerBar,
-            {
-              borderBottomColor: colors.borderSubtle,
-              paddingHorizontal: spacing.lg,
-              paddingVertical: spacing.md,
-            },
-          ]}
+      <View
+        style={[
+          styles.headerBar,
+          {
+            borderBottomColor: colors.borderSubtle,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backBtn, { padding: spacing.xs }]}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backBtn, { padding: spacing.xs }]}
+          <ArrowLeft size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text
+            style={[
+              styles.screenTitle,
+              {
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.lg,
+              },
+            ]}
           >
-            <ArrowLeft size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={{ flex: 1, marginLeft: spacing.sm }}>
-            <Text
-              style={[
-                styles.screenTitle,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: typography.sizes.lg,
-                },
-              ]}
-            >
-              Cash Flow Streams
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.xs,
-              }}
-            >
-              Income to Outflow Ribbon
-            </Text>
-          </View>
+            Cash Flow Streams
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+            }}
+          >
+            Income to Outflow Ribbon
+          </Text>
         </View>
-      )}
+      </View>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { padding: showHeader ? spacing.lg : 0, paddingBottom: 60 }]}
+        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Period Filter Tabs */}

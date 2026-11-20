@@ -109,7 +109,7 @@ export function TransactionsScreen() {
             isCleared: true,
           };
         })
-      : [];
+      : DEFAULT_TRANSACTIONS;
 
     return baseList
       .filter((tx) => !deletedIds.has(tx.id))
@@ -274,30 +274,16 @@ export function TransactionsScreen() {
             />
           )}
           ListEmptyComponent={
-            <View style={[styles.emptyContainer, { paddingVertical: spacing.xxl, alignItems: 'center' }]}>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: typography.sizes.md,
-                  textAlign: 'center',
-                  marginBottom: spacing.xs,
-                }}
-              >
-                {searchQuery ? 'No transactions found' : 'No transactions recorded yet'}
-              </Text>
+            <View style={[styles.emptyContainer, { paddingVertical: spacing.huge }]}>
               <Text
                 style={{
                   color: colors.textSecondary,
                   fontFamily: typography.fonts.regular,
-                  fontSize: typography.sizes.bodySm,
+                  fontSize: typography.sizes.body,
                   textAlign: 'center',
-                  maxWidth: 280,
                 }}
               >
-                {searchQuery
-                  ? 'Try searching for a different keyword or adjusting your filters.'
-                  : 'Add expenses, record income, or import bank statements to view your ledger history.'}
+                No transactions match your filters.
               </Text>
             </View>
           }

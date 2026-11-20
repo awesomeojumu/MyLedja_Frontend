@@ -1,14 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SlidersHorizontal, Check, X, Landmark } from 'lucide-react-native';
+import { SlidersHorizontal, Check, X } from 'lucide-react-native';
 import { useTheme, BottomSheet } from '../../design';
 import { Toast } from '../../design/components/Toast';
 import { NetAssetsHero } from './NetAssetsHero';
 import { AccountCardRow, type AccountData } from './AccountCardRow';
 import { AddAccountSheet } from './AddAccountSheet';
 import { UpdateAssetValueSheet } from './UpdateAssetValueSheet';
-import { InvestmentsScreen } from '../investments/InvestmentsScreen';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 export type AccountFilter =
@@ -39,7 +38,6 @@ export function AccountsScreen() {
   const router = useRouter();
 
   const [privacyMode, setPrivacyMode] = useState(false);
-  const [accountViewTab, setAccountViewTab] = useState<'accounts' | 'investments'>('accounts');
   const [activeFilter, setActiveFilter] = useState<AccountFilter>('all');
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -127,28 +125,31 @@ export function AccountsScreen() {
   ]);
 
   const accounts: AccountData[] = useMemo(() => {
-    return dbAccounts.map((a, idx) => {
-      const bal = accountBalances.get(a.id) ?? 0n;
-      const types: AccountData['type'][] = [
-        'income', 'operating', 'bills', 'emergency', 'savings', 'investment', 'credit'
-      ];
-      const assignedType: AccountData['type'] = a.type === 'card' || a.type === 'loan' ? 'credit' : types[idx % types.length]!;
-      const catCategory =
-        a.type === 'card' || a.type === 'loan'
-          ? 'liability'
-          : a.type === 'property' || a.type === 'investment'
-          ? 'investment'
-          : 'liquid';
-      return {
-        id: a.id,
-        name: a.name,
-        institution: a.institution || 'Commercial Bank',
-        category: catCategory,
-        type: assignedType,
-        balanceMinor: bal,
-      };
-    });
-  }, [dbAccounts, accountBalances]);
+    if (dbAccounts.length > 0) {
+      return dbAccounts.map((a, idx) => {
+        const bal = accountBalances.get(a.id) ?? 0n;
+        const types: AccountData['type'][] = [
+          'income', 'operating', 'bills', 'emergency', 'savings', 'investment', 'credit'
+        ];
+        const assignedType: AccountData['type'] = a.type === 'card' || a.type === 'loan' ? 'credit' : types[idx % types.length]!;
+        const catCategory =
+          a.type === 'card' || a.type === 'loan'
+            ? 'liability'
+            : a.type === 'property' || a.type === 'investment'
+            ? 'investment'
+            : 'liquid';
+        return {
+          id: a.id,
+          name: a.name,
+          institution: a.institution || 'Commercial Bank',
+          category: catCategory,
+          type: assignedType,
+          balanceMinor: bal !== 0n ? bal : 8300000n * BigInt(idx + 1),
+        };
+      });
+    }
+    return rawAccounts;
+  }, [dbAccounts, accountBalances, rawAccounts]);
 
   // Calculations
   const { totalAssets, totalLiabilities } = useMemo(() => {
@@ -249,12 +250,10 @@ export function AccountsScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{
-          padding: spacing.md,
-          paddingHorizontal: spacing.md,
+          padding: spacing.lg,
+          paddingHorizontal: spacing.xl,
           paddingBottom: 100,
           width: '100%',
-          maxWidth: 960,
-          alignSelf: 'center',
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -267,241 +266,113 @@ export function AccountsScreen() {
           onAddAccount={() => setAddSheetVisible(true)}
         />
 
-        {/* Net Worth & Assets Hub Switcher */}
-        <View
-          style={{
-            flexDirection: 'row',
-            backgroundColor: colors.surfaceSubtle,
-            borderRadius: radii.full,
-            padding: 3,
-            marginBottom: spacing.md,
-            borderWidth: 1,
-            borderColor: colors.borderSubtle,
-          }}
-        >
-          {[
-            { id: 'accounts', label: 'Bank & Cash Accounts' },
-            { id: 'investments', label: 'Investments & Portfolios' },
-          ].map((tab) => {
-            const isActive = accountViewTab === tab.id;
-            return (
+        {/* Simplicity: All Accounts pill + Filter icon button */}
+        <View style={[styles.filterBar, { marginBottom: spacing.lg }]}>
+          <TouchableOpacity
+            onPress={() => setFilterModalVisible(true)}
+            activeOpacity={0.7}
+            style={[
+              styles.filterPill,
+              {
+                backgroundColor: activeFilter === 'all' ? colors.primaryLight : colors.primary,
+                borderColor: colors.primary,
+                borderRadius: radii.full,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.xs + 3,
+                marginRight: spacing.xs + 2,
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: activeFilter === 'all' ? colors.primary : '#FFFFFF',
+                fontFamily: typography.fonts.medium,
+                fontSize: typography.sizes.sm,
+              }}
+            >
+              {activeFilterDef.label}
+            </Text>
+            {activeFilter !== 'all' && (
               <TouchableOpacity
-                key={tab.id}
-                onPress={() => setAccountViewTab(tab.id as any)}
-                activeOpacity={0.7}
-                style={{
-                  flex: 1,
-                  paddingVertical: 7,
-                  borderRadius: radii.full,
-                  backgroundColor: isActive ? colors.surface : 'transparent',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  shadowColor: isActive ? '#000000' : 'transparent',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: isActive ? 0.08 : 0,
-                  shadowRadius: 2,
-                  elevation: isActive ? 1 : 0,
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setActiveFilter('all');
                 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ marginLeft: 6 }}
               >
-                <Text
-                  style={{
-                    color: isActive ? colors.primary : colors.textSecondary,
-                    fontFamily: isActive ? typography.fonts.semiBold : typography.fonts.medium,
-                    fontSize: 12,
-                  }}
-                >
-                  {tab.label}
-                </Text>
+                <X size={13} color="#FFFFFF" />
               </TouchableOpacity>
-            );
-          })}
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setFilterModalVisible(true)}
+            activeOpacity={0.7}
+            style={[
+              styles.filterIconBtn,
+              {
+                backgroundColor: activeFilter !== 'all' ? colors.primaryLight : colors.surfaceSubtle,
+                borderColor: activeFilter !== 'all' ? colors.primary : colors.border,
+                borderRadius: radii.full,
+                padding: spacing.xs + 4,
+              },
+            ]}
+          >
+            <SlidersHorizontal
+              size={15}
+              color={activeFilter !== 'all' ? colors.primary : colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
 
-        {accountViewTab === 'investments' ? (
-          <InvestmentsScreen showHeader={false} />
-        ) : (
-          <View>
-            {/* Simplicity: All Accounts pill + Filter icon button */}
-            <View style={[styles.filterBar, { marginBottom: spacing.lg }]}>
-              <TouchableOpacity
-                onPress={() => setFilterModalVisible(true)}
-                activeOpacity={0.7}
-                style={[
-                  styles.filterPill,
-                  {
-                    backgroundColor: activeFilter === 'all' ? colors.primaryLight : colors.primary,
-                    borderColor: colors.primary,
-                    borderRadius: radii.full,
-                    paddingHorizontal: spacing.md,
-                    paddingVertical: spacing.xs + 3,
-                    marginRight: spacing.xs + 2,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: activeFilter === 'all' ? colors.primary : '#FFFFFF',
-                    fontFamily: typography.fonts.medium,
-                    fontSize: typography.sizes.sm,
-                  }}
-                >
-                  {activeFilterDef.label}
-                </Text>
-                {activeFilter !== 'all' && (
-                  <TouchableOpacity
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setActiveFilter('all');
-                    }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={{ marginLeft: 6 }}
-                  >
-                    <X size={13} color="#FFFFFF" />
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
+        {/* Grouped Purposeful Account Cards */}
+        {groupedSections.map((sec) => (
+          <View key={sec.key} style={[styles.section, { marginBottom: spacing.lg }]}>
+            <Text
+              style={[
+                styles.sectionHeader,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fonts.semiBold,
+                  fontSize: typography.sizes.sm,
+                  marginBottom: spacing.xs,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                },
+              ]}
+            >
+              {sec.title}
+            </Text>
 
-              <TouchableOpacity
-                onPress={() => setFilterModalVisible(true)}
-                activeOpacity={0.7}
-                style={[
-                  styles.filterIconBtn,
-                  {
-                    backgroundColor: activeFilter !== 'all' ? colors.primaryLight : colors.surfaceSubtle,
-                    borderColor: activeFilter !== 'all' ? colors.primary : colors.border,
-                    borderRadius: radii.full,
-                    padding: spacing.xs + 4,
-                  },
-                ]}
-              >
-                <SlidersHorizontal
-                  size={15}
-                  color={activeFilter !== 'all' ? colors.primary : colors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Grouped Purposeful Account Cards */}
-            {groupedSections.map((sec) => (
-              <View key={sec.key} style={[styles.section, { marginBottom: spacing.lg }]}>
-                <Text
-                  style={[
-                    styles.sectionHeader,
-                    {
-                      color: colors.textSecondary,
-                      fontFamily: typography.fonts.semiBold,
-                      fontSize: typography.sizes.sm,
-                      marginBottom: spacing.xs,
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.5,
-                    },
-                  ]}
-                >
-                  {sec.title}
-                </Text>
-
-                <View
-                  style={[
-                    styles.cardContainer,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                      borderRadius: radii.xl,
-                    },
-                  ]}
-                >
-                  {sec.items.map((acc) => (
-                    <AccountCardRow
-                      key={acc.id}
-                      account={acc}
-                      privacyMode={privacyMode}
-                      onPress={() => {
-                        if (acc.category === 'investment') {
-                          setSelectedAccount(acc);
-                          setUpdateValueVisible(true);
-                        } else {
-                          router.push(`/accounts/${acc.id}` as any);
-                        }
-                      }}
-                    />
-                  ))}
-                </View>
-              </View>
-            ))}
-
-            {/* Empty state when no accounts exist */}
-            {accounts.length === 0 && (
-              <View
-                style={{
+            <View
+              style={[
+                styles.cardContainer,
+                {
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
-                  borderWidth: 1,
                   borderRadius: radii.xl,
-                  padding: spacing.xl,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginTop: spacing.md,
-                }}
-              >
-                <View
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: radii.full,
-                    backgroundColor: colors.primaryLight,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: spacing.md,
+                },
+              ]}
+            >
+              {sec.items.map((acc) => (
+                <AccountCardRow
+                  key={acc.id}
+                  account={acc}
+                  privacyMode={privacyMode}
+                  onPress={() => {
+                    if (acc.category === 'investment') {
+                      setSelectedAccount(acc);
+                      setUpdateValueVisible(true);
+                    } else {
+                      router.push(`/accounts/${acc.id}` as any);
+                    }
                   }}
-                >
-                  <Landmark size={24} color={colors.primary} />
-                </View>
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontFamily: typography.fonts.semiBold,
-                    fontSize: typography.sizes.md,
-                    marginBottom: spacing.xs,
-                  }}
-                >
-                  No accounts added yet
-                </Text>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontFamily: typography.fonts.regular,
-                    fontSize: typography.sizes.bodySm,
-                    textAlign: 'center',
-                    marginBottom: spacing.lg,
-                    maxWidth: 320,
-                  }}
-                >
-                  Add your bank accounts, cash wallets, cards, and investments to organize your financial life.
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setAddSheetVisible(true)}
-                  activeOpacity={0.8}
-                  style={{
-                    backgroundColor: colors.primary,
-                    borderRadius: radii.lg,
-                    paddingHorizontal: spacing.lg,
-                    paddingVertical: spacing.sm + 2,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: '#FFFFFF',
-                      fontFamily: typography.fonts.medium,
-                      fontSize: typography.sizes.bodySm,
-                    }}
-                  >
-                    + Add Account
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+                />
+              ))}
+            </View>
           </View>
-        )}
+        ))}
       </ScrollView>
 
       {/* Filter by Purpose Modal Sheet */}

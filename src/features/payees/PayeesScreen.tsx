@@ -21,7 +21,43 @@ export function PayeesScreen() {
   const { repo, payees: dbPayees, categories: dbCategories } = useDatabaseData();
 
   const [search, setSearch] = useState('');
-  const [localPayees, setLocalPayees] = useState<PayeeItem[]>([]);
+  const [localPayees, setLocalPayees] = useState<PayeeItem[]>([
+    {
+      id: 'pay-1',
+      name: 'Shoprite Lekki Mall',
+      defaultCategory: 'Groceries',
+      matchPattern: 'SHOPRITE',
+      txCount: 18,
+    },
+    {
+      id: 'pay-2',
+      name: 'Uber Nigeria',
+      defaultCategory: 'Transport & Fuel',
+      matchPattern: 'UBER *TRIP',
+      txCount: 24,
+    },
+    {
+      id: 'pay-3',
+      name: 'TotalEnergies Victoria Island',
+      defaultCategory: 'Transport & Fuel',
+      matchPattern: 'TOTALENERGIES',
+      txCount: 12,
+    },
+    {
+      id: 'pay-4',
+      name: 'Ikeja Electric Prepaid',
+      defaultCategory: 'Utilities',
+      matchPattern: 'IKEDC',
+      txCount: 10,
+    },
+    {
+      id: 'pay-5',
+      name: 'Netflix Services',
+      defaultCategory: 'Entertainment',
+      matchPattern: 'NETFLIX',
+      txCount: 8,
+    },
+  ]);
 
   const payees: PayeeItem[] = React.useMemo(() => {
     if (dbPayees.length > 0) {
@@ -199,45 +235,6 @@ export function PayeesScreen() {
             </View>
           </TouchableOpacity>
         ))}
-
-        {filtered.length === 0 && (
-          <View
-            style={[
-              styles.payeeCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radii.xl,
-                padding: spacing.xl,
-                alignItems: 'center',
-                marginTop: spacing.md,
-              },
-            ]}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: typography.sizes.md,
-                marginBottom: spacing.xs,
-              }}
-            >
-              {search ? 'No payees match your search' : 'No payees found yet'}
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.bodySm,
-                textAlign: 'center',
-              }}
-            >
-              {search
-                ? 'Try a different merchant name or check your spelling.'
-                : 'As you record expenses and deposits, your merchants and counterparties will automatically appear here.'}
-            </Text>
-          </View>
-        )}
       </ScrollView>
 
       {/* Sheets */}

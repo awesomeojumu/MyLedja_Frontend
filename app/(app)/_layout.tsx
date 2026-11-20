@@ -7,7 +7,6 @@ import {
   Receipt,
   PieChart,
   Landmark,
-  BarChart3,
   LayoutGrid,
 } from 'lucide-react-native';
 
@@ -124,7 +123,7 @@ export default function AppLayout() {
         <Tabs.Screen
           name="budget"
           options={{
-            title: 'Planning',
+            title: 'Budget',
             tabBarIcon: ({ color }) => <PieChart size={20} color={color} strokeWidth={2} />,
           }}
         />
@@ -136,13 +135,12 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
-          name="reports"
+          name="more"
           options={{
-            title: 'Analytics',
-            tabBarIcon: ({ color }) => <BarChart3 size={20} color={color} strokeWidth={2} />,
+            title: 'More',
+            tabBarIcon: ({ color }) => <LayoutGrid size={20} color={color} strokeWidth={2} />,
           }}
         />
-        <Tabs.Screen name="more" options={{ title: 'More', tabBarItemStyle: { display: 'none' } }} />
         <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarItemStyle: { display: 'none' } }} />
         <Tabs.Screen name="cash-flow" options={{ title: 'Cash Flow', tabBarItemStyle: { display: 'none' } }} />
         <Tabs.Screen name="health" options={{ title: 'Health Score', tabBarItemStyle: { display: 'none' } }} />
@@ -153,6 +151,7 @@ export default function AppLayout() {
         <Tabs.Screen name="notifications" options={{ title: 'Notifications', tabBarItemStyle: { display: 'none' } }} />
         <Tabs.Screen name="payees" options={{ title: 'Payees', tabBarItemStyle: { display: 'none' } }} />
         <Tabs.Screen name="plan" options={{ title: 'Plan', tabBarItemStyle: { display: 'none' } }} />
+        <Tabs.Screen name="reports" options={{ title: 'Reports', tabBarItemStyle: { display: 'none' } }} />
         <Tabs.Screen name="rules" options={{ title: 'Rules', tabBarItemStyle: { display: 'none' } }} />
       </Tabs>
     </View>

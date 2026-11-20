@@ -24,11 +24,7 @@ interface GoalItemUI {
   targetDate?: string;
 }
 
-export interface GoalsScreenProps {
-  showHeader?: boolean;
-}
-
-export function GoalsScreen({ showHeader = true }: GoalsScreenProps = {}) {
+export function GoalsScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
@@ -36,7 +32,29 @@ export function GoalsScreen({ showHeader = true }: GoalsScreenProps = {}) {
   const { repo, goals: dbGoals, accounts: dbAccounts } = useDatabaseData();
 
   // State
-  const [localGoals, setLocalGoals] = useState<GoalItemUI[]>([]);
+  const [localGoals, setLocalGoals] = useState<GoalItemUI[]>([
+    {
+      id: 'g-1',
+      name: 'Emergency Fund Vault (6 Months)',
+      targetMinor: 300000000n, // ₦3,000,000.00
+      currentMinor: 185000000n, // ₦1,850,000.00
+      targetDate: '31 Mar 2027',
+    },
+    {
+      id: 'g-2',
+      name: 'Annual Apartment Rent Advance',
+      targetMinor: 150000000n, // ₦1,500,000.00
+      currentMinor: 95000000n,  // ₦950,000.00
+      targetDate: '30 Jun 2027',
+    },
+    {
+      id: 'g-3',
+      name: 'MacBook Pro M4 Workstation',
+      targetMinor: 280000000n, // ₦2,800,000.00
+      currentMinor: 220000000n, // ₦2,200,000.00
+      targetDate: '15 Dec 2026',
+    },
+  ]);
 
   const goals: GoalItemUI[] = React.useMemo(() => {
     if (dbGoals.length > 0) {
@@ -116,99 +134,76 @@ export function GoalsScreen({ showHeader = true }: GoalsScreenProps = {}) {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
-      {showHeader && (
-        <View
-          style={[
-            styles.headerBar,
-            {
-              borderBottomColor: colors.borderSubtle,
-              paddingHorizontal: spacing.lg,
-              paddingVertical: spacing.md,
-            },
-          ]}
+      <View
+        style={[
+          styles.headerBar,
+          {
+            borderBottomColor: colors.borderSubtle,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backBtn, { padding: spacing.xs }]}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backBtn, { padding: spacing.xs }]}
-          >
-            <ArrowLeft size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={{ flex: 1, marginLeft: spacing.sm }}>
-            <Text
-              style={[
-                styles.screenTitle,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: typography.sizes.lg,
-                },
-              ]}
-            >
-              Savings Goals
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.xs,
-              }}
-            >
-              Target Funds & Vaults
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            onPress={() => setCreateSheetVisible(true)}
+          <ArrowLeft size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text
             style={[
-              styles.addBtn,
+              styles.screenTitle,
               {
-                backgroundColor: colors.primary,
-                borderRadius: radii.full,
-                paddingHorizontal: spacing.sm,
-                paddingVertical: 4,
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.lg,
               },
             ]}
           >
-            <Plus size={14} color="#FFFFFF" />
-            <Text
-              style={{
-                color: '#FFFFFF',
-                fontFamily: typography.fonts.medium,
-                fontSize: 12,
-                marginLeft: 4,
-              }}
-            >
-              New Goal
-            </Text>
-          </TouchableOpacity>
+            Savings Goals
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+            }}
+          >
+            Target Funds & Vaults
+          </Text>
         </View>
-      )}
+
+        <TouchableOpacity
+          onPress={() => setCreateSheetVisible(true)}
+          style={[
+            styles.addBtn,
+            {
+              backgroundColor: colors.primary,
+              borderRadius: radii.full,
+              paddingHorizontal: spacing.sm,
+              paddingVertical: 4,
+            },
+          ]}
+        >
+          <Plus size={14} color="#FFFFFF" />
+          <Text
+            style={{
+              color: '#FFFFFF',
+              fontFamily: typography.fonts.medium,
+              fontSize: 12,
+              marginLeft: 4,
+            }}
+          >
+            New Goal
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { padding: showHeader ? spacing.lg : 0, paddingBottom: 60 }]}
+        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
         showsVerticalScrollIndicator={false}
       >
-        {!showHeader && (
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: spacing.sm }}>
-            <TouchableOpacity
-              onPress={() => setCreateSheetVisible(true)}
-              style={[
-                styles.addBtn,
-                {
-                  backgroundColor: colors.primary,
-                  borderRadius: radii.full,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: 6,
-                },
-              ]}
-            >
-              <Plus size={14} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontFamily: typography.fonts.medium, fontSize: 12, marginLeft: 4 }}>
-                New Goal
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
         {/* Total Goals Hero Card */}
         <View
           style={[
@@ -471,67 +466,6 @@ export function GoalsScreen({ showHeader = true }: GoalsScreenProps = {}) {
             </View>
           );
         })}
-
-        {goals.length === 0 && (
-          <View
-            style={[
-              styles.goalCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radii.xl,
-                padding: spacing.xl,
-                alignItems: 'center',
-                marginTop: spacing.md,
-              },
-            ]}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: typography.sizes.md,
-                marginBottom: spacing.xs,
-              }}
-            >
-              No savings goals created yet
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.bodySm,
-                textAlign: 'center',
-                marginBottom: spacing.md,
-              }}
-            >
-              Set targets for emergency funds, rent advances, vacation travel, or gadgets.
-            </Text>
-            <TouchableOpacity
-              onPress={() => setCreateSheetVisible(true)}
-              activeOpacity={0.8}
-              style={[
-                styles.addBtn,
-                {
-                  backgroundColor: colors.primary,
-                  borderRadius: radii.lg,
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.sm + 2,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: '#FFFFFF',
-                  fontFamily: typography.fonts.medium,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                + Create Savings Goal
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </ScrollView>
 
       {/* Sheets */}

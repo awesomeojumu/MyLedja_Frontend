@@ -607,14 +607,7 @@ export function NetAssetsHero({
   const activeTrend =
     activeCategoryTrajectory.ranges[selectedRange] ??
     activeCategoryTrajectory.ranges['1M'];
-  const isZeroState = totalAssetsMinor === 0n && totalLiabilitiesMinor === 0n;
-
-  const points = isZeroState
-    ? [
-        { date: 'Today', amountMinor: 0n },
-        { date: 'Now', amountMinor: 0n },
-      ]
-    : activeTrend.points;
+  const points = activeTrend.points;
 
   const currentPoint =
     activePointIndex !== null && points[activePointIndex]
@@ -667,18 +660,14 @@ export function NetAssetsHero({
       : coords[coords.length - 1]!;
 
   const netWorthMinor = totalAssetsMinor - totalLiabilitiesMinor;
-  const displayedAmount = isZeroState
-    ? 0n
-    : activeFilter === 'all'
-    ? activePointIndex !== null
+  const displayedAmount =
+    activeFilter === 'all'
+      ? activePointIndex !== null
+        ? currentPoint.amountMinor
+        : netWorthMinor
+      : activePointIndex !== null
       ? currentPoint.amountMinor
-      : netWorthMinor
-    : activePointIndex !== null
-    ? currentPoint.amountMinor
-    : totalAssetsMinor;
-
-  const displayPercent = isZeroState ? '0.0%' : activeTrend.percent;
-  const displayDeltaMinor = isZeroState ? 0n : activeTrend.deltaMinor;
+      : currentPoint.amountMinor;
 
   const strokeColor =
     activeFilter === 'liability' ? colors.statusDanger : colors.primary;
@@ -769,7 +758,7 @@ export function NetAssetsHero({
             style={[
               styles.badge,
               {
-                backgroundColor: (isZeroState || activeTrend.isPositive)
+                backgroundColor: activeTrend.isPositive
                   ? colors.statusSuccessLight
                   : colors.statusDangerLight,
                 borderRadius: radii.full,
@@ -777,7 +766,7 @@ export function NetAssetsHero({
               },
             ]}
           >
-            {(isZeroState || activeTrend.isPositive) ? (
+            {activeTrend.isPositive ? (
               <TrendingUp size={12} color={colors.statusSuccess} />
             ) : (
               <TrendingDown size={12} color={colors.statusDanger} />
@@ -786,14 +775,14 @@ export function NetAssetsHero({
               style={[
                 styles.badgeText,
                 {
-                  color: (isZeroState || activeTrend.isPositive) ? colors.statusSuccess : colors.statusDanger,
+                  color: activeTrend.isPositive ? colors.statusSuccess : colors.statusDanger,
                   fontFamily: typography.fonts.semiBold,
                   fontSize: 11,
                   marginLeft: 2,
                 },
               ]}
             >
-              {displayPercent}
+              {activeTrend.percent}
             </Text>
           </View>
         </View>

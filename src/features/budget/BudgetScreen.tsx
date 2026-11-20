@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useTheme } from '../../design';
 import { useResponsive } from '../../design/size';
 import { Toast } from '../../design/components/Toast';
@@ -12,9 +12,6 @@ import { CategoryBudgetsSheet } from './CategoryBudgetsSheet';
 import { MonthBudgetSetupSheet, type MonthBudgetConfig, type ExpectedEarmark } from './MonthBudgetSetupSheet';
 import { IncomeProgressCard, type IncomeStreamItem } from './IncomeProgressCard';
 import { EditIncomeBudgetSheet, type IncomeCategoryConfig } from './EditIncomeBudgetSheet';
-import { PlanScreen } from '../plan/PlanScreen';
-import { DebtsScreen } from '../debts/DebtsScreen';
-import { GoalsScreen } from '../goals/GoalsScreen';
 import { useFinancialRules } from '../rules/RulesContext';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
 import { STANDARD_FRAMEWORK_PRESETS } from '../../data/rulesModel';
@@ -42,7 +39,6 @@ export function BudgetScreen() {
   } = useCategoryPreferences();
 
   const [currentMonth, setCurrentMonth] = useState('November 2026');
-  const [planningTab, setPlanningTab] = useState<'envelopes' | 'bills' | 'debts' | 'goals'>('envelopes');
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
 
@@ -615,123 +611,57 @@ export function BudgetScreen() {
           onOpenIncomeBudget={() => setIncomeBudgetVisible(true)}
         />
 
-        {/* Planning Hub Unified Segmented Switcher */}
-        <View
-          style={{
-            flexDirection: 'row',
-            backgroundColor: colors.surfaceSubtle,
-            borderRadius: radii.full,
-            padding: 3,
-            marginVertical: spacing.md,
-            borderWidth: 1,
-            borderColor: colors.borderSubtle,
-          }}
-        >
-          {[
-            { id: 'envelopes', label: 'Envelopes' },
-            { id: 'bills', label: 'Bills & Plans' },
-            { id: 'debts', label: 'Debts & Loans' },
-            { id: 'goals', label: 'Savings Goals' },
-          ].map((tab) => {
-            const isActive = planningTab === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                onPress={() => setPlanningTab(tab.id as any)}
-                activeOpacity={0.7}
-                style={{
-                  flex: 1,
-                  paddingVertical: 7,
-                  borderRadius: radii.full,
-                  backgroundColor: isActive ? colors.surface : 'transparent',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  shadowColor: isActive ? '#000000' : 'transparent',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: isActive ? 0.08 : 0,
-                  shadowRadius: 2,
-                  elevation: isActive ? 1 : 0,
-                }}
+        {/* 2. Expected Income Streams Card (Collapsible) */}
+        <IncomeProgressCard
+          streams={incomeStreams}
+          totalExpectedMinor={currentConfig.expectedIncomeMinor}
+          totalReceivedMinor={totalIncomeReceivedMinor}
+          onOpenEditIncome={() => setIncomeBudgetVisible(true)}
+        />
+
+        {/* 3. Grouped Category Envelopes (Directly organized by active monthly framework pillars) */}
+        {groups.map(([groupName, groupEnvelopes]) => (
+          <View key={groupName} style={[styles.groupSection, { marginBottom: spacing.md }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Text
+                style={[
+                  styles.groupTitle,
+                  {
+                    color: colors.textSecondary,
+                    fontFamily: typography.fonts.semiBold,
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  },
+                ]}
               >
-                <Text
-                  style={{
-                    color: isActive ? colors.primary : colors.textSecondary,
-                    fontFamily: isActive ? typography.fonts.semiBold : typography.fonts.medium,
-                    fontSize: 11.5,
+                {groupName}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.groupCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.lg,
+                },
+              ]}
+            >
+              {groupEnvelopes.map((env) => (
+                <CategoryEnvelopeRow
+                  key={env.id}
+                  envelope={env}
+                  onPress={() => {
+                    setSelectedEnvelope(env);
+                    setEditLimitVisible(true);
                   }}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Tab 1: Category Envelopes */}
-        {planningTab === 'envelopes' && (
-          <View>
-            {/* 2. Expected Income Streams Card (Collapsible) */}
-            <IncomeProgressCard
-              streams={incomeStreams}
-              totalExpectedMinor={currentConfig.expectedIncomeMinor}
-              totalReceivedMinor={totalIncomeReceivedMinor}
-              onOpenEditIncome={() => setIncomeBudgetVisible(true)}
-            />
-
-            {/* 3. Grouped Category Envelopes (Directly organized by active monthly framework pillars) */}
-            {groups.map(([groupName, groupEnvelopes]) => (
-              <View key={groupName} style={[styles.groupSection, { marginBottom: spacing.md }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <Text
-                    style={[
-                      styles.groupTitle,
-                      {
-                        color: colors.textSecondary,
-                        fontFamily: typography.fonts.semiBold,
-                        fontSize: 11,
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                      },
-                    ]}
-                  >
-                    {groupName}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.groupCard,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.borderSubtle,
-                      borderRadius: radii.lg,
-                    },
-                  ]}
-                >
-                  {groupEnvelopes.map((env) => (
-                    <CategoryEnvelopeRow
-                      key={env.id}
-                      envelope={env}
-                      onPress={() => {
-                        setSelectedEnvelope(env);
-                        setEditLimitVisible(true);
-                      }}
-                    />
-                  ))}
-                </View>
-              </View>
-            ))}
+                />
+              ))}
+            </View>
           </View>
-        )}
-
-        {/* Tab 2: Bills & Recurring Plans */}
-        {planningTab === 'bills' && <PlanScreen showHeader={false} />}
-
-        {/* Tab 3: Debts & Loans */}
-        {planningTab === 'debts' && <DebtsScreen showHeader={false} />}
-
-        {/* Tab 4: Savings Goals */}
-        {planningTab === 'goals' && <GoalsScreen showHeader={false} />}
+        ))}
       </ScrollView>
 
       {/* Popups & Sheets */}

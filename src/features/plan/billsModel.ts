@@ -79,14 +79,14 @@ export function getMonthlyEquivalentMinor(bill: RecurringBillItem): bigint {
   }
 }
 
-/** Load bills from persistent KV storage or fallback to empty */
+/** Load bills from persistent KV storage or fallback to defaults */
 export async function loadBillsFromStorage(): Promise<RecurringBillItem[]> {
   try {
     const kv = openKeyValue('myledja');
     const stored = await kv.get(STORAGE_KEY_RECURRING_BILLS);
-    if (stored !== null && stored !== undefined) {
+    if (stored) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
+      if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed.map((item: any) => ({
           id: item.id,
           name: item.name,
@@ -102,7 +102,7 @@ export async function loadBillsFromStorage(): Promise<RecurringBillItem[]> {
   } catch (err) {
     console.warn('Failed to load recurring bills from KV', err);
   }
-  return [];
+  return DEFAULT_RECURRING_BILLS;
 }
 
 /** Save bills to persistent KV storage */

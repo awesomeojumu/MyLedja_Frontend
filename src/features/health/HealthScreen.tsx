@@ -26,11 +26,7 @@ interface Pillar {
   recommendation: string;
 }
 
-export interface HealthScreenProps {
-  showHeader?: boolean;
-}
-
-export function HealthScreen({ showHeader = true }: HealthScreenProps = {}) {
+export function HealthScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
@@ -105,64 +101,62 @@ export function HealthScreen({ showHeader = true }: HealthScreenProps = {}) {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
-      {showHeader && (
-        <View
-          style={[
-            styles.headerBar,
-            {
-              borderBottomColor: colors.borderSubtle,
-              paddingHorizontal: spacing.lg,
-              paddingVertical: spacing.md,
-            },
-          ]}
+      <View
+        style={[
+          styles.headerBar,
+          {
+            borderBottomColor: colors.borderSubtle,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backBtn, { padding: spacing.xs }]}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backBtn, { padding: spacing.xs }]}
-          >
-            <ArrowLeft size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={{ flex: 1, marginLeft: spacing.sm }}>
-            <Text
-              style={[
-                styles.screenTitle,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: typography.sizes.lg,
-                },
-              ]}
-            >
-              Financial Health
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.xs,
-              }}
-            >
-              Vulnerability & Resilience Score
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => setShareVisible(true)}
+          <ArrowLeft size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text
             style={[
-              styles.shareBtn,
+              styles.screenTitle,
               {
-                backgroundColor: colors.surfaceSubtle,
-                borderRadius: radii.full,
-                padding: spacing.xs,
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.lg,
               },
             ]}
           >
-            <Share2 size={18} color={colors.textPrimary} />
-          </TouchableOpacity>
+            Financial Health
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+            }}
+          >
+            Vulnerability & Resilience Score
+          </Text>
         </View>
-      )}
+        <TouchableOpacity
+          onPress={() => setShareVisible(true)}
+          style={[
+            styles.shareBtn,
+            {
+              backgroundColor: colors.surfaceSubtle,
+              borderRadius: radii.full,
+              padding: spacing.xs,
+            },
+          ]}
+        >
+          <Share2 size={18} color={colors.textPrimary} />
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { padding: showHeader ? spacing.lg : 0, paddingBottom: 60 }]}
+        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Score Ring Hero */}

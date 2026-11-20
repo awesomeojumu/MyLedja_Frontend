@@ -25,11 +25,7 @@ interface HoldingItemUI {
   currentPriceMinor: bigint;
 }
 
-export interface InvestmentsScreenProps {
-  showHeader?: boolean;
-}
-
-export function InvestmentsScreen({ showHeader = true }: InvestmentsScreenProps = {}) {
+export function InvestmentsScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
@@ -37,7 +33,32 @@ export function InvestmentsScreen({ showHeader = true }: InvestmentsScreenProps 
   const { repo, holdings: dbHoldings, accounts: dbAccounts } = useDatabaseData();
 
   // State
-  const [localHoldings, setLocalHoldings] = useState<HoldingItemUI[]>([]);
+  const [localHoldings, setLocalHoldings] = useState<HoldingItemUI[]>([
+    {
+      id: 'h-1',
+      ticker: 'MTNN',
+      name: 'MTN Nigeria Plc',
+      units: 4500,
+      avgCostMinor: 22000n, // ₦220.00
+      currentPriceMinor: 27500n, // ₦275.00
+    },
+    {
+      id: 'h-2',
+      ticker: 'GTCO',
+      name: 'Guaranty Trust Holding Co',
+      units: 12000,
+      avgCostMinor: 3800n, // ₦38.00
+      currentPriceMinor: 4950n, // ₦49.50
+    },
+    {
+      id: 'h-3',
+      ticker: 'AIRTELAFRI',
+      name: 'Airtel Africa Plc',
+      units: 800,
+      avgCostMinor: 185000n, // ₦1,850.00
+      currentPriceMinor: 215000n, // ₦2,150.00
+    },
+  ]);
 
   const holdings: HoldingItemUI[] = React.useMemo(() => {
     if (dbHoldings.length > 0) {
@@ -139,134 +160,91 @@ export function InvestmentsScreen({ showHeader = true }: InvestmentsScreenProps 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Top Header */}
-      {showHeader && (
-        <View
+      <View
+        style={[
+          styles.headerBar,
+          {
+            borderBottomColor: colors.borderSubtle,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backBtn, { padding: spacing.xs }]}
+        >
+          <ArrowLeft size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text
+            style={[
+              styles.screenTitle,
+              {
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.lg,
+              },
+            ]}
+          >
+            Investments Portfolio
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+            }}
+          >
+            Equities & Asset Holdings
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => setPriceSheetVisible(true)}
           style={[
-            styles.headerBar,
+            styles.headerIconBtn,
             {
-              borderBottomColor: colors.borderSubtle,
-              paddingHorizontal: spacing.lg,
-              paddingVertical: spacing.md,
+              backgroundColor: colors.surfaceSubtle,
+              borderRadius: radii.full,
+              padding: spacing.xs,
+              marginRight: spacing.xs,
             },
           ]}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backBtn, { padding: spacing.xs }]}
-          >
-            <ArrowLeft size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={{ flex: 1, marginLeft: spacing.sm }}>
-            <Text
-              style={[
-                styles.screenTitle,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: typography.sizes.lg,
-                },
-              ]}
-            >
-              Investments Portfolio
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.xs,
-              }}
-            >
-              Equities & Asset Holdings
-            </Text>
-          </View>
+          <RefreshCw size={16} color={colors.primary} />
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => setPriceSheetVisible(true)}
-            style={[
-              styles.headerIconBtn,
-              {
-                backgroundColor: colors.surfaceSubtle,
-                borderRadius: radii.full,
-                padding: spacing.xs,
-                marginRight: spacing.xs,
-              },
-            ]}
+        <TouchableOpacity
+          onPress={() => setTradeSheetVisible(true)}
+          style={[
+            styles.addBtn,
+            {
+              backgroundColor: colors.primary,
+              borderRadius: radii.full,
+              paddingHorizontal: spacing.sm,
+              paddingVertical: 4,
+            },
+          ]}
+        >
+          <Plus size={14} color="#FFFFFF" />
+          <Text
+            style={{
+              color: '#FFFFFF',
+              fontFamily: typography.fonts.medium,
+              fontSize: 12,
+              marginLeft: 4,
+            }}
           >
-            <RefreshCw size={16} color={colors.primary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setTradeSheetVisible(true)}
-            style={[
-              styles.addBtn,
-              {
-                backgroundColor: colors.primary,
-                borderRadius: radii.full,
-                paddingHorizontal: spacing.sm,
-                paddingVertical: 4,
-              },
-            ]}
-          >
-            <Plus size={14} color="#FFFFFF" />
-            <Text
-              style={{
-                color: '#FFFFFF',
-                fontFamily: typography.fonts.medium,
-                fontSize: 12,
-                marginLeft: 4,
-              }}
-            >
-              Record Trade
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+            Record Trade
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { padding: showHeader ? spacing.lg : 0, paddingBottom: 60 }]}
+        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
         showsVerticalScrollIndicator={false}
       >
-        {!showHeader && (
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: spacing.sm, gap: spacing.xs }}>
-            <TouchableOpacity
-              onPress={() => setPriceSheetVisible(true)}
-              style={[
-                styles.headerIconBtn,
-                {
-                  backgroundColor: colors.surfaceSubtle,
-                  borderRadius: radii.full,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: 6,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                },
-              ]}
-            >
-              <RefreshCw size={14} color={colors.primary} />
-              <Text style={{ color: colors.primary, fontSize: 12, fontFamily: typography.fonts.medium, marginLeft: 4 }}>
-                Update Prices
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setTradeSheetVisible(true)}
-              style={[
-                styles.addBtn,
-                {
-                  backgroundColor: colors.primary,
-                  borderRadius: radii.full,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: 6,
-                },
-              ]}
-            >
-              <Plus size={14} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontFamily: typography.fonts.medium, fontSize: 12, marginLeft: 4 }}>
-                Record Trade
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
         {/* Portfolio Value Hero Card */}
         <View
           style={[
@@ -450,67 +428,6 @@ export function InvestmentsScreen({ showHeader = true }: InvestmentsScreenProps 
             </TouchableOpacity>
           );
         })}
-
-        {holdings.length === 0 && (
-          <View
-            style={[
-              styles.holdingCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radii.xl,
-                padding: spacing.xl,
-                alignItems: 'center',
-                marginTop: spacing.md,
-              },
-            ]}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: typography.sizes.md,
-                marginBottom: spacing.xs,
-              }}
-            >
-              No investment holdings yet
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.bodySm,
-                textAlign: 'center',
-                marginBottom: spacing.md,
-              }}
-            >
-              Track your NGX stocks, US equities, mutual funds, Eurobonds, and real estate assets.
-            </Text>
-            <TouchableOpacity
-              onPress={() => setTradeSheetVisible(true)}
-              activeOpacity={0.8}
-              style={[
-                styles.addBtn,
-                {
-                  backgroundColor: colors.primary,
-                  borderRadius: radii.lg,
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.sm + 2,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: '#FFFFFF',
-                  fontFamily: typography.fonts.medium,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                + Record Trade / Asset
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </ScrollView>
 
       {/* Sheets */}

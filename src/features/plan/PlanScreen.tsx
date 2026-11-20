@@ -27,11 +27,7 @@ import {
 } from './billsModel';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
-export interface PlanScreenProps {
-  showHeader?: boolean;
-}
-
-export function PlanScreen({ showHeader = true }: PlanScreenProps = {}) {
+export function PlanScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
@@ -39,7 +35,7 @@ export function PlanScreen({ showHeader = true }: PlanScreenProps = {}) {
   const { repo, accounts, categories } = useDatabaseData();
 
   // State
-  const [bills, setBills] = useState<RecurringBillItem[]>([]);
+  const [bills, setBills] = useState<RecurringBillItem[]>(DEFAULT_RECURRING_BILLS);
   const [loading, setLoading] = useState(true);
 
   // Sheets
@@ -122,134 +118,91 @@ export function PlanScreen({ showHeader = true }: PlanScreenProps = {}) {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Top Header */}
-      {showHeader && (
-        <View
+      <View
+        style={[
+          styles.headerBar,
+          {
+            borderBottomColor: colors.borderSubtle,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backBtn, { padding: spacing.xs }]}
+        >
+          <ArrowLeft size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text
+            style={[
+              styles.screenTitle,
+              {
+                color: colors.textPrimary,
+                fontFamily: typography.fonts.semiBold,
+                fontSize: typography.sizes.lg,
+              },
+            ]}
+          >
+            Bills & Recurring Plan
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fonts.regular,
+              fontSize: typography.sizes.xs,
+            }}
+          >
+            November 2026 Scheduled Outflows
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => setSuggestSheetVisible(true)}
           style={[
-            styles.headerBar,
+            styles.headerIconBtn,
             {
-              borderBottomColor: colors.borderSubtle,
-              paddingHorizontal: spacing.lg,
-              paddingVertical: spacing.md,
+              backgroundColor: colors.surfaceSubtle,
+              borderRadius: radii.full,
+              padding: spacing.xs,
+              marginRight: spacing.xs,
             },
           ]}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backBtn, { padding: spacing.xs }]}
-          >
-            <ArrowLeft size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={{ flex: 1, marginLeft: spacing.sm }}>
-            <Text
-              style={[
-                styles.screenTitle,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: typography.sizes.lg,
-                },
-              ]}
-            >
-              Bills & Recurring Plan
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.xs,
-              }}
-            >
-              November 2026 Scheduled Outflows
-            </Text>
-          </View>
+          <Sparkles size={16} color={colors.primary} />
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => setSuggestSheetVisible(true)}
-            style={[
-              styles.headerIconBtn,
-              {
-                backgroundColor: colors.surfaceSubtle,
-                borderRadius: radii.full,
-                padding: spacing.xs,
-                marginRight: spacing.xs,
-              },
-            ]}
+        <TouchableOpacity
+          onPress={() => setAddSheetVisible(true)}
+          style={[
+            styles.addBtn,
+            {
+              backgroundColor: colors.primary,
+              borderRadius: radii.full,
+              paddingHorizontal: spacing.sm,
+              paddingVertical: 4,
+            },
+          ]}
+        >
+          <Plus size={14} color="#FFFFFF" />
+          <Text
+            style={{
+              color: '#FFFFFF',
+              fontFamily: typography.fonts.medium,
+              fontSize: 12,
+              marginLeft: 4,
+            }}
           >
-            <Sparkles size={16} color={colors.primary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setAddSheetVisible(true)}
-            style={[
-              styles.addBtn,
-              {
-                backgroundColor: colors.primary,
-                borderRadius: radii.full,
-                paddingHorizontal: spacing.sm,
-                paddingVertical: 4,
-              },
-            ]}
-          >
-            <Plus size={14} color="#FFFFFF" />
-            <Text
-              style={{
-                color: '#FFFFFF',
-                fontFamily: typography.fonts.medium,
-                fontSize: 12,
-                marginLeft: 4,
-              }}
-            >
-              Add Bill
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+            Add Bill
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { padding: showHeader ? spacing.lg : 0, paddingBottom: 60 }]}
+        contentContainerStyle={[styles.content, { padding: spacing.lg }]}
         showsVerticalScrollIndicator={false}
       >
-        {!showHeader && (
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: spacing.sm, gap: spacing.xs }}>
-            <TouchableOpacity
-              onPress={() => setSuggestSheetVisible(true)}
-              style={[
-                styles.headerIconBtn,
-                {
-                  backgroundColor: colors.surfaceSubtle,
-                  borderRadius: radii.full,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: 6,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                },
-              ]}
-            >
-              <Sparkles size={14} color={colors.primary} />
-              <Text style={{ color: colors.primary, fontSize: 12, fontFamily: typography.fonts.medium, marginLeft: 4 }}>
-                Suggestions
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setAddSheetVisible(true)}
-              style={[
-                styles.addBtn,
-                {
-                  backgroundColor: colors.primary,
-                  borderRadius: radii.full,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: 6,
-                },
-              ]}
-            >
-              <Plus size={14} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontFamily: typography.fonts.medium, fontSize: 12, marginLeft: 4 }}>
-                Add Bill
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
         {/* Month Obligations Summary */}
         <View
           style={[
@@ -589,67 +542,6 @@ export function PlanScreen({ showHeader = true }: PlanScreenProps = {}) {
             </View>
           </View>
         ))}
-
-        {bills.length === 0 && (
-          <View
-            style={[
-              styles.billItem,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radii.xl,
-                padding: spacing.xl,
-                alignItems: 'center',
-                marginTop: spacing.md,
-              },
-            ]}
-          >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: typography.sizes.md,
-                marginBottom: spacing.xs,
-              }}
-            >
-              No recurring bills scheduled
-            </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.bodySm,
-                textAlign: 'center',
-                marginBottom: spacing.md,
-              }}
-            >
-              Track your electricity tokens, internet subscriptions, rent, estate dues, and streaming services.
-            </Text>
-            <TouchableOpacity
-              onPress={() => setAddSheetVisible(true)}
-              activeOpacity={0.8}
-              style={[
-                styles.addBtn,
-                {
-                  backgroundColor: colors.primary,
-                  borderRadius: radii.lg,
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.sm + 2,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: '#FFFFFF',
-                  fontFamily: typography.fonts.medium,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                + Add Recurring Bill
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </ScrollView>
 
       {/* Sheets */}
