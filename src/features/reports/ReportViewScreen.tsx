@@ -18,46 +18,237 @@ export function ReportViewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   // Live Database Hook
-  const { events: dbEvents, categories: dbCategories, netWorthMinor, getMonthlyTotals } = useDatabaseData();
+  const {
+    events: dbEvents,
+    categories: dbCategories,
+    accounts: dbAccounts,
+    payees: dbPayees,
+    accountBalances,
+    netWorthMinor,
+  } = useDatabaseData();
 
   const [period, setPeriod] = useState<'month' | 'quarter' | 'year'>('month');
   const [exportVisible, setExportVisible] = useState(false);
 
-  const reportTitle =
-    id === 'spending-category'
-      ? 'Monthly Spending by Category'
-      : id === 'income-vs-expense'
-      ? 'Income vs. Expense Delta'
-      : id === 'statutory-deductions'
-      ? 'PAYE Tax & Pension Deductions'
-      : 'Net Worth Growth Trajectory';
+  // Determine report details and compute specific metrics
+  const reportConfig = React.useMemo(() => {
+    switch (id) {
+      case 'top-merchants': {
+        const title = 'Top Payees & Merchants';
+        const subtitle = 'Highest volume counterparties and merchant fees';
+        const heroLabel = 'Total Merchant Expenses';
+        const segmentHeader = 'Merchant & Vendor Breakdown';
 
-  const rows = React.useMemo(() => {
-    if (dbEvents.length > 0) {
-      const catTotals: Record<string, bigint> = {};
-      let totalSpent = 0n;
-      for (const ev of dbEvents) {
-        if (ev.type === 'expense') {
+        const payeeMap: Record<string, bigint> = {};
+        let totalExpense = 0n;
+
+        for (const ev of dbEvents) {
+          if (ev.type === 'expense') {
+            let evAmount = 0n;
+            for (const line of ev.lines) {
+              if (line.amountMinor > 0n) evAmount += line.amountMinor;
+            }
+            const payee = dbPayees.find((p) => p.id === (ev as any).payeeId);
+            const name = payee?.name || ev.payeeName || ev.notes || 'Unspecified Vendor';
+            payeeMap[name] = (payeeMap[name] || 0n) + evAmount;
+            totalExpense += evAmount;
+          }
+        }
+
+        const items = Object.entries(payeeMap)
+          .sort((a, b) => (b[1] > a[1] ? 1 : -1))
+          .map(([name, amountMinor]) => ({
+            label: name,
+            amountMinor,
+            percent: totalExpense > 0n ? Math.round((Number(amountMinor) / Number(totalExpense)) * 100) : 0,
+          }));
+
+        return {
+          title,
+          subtitle,
+          heroLabel,
+          heroAmountMinor: totalExpense,
+          segmentHeader,
+          rows: items,
+          unitLabel: 'of merchant expenses',
+        };
+      }
+
+      case 'spending-category': {
+        const title = 'Monthly Spending by Category';
+        const subtitle = 'Envelope expense distributions and category weights';
+        const heroLabel = 'Total Category Spending';
+        const segmentHeader = 'Category Envelope Breakdown';
+
+        const catMap: Record<string, bigint> = {};
+        let totalExpense = 0n;
+
+        for (const ev of dbEvents) {
+          if (ev.type === 'expense') {
+            let evAmount = 0n;
+            for (const line of ev.lines) {
+              if (line.amountMinor > 0n) evAmount += line.amountMinor;
+            }
+            const cat = dbCategories.find((c) => c.id === ev.lines[0]?.ledgerAccountId);
+            const name = cat?.name || 'General Spending';
+            catMap[name] = (catMap[name] || 0n) + evAmount;
+            totalExpense += evAmount;
+          }
+        }
+
+        const items = Object.entries(catMap)
+          .sort((a, b) => (b[1] > a[1] ? 1 : -1))
+          .map(([name, amountMinor]) => ({
+            label: name,
+            amountMinor,
+            percent: totalExpense > 0n ? Math.round((Number(amountMinor) / Number(totalExpense)) * 100) : 0,
+          }));
+
+        return {
+          title,
+          subtitle,
+          heroLabel,
+          heroAmountMinor: totalExpense,
+          segmentHeader,
+          rows: items,
+          unitLabel: 'of category spending',
+        };
+      }
+
+      case 'income-vs-expense': {
+        const title = 'Income vs. Expense Delta';
+        const subtitle = 'Surplus cash flow retention compared against living burn';
+        const heroLabel = 'Net Cash Retention Surplus';
+        const segmentHeader = 'Cash Flow Inflow & Outflow Delta';
+
+        let totalIncome = 0n;
+        let totalExpense = 0n;
+
+        for (const ev of dbEvents) {
+          if (ev.status !== 'posted') continue;
           let evAmount = 0n;
           for (const line of ev.lines) {
             if (line.amountMinor > 0n) evAmount += line.amountMinor;
           }
-          const cat = dbCategories.find((c) => c.id === ev.lines[0]?.ledgerAccountId);
-          const catName = cat?.name || 'General Spending';
-          catTotals[catName] = (catTotals[catName] || 0n) + evAmount;
-          totalSpent += evAmount;
+          if (ev.type === 'income') totalIncome += evAmount;
+          else if (ev.type === 'expense') totalExpense += evAmount;
         }
-      }
-      return Object.entries(catTotals).map(([name, amountMinor]) => ({
-        label: name,
-        amountMinor,
-        percent: totalSpent > 0n ? Math.round((Number(amountMinor) / Number(totalSpent)) * 100) : 0,
-      }));
-    }
-    return [];
-  }, [dbEvents, dbCategories]);
 
-  const totalMinor = rows.reduce((s, r) => s + r.amountMinor, 0n);
+        const netSurplus = totalIncome >= totalExpense ? totalIncome - totalExpense : -(totalExpense - totalIncome);
+        const baseVolume = totalIncome > 0n ? totalIncome : totalExpense;
+
+        const items = [
+          {
+            label: 'Total Earned Income',
+            amountMinor: totalIncome,
+            percent: baseVolume > 0n ? Math.round((Number(totalIncome) / Number(baseVolume)) * 100) : 0,
+          },
+          {
+            label: 'Total Living & Fixed Expenses',
+            amountMinor: totalExpense,
+            percent: baseVolume > 0n ? Math.round((Number(totalExpense) / Number(baseVolume)) * 100) : 0,
+          },
+          {
+            label: 'Net Retained Savings',
+            amountMinor: netSurplus > 0n ? netSurplus : 0n,
+            percent: totalIncome > 0n && netSurplus > 0n ? Math.round((Number(netSurplus) / Number(totalIncome)) * 100) : 0,
+          },
+        ].filter(() => totalIncome > 0n || totalExpense > 0n);
+
+        return {
+          title,
+          subtitle,
+          heroLabel,
+          heroAmountMinor: netSurplus,
+          segmentHeader,
+          rows: items,
+          unitLabel: 'of volume',
+        };
+      }
+
+      case 'statutory-deductions': {
+        const title = 'PAYE Tax & Pension Deductions';
+        const subtitle = 'Detailed statement of PAYE tax, pension contributions & levies';
+        const heroLabel = 'Total Statutory Deductions';
+        const segmentHeader = 'Statutory Line Item Breakdown';
+
+        const statutoryMap: Record<string, bigint> = {};
+        let totalStatutory = 0n;
+
+        for (const ev of dbEvents) {
+          if (ev.type === 'expense') {
+            for (const line of ev.lines) {
+              const cat = dbCategories.find((c) => c.id === line.ledgerAccountId);
+              const catName = cat?.name?.toLowerCase() || '';
+              if (
+                catName.includes('tax') ||
+                catName.includes('pension') ||
+                catName.includes('nhf') ||
+                catName.includes('tithe') ||
+                catName.includes('levy')
+              ) {
+                const label = cat?.name || 'Statutory Deduction';
+                const amt = line.amountMinor > 0n ? line.amountMinor : -line.amountMinor;
+                statutoryMap[label] = (statutoryMap[label] || 0n) + amt;
+                totalStatutory += amt;
+              }
+            }
+          }
+        }
+
+        const items = Object.entries(statutoryMap).map(([name, amountMinor]) => ({
+          label: name,
+          amountMinor,
+          percent: totalStatutory > 0n ? Math.round((Number(amountMinor) / Number(totalStatutory)) * 100) : 0,
+        }));
+
+        return {
+          title,
+          subtitle,
+          heroLabel,
+          heroAmountMinor: totalStatutory,
+          segmentHeader,
+          rows: items,
+          unitLabel: 'of statutory deductions',
+        };
+      }
+
+      case 'net-worth':
+      default: {
+        const title = 'Net Worth Growth Trajectory';
+        const subtitle = 'Consolidated balance sheet assets vs. liabilities';
+        const heroLabel = 'Current Net Worth';
+        const segmentHeader = 'Account & Asset Balances';
+
+        let totalAssets = 0n;
+        const items = dbAccounts
+          .filter((acc) => !acc.archived)
+          .map((acc) => {
+            const bal = accountBalances.get(acc.id) ?? 0n;
+            if (bal > 0n) totalAssets += bal;
+            return {
+              label: `${acc.name} (${acc.type})`,
+              amountMinor: bal,
+              percent: 0,
+            };
+          })
+          .map((item) => ({
+            ...item,
+            percent: totalAssets > 0n && item.amountMinor > 0n ? Math.round((Number(item.amountMinor) / Number(totalAssets)) * 100) : 0,
+          }));
+
+        return {
+          title,
+          subtitle,
+          heroLabel,
+          heroAmountMinor: netWorthMinor,
+          segmentHeader,
+          rows: items,
+          unitLabel: 'of total assets',
+        };
+      }
+    }
+  }, [id, dbEvents, dbCategories, dbAccounts, dbPayees, accountBalances, netWorthMinor]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -89,7 +280,7 @@ export function ReportViewScreen() {
               },
             ]}
           >
-            {reportTitle}
+            {reportConfig.title}
           </Text>
           <Text
             style={{
@@ -98,7 +289,7 @@ export function ReportViewScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Executive Summary Statement
+            {reportConfig.subtitle}
           </Text>
         </View>
 
@@ -200,7 +391,7 @@ export function ReportViewScreen() {
               letterSpacing: 0.5,
             }}
           >
-            Total Period Volume
+            {reportConfig.heroLabel}
           </Text>
           <Text
             style={{
@@ -210,7 +401,7 @@ export function ReportViewScreen() {
               marginTop: spacing.xxs,
             }}
           >
-            {formatNaira(totalMinor)}
+            {formatNaira(reportConfig.heroAmountMinor)}
           </Text>
           <Text
             style={{
@@ -220,8 +411,8 @@ export function ReportViewScreen() {
               marginTop: 2,
             }}
           >
-            {rows.length > 0
-              ? `Computed across ${rows.length} reporting segments`
+            {reportConfig.rows.length > 0
+              ? `Computed across ${reportConfig.rows.length} reporting segments`
               : 'Awaiting transaction data for this reporting period'}
           </Text>
         </View>
@@ -235,10 +426,10 @@ export function ReportViewScreen() {
             marginBottom: spacing.md,
           }}
         >
-          Segment Breakdown
+          {reportConfig.segmentHeader}
         </Text>
 
-        {rows.length === 0 ? (
+        {reportConfig.rows.length === 0 ? (
           <View
             style={[
               styles.breakdownRow,
@@ -263,83 +454,84 @@ export function ReportViewScreen() {
             </Text>
           </View>
         ) : (
-          rows.map((row) => (
+          reportConfig.rows.map((row) => (
             <View
               key={row.label}
-            style={[
-              styles.breakdownRow,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.borderSubtle,
-                borderRadius: radii.md,
-                padding: spacing.md,
-                marginBottom: spacing.md,
-              },
-            ]}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.medium,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                {row.label}
-              </Text>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: typography.sizes.bodySm,
-                }}
-              >
-                {formatNaira(row.amountMinor)}
-              </Text>
-            </View>
-
-            {/* Progress bar */}
-            <View
               style={[
-                styles.barBg,
+                styles.breakdownRow,
                 {
-                  backgroundColor: colors.surfaceSubtle,
-                  borderRadius: radii.full,
-                  marginTop: spacing.sm,
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderSubtle,
+                  borderRadius: radii.md,
+                  padding: spacing.md,
+                  marginBottom: spacing.md,
                 },
               ]}
             >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.medium,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {row.label}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: typography.fonts.semiBold,
+                    fontSize: typography.sizes.bodySm,
+                  }}
+                >
+                  {formatNaira(row.amountMinor)}
+                </Text>
+              </View>
+
+              {/* Progress bar */}
               <View
                 style={[
-                  styles.barFill,
+                  styles.barBg,
                   {
-                    width: `${row.percent}%`,
-                    backgroundColor: colors.primary,
+                    backgroundColor: colors.surfaceSubtle,
                     borderRadius: radii.full,
+                    marginTop: spacing.sm,
                   },
                 ]}
-              />
-            </View>
+              >
+                <View
+                  style={[
+                    styles.barFill,
+                    {
+                      width: `${row.percent}%`,
+                      backgroundColor: colors.primary,
+                      borderRadius: radii.full,
+                    },
+                  ]}
+                />
+              </View>
 
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontSize: 10,
-                fontFamily: typography.fonts.regular,
-                marginTop: 4,
-              }}
-            >
-              {row.percent}% of total reported volume
-            </Text>
-          </View>
-        )))}
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 10,
+                  fontFamily: typography.fonts.regular,
+                  marginTop: 4,
+                }}
+              >
+                {row.percent}% {reportConfig.unitLabel}
+              </Text>
+            </View>
+          ))
+        )}
       </ScrollView>
 
       {/* Export Menu Sheet */}
       <ExportMenuSheet
         visible={exportVisible}
         onClose={() => setExportVisible(false)}
-        reportTitle={reportTitle}
+        reportTitle={reportConfig.title}
         onExport={() => {}}
       />
     </View>
