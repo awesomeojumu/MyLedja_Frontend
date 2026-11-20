@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { useTheme, BottomSheet, TextInput, CurrencyInput, Button } from '../../design';
+import { useTheme, BottomSheet, TextInput, CurrencyInput, Button, DatePicker } from '../../design';
 import { parseAmount } from '../../money';
 
 export interface AddedGoal {
@@ -77,12 +77,12 @@ export function CreateGoalSheet({
           />
         </View>
 
-        <View style={{ marginBottom: spacing.lg }}>
-          <TextInput
+        <View style={{ marginBottom: spacing.lg, zIndex: 20 }}>
+          <DatePicker
             label="Target Date (Optional)"
-            placeholder="e.g. 15 Dec 2026"
+            placeholder="Select target date..."
             value={targetDate}
-            onChangeText={setTargetDate}
+            onChange={setTargetDate}
           />
         </View>
 

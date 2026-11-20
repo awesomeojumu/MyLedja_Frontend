@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useTheme, BottomSheet, TextInput, CurrencyInput, Button } from '../../design';
+import { useTheme, BottomSheet, TextInput, CurrencyInput, Button, DatePicker } from '../../design';
 import { parseAmount } from '../../money';
 
 export interface AddedDebt {
@@ -150,12 +150,12 @@ export function RecordDebtSheet({
           />
         </View>
 
-        <View style={{ marginBottom: spacing.md }}>
-          <TextInput
+        <View style={{ marginBottom: spacing.md, zIndex: 20 }}>
+          <DatePicker
             label="Expected Repayment Date (Optional)"
-            placeholder="e.g. 25 Dec 2026"
+            placeholder="Select repayment date..."
             value={dueDate}
-            onChangeText={setDueDate}
+            onChange={setDueDate}
           />
         </View>
 

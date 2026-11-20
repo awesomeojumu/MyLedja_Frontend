@@ -8,4 +8,5 @@ export * from './components/CurrencyInput';
 export * from './components/BottomSheet';
 export * from './components/Toast';
 export * from './components/Dropdown';
+export * from './components/DatePicker';
 export * from './components/overlays';
