@@ -35,7 +35,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 export function WelcomeScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
-  const { user, workspaceId, client, setSession } = useAuth();
+  const { user, workspaceId, client, source, setSession } = useAuth();
   const { store, engine } = useSync();
   const { enabledIncomeIds, enabledExpenseIds, setIncomeCategories, setExpenseCategories } = useCategoryPreferences();
 
@@ -131,14 +131,15 @@ export function WelcomeScreen() {
     const wsId = workspaceId || user?.workspaceId;
     try {
       let finishedUser = user ? { ...user, setupComplete: true, workspaceName: body.workspaceName } : null;
-      if (client.hasAccessToken() && wsId) {
+      if (source !== 'mock' && wsId) {
         // The server creates the accounts, opening balances and categories; sync brings them to this device.
         const saved = await authApi(client).finishSetup(wsId, body);
         finishedUser = { ...saved, setupComplete: true };
         void engine.wake();
       } else if (wsId) {
-        // Not signed in to a server (demo and tests): seed this device.
+        // Demo and tests run on the built-in mock: seed this device, and tell the mock setup is done.
         await new WorkspaceRepository(store, engine, wsId).seedFromSetup(body);
+        if (client.hasAccessToken()) await authApi(client).finishSetup(wsId, body).catch(() => undefined);
       }
       setExpenseCategories(body.categories.filter((c) => c.group === 'Spending').map((c) => c.key));
       setIncomeCategories(body.categories.filter((c) => c.group === 'Income').map((c) => c.key));

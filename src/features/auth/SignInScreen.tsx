@@ -4,13 +4,17 @@ import { useRouter } from 'expo-router';
 import { Eye, EyeOff, Lock, Mail, Fingerprint, Globe } from 'lucide-react-native';
 import { useTheme, TextInput, Button } from '../../design';
 import { useAuth } from './AuthProvider';
+import { authApi } from '../../api/auth';
+import { securityApi, isTwoFactorRequired } from '../../api/security';
+import { ApiError, NetworkError } from '../../api/client';
+import { t } from '../../i18n';
 import { TwoFactorChallengeSheet } from './TwoFactorChallengeSheet';
 import { PasskeyPromptSheet } from './PasskeyPromptSheet';
 
 export function SignInScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
-  const { setSession } = useAuth();
+  const { client, signedIn } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,48 +27,65 @@ export function SignInScreen() {
   const [twoFactorVisible, setTwoFactorVisible] = useState(false);
   const [passkeyVisible, setPasskeyVisible] = useState(false);
 
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+
+  const errorText = (err: unknown) => {
+    if (err instanceof NetworkError) return t('errors.network');
+    if (err instanceof ApiError) {
+      if (err.body.code === 'credentials_wrong') return t('signIn.wrong');
+      if (err.body.code === 'too_many_attempts') return t('signIn.wait');
+      if (err.body.code === 'email_not_verified') return t('signIn.emailNotVerified');
+      return err.body.message || t('errors.generic');
+    }
+    return t('errors.generic');
+  };
+
+  const finish = (setupComplete: boolean) => router.replace((setupComplete ? '/' : '/welcome') as never);
+
   const handleSignIn = async () => {
     if (!email.trim() || !password) {
-      setError('Please enter your email and password');
+      setError(t('signIn.wrong'));
       return;
     }
     setError('');
     setLoading(true);
-
     try {
-      // Simulate/Trigger sign-in
-      await setSession({
-        id: 'usr-1',
-        email: email.trim(),
-        name: 'MyLedja User',
-        setupComplete: true,
-        workspaceId: 'default',
-        workspaceName: 'Personal',
-      });
-      router.replace('/' as any);
-    } catch {
-      setError('Email or password is wrong');
+      const res = await authApi(client).signIn({ email: email.trim(), password, staySignedIn });
+      if (isTwoFactorRequired(res)) {
+        setChallengeToken(res.challengeToken);
+        setTwoFactorVisible(true);
+        return;
+      }
+      await signedIn(res, staySignedIn);
+      finish(res.user.setupComplete);
+    } catch (err) {
+      setError(errorText(err));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSocialGoogle = async () => {
-    setLoading(true);
+  const handleTwoFactor = async (code: string) => {
+    if (!challengeToken) return;
     try {
-      await setSession({
-        id: 'usr-google',
-        email: 'user@gmail.com',
-        name: 'Google User',
-        setupComplete: true,
-        workspaceId: 'default',
-        workspaceName: 'Personal',
+      const res = await securityApi(client).twoFactorSignIn({
+        challengeToken,
+        code: code.length === 6 ? code : undefined,
+        backupCode: code.length === 6 ? undefined : code,
+        trustDevice: false,
+        staySignedIn,
       });
-      router.replace('/' as any);
-    } finally {
-      setLoading(false);
+      setTwoFactorVisible(false);
+      await signedIn(res, staySignedIn);
+      finish(res.user.setupComplete);
+    } catch (err) {
+      setTwoFactorVisible(false);
+      setError(errorText(err));
     }
   };
+
+  // Google needs the platform sign-in SDK, which isn't in this build yet.
+  const handleSocialGoogle = () => setError(t('signIn.googleUnavailable'));
 
   return (
     <ScrollView
@@ -285,7 +306,7 @@ export function SignInScreen() {
               },
             ]}
           >
-            Don't have an account?{' '}
+            {t('signIn.newPrompt')}{' '}
           </Text>
           <TouchableOpacity onPress={() => router.push('/sign-up' as any)}>
             <Text
@@ -308,7 +329,7 @@ export function SignInScreen() {
       <TwoFactorChallengeSheet
         visible={twoFactorVisible}
         onClose={() => setTwoFactorVisible(false)}
-        onVerify={() => router.replace('/' as any)}
+        onVerify={(code) => void handleTwoFactor(code)}
       />
 
       <PasskeyPromptSheet

@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useAuth } from './AuthProvider';
+import { authApi } from '../../api/auth';
+import { ApiError, NetworkError } from '../../api/client';
+import { t } from '../../i18n';
 import { Mail, Lock, KeyRound } from 'lucide-react-native';
 import { useTheme, TextInput, Button } from '../../design';
 
@@ -16,34 +20,52 @@ export function RecoverScreen() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleRequestCode = () => {
-    if (!email.trim() || !email.includes('@')) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    setError('');
-    setStep('reset');
+  const { client } = useAuth();
+
+  const errorText = (err: unknown) => {
+    if (err instanceof NetworkError) return t('errors.network');
+    if (err instanceof ApiError) return err.body.code === 'code_invalid' ? t('errors.codeInvalid') : err.body.message || t('errors.generic');
+    return t('errors.generic');
   };
 
-  const handleResetPassword = () => {
-    if (code.length !== 6) {
-      setError('Please enter the 6-digit recovery code');
-      return;
-    }
-    if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters long');
+  const handleRequestCode = async () => {
+    if (!email.trim() || !email.includes('@')) {
+      setError(t('errors.emailInvalid'));
       return;
     }
     setError('');
     setLoading(true);
-
-    setTimeout(() => {
+    try {
+      await authApi(client).recover({ email: email.trim() });
+      setStep('reset');
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
       setLoading(false);
-      setSuccess('Password changed successfully. All other devices have been signed out.');
-      setTimeout(() => {
-        router.replace('/sign-in' as any);
-      }, 1500);
-    }, 600);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (code.length !== 6) {
+      setError(t('errors.codeIncomplete'));
+      return;
+    }
+    // Same minimum as the server (PASSWORD_MIN_LENGTH).
+    if (newPassword.length < 10) {
+      setError(t('signUp.rule.length'));
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await authApi(client).newPassword({ email: email.trim(), code, newPassword });
+      setSuccess(t('recover.doneTitle'));
+      setTimeout(() => router.replace('/sign-in' as never), 1500);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

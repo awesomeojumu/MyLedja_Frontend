@@ -4,12 +4,15 @@ import { useRouter } from 'expo-router';
 import { Lock, Mail, User, Globe, Check } from 'lucide-react-native';
 import { useTheme, TextInput, Button } from '../../design';
 import { useAuth } from './AuthProvider';
+import { authApi } from '../../api/auth';
+import { ApiError, NetworkError } from '../../api/client';
+import { t } from '../../i18n';
 import { TermsPrivacySheet } from './TermsPrivacySheet';
 
 export function SignUpScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
-  const { setSession } = useAuth();
+  const { client, signedIn } = useAuth();
 
   const [step, setStep] = useState<'form' | 'otp'>('form');
   const [name, setName] = useState('');
@@ -24,7 +27,8 @@ export function SignUpScreen() {
   const [termsVisible, setTermsVisible] = useState(false);
 
   // Password rules validation
-  const hasMinLength = password.length >= 8;
+  // Same minimum as the server (PASSWORD_MIN_LENGTH).
+  const hasMinLength = password.length >= 10;
   const hasNumber = /\d/.test(password);
   const hasSymbol = /[!@#$%^&*(),.?":{}|<>]/.test(password);
   const isPasswordValid = hasMinLength && hasNumber && hasSymbol;
@@ -47,26 +51,30 @@ export function SignUpScreen() {
       return;
     }
     setError('');
-    // Advance to OTP step
-    setStep('otp');
+    setLoading(true);
+    authApi(client)
+      .signUp({ name: name.trim(), email: email.trim(), password, termsAccepted: true })
+      .then(() => setStep('otp'))
+      .catch((err: unknown) => setError(errorText(err)))
+      .finally(() => setLoading(false));
+  };
+
+  const errorText = (err: unknown) => {
+    if (err instanceof NetworkError) return t('errors.network');
+    if (err instanceof ApiError) return err.body.code === 'code_invalid' ? t('errors.codeInvalid') : err.body.message || t('errors.generic');
+    return t('errors.generic');
   };
 
   const handleVerifyOtp = async (code: string) => {
     if (code.length !== 6) return;
     setLoading(true);
     try {
-      await setSession({
-        id: `usr-${Date.now()}`,
-        email: email.trim(),
-        name: name.trim(),
-        setupComplete: false,
-        workspaceId: 'default',
-        workspaceName: 'Personal',
-      });
-      // New users land on Welcome setup wizard
-      router.replace('/welcome' as any);
-    } catch {
-      setError('Verification code is invalid or has expired');
+      const res = await authApi(client).verifyEmail({ email: email.trim(), code, staySignedIn: true });
+      await signedIn(res, true);
+      // New people land on Welcome.
+      router.replace((res.user.setupComplete ? '/' : '/welcome') as never);
+    } catch (err) {
+      setError(errorText(err));
     } finally {
       setLoading(false);
     }
@@ -177,7 +185,7 @@ export function SignUpScreen() {
             <View style={{ marginTop: spacing.md }}>
               <TextInput
                 label="Create Password"
-                placeholder="At least 8 characters"
+                placeholder={t('signUp.rule.length')}
                 secureTextEntry
                 value={password}
                 onChangeText={(v) => {
@@ -193,7 +201,7 @@ export function SignUpScreen() {
               <View style={styles.ruleItem}>
                 <View style={[styles.ruleDot, { backgroundColor: hasMinLength ? colors.statusSuccess : colors.border }]} />
                 <Text style={[styles.ruleText, { color: hasMinLength ? colors.statusSuccess : colors.textTertiary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs }]}>
-                  8+ characters
+                  {t('signUp.rule.length')}
                 </Text>
               </View>
               <View style={styles.ruleItem}>
@@ -254,21 +262,11 @@ export function SignUpScreen() {
               size="lg"
             />
 
-            {/* Google Signup bypass */}
+            {/* Google needs the platform sign-in SDK, which isn't in this build yet. */}
             <View style={{ marginTop: spacing.md }}>
               <Button
                 label="Sign up with Google"
-                onPress={async () => {
-                  await setSession({
-                    id: 'usr-google',
-                    email: 'user@gmail.com',
-                    name: 'Google User',
-                    setupComplete: false,
-                    workspaceId: 'default',
-                    workspaceName: 'Personal',
-                  });
-                  router.replace('/welcome' as any);
-                }}
+                onPress={() => setError(t('signIn.googleUnavailable'))}
                 variant="secondary"
                 icon={<Globe size={18} color={colors.textSecondary} />}
               />

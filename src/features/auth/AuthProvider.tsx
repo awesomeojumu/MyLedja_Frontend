@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
-import type { User, Workspace } from '../../api/auth';
-import { ApiClient, fetchTransport } from '../../api/client';
+import { authApi, type SessionResponse, type User, type Workspace } from '../../api/auth';
+import { ApiClient, fetchTransport, NetworkError } from '../../api/client';
+import { createAuthMock } from '../../api/mocks/auth';
+import { config } from '../../config';
 import { createSessionStore } from '../../data/session';
 import { openKeyValue } from '../../data/kv';
 
@@ -17,6 +19,8 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   setSession: (user: User, workspaceId?: string | null, workspaces?: Workspace[]) => Promise<void>;
+  /** After sign in, sign up or two-factor: keep the tokens and the person. */
+  signedIn: (res: SessionResponse, staySignedIn: boolean) => Promise<void>;
   setWorkspaceId: (workspaceId: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -26,110 +30,122 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const AUTH_USER_KEY = 'auth:user';
 const AUTH_WORKSPACE_KEY = 'auth:workspaceId';
 
-export const DEV_ACCESS_TOKEN =
-  'eyJhbGciOiJIUzI1NiJ9.eyJzaWQiOiI5MDM5Y2MzYy1mOGY2LTRlOGYtYTk5YS03ODc2YmI1MjQ5NWYiLCJ0eXAiOiJhY2Nlc3MiLCJzdWIiOiIwMWExZDNmMC0xMjFiLTc3NGEtOWFkOS1lZjNjM2NmODYxYTMiLCJpc3MiOiJteWxlZGphIiwiYXVkIjoibXlsZWRqYS1hcHAiLCJpYXQiOjE3OTQ4NDExNDksImV4cCI6MTgwMjYxNzE0OX0.Y69kdsLcS0WfTt0oApf5dbsILqCJhnGJj0uwYVA8vvk';
-export const DEV_REFRESH_TOKEN =
-  '9039cc3c-f8f6-4e8f-a99a-7876bb52495f.qf4vbps0G4rYR0KcdlRov3U-S0HVGktffJcRehy5JcU';
-
-export const DEV_USER: User = {
-  id: '01a1d3f0-121b-774a-9ad9-ef3c3cf861a3',
-  name: 'Awesome Ojumu',
-  email: 'ayobamiojumu@gmail.com',
-  setupComplete: true,
-  workspaceId: '01a1d3f0-b2ae-7433-98e3-d2b16c4125b3',
-  workspaceName: 'Personal',
-};
-export const DEV_WORKSPACE_ID = '01a1d3f0-b2ae-7433-98e3-d2b16c4125b3';
+/**
+ * Where the app talks to. With EXPO_PUBLIC_API_URL set it's the real backend; without it the app runs on the
+ * built-in mock (demo person in src/api/mocks/auth.ts), which also keeps tests and offline demos working.
+ */
+function apiSource(): ApiSource {
+  if (!config.apiUrl) return 'mock';
+  return config.appEnv === 'development' ? 'local' : 'staging';
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [workspaceId, setWorkspaceIdState] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [source, setSource] = useState<ApiSource>('local');
+  const [source] = useState<ApiSource>(apiSource);
 
   const session = useMemo(() => createSessionStore(), []);
   const client = useMemo(
-    () =>
-      new ApiClient(
-        fetchTransport(process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000'),
-        session
-      ),
-    [session]
+    () => new ApiClient(config.apiUrl ? fetchTransport(config.apiUrl) : createAuthMock().transport, session),
+    [session],
   );
 
+  const remember = async (u: User | null, ws: string | null) => {
+    try {
+      const kv = openKeyValue('myledja');
+      if (u && ws) {
+        await kv.set([
+          [AUTH_USER_KEY, JSON.stringify(u)],
+          [AUTH_WORKSPACE_KEY, ws],
+        ]);
+      } else {
+        await kv.remove([AUTH_USER_KEY, AUTH_WORKSPACE_KEY]);
+      }
+    } catch {
+      // Storage errors are not fatal; the session lives in memory for this run.
+    }
+  };
+
+  // On open: resume the stored session with the refresh token (or cookie). Offline, keep the stored user so
+  // the app still opens on this device's copy; signed out on the server, start at Sign in.
   useEffect(() => {
-    async function loadStoredAuth() {
+    let alive = true;
+    async function resume() {
+      let stored: User | null = null;
+      let storedWorkspace: string | null = null;
       try {
         const kv = openKeyValue('myledja');
-        const storedUser = await kv.get(AUTH_USER_KEY);
-        const storedWorkspace = await kv.get(AUTH_WORKSPACE_KEY);
-
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser) as User;
-          setUser(parsedUser);
-          setWorkspaceIdState(storedWorkspace ?? parsedUser.workspaceId ?? DEV_WORKSPACE_ID);
-        } else {
-          // Default to live MongoDB workspace and authenticated user
-          setUser(DEV_USER);
-          setWorkspaceIdState(DEV_WORKSPACE_ID);
-          await kv.set([
-            [AUTH_USER_KEY, JSON.stringify(DEV_USER)],
-            [AUTH_WORKSPACE_KEY, DEV_WORKSPACE_ID],
-          ]);
-        }
-        await client.signedIn(
-          { accessToken: DEV_ACCESS_TOKEN, refreshToken: DEV_REFRESH_TOKEN },
-          true
-        );
+        const raw = await kv.get(AUTH_USER_KEY);
+        stored = raw ? (JSON.parse(raw) as User) : null;
+        storedWorkspace = await kv.get(AUTH_WORKSPACE_KEY);
       } catch {
-        // Fallback to dev user
-        setUser(DEV_USER);
-        setWorkspaceIdState(DEV_WORKSPACE_ID);
+        stored = null;
+      }
+      try {
+        const refreshed = await client.refresh();
+        if (!alive) return;
+        if (refreshed) {
+          const me = await authApi(client).me();
+          if (!alive) return;
+          const ws = storedWorkspace && stored?.id === me.id ? storedWorkspace : me.workspaceId;
+          setUser(me);
+          setWorkspaceIdState(ws);
+          await remember(me, ws);
+        } else {
+          setUser(null);
+          setWorkspaceIdState(null);
+          await remember(null, null);
+        }
+      } catch (err) {
+        if (!alive) return;
+        if (err instanceof NetworkError && stored) {
+          setUser(stored);
+          setWorkspaceIdState(storedWorkspace ?? stored.workspaceId);
+        } else {
+          setUser(null);
+          setWorkspaceIdState(null);
+        }
       } finally {
-        setIsLoading(false);
+        if (alive) setIsLoading(false);
       }
     }
-    loadStoredAuth();
+    void resume();
+    return () => {
+      alive = false;
+    };
   }, [client]);
 
   const setSession = async (newUser: User, activeWorkspaceId?: string | null, newWorkspaces?: Workspace[]) => {
+    const resolvedWorkspace = activeWorkspaceId ?? newUser.workspaceId;
     setUser(newUser);
-    const resolvedWorkspace = activeWorkspaceId ?? newUser.workspaceId ?? 'default';
     setWorkspaceIdState(resolvedWorkspace);
     if (newWorkspaces) setWorkspaces(newWorkspaces);
+    await remember(newUser, resolvedWorkspace);
+  };
 
-    try {
-      const kv = openKeyValue('myledja');
-      await kv.set([
-        [AUTH_USER_KEY, JSON.stringify(newUser)],
-        [AUTH_WORKSPACE_KEY, resolvedWorkspace],
-      ]);
-    } catch {
-      // Storage error non-fatal
-    }
+  const signedIn = async (res: SessionResponse, staySignedIn: boolean) => {
+    await client.signedIn(res, staySignedIn);
+    await setSession(res.user, res.user.workspaceId);
   };
 
   const setWorkspaceId = async (id: string) => {
     setWorkspaceIdState(id);
-    try {
-      const kv = openKeyValue('myledja');
-      await kv.set([[AUTH_WORKSPACE_KEY, id]]);
-    } catch {
-      // Non-fatal
-    }
+    if (user) await remember(user, id);
   };
 
   const signOut = async () => {
+    try {
+      if (client.hasAccessToken()) await authApi(client).signOut();
+    } catch {
+      // Signing out on this device goes ahead even if the server can't be reached.
+    }
+    await client.signOut();
     setUser(null);
     setWorkspaceIdState(null);
     setWorkspaces([]);
-    try {
-      const kv = openKeyValue('myledja');
-      await kv.remove([AUTH_USER_KEY, AUTH_WORKSPACE_KEY]);
-    } catch {
-      // Non-fatal
-    }
+    await remember(null, null);
   };
 
   const status: AuthStatus = isLoading ? 'loading' : user ? 'signed-in' : 'signed-out';
@@ -145,10 +161,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: !!user,
       isLoading,
       setSession,
+      signedIn,
       setWorkspaceId,
       signOut,
     }),
-    [user, workspaceId, workspaces, status, source, client, isLoading]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, workspaceId, workspaces, status, source, client, isLoading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -168,6 +186,7 @@ export function useAuth(): AuthContextType {
       isAuthenticated: false,
       isLoading: false,
       setSession: async () => {},
+      signedIn: async () => {},
       setWorkspaceId: async () => {},
       signOut: async () => {},
     };

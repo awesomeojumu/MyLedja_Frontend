@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
-import { Tabs } from 'expo-router';
+import { View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
+import { Redirect, Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Home,
@@ -21,8 +21,19 @@ export default function AppLayout() {
   const { colors, typography } = useTheme();
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  const { workspaceId } = useAuth();
-  const activeWsId = workspaceId || '01a1d3f0-b2ae-7433-98e3-d2b16c4125b3';
+  const { status, user, workspaceId } = useAuth();
+
+  // Signed out: Sign in. Signed in but not set up: Welcome. Loading: wait, never open a made-up workspace.
+  if (status === 'loading') {
+    return (
+      <View style={[styles.mobileRoot, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+  if (status === 'signed-out' || !user) return <Redirect href="/sign-in" />;
+  if (!user.setupComplete) return <Redirect href="/welcome" />;
+  const activeWsId = workspaceId || user.workspaceId;
 
   // Desktop & Large Tablet: Dual-pane with clean Sidebar + Top Header
   if (isDesktop && Platform.OS === 'web') {
