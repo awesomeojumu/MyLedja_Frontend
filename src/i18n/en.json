@@ -4258,5 +4258,17 @@
   "quick.moneyIn": "Money in",
   "bulk.title": "Categorize transactions",
   "bulk.subtitle": "Choose a category for {n} selected transactions",
-  "bulk.instruction": "Tap a category to update every selected transaction."
+  "bulk.instruction": "Tap a category to update every selected transaction.",
+  "invest.paidFrom": "Paid from",
+  "invest.paidInto": "Money goes into",
+  "invest.noCashAccount": "Add a bank, wallet or cash account first, so the money has somewhere to come from.",
+  "invest.saved": "Saved {name}",
+  "invest.sold": "Sold {name}",
+  "invest.failed": "That did not save. Check the units and try again.",
+  "invest.accountName": "Investments",
+  "holding.bought": "Bought {units} units",
+  "holding.sold": "Sold {units} units",
+  "holding.dividend": "Dividend received",
+  "holding.saved": "Saved",
+  "holding.failed": "That did not save. Try again."
 }

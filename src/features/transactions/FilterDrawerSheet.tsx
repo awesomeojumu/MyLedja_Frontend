@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
 export interface FilterOptions {
   dateRange: 'all' | 'this-month' | 'last-30' | 'this-year';
@@ -22,7 +23,7 @@ const DATE_RANGES: { id: FilterOptions['dateRange']; label: string }[] = [
   { id: 'this-year', label: 'This Year' },
 ];
 
-const ACCOUNTS = ['All Accounts', 'GTBank (Current)', 'Kuda Bank', 'Cash Wallet'];
+const ALL_ACCOUNTS = 'All Accounts';
 
 const TYPES: { id: FilterOptions['type']; label: string }[] = [
   { id: 'all', label: 'All Types' },
@@ -40,6 +41,8 @@ export function FilterDrawerSheet({
   const { colors, typography, spacing, radii } = useTheme();
 
   const [dateRange, setDateRange] = useState(currentFilters.dateRange);
+  const { accounts: dbAccounts } = useDatabaseData();
+  const ACCOUNTS = [ALL_ACCOUNTS, ...dbAccounts.filter((a) => !a.archived).map((a) => a.name)];
   const [account, setAccount] = useState(currentFilters.account);
   const [type, setType] = useState(currentFilters.type);
 
@@ -52,7 +55,7 @@ export function FilterDrawerSheet({
     setDateRange('all');
     setAccount('All Accounts');
     setType('all');
-    onApplyFilters({ dateRange: 'all', account: 'All Accounts', type: 'all' });
+    onApplyFilters({ dateRange: 'all', account: ALL_ACCOUNTS, type: 'all' });
     onClose();
   };
 

@@ -4,6 +4,9 @@ import Svg, { Path, Defs, LinearGradient, Stop, Circle, Line, Text as SvgText } 
 import { Plus, ArrowDownLeft, ArrowUpRight, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { balanceHistory } from './balanceHistory';
+import { purposeOf } from './purpose';
 
 export type TimeRange = '1W' | '1M' | '3M' | 'YTD' | 'ALL';
 export type AccountFilter =
@@ -17,10 +20,6 @@ export type AccountFilter =
   | 'project'
   | 'liability';
 
-interface ChartPoint {
-  date: string;
-  amountMinor: bigint;
-}
 
 export interface NetAssetsHeroProps {
   totalAssetsMinor: bigint;
@@ -30,564 +29,16 @@ export interface NetAssetsHeroProps {
   activeFilter?: AccountFilter;
 }
 
-interface FilterTrajectory {
-  title: string;
-  ranges: Record<
-    TimeRange,
-    { points: ChartPoint[]; percent: string; isPositive: boolean; deltaMinor: bigint }
-  >;
-}
-
-const FILTER_TRAJECTORIES: Record<AccountFilter, FilterTrajectory> = {
-  all: {
-    title: 'Total Net Assets',
-    ranges: {
-      '1W': {
-        points: [
-          { date: '10 Nov', amountMinor: 1285000000n },
-          { date: '11 Nov', amountMinor: 1287000000n },
-          { date: '12 Nov', amountMinor: 1286000000n },
-          { date: '13 Nov', amountMinor: 1288000000n },
-          { date: '14 Nov', amountMinor: 1283000000n },
-          { date: '15 Nov', amountMinor: 1281000000n },
-          { date: '16 Nov', amountMinor: 1308300000n },
-        ],
-        percent: '+1.8%',
-        isPositive: true,
-        deltaMinor: 23300000n,
-      },
-      '1M': {
-        points: [
-          { date: '18 Oct', amountMinor: 1245000000n },
-          { date: '26 Oct', amountMinor: 1252000000n },
-          { date: '03 Nov', amountMinor: 1261000000n },
-          { date: '09 Nov', amountMinor: 1275000000n },
-          { date: '16 Nov', amountMinor: 1308300000n },
-        ],
-        percent: '+5.1%',
-        isPositive: true,
-        deltaMinor: 63300000n,
-      },
-      '3M': {
-        points: [
-          { date: 'Aug', amountMinor: 1180000000n },
-          { date: 'Sep', amountMinor: 1215000000n },
-          { date: 'Oct', amountMinor: 1245000000n },
-          { date: 'Nov', amountMinor: 1308300000n },
-        ],
-        percent: '+10.9%',
-        isPositive: true,
-        deltaMinor: 128300000n,
-      },
-      'YTD': {
-        points: [
-          { date: 'Jan', amountMinor: 1020000000n },
-          { date: 'Apr', amountMinor: 1095000000n },
-          { date: 'Jul', amountMinor: 1150000000n },
-          { date: 'Oct', amountMinor: 1245000000n },
-          { date: 'Nov', amountMinor: 1308300000n },
-        ],
-        percent: '+28.3%',
-        isPositive: true,
-        deltaMinor: 288300000n,
-      },
-      'ALL': {
-        points: [
-          { date: '2024', amountMinor: 750000000n },
-          { date: '2025', amountMinor: 1020000000n },
-          { date: '2026', amountMinor: 1308300000n },
-        ],
-        percent: '+74.4%',
-        isPositive: true,
-        deltaMinor: 558300000n,
-      },
-    },
-  },
-  income: {
-    title: 'Income Inflows',
-    ranges: {
-      '1W': {
-        points: [
-          { date: '10 Nov', amountMinor: 0n },
-          { date: '12 Nov', amountMinor: 0n },
-          { date: '14 Nov', amountMinor: 0n },
-          { date: '16 Nov', amountMinor: 85000000n },
-        ],
-        percent: '+100%',
-        isPositive: true,
-        deltaMinor: 85000000n,
-      },
-      '1M': {
-        points: [
-          { date: '18 Oct', amountMinor: 75000000n },
-          { date: '26 Oct', amountMinor: 78000000n },
-          { date: '03 Nov', amountMinor: 78000000n },
-          { date: '09 Nov', amountMinor: 80000000n },
-          { date: '16 Nov', amountMinor: 85000000n },
-        ],
-        percent: '+13.3%',
-        isPositive: true,
-        deltaMinor: 10000000n,
-      },
-      '3M': {
-        points: [
-          { date: 'Aug', amountMinor: 70000000n },
-          { date: 'Sep', amountMinor: 75000000n },
-          { date: 'Oct', amountMinor: 78000000n },
-          { date: 'Nov', amountMinor: 85000000n },
-        ],
-        percent: '+21.4%',
-        isPositive: true,
-        deltaMinor: 15000000n,
-      },
-      'YTD': {
-        points: [
-          { date: 'Jan', amountMinor: 60000000n },
-          { date: 'Apr', amountMinor: 65000000n },
-          { date: 'Jul', amountMinor: 70000000n },
-          { date: 'Oct', amountMinor: 78000000n },
-          { date: 'Nov', amountMinor: 85000000n },
-        ],
-        percent: '+41.7%',
-        isPositive: true,
-        deltaMinor: 25000000n,
-      },
-      'ALL': {
-        points: [
-          { date: '2024', amountMinor: 50000000n },
-          { date: '2025', amountMinor: 65000000n },
-          { date: '2026', amountMinor: 85000000n },
-        ],
-        percent: '+70.0%',
-        isPositive: true,
-        deltaMinor: 35000000n,
-      },
-    },
-  },
-  operating: {
-    title: 'Operating Spending Cash',
-    ranges: {
-      '1W': {
-        points: [
-          { date: '10 Nov', amountMinor: 38000000n },
-          { date: '12 Nov', amountMinor: 36500000n },
-          { date: '14 Nov', amountMinor: 35200000n },
-          { date: '16 Nov', amountMinor: 34500000n },
-        ],
-        percent: '-9.2%',
-        isPositive: true,
-        deltaMinor: -3500000n,
-      },
-      '1M': {
-        points: [
-          { date: '18 Oct', amountMinor: 42000000n },
-          { date: '26 Oct', amountMinor: 39500000n },
-          { date: '03 Nov', amountMinor: 38000000n },
-          { date: '09 Nov', amountMinor: 36000000n },
-          { date: '16 Nov', amountMinor: 34500000n },
-        ],
-        percent: '-17.8%',
-        isPositive: true,
-        deltaMinor: -7500000n,
-      },
-      '3M': {
-        points: [
-          { date: 'Aug', amountMinor: 32000000n },
-          { date: 'Sep', amountMinor: 35000000n },
-          { date: 'Oct', amountMinor: 39500000n },
-          { date: 'Nov', amountMinor: 34500000n },
-        ],
-        percent: '+7.8%',
-        isPositive: true,
-        deltaMinor: 2500000n,
-      },
-      'YTD': {
-        points: [
-          { date: 'Jan', amountMinor: 25000000n },
-          { date: 'Apr', amountMinor: 28000000n },
-          { date: 'Jul', amountMinor: 32000000n },
-          { date: 'Oct', amountMinor: 39500000n },
-          { date: 'Nov', amountMinor: 34500000n },
-        ],
-        percent: '+38.0%',
-        isPositive: true,
-        deltaMinor: 9500000n,
-      },
-      'ALL': {
-        points: [
-          { date: '2024', amountMinor: 20000000n },
-          { date: '2025', amountMinor: 28000000n },
-          { date: '2026', amountMinor: 34500000n },
-        ],
-        percent: '+72.5%',
-        isPositive: true,
-        deltaMinor: 14500000n,
-      },
-    },
-  },
-  bills: {
-    title: 'Bills & Subscriptions Reserve',
-    ranges: {
-      '1W': {
-        points: [
-          { date: '10 Nov', amountMinor: 21000000n },
-          { date: '12 Nov', amountMinor: 21000000n },
-          { date: '14 Nov', amountMinor: 21000000n },
-          { date: '16 Nov', amountMinor: 21000000n },
-        ],
-        percent: '0.0%',
-        isPositive: true,
-        deltaMinor: 0n,
-      },
-      '1M': {
-        points: [
-          { date: '18 Oct', amountMinor: 19500000n },
-          { date: '26 Oct', amountMinor: 20000000n },
-          { date: '03 Nov', amountMinor: 20500000n },
-          { date: '09 Nov', amountMinor: 21000000n },
-          { date: '16 Nov', amountMinor: 21000000n },
-        ],
-        percent: '+7.7%',
-        isPositive: true,
-        deltaMinor: 1500000n,
-      },
-      '3M': {
-        points: [
-          { date: 'Aug', amountMinor: 18000000n },
-          { date: 'Sep', amountMinor: 19000000n },
-          { date: 'Oct', amountMinor: 20000000n },
-          { date: 'Nov', amountMinor: 21000000n },
-        ],
-        percent: '+16.7%',
-        isPositive: true,
-        deltaMinor: 3000000n,
-      },
-      'YTD': {
-        points: [
-          { date: 'Jan', amountMinor: 15000000n },
-          { date: 'Apr', amountMinor: 16500000n },
-          { date: 'Jul', amountMinor: 18000000n },
-          { date: 'Oct', amountMinor: 20000000n },
-          { date: 'Nov', amountMinor: 21000000n },
-        ],
-        percent: '+40.0%',
-        isPositive: true,
-        deltaMinor: 6000000n,
-      },
-      'ALL': {
-        points: [
-          { date: '2024', amountMinor: 12000000n },
-          { date: '2025', amountMinor: 16000000n },
-          { date: '2026', amountMinor: 21000000n },
-        ],
-        percent: '+75.0%',
-        isPositive: true,
-        deltaMinor: 9000000n,
-      },
-    },
-  },
-  emergency: {
-    title: 'Emergency Fund Reserves',
-    ranges: {
-      '1W': {
-        points: [
-          { date: '10 Nov', amountMinor: 45000000n },
-          { date: '12 Nov', amountMinor: 45000000n },
-          { date: '14 Nov', amountMinor: 45000000n },
-          { date: '16 Nov', amountMinor: 45000000n },
-        ],
-        percent: '0.0%',
-        isPositive: true,
-        deltaMinor: 0n,
-      },
-      '1M': {
-        points: [
-          { date: '18 Oct', amountMinor: 38000000n },
-          { date: '26 Oct', amountMinor: 40000000n },
-          { date: '03 Nov', amountMinor: 42000000n },
-          { date: '09 Nov', amountMinor: 44000000n },
-          { date: '16 Nov', amountMinor: 45000000n },
-        ],
-        percent: '+18.4%',
-        isPositive: true,
-        deltaMinor: 7000000n,
-      },
-      '3M': {
-        points: [
-          { date: 'Aug', amountMinor: 30000000n },
-          { date: 'Sep', amountMinor: 35000000n },
-          { date: 'Oct', amountMinor: 40000000n },
-          { date: 'Nov', amountMinor: 45000000n },
-        ],
-        percent: '+50.0%',
-        isPositive: true,
-        deltaMinor: 15000000n,
-      },
-      'YTD': {
-        points: [
-          { date: 'Jan', amountMinor: 20000000n },
-          { date: 'Apr', amountMinor: 25000000n },
-          { date: 'Jul', amountMinor: 30000000n },
-          { date: 'Oct', amountMinor: 40000000n },
-          { date: 'Nov', amountMinor: 45000000n },
-        ],
-        percent: '+125.0%',
-        isPositive: true,
-        deltaMinor: 25000000n,
-      },
-      'ALL': {
-        points: [
-          { date: '2024', amountMinor: 15000000n },
-          { date: '2025', amountMinor: 25000000n },
-          { date: '2026', amountMinor: 45000000n },
-        ],
-        percent: '+200.0%',
-        isPositive: true,
-        deltaMinor: 30000000n,
-      },
-    },
-  },
-  savings: {
-    title: 'Target Savings Pot',
-    ranges: {
-      '1W': {
-        points: [
-          { date: '10 Nov', amountMinor: 34000000n },
-          { date: '12 Nov', amountMinor: 34500000n },
-          { date: '14 Nov', amountMinor: 34800000n },
-          { date: '16 Nov', amountMinor: 35000000n },
-        ],
-        percent: '+2.9%',
-        isPositive: true,
-        deltaMinor: 1000000n,
-      },
-      '1M': {
-        points: [
-          { date: '18 Oct', amountMinor: 28500000n },
-          { date: '26 Oct', amountMinor: 30000000n },
-          { date: '03 Nov', amountMinor: 32000000n },
-          { date: '09 Nov', amountMinor: 34000000n },
-          { date: '16 Nov', amountMinor: 35000000n },
-        ],
-        percent: '+22.8%',
-        isPositive: true,
-        deltaMinor: 6500000n,
-      },
-      '3M': {
-        points: [
-          { date: 'Aug', amountMinor: 22000000n },
-          { date: 'Sep', amountMinor: 25500000n },
-          { date: 'Oct', amountMinor: 30000000n },
-          { date: 'Nov', amountMinor: 35000000n },
-        ],
-        percent: '+59.1%',
-        isPositive: true,
-        deltaMinor: 13000000n,
-      },
-      'YTD': {
-        points: [
-          { date: 'Jan', amountMinor: 15000000n },
-          { date: 'Apr', amountMinor: 18500000n },
-          { date: 'Jul', amountMinor: 22000000n },
-          { date: 'Oct', amountMinor: 30000000n },
-          { date: 'Nov', amountMinor: 35000000n },
-        ],
-        percent: '+133.3%',
-        isPositive: true,
-        deltaMinor: 20000000n,
-      },
-      'ALL': {
-        points: [
-          { date: '2024', amountMinor: 10000000n },
-          { date: '2025', amountMinor: 18000000n },
-          { date: '2026', amountMinor: 35000000n },
-        ],
-        percent: '+250.0%',
-        isPositive: true,
-        deltaMinor: 25000000n,
-      },
-    },
-  },
-  investment: {
-    title: 'Investments & Wealth Portfolio',
-    ranges: {
-      '1W': {
-        points: [
-          { date: '10 Nov', amountMinor: 1050000000n },
-          { date: '16 Nov', amountMinor: 1050000000n },
-        ],
-        percent: '0.0%',
-        isPositive: true,
-        deltaMinor: 0n,
-      },
-      '1M': {
-        points: [
-          { date: '18 Oct', amountMinor: 1010000000n },
-          { date: '26 Oct', amountMinor: 1015000000n },
-          { date: '03 Nov', amountMinor: 1030000000n },
-          { date: '16 Nov', amountMinor: 1050000000n },
-        ],
-        percent: '+4.0%',
-        isPositive: true,
-        deltaMinor: 40000000n,
-      },
-      '3M': {
-        points: [
-          { date: 'Aug', amountMinor: 975000000n },
-          { date: 'Sep', amountMinor: 990000000n },
-          { date: 'Oct', amountMinor: 1015000000n },
-          { date: 'Nov', amountMinor: 1050000000n },
-        ],
-        percent: '+7.7%',
-        isPositive: true,
-        deltaMinor: 75000000n,
-      },
-      'YTD': {
-        points: [
-          { date: 'Jan', amountMinor: 850000000n },
-          { date: 'Apr', amountMinor: 900000000n },
-          { date: 'Jul', amountMinor: 950000000n },
-          { date: 'Oct', amountMinor: 1015000000n },
-          { date: 'Nov', amountMinor: 1050000000n },
-        ],
-        percent: '+23.5%',
-        isPositive: true,
-        deltaMinor: 200000000n,
-      },
-      'ALL': {
-        points: [
-          { date: '2024', amountMinor: 600000000n },
-          { date: '2025', amountMinor: 850000000n },
-          { date: '2026', amountMinor: 1050000000n },
-        ],
-        percent: '+75.0%',
-        isPositive: true,
-        deltaMinor: 450000000n,
-      },
-    },
-  },
-  project: {
-    title: 'Project Accounts Targets',
-    ranges: {
-      '1W': {
-        points: [
-          { date: '10 Nov', amountMinor: 38000000n },
-          { date: '12 Nov', amountMinor: 38500000n },
-          { date: '14 Nov', amountMinor: 38800000n },
-          { date: '16 Nov', amountMinor: 39000000n },
-        ],
-        percent: '+2.6%',
-        isPositive: true,
-        deltaMinor: 1000000n,
-      },
-      '1M': {
-        points: [
-          { date: '18 Oct', amountMinor: 30000000n },
-          { date: '26 Oct', amountMinor: 33000000n },
-          { date: '03 Nov', amountMinor: 36000000n },
-          { date: '09 Nov', amountMinor: 38000000n },
-          { date: '16 Nov', amountMinor: 39000000n },
-        ],
-        percent: '+30.0%',
-        isPositive: true,
-        deltaMinor: 9000000n,
-      },
-      '3M': {
-        points: [
-          { date: 'Aug', amountMinor: 20000000n },
-          { date: 'Sep', amountMinor: 25000000n },
-          { date: 'Oct', amountMinor: 33000000n },
-          { date: 'Nov', amountMinor: 39000000n },
-        ],
-        percent: '+95.0%',
-        isPositive: true,
-        deltaMinor: 19000000n,
-      },
-      'YTD': {
-        points: [
-          { date: 'Jan', amountMinor: 10000000n },
-          { date: 'Apr', amountMinor: 15000000n },
-          { date: 'Jul', amountMinor: 20000000n },
-          { date: 'Oct', amountMinor: 33000000n },
-          { date: 'Nov', amountMinor: 39000000n },
-        ],
-        percent: '+290.0%',
-        isPositive: true,
-        deltaMinor: 29000000n,
-      },
-      'ALL': {
-        points: [
-          { date: '2024', amountMinor: 5000000n },
-          { date: '2025', amountMinor: 15000000n },
-          { date: '2026', amountMinor: 39000000n },
-        ],
-        percent: '+680.0%',
-        isPositive: true,
-        deltaMinor: 34000000n,
-      },
-    },
-  },
-  liability: {
-    title: 'Credit & Liabilities Owed',
-    ranges: {
-      '1W': {
-        points: [
-          { date: '10 Nov', amountMinor: 1500000n },
-          { date: '12 Nov', amountMinor: 1400000n },
-          { date: '14 Nov', amountMinor: 1350000n },
-          { date: '16 Nov', amountMinor: 1200000n },
-        ],
-        percent: '-20.0%',
-        isPositive: true,
-        deltaMinor: -300000n,
-      },
-      '1M': {
-        points: [
-          { date: '18 Oct', amountMinor: 4500000n },
-          { date: '26 Oct', amountMinor: 3800000n },
-          { date: '03 Nov', amountMinor: 2500000n },
-          { date: '09 Nov', amountMinor: 1800000n },
-          { date: '16 Nov', amountMinor: 1200000n },
-        ],
-        percent: '-73.3%',
-        isPositive: true,
-        deltaMinor: -3300000n,
-      },
-      '3M': {
-        points: [
-          { date: 'Aug', amountMinor: 7500000n },
-          { date: 'Sep', amountMinor: 5800000n },
-          { date: 'Oct', amountMinor: 4500000n },
-          { date: 'Nov', amountMinor: 1200000n },
-        ],
-        percent: '-84.0%',
-        isPositive: true,
-        deltaMinor: -6300000n,
-      },
-      'YTD': {
-        points: [
-          { date: 'Jan', amountMinor: 12000000n },
-          { date: 'Apr', amountMinor: 9500000n },
-          { date: 'Jul', amountMinor: 8200000n },
-          { date: 'Oct', amountMinor: 4500000n },
-          { date: 'Nov', amountMinor: 1200000n },
-        ],
-        percent: '-90.0%',
-        isPositive: true,
-        deltaMinor: -10800000n,
-      },
-      'ALL': {
-        points: [
-          { date: '2024', amountMinor: 15000000n },
-          { date: '2025', amountMinor: 11000000n },
-          { date: '2026', amountMinor: 1200000n },
-        ],
-        percent: '-92.0%',
-        isPositive: true,
-        deltaMinor: -13800000n,
-      },
-    },
-  },
+const FILTER_TITLES: Record<AccountFilter, string> = {
+  all: 'Total Net Assets',
+  income: 'Income Inflows',
+  operating: 'Operating Spending Cash',
+  bills: 'Bills & Subscriptions Reserve',
+  emergency: 'Emergency Fund Reserves',
+  savings: 'Target Savings Pot',
+  investment: 'Investments & Wealth Portfolio',
+  project: 'Project Accounts Targets',
+  liability: 'Credit & Liabilities Owed',
 };
 
 export function NetAssetsHero({
@@ -602,41 +53,26 @@ export function NetAssetsHero({
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(340);
 
-  const activeCategoryTrajectory =
-    FILTER_TRAJECTORIES[activeFilter] ?? FILTER_TRAJECTORIES.all;
+  const { accounts, events } = useDatabaseData();
 
-  const netWorthMinor = totalAssetsMinor - totalLiabilitiesMinor;
-
+  // Real history: the accounts in the current filter, balance on each date from the posted events.
   const activeTrend = React.useMemo(() => {
-    if (totalAssetsMinor === 0n && totalLiabilitiesMinor === 0n) {
-      return {
-        points: [
-          { date: 'Start', amountMinor: 0n },
-          { date: 'Today', amountMinor: 0n },
-        ],
-        percent: '0.0%',
-        isPositive: true,
-        deltaMinor: 0n,
-      };
-    }
-    const raw =
-      activeCategoryTrajectory.ranges[selectedRange] ??
-      activeCategoryTrajectory.ranges['1M'];
-    const latestRaw = raw.points[raw.points.length - 1]!.amountMinor;
-    if (latestRaw === 0n) return raw;
-    const targetMinor = activeFilter === 'all' ? netWorthMinor : totalAssetsMinor;
-    const scaledPoints = raw.points.map((p) => ({
-      date: p.date,
-      amountMinor: targetMinor > 0n ? (p.amountMinor * targetMinor) / latestRaw : 0n,
-    }));
-    const delta = (scaledPoints[scaledPoints.length - 1]?.amountMinor ?? 0n) - (scaledPoints[0]?.amountMinor ?? 0n);
-    return {
-      points: scaledPoints,
-      deltaMinor: delta,
-      percent: raw.percent,
-      isPositive: delta >= 0n,
-    };
-  }, [totalAssetsMinor, totalLiabilitiesMinor, activeCategoryTrajectory, selectedRange, activeFilter, netWorthMinor]);
+    const ids = accounts
+      .filter((a) => !a.archived || a.closedWithBalance)
+      .filter((a) => {
+        if (activeFilter === 'all') return true;
+        const shown = purposeOf(a);
+        if (activeFilter === 'liability') return shown === 'credit' || shown === 'loan';
+        if (activeFilter === 'investment') return shown === 'investment' || shown === 'property';
+        return shown === activeFilter;
+      })
+      .map((a) => a.id);
+    const history = balanceHistory(ids, events, selectedRange);
+    if (activeFilter !== 'liability') return history;
+    // What you owe, as a positive figure.
+    const points = history.points.map((p) => ({ ...p, amountMinor: -p.amountMinor }));
+    return { ...history, points, deltaMinor: -history.deltaMinor, isPositive: history.deltaMinor >= 0n };
+  }, [accounts, events, activeFilter, selectedRange]);
 
   const points = activeTrend.points;
 
@@ -690,14 +126,8 @@ export function NetAssetsHero({
       ? coords[activePointIndex]
       : coords[coords.length - 1]!;
 
-  const displayedAmount =
-    activeFilter === 'all'
-      ? activePointIndex !== null
-        ? currentPoint.amountMinor
-        : netWorthMinor
-      : activePointIndex !== null
-      ? currentPoint.amountMinor
-      : totalAssetsMinor;
+  // The last point is today's balance for the accounts in the filter.
+  const displayedAmount = currentPoint.amountMinor;
 
   const strokeColor =
     activeFilter === 'liability' ? colors.statusDanger : colors.primary;
@@ -731,7 +161,7 @@ export function NetAssetsHero({
             },
           ]}
         >
-          {activeCategoryTrajectory.title}
+          {FILTER_TITLES[activeFilter] ?? FILTER_TITLES.all}
         </Text>
 
         <TouchableOpacity

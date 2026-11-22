@@ -4,117 +4,35 @@ import Svg, { Path, Defs, LinearGradient, Stop, Circle, Line, Text as SvgText } 
 import { TrendingUp, TrendingDown } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { balanceHistory } from './balanceHistory';
 
 type TimeRange = '1W' | '1M' | '3M' | 'YTD' | 'ALL';
 
-interface ChartPoint {
-  date: string;
-  balanceMinor: bigint;
-}
 
 interface AccountBalanceChartProps {
+  accountId: string;
   currentBalanceMinor: bigint;
   accountType?: string;
 }
 
-const TIMEFRAME_DATA: Record<TimeRange, { points: ChartPoint[]; netDeltaMinor: bigint; percent: string; isPositive: boolean }> = {
-  '1W': {
-    points: [
-      { date: '10 Nov', balanceMinor: 81200000n },
-      { date: '11 Nov', balanceMinor: 81000000n },
-      { date: '12 Nov', balanceMinor: 80250000n },
-      { date: '13 Nov', balanceMinor: 80250000n },
-      { date: '14 Nov', balanceMinor: 75400000n },
-      { date: '15 Nov', balanceMinor: 72900000n },
-      { date: '16 Nov', balanceMinor: 84500000n },
-    ],
-    netDeltaMinor: 3300000n,
-    percent: '+4.0%',
-    isPositive: true,
-  },
-  '1M': {
-    points: [
-      { date: '18 Oct', balanceMinor: 52000000n },
-      { date: '22 Oct', balanceMinor: 49500000n },
-      { date: '26 Oct', balanceMinor: 46000000n },
-      { date: '30 Oct', balanceMinor: 42000000n },
-      { date: '03 Nov', balanceMinor: 39000000n },
-      { date: '07 Nov', balanceMinor: 37500000n },
-      { date: '11 Nov', balanceMinor: 35000000n },
-      { date: '16 Nov', balanceMinor: 84500000n },
-    ],
-    netDeltaMinor: 32500000n,
-    percent: '+62.5%',
-    isPositive: true,
-  },
-  '3M': {
-    points: [
-      { date: 'Aug', balanceMinor: 38000000n },
-      { date: 'Sep', balanceMinor: 44000000n },
-      { date: 'Oct', balanceMinor: 52000000n },
-      { date: 'Nov', balanceMinor: 84500000n },
-    ],
-    netDeltaMinor: 46500000n,
-    percent: '+122.3%',
-    isPositive: true,
-  },
-  'YTD': {
-    points: [
-      { date: 'Jan', balanceMinor: 21000000n },
-      { date: 'Apr', balanceMinor: 29000000n },
-      { date: 'Jul', balanceMinor: 35000000n },
-      { date: 'Oct', balanceMinor: 52000000n },
-      { date: 'Nov', balanceMinor: 84500000n },
-    ],
-    netDeltaMinor: 63500000n,
-    percent: '+302.4%',
-    isPositive: true,
-  },
-  'ALL': {
-    points: [
-      { date: '2024', balanceMinor: 15000000n },
-      { date: '2025', balanceMinor: 32000000n },
-      { date: '2026', balanceMinor: 84500000n },
-    ],
-    netDeltaMinor: 69500000n,
-    percent: '+463.3%',
-    isPositive: true,
-  },
-};
 
-export function AccountBalanceChart({ currentBalanceMinor, accountType }: AccountBalanceChartProps) {
+export function AccountBalanceChart({ accountId, currentBalanceMinor, accountType }: AccountBalanceChartProps) {
   const { colors, typography, spacing, radii } = useTheme();
   const [selectedRange, setSelectedRange] = useState<TimeRange>('1M');
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(340);
 
+  const { events } = useDatabaseData();
+
+  // Real history from this account's posted events; the last point is today's balance.
   const activeData = React.useMemo(() => {
-    if (currentBalanceMinor === 0n) {
-      return {
-        points: [
-          { date: 'Start', balanceMinor: 0n },
-          { date: 'Today', balanceMinor: 0n },
-        ],
-        netDeltaMinor: 0n,
-        percent: '0.0%',
-        isPositive: true,
-      };
-    }
-    const raw = TIMEFRAME_DATA[selectedRange];
-    const latestRaw = raw.points[raw.points.length - 1]!.balanceMinor;
-    if (latestRaw === 0n) return raw;
-    const scaledPoints = raw.points.map((p) => ({
-      date: p.date,
-      balanceMinor: (p.balanceMinor * currentBalanceMinor) / latestRaw,
-    }));
-    const delta = currentBalanceMinor - scaledPoints[0]!.balanceMinor;
-    return {
-      points: scaledPoints,
-      netDeltaMinor: delta,
-      percent: raw.percent,
-      isPositive: delta >= 0n,
-    };
-  }, [currentBalanceMinor, selectedRange]);
+    const history = balanceHistory([accountId], events, selectedRange);
+    const points = history.points.map((p) => ({ date: p.date, balanceMinor: p.amountMinor }));
+    if (points.length > 0) points[points.length - 1] = { ...points[points.length - 1]!, balanceMinor: currentBalanceMinor };
+    const delta = currentBalanceMinor - (points[0]?.balanceMinor ?? 0n);
+    return { points, netDeltaMinor: delta, percent: history.percent, isPositive: delta >= 0n };
+  }, [accountId, events, currentBalanceMinor, selectedRange]);
 
   const points = activeData.points;
 

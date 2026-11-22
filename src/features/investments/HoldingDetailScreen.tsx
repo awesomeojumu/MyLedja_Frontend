@@ -14,6 +14,11 @@ import { formatNaira } from '../../money';
 import { RecordDividendSheet } from './RecordDividendSheet';
 import { SellHoldingSheet } from './SellHoldingSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { holdingFigures } from './positions';
+import { pickAccount } from '../accounts/pickAccount';
+import { valueOf } from '../../ledger/investments';
+import { t } from '../../i18n';
+import { Toast } from '../../design/components/Toast';
 
 interface HoldingDetailScreenProps {
   holdingId: string;
@@ -22,65 +27,80 @@ interface HoldingDetailScreenProps {
 export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
-  const { holdings: dbHoldings } = useDatabaseData();
+  const { repo, holdings: dbHoldings, accounts, events: dbEvents, snapshot } = useDatabaseData();
 
   const matched = dbHoldings.find((h) => h.id === holdingId || h.symbol === holdingId);
 
-  // State
-  const ticker = matched?.symbol || holdingId || 'Asset';
-  const name = matched?.name || 'Investment Holding';
-  const [units, setUnits] = useState(0);
-  const [avgCostMinor, setAvgCostMinor] = useState(0n);
-  const [currentPriceMinor, setCurrentPriceMinor] = useState(0n);
+  const ticker = matched?.symbol || matched?.name || holdingId || '';
+  const name = matched?.name || '';
+  const figures = React.useMemo(
+    () => (matched ? holdingFigures(snapshot?.lots ?? [], snapshot?.prices ?? []).get(matched.id) : undefined),
+    [matched, snapshot?.lots, snapshot?.prices],
+  );
+  const units = figures?.units ?? 0;
+  const avgCostMinor = figures?.avgCostMinor ?? 0n;
+  const currentPriceMinor = figures?.priceMinor ?? 0n;
+  const [notice, setNotice] = useState('');
 
   // Sheets
   const [dividendVisible, setDividendVisible] = useState(false);
   const [sellVisible, setSellVisible] = useState(false);
 
-  // Real events history
-  const [events, setEvents] = useState<Array<{
-    id: string;
-    date: string;
-    type: string;
-    description: string;
-    amountMinor: bigint;
-  }>>([]);
+  // History from the posted events for this holding.
+  const events = React.useMemo(() => {
+    if (!matched) return [];
+    return dbEvents
+      .filter((e) => e.status === 'posted' && (e.holdingId === matched.id || e.lines.some((l) => l.ledgerAccountId === matched.ledgerAccountId)))
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((e) => {
+        const cash = e.lines.reduce((sum, l) => (l.ledgerAccountId !== matched.ledgerAccountId && l.amountMinor > 0n ? sum + l.amountMinor : sum), 0n);
+        const kind = e.type === 'investment_buy' ? 'buy' : e.type === 'investment_sell' ? 'sell' : 'dividend';
+        return {
+          id: e.id,
+          date: e.date,
+          type: kind,
+          description:
+            kind === 'buy'
+              ? t('holding.bought', { units: e.investmentUnits ?? '' })
+              : kind === 'sell'
+                ? t('holding.sold', { units: e.investmentUnits ?? '' })
+                : t('holding.dividend'),
+          amountMinor: cash,
+        };
+      });
+  }, [matched, dbEvents]);
 
-  const totalValueMinor =
-    (currentPriceMinor * BigInt(Math.round(units * 100))) / 100n;
-  const totalCostMinor =
-    (avgCostMinor * BigInt(Math.round(units * 100))) / 100n;
+  const totalValueMinor = figures ? (figures.hasPrice ? valueOf(figures.unitsMicro, figures.priceMinor) : figures.costMinor) : 0n;
+  const totalCostMinor = figures?.costMinor ?? 0n;
   const gainMinor = totalValueMinor - totalCostMinor;
   const gainPercent =
     totalCostMinor > 0n
       ? Math.round((Number(gainMinor) / Number(totalCostMinor)) * 100)
       : 0;
 
-  const handleDividend = (amountMinor: bigint) => {
-    setEvents((prev) => [
-      {
-        id: `div-${Date.now()}`,
-        date: 'Today',
-        type: 'dividend',
-        description: 'Dividend Payout Received',
-        amountMinor,
-      },
-      ...prev,
-    ]);
+  const cashAccountId = pickAccount(accounts)?.id;
+
+  const handleDividend = async (amountMinor: bigint) => {
+    if (!matched || !cashAccountId) return;
+    const res = await repo.recordDividend({
+      holdingId: matched.id,
+      amount: amountMinor,
+      date: new Date().toISOString().slice(0, 10),
+      cashAccountId,
+    });
+    setNotice(res.ok ? t('holding.saved') : t('holding.failed'));
   };
 
-  const handleSale = (soldUnits: number, priceMinor: bigint) => {
-    setUnits((prev) => Math.max(0, prev - soldUnits));
-    setEvents((prev) => [
-      {
-        id: `sell-${Date.now()}`,
-        date: 'Today',
-        type: 'sell',
-        description: `Sold ${soldUnits} units @ ${formatNaira(priceMinor)}`,
-        amountMinor: (priceMinor * BigInt(Math.round(soldUnits * 100))) / 100n,
-      },
-      ...prev,
-    ]);
+  const handleSale = async (soldUnits: number, priceMinor: bigint) => {
+    if (!matched || !cashAccountId) return;
+    const res = await repo.sellHolding({
+      holdingId: matched.id,
+      units: String(soldUnits),
+      pricePerUnit: priceMinor,
+      cashAccountId,
+      date: new Date().toISOString().slice(0, 10),
+    });
+    setNotice(res.ok ? t('holding.saved') : t('holding.failed'));
   };
 
   return (
@@ -358,6 +378,8 @@ export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
         avgCostMinor={avgCostMinor}
         onConfirmSale={handleSale}
       />
+
+      <Toast visible={!!notice} message={notice} onDismiss={() => setNotice('')} />
     </View>
   );
 }

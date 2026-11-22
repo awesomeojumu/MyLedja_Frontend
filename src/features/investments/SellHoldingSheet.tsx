@@ -26,7 +26,7 @@ export function SellHoldingSheet({
   const [priceText, setPriceText] = useState('');
   const [error, setError] = useState('');
 
-  const numUnits = parseFloat(unitsText) || 0;
+  const numUnits = Number(unitsText.replace(/,/g, '')) || 0;
   const parsedPrice = parseAmount(priceText);
   const priceMinor = parsedPrice.ok ? parsedPrice.minor : 0n;
 

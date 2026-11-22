@@ -332,6 +332,7 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
 
         {/* Interactive Balance Trend Chart */}
         <AccountBalanceChart
+          accountId={matched?.id ?? accountId}
           currentBalanceMinor={balanceMinor}
           accountType={accountType}
         />

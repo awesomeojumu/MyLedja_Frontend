@@ -126,14 +126,17 @@ export function PlanScreen() {
     }
   };
 
-  const handleConfirmPaid = (billId: string) => {
+  const handleConfirmPaid = (billId: string, paidFromId?: string) => {
     const updated = localBills.map((b) => (b.id === billId ? { ...b, paid: true } : b));
     setLocalBills(updated);
     saveBillsToStorage(updated);
 
     const bill = bills.find((b) => b.id === billId);
     const schedule = dbRecurring.find((r) => r.id === billId);
-    const payFrom = accounts.find((a) => a.id === schedule?.accountId && !a.archived) ?? pickAccount(accounts, 'bills');
+    const payFrom =
+      accounts.find((a) => a.id === paidFromId && !a.archived) ??
+      accounts.find((a) => a.id === schedule?.accountId && !a.archived) ??
+      pickAccount(accounts, 'bills');
     if (bill && repo && payFrom) {
       const today = new Date().toISOString().slice(0, 10);
       const known = schedule?.categoryId && categories.some((c) => c.id === schedule.categoryId) ? schedule.categoryId : null;
@@ -749,8 +752,9 @@ export function PlanScreen() {
           onClose={() => setPayingBill(null)}
           billName={payingBill.name}
           amountMinor={payingBill.amountMinor}
-          onConfirmPaid={() => {
-            handleConfirmPaid(payingBill.id);
+          defaultAccountId={dbRecurring.find((r) => r.id === payingBill.id)?.accountId}
+          onConfirmPaid={(accountId) => {
+            handleConfirmPaid(payingBill.id, accountId);
             setPayingBill(null);
           }}
         />

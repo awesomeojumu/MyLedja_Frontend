@@ -17,6 +17,7 @@ import { DeleteCategorySheet } from './DeleteCategorySheet';
 import { MoveMoneySheet } from './MoveMoneySheet';
 import { QuickTransactionSheet } from '../dashboard/QuickTransactionSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { budgetAssignId } from '../../data/workspace/model';
 
 interface CategoryDetailScreenProps {
   categoryId: string;
@@ -31,6 +32,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
     events: dbEvents,
     payees: dbPayees,
     assigns,
+    repo,
   } = useDatabaseData();
 
   const matched = dbCategories.find((c) => c.id === categoryId) || dbCategories[0];
@@ -41,7 +43,8 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
 
   const name = customName ?? (matched?.name || 'Category');
   const group = customGroup ?? (matched?.group || 'Needs & Living Expenses');
-  const targetMinor = customTarget ?? (matched ? (assigns.get(matched.id) ?? 0n) : 0n);
+  const month = new Date().toISOString().slice(0, 7);
+  const targetMinor = customTarget ?? (matched ? (assigns.get(budgetAssignId(matched.id, month)) ?? 0n) : 0n);
 
   // Real transactions from database
   const transactions = React.useMemo(() => {
@@ -416,7 +419,10 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
         onClose={() => setTargetSheetVisible(false)}
         categoryName={name}
         initialTargetMinor={targetMinor}
-        onSaveTarget={(t) => setTargetMinor(t)}
+        onSaveTarget={(amount) => {
+          setTargetMinor(amount);
+          void repo.setAssigned(categoryId, month, amount);
+        }}
       />
 
       <EditCategorySheet
@@ -441,22 +447,15 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
         visible={moveMoneyVisible}
         onClose={() => setMoveMoneyVisible(false)}
         envelopes={[
-          {
-            id: categoryId,
-            name,
-            group,
-            plannedMinor: targetMinor,
-            spentMinor,
-          },
-          {
-            id: 'other-1',
-            name: 'Emergency Fund',
-            group: 'Savings',
-            plannedMinor: 5000000n,
-            spentMinor: 0n,
-          },
+          { id: categoryId, name, group, plannedMinor: targetMinor, spentMinor },
+          ...dbCategories
+            .filter((c) => c.id !== categoryId && c.kind === 'expense' && !c.hidden && !c.deleted)
+            .map((c) => ({ id: c.id, name: c.name, group: c.group, plannedMinor: assigns.get(budgetAssignId(c.id, month)) ?? 0n, spentMinor: 0n })),
         ]}
-        onConfirmMove={() => setMoveMoneyVisible(false)}
+        onConfirmMove={(fromId: string, toId: string, amountMinor: bigint) => {
+          void repo.moveAssigned(fromId, toId, month, amountMinor);
+          setMoveMoneyVisible(false);
+        }}
       />
 
       <QuickTransactionSheet

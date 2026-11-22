@@ -3,13 +3,18 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Building2, Check } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 import { formatNaira } from '../../money';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { isSpendingAccount } from '../accounts/purpose';
+import { pickAccount } from '../accounts/pickAccount';
 
 interface MarkPaidSheetProps {
   visible: boolean;
   onClose: () => void;
   billName: string;
   amountMinor: bigint;
-  onConfirmPaid: (account: string) => void;
+  /** The account id the bill was paid from. */
+  onConfirmPaid: (accountId: string) => void;
+  defaultAccountId?: string;
 }
 
 export function MarkPaidSheet({
@@ -18,11 +23,17 @@ export function MarkPaidSheet({
   billName,
   amountMinor,
   onConfirmPaid,
+  defaultAccountId,
 }: MarkPaidSheetProps) {
   const { colors, typography, spacing, radii } = useTheme();
 
-  const accounts = ['GTBank Main Salary', 'Kuda Bank', 'Cash Wallet'];
-  const [selectedAccount, setSelectedAccount] = useState(accounts[0]!);
+  const { accounts: dbAccounts } = useDatabaseData();
+  const payable = dbAccounts.filter(isSpendingAccount);
+  const fallback = defaultAccountId && payable.some((a) => a.id === defaultAccountId) ? defaultAccountId : (pickAccount(dbAccounts, 'bills')?.id ?? '');
+  const [picked, setSelectedAccount] = useState('');
+  const selectedAccount = payable.some((a) => a.id === picked) ? picked : fallback;
+  const accounts = payable.map((a) => a.id);
+  const nameOf = (id: string) => payable.find((a) => a.id === id)?.name ?? '';
 
   return (
     <BottomSheet visible={visible} onClose={onClose} title="Confirm Bill Payment">
@@ -110,7 +121,7 @@ export function MarkPaidSheet({
                   marginLeft: spacing.sm,
                 }}
               >
-                {acc}
+                {nameOf(acc)}
               </Text>
             </View>
             {selectedAccount === acc && <Check size={16} color={colors.primary} />}

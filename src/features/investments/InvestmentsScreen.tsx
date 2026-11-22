@@ -22,6 +22,9 @@ import {
 import { useTheme } from '../../design';
 import { formatNaira, parseAmount } from '../../money';
 import { RecordTradeSheet, type AddedTrade } from './RecordTradeSheet';
+import { holdingFigures } from './positions';
+import { t } from '../../i18n';
+import { Toast } from '../../design/components/Toast';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import type { HoldingType, HoldingUnitType } from '../../data/workspace/model';
 
@@ -76,10 +79,10 @@ export function InvestmentsScreen() {
   const router = useRouter();
 
   // Live Database Hook
-  const { repo, holdings: dbHoldings, accounts: dbAccounts } = useDatabaseData();
+  const { repo, holdings: dbHoldings, accounts: dbAccounts, snapshot } = useDatabaseData();
+  const [notice, setNotice] = useState('');
 
   // State
-  const [localHoldings, setLocalHoldings] = useState<HoldingItemUI[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
 
@@ -94,22 +97,32 @@ export function InvestmentsScreen() {
     { id: 'preciousMetals', label: 'Precious Metals', icon: Shield },
   ];
 
-  const holdings: HoldingItemUI[] = React.useMemo(() => {
-    if (dbHoldings.length > 0) {
-      return dbHoldings.map((h, idx) => ({
-        id: h.id,
-        ticker: h.symbol || h.name,
-        name: h.name,
-        type: h.type || 'stock',
-        unitType: h.unitType,
-        units: 1000 * (idx + 1),
-        avgCostMinor: 25000n,
-        currentPriceMinor: 28500n,
-        location: h.location,
-      }));
-    }
-    return localHoldings;
-  }, [dbHoldings, localHoldings]);
+  const figures = React.useMemo(
+    () => holdingFigures(snapshot?.lots ?? [], snapshot?.prices ?? []),
+    [snapshot?.lots, snapshot?.prices],
+  );
+
+  // Real positions: units and cost from the lots, value from the latest price entered.
+  const holdings: HoldingItemUI[] = React.useMemo(
+    () =>
+      dbHoldings
+        .filter((h) => !h.archived && !h.isWrittenOff)
+        .map((h) => {
+          const f = figures.get(h.id);
+          return {
+            id: h.id,
+            ticker: h.symbol || h.name,
+            name: h.name,
+            type: h.type || 'stock',
+            unitType: h.unitType,
+            units: f?.units ?? 0,
+            avgCostMinor: f?.avgCostMinor ?? 0n,
+            currentPriceMinor: f?.priceMinor ?? 0n,
+            location: h.location,
+          };
+        }),
+    [dbHoldings, figures],
+  );
 
   const filteredHoldings = React.useMemo(() => {
     if (selectedCategory === 'all') return holdings;
@@ -137,73 +150,74 @@ export function InvestmentsScreen() {
       ? Math.round((Number(totalGainMinor) / Number(totalCostMinor)) * 100)
       : 0;
 
-  const handleTrade = (trade: AddedTrade) => {
-    if (repo && dbAccounts.length > 0) {
-      repo.createHolding({
-        name: trade.name,
-        symbol: trade.ticker,
-        type: trade.type,
-        accountId: dbAccounts[0]!.id,
-        currentPriceMinor: trade.priceMinor,
-        unitType: trade.unitType,
-        location: trade.location,
-      }).catch((e: unknown) => console.warn('Failed to record holding in DB', e));
-    }
-    setLocalHoldings((prev) => {
-      const existing = prev.find(
-        (h) =>
-          (trade.holdingId && h.id === trade.holdingId) ||
-          h.ticker.toUpperCase() === trade.ticker.toUpperCase() ||
-          h.name.toLowerCase() === trade.name.toLowerCase()
-      );
-      if (existing) {
-        if (trade.action === 'buy') {
-          const totalExistingCost =
-            (existing.avgCostMinor * BigInt(Math.round(existing.units * 100))) / 100n;
-          const newTradeCost =
-            (trade.priceMinor * BigInt(Math.round(trade.units * 100))) / 100n;
-          const nextUnits = existing.units + trade.units;
-          const nextAvg =
-            nextUnits > 0
-              ? (totalExistingCost + newTradeCost) / BigInt(Math.round(nextUnits))
-              : existing.avgCostMinor;
-
-          return prev.map((h) =>
-            h.id === existing.id
-              ? {
-                  ...h,
-                  units: nextUnits,
-                  avgCostMinor: nextAvg,
-                  currentPriceMinor: trade.priceMinor,
-                }
-              : h
-          );
-        } else {
-          const nextUnits = Math.max(0, existing.units - trade.units);
-          if (nextUnits <= 0) {
-            return prev.filter((h) => h.id !== existing.id);
-          }
-          return prev.map((h) =>
-            h.id === existing.id ? { ...h, units: nextUnits, currentPriceMinor: trade.priceMinor } : h
-          );
-        }
-      } else {
-        return [
-          ...prev,
-          {
-            id: `h-${Date.now()}`,
-            ticker: trade.ticker,
-            name: trade.name,
-            type: trade.type,
-            unitType: trade.unitType,
-            units: trade.units,
-            avgCostMinor: trade.priceMinor,
-            currentPriceMinor: trade.priceMinor,
-            location: trade.location,
-          },
-        ];
-      }
+  /** Holdings live in an investment account; the first trade makes one if there isn't one yet. */
+  const investmentAccountId = async (): Promise<string | null> => {
+    const existing = dbAccounts.find((a) => a.type === 'investment' && !a.archived);
+    if (existing) return existing.id;
+    const made = await repo.addAccount({
+      name: t('invest.accountName'),
+      type: 'investment',
+      purpose: 'investment',
+      openingBalance: 0n,
+      openingDate: new Date().toISOString().slice(0, 10),
     });
+    return made.ok ? made.value.id : null;
+  };
+
+  const handleTrade = async (trade: AddedTrade) => {
+    const date = new Date().toISOString().slice(0, 10);
+    const units = String(trade.units);
+    const known =
+      dbHoldings.find((h) => h.id === trade.holdingId) ??
+      dbHoldings.find(
+        (h) =>
+          !h.archived &&
+          ((trade.ticker && h.symbol?.toUpperCase() === trade.ticker.toUpperCase()) ||
+            h.name.toLowerCase() === trade.name.toLowerCase()),
+      );
+    let ok = false;
+    if (trade.action === 'sell') {
+      if (known) {
+        const res = await repo.sellHolding({
+          holdingId: known.id,
+          units,
+          pricePerUnit: trade.priceMinor,
+          fees: trade.feesMinor,
+          cashAccountId: trade.cashAccountId,
+          date,
+        });
+        ok = res.ok;
+      }
+    } else {
+      let holdingId = known?.id;
+      if (!holdingId) {
+        const parent = await investmentAccountId();
+        if (parent) {
+          const created = await repo.createHolding({
+            name: trade.name,
+            symbol: trade.ticker,
+            type: trade.type,
+            accountId: parent,
+            currentPriceMinor: trade.priceMinor,
+            unitType: trade.unitType,
+            location: trade.location,
+          });
+          if (created.ok) holdingId = created.value.id;
+        }
+      }
+      if (holdingId) {
+        const res = await repo.buyHolding({
+          holdingId,
+          units,
+          pricePerUnit: trade.priceMinor,
+          fees: trade.feesMinor,
+          cashAccountId: trade.cashAccountId,
+          date,
+        });
+        ok = res.ok;
+      }
+    }
+    setNotice(ok ? t(trade.action === 'sell' ? 'invest.sold' : 'invest.saved', { name: trade.name }) : t('invest.failed'));
   };
 
   return (
@@ -689,6 +703,8 @@ export function InvestmentsScreen() {
           unitType: h.unitType,
         }))}
       />
+
+      <Toast visible={!!notice} message={notice} onDismiss={() => setNotice('')} />
     </View>
   );
 }

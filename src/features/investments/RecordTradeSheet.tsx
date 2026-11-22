@@ -19,6 +19,10 @@ import {
   type DropdownOption,
 } from '../../design';
 import { parseAmount } from '../../money';
+import { t } from '../../i18n';
+import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { isSpendingAccount } from '../accounts/purpose';
+import { pickAccount } from '../accounts/pickAccount';
 import type { HoldingType, HoldingUnitType } from '../../data/workspace/model';
 
 export interface AddedTrade {
@@ -33,6 +37,8 @@ export interface AddedTrade {
   feesMinor: bigint;
   location?: string;
   holdingId?: string;
+  /** The everyday account the money comes from (buy) or goes into (sell). */
+  cashAccountId: string;
 }
 
 export interface ExistingHoldingOption {
@@ -189,6 +195,10 @@ export function RecordTradeSheet({
   const [location, setLocation] = useState('');
   const [unitType, setUnitType] = useState<HoldingUnitType>('shares');
   const [error, setError] = useState('');
+  const { accounts } = useDatabaseData();
+  const cashAccounts = accounts.filter(isSpendingAccount);
+  const [cashAccountId, setCashAccountId] = useState('');
+  const cashId = cashAccounts.some((a) => a.id === cashAccountId) ? cashAccountId : (pickAccount(accounts)?.id ?? '');
 
   const activeCategory =
     INVESTMENT_CATEGORIES.find((c) => c.id === category) ??
@@ -235,8 +245,8 @@ export function RecordTradeSheet({
       setError('Investment name or symbol is required');
       return;
     }
-    const numUnits = parseFloat(units);
-    if (!numUnits || numUnits <= 0) {
+    const numUnits = Number(units.replace(/,/g, ''));
+    if (!Number.isFinite(numUnits) || numUnits <= 0) {
       setError('Please enter a valid quantity / unit amount');
       return;
     }
@@ -246,6 +256,10 @@ export function RecordTradeSheet({
       return;
     }
     const parsedFees = parseAmount(feesText);
+    if (!cashId) {
+      setError(t('invest.noCashAccount'));
+      return;
+    }
 
     const finalTicker = activeCategory.showTicker
       ? ticker.trim().toUpperCase() || activeCategory.defaultTicker
@@ -263,6 +277,7 @@ export function RecordTradeSheet({
       feesMinor: parsedFees.ok ? parsedFees.minor : 0n,
       location: location.trim() || undefined,
       holdingId: selectedHoldingId || undefined,
+      cashAccountId: cashId,
     });
 
     setTicker('');
@@ -448,6 +463,14 @@ export function RecordTradeSheet({
             onChangeText={setFeesText}
           />
         </View>
+
+        <Dropdown
+          label={action === 'sell' ? t('invest.paidInto') : t('invest.paidFrom')}
+          value={cashId}
+          options={cashAccounts.map((a) => ({ label: a.name, value: a.id, subtitle: a.institution }))}
+          onSelect={setCashAccountId}
+          containerStyle={{ marginBottom: spacing.md }}
+        />
 
         <Button
           label={

@@ -142,7 +142,7 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
               fontSize: typography.sizes.xs,
             }}
           >
-            GTBank Main Salary
+            {matchedAccount?.name ?? ''}
           </Text>
         </View>
       </View>
