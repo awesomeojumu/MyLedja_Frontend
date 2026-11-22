@@ -12,13 +12,15 @@ import { RecentActivityList, type RecentTransactionItem } from './RecentActivity
 import { QuickTransactionSheet } from './QuickTransactionSheet';
 import { QuickTransferSheet } from './QuickTransferSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { t, type TextKey } from '../../i18n';
+import { monthCodeOf, shiftMonth, thisMonthLabel } from '../../lib/months';
 
 export function DashboardScreen() {
   const { colors, spacing } = useTheme();
   const router = useRouter();
 
   // Screen State
-  const [currentMonth, setCurrentMonth] = useState('November 2026');
+  const [currentMonth, setCurrentMonth] = useState(thisMonthLabel);
   const [isCurrentMonth, setIsCurrentMonth] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -34,20 +36,13 @@ export function DashboardScreen() {
     getMonthlyTotals,
   } = useDatabaseData();
 
-  const handlePrevMonth = () => {
-    setCurrentMonth('October 2026');
-    setIsCurrentMonth(false);
+  const goToMonth = (label: string) => {
+    setCurrentMonth(label);
+    setIsCurrentMonth(label === thisMonthLabel());
   };
-
-  const handleNextMonth = () => {
-    setCurrentMonth('December 2026');
-    setIsCurrentMonth(false);
-  };
-
-  const handleResetToCurrent = () => {
-    setCurrentMonth('November 2026');
-    setIsCurrentMonth(true);
-  };
+  const handlePrevMonth = () => goToMonth(shiftMonth(currentMonth, -1));
+  const handleNextMonth = () => goToMonth(shiftMonth(currentMonth, 1));
+  const handleResetToCurrent = () => goToMonth(thisMonthLabel());
 
   // Popups State
   const [expenseSheetVisible, setExpenseSheetVisible] = useState(false);
@@ -55,11 +50,7 @@ export function DashboardScreen() {
   const [transferSheetVisible, setTransferSheetVisible] = useState(false);
 
   // Dynamic Metrics from Database
-  const targetMonthCode = currentMonth.includes('Oct')
-    ? '2026-10'
-    : currentMonth.includes('Dec')
-    ? '2026-12'
-    : '2026-11';
+  const targetMonthCode = monthCodeOf(currentMonth);
 
   const monthlyTotals = getMonthlyTotals(targetMonthCode);
 
@@ -86,22 +77,44 @@ export function DashboardScreen() {
     });
   }, [dbAccounts, accountBalances]);
 
-  // Live recent transactions from MongoDB
+  // Recent activity: newest first, each event named for what it is. Opening balances, corrections and moves
+  // between your own accounts are shown as neutral, never as spending.
   const displayTransactions: RecentTransactionItem[] = useMemo(() => {
-    return dbEvents.slice(0, 10).map((ev) => {
-      let amount = 0n;
-      for (const line of ev.lines) {
-        if (line.amountMinor > 0n) amount += line.amountMinor;
-      }
-      return {
-        id: ev.id,
-        payee: ev.payeeName || (ev.type === 'income' ? 'Income Deposit' : 'Expense Outflow'),
-        category: ev.type === 'transfer' ? 'Transfer' : ev.type === 'income' ? 'Income' : 'Expense',
-        date: ev.date,
-        amountMinor: amount,
-        type: ev.type === 'income' ? 'income' : ev.type === 'transfer' ? 'transfer' : 'expense',
-      };
-    });
+    const kindOf: Partial<Record<string, { label: TextKey; type: RecentTransactionItem['type'] }>> = {
+      income: { label: 'activity.income', type: 'income' },
+      salary_gross: { label: 'activity.income', type: 'income' },
+      expense: { label: 'activity.expense', type: 'expense' },
+      transfer: { label: 'activity.transfer', type: 'transfer' },
+      opening_balance: { label: 'activity.opening', type: 'transfer' },
+      balance_adjustment: { label: 'activity.adjustment', type: 'transfer' },
+      refund: { label: 'activity.refund', type: 'income' },
+      investment_buy: { label: 'activity.investBuy', type: 'transfer' },
+      investment_sell: { label: 'activity.investSell', type: 'transfer' },
+      collect: { label: 'activity.debtIn', type: 'income' },
+      loan_repayment: { label: 'activity.debtOut', type: 'expense' },
+      lend: { label: 'activity.lend', type: 'transfer' },
+      loan_proceeds: { label: 'activity.loan', type: 'transfer' },
+      write_off: { label: 'activity.writeOff', type: 'expense' },
+    };
+    return [...dbEvents]
+      .filter((ev) => ev.status === 'posted' && ev.type !== 'reversal')
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 10)
+      .map((ev) => {
+        let amount = 0n;
+        for (const line of ev.lines) {
+          if (line.amountMinor > 0n) amount += line.amountMinor;
+        }
+        const kind = kindOf[ev.type] ?? { label: 'activity.expense' as TextKey, type: 'expense' as const };
+        return {
+          id: ev.id,
+          payee: ev.payeeName || t(kind.label),
+          category: t(kind.label),
+          date: ev.date,
+          amountMinor: amount,
+          type: kind.type,
+        };
+      });
   }, [dbEvents]);
 
   const showSaved = (message: string) => {

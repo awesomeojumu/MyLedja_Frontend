@@ -1,4 +1,5 @@
 import React from 'react';
+import { thisMonthLabel } from '../../lib/months';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Eye, EyeOff, TrendingUp, TrendingDown, Wallet } from 'lucide-react-native';
 import { useTheme, useResponsive } from '../../design';
@@ -19,7 +20,7 @@ export function NetWorthHeroCard({
   monthlyDeltaMinor,
   incomeMinor,
   spentMinor,
-  currentMonth = 'November 2026',
+  currentMonth = thisMonthLabel(),
   privacyMode,
   onTogglePrivacy,
 }: NetWorthHeroCardProps) {

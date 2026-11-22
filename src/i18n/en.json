@@ -4301,5 +4301,18 @@
   "goals.add.save": "Add money",
   "goals.add.remaining": "{amount} to go",
   "goals.spend.failed": "That did not save. Try again.",
-  "goals.savingsGroup": "Savings"
+  "goals.savingsGroup": "Savings",
+  "activity.income": "Income",
+  "activity.expense": "Expense",
+  "activity.transfer": "Transfer",
+  "activity.opening": "Opening balance",
+  "activity.adjustment": "Balance correction",
+  "activity.refund": "Refund",
+  "activity.investBuy": "Investment bought",
+  "activity.investSell": "Investment sold",
+  "activity.debtIn": "Debt repaid to you",
+  "activity.debtOut": "Debt repayment",
+  "activity.lend": "Money lent",
+  "activity.loan": "Loan received",
+  "activity.writeOff": "Written off"
 }

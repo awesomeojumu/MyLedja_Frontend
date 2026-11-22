@@ -5,9 +5,11 @@ import { useTheme, BottomSheet, Button } from '../../design';
 export interface TermsPrivacySheetProps {
   visible: boolean;
   onClose: () => void;
+  /** Agreeing ticks the terms box on Sign up. */
+  onAgree?: () => void;
 }
 
-export function TermsPrivacySheet({ visible, onClose }: TermsPrivacySheetProps) {
+export function TermsPrivacySheet({ visible, onClose, onAgree }: TermsPrivacySheetProps) {
   const { colors, typography, spacing } = useTheme();
 
   return (
@@ -40,7 +42,15 @@ export function TermsPrivacySheet({ visible, onClose }: TermsPrivacySheetProps) 
         </Text>
 
         <View style={{ marginTop: spacing.xl }}>
-          <Button label="I Understand & Agree" onPress={onClose} variant="primary" size="lg" />
+          <Button
+            label="I Understand & Agree"
+            onPress={() => {
+              onAgree?.();
+              onClose();
+            }}
+            variant="primary"
+            size="lg"
+          />
         </View>
       </ScrollView>
     </BottomSheet>

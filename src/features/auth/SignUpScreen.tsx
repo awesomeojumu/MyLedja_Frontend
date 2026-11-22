@@ -360,7 +360,7 @@ export function SignUpScreen() {
         </View>
       </View>
 
-      <TermsPrivacySheet visible={termsVisible} onClose={() => setTermsVisible(false)} />
+      <TermsPrivacySheet visible={termsVisible} onClose={() => setTermsVisible(false)} onAgree={() => setTermsAccepted(true)} />
     </ScrollView>
   );
 }

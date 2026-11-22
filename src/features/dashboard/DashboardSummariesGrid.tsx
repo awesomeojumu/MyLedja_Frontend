@@ -11,6 +11,7 @@ import {
 import { useTheme, useResponsive } from '../../design';
 import { formatNaira } from '../../money';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { monthCodeOf, thisMonthLabel } from '../../lib/months';
 
 export interface DashboardSummariesGridProps {
   privacyMode: boolean;
@@ -19,7 +20,7 @@ export interface DashboardSummariesGridProps {
 
 export function DashboardSummariesGrid({
   privacyMode,
-  currentMonth = 'November 2026',
+  currentMonth = thisMonthLabel(),
 }: DashboardSummariesGridProps) {
   const { colors, typography, spacing, radii } = useTheme();
   const { isDesktop, isTablet } = useResponsive();
@@ -33,13 +34,10 @@ export function DashboardSummariesGrid({
     recurring: dbRecurring,
     debts: dbDebts,
     goals: dbGoals,
+    allocations,
   } = useDatabaseData();
 
-  const targetMonthCode = currentMonth.includes('Oct')
-    ? '2026-10'
-    : currentMonth.includes('Dec')
-    ? '2026-12'
-    : '2026-11';
+  const targetMonthCode = monthCodeOf(currentMonth);
 
   // Live Budget Calculation from Database Assigns
   let budgetTotalMinor = 0n;
@@ -87,7 +85,11 @@ export function DashboardSummariesGrid({
   const goals = useMemo(() => {
     return dbGoals.slice(0, 3).map((g) => {
       const target = BigInt(g.targetMinor || '1');
-      const cur = BigInt(g.scheduleAmountMinor || '0');
+      // Saved so far: what's been set aside, less what's been spent from it.
+      const saved = allocations
+        .filter((a) => a.goalId === g.id)
+        .reduce((sum, a) => (a.kind === 'spend' ? sum - BigInt(a.amountMinor) : sum + BigInt(a.amountMinor)), 0n);
+      const cur = saved > 0n ? saved : 0n;
       const pct = target > 0n ? Math.min(100, Math.round(Number((cur * 100n) / target))) : 0;
       return {
         name: g.name,
@@ -96,7 +98,7 @@ export function DashboardSummariesGrid({
         percent: pct,
       };
     });
-  }, [dbGoals]);
+  }, [dbGoals, allocations]);
 
   return (
     <View style={styles.container}>

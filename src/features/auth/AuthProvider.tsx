@@ -83,6 +83,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {
         stored = null;
       }
+      // The built-in mock keeps its people in memory, so after a reload it can't vouch for anyone; the demo
+      // carries on with the person stored on this device.
+      if (source === 'mock' && stored) {
+        await client.signedIn({ accessToken: 'mock-session' }, true);
+        setUser(stored);
+        setWorkspaceIdState(storedWorkspace ?? stored.workspaceId);
+        setIsLoading(false);
+        return;
+      }
       try {
         const refreshed = await client.refresh();
         if (!alive) return;
@@ -115,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [client]);
+  }, [client, source]);
 
   const setSession = async (newUser: User, activeWorkspaceId?: string | null, newWorkspaces?: Workspace[]) => {
     const resolvedWorkspace = activeWorkspaceId ?? newUser.workspaceId;

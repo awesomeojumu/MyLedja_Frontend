@@ -26,16 +26,8 @@ import {
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import { categoryForTaxonomy, resolveCategoryId } from '../categories/catalog';
 import type { CategoryDefinition } from '../../data/categoriesTaxonomy';
+import { monthCodeOf, shiftMonth, thisMonthLabel } from '../../lib/months';
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-/** "November 2026" → "2026-11". */
-function monthCodeOf(label: string): string {
-  const [name = '', year = ''] = label.trim().split(/\s+/);
-  const index = MONTHS.findIndex((m) => m.toLowerCase() === name.toLowerCase());
-  if (index < 0 || !/^\d{4}$/.test(year)) return new Date().toISOString().slice(0, 7);
-  return `${year}-${String(index + 1).padStart(2, '0')}`;
-}
 
 const STORAGE_KEY_SUB_LIMITS = 'pref:budget_subcategory_limits_v1';
 const STORAGE_KEY_INCOME_BUDGETS = 'pref:budget_income_budgets_v1';
@@ -51,7 +43,7 @@ export function BudgetScreen() {
     getSubcategoriesForIncome,
   } = useCategoryPreferences();
 
-  const [currentMonth, setCurrentMonth] = useState('November 2026');
+  const [currentMonth, setCurrentMonth] = useState(thisMonthLabel);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
 
@@ -75,32 +67,8 @@ export function BudgetScreen() {
   >({});
 
   // Month-specific budget structures
-  const [monthConfigs, setMonthConfigs] = useState<Record<string, MonthBudgetConfig>>({
-    'November 2026': {
-      month: 'November 2026',
-      expectedIncomeMinor: 0n,
-      frameworkId: 'user_50_10_10_20_10',
-      titheEnabled: true,
-      taxEnabled: false,
-      earmarkedInflows: [],
-    },
-    'December 2026': {
-      month: 'December 2026',
-      expectedIncomeMinor: 0n,
-      frameworkId: 'wealth_builder_70_20_10',
-      titheEnabled: true,
-      taxEnabled: false,
-      earmarkedInflows: [],
-    },
-    'October 2026': {
-      month: 'October 2026',
-      expectedIncomeMinor: 0n,
-      frameworkId: 'classic_50_30_20',
-      titheEnabled: false,
-      taxEnabled: false,
-      earmarkedInflows: [],
-    },
-  });
+  // Per-month plans the person has applied; a month without one starts from the active framework.
+  const [monthConfigs, setMonthConfigs] = useState<Record<string, MonthBudgetConfig>>({});
 
   // Subcategory custom limits: envId -> subcategoryName -> plannedMinor
   const [subcategoryCustomLimits, setSubcategoryCustomLimits] = useState<
@@ -515,13 +483,11 @@ export function BudgetScreen() {
 
   // Month navigation
   const handlePrevMonth = () => {
-    if (currentMonth === 'November 2026') setCurrentMonth('October 2026');
-    else if (currentMonth === 'December 2026') setCurrentMonth('November 2026');
+    setCurrentMonth((m) => shiftMonth(m, -1));
   };
 
   const handleNextMonth = () => {
-    if (currentMonth === 'October 2026') setCurrentMonth('November 2026');
-    else if (currentMonth === 'November 2026') setCurrentMonth('December 2026');
+    setCurrentMonth((m) => shiftMonth(m, 1));
   };
 
   // Handle Move Money
