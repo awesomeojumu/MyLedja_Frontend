@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-import { Plus, Receipt, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { Receipt } from 'lucide-react-native';
 import { useTheme, Button } from '../../design';
 import { Toast } from '../../design/components/Toast';
 import { formatNaira } from '../../money';
@@ -19,13 +19,9 @@ export function TransactionsScreen() {
 
   // Live Database Data
   const {
-    isReady,
     events: dbEvents,
     accounts: dbAccounts,
     categories: dbCategories,
-    holdings: dbHoldings,
-    goals: dbGoals,
-    debts: dbDebts,
     repo,
   } = useDatabaseData();
 
@@ -170,131 +166,8 @@ export function TransactionsScreen() {
     });
   };
 
-  // Add Transaction Handler with Smart Linking
-  const handleSaveTransaction = async (data: {
-    amount: string;
-    category: string;
-    account: string;
-    payee: string;
-    note: string;
-    linkType?: 'investment' | 'goal' | 'debt';
-    linkTargetId?: string;
-    linkTargetName?: string;
-  }) => {
-    const minor = BigInt(Math.round(parseFloat(data.amount) * 100));
-    const isExpense = addTxType === 'expense';
-    const today = new Date().toISOString().split('T')[0]!;
-
-    if (repo && dbAccounts.length > 0) {
-      try {
-        const targetAccount = dbAccounts.find((a) => a.name === data.account) || dbAccounts[0]!;
-        const targetCat =
-          dbCategories.find((c) => c.name.toLowerCase() === data.category.toLowerCase()) ||
-          dbCategories[0];
-
-        const notesText = data.linkTargetName ? `Smart Link: ${data.linkTargetName}` : data.note || undefined;
-
-        if (isExpense) {
-          await repo.addTransaction({
-            kind: 'expense',
-            accountId: targetAccount.id,
-            parts: [{ amount: minor, categoryId: targetCat?.id || 'default' }],
-            date: today,
-            payeeName: data.payee || (data.linkTargetName ? `Allocation: ${data.linkTargetName}` : undefined),
-            notes: notesText,
-          });
-        } else {
-          await repo.addTransaction({
-            kind: 'income',
-            accountId: targetAccount.id,
-            categoryId: targetCat?.id || 'default',
-            amount: minor,
-            date: today,
-            payeeName: data.payee || undefined,
-            notes: notesText,
-          });
-        }
-
-        // 2. Execute Smart Link Balance Sheet update
-        if (data.linkType === 'goal' && data.linkTargetId) {
-          let goal = dbGoals.find((g) => g.id === data.linkTargetId || g.name === data.linkTargetName);
-          if (!goal) {
-            const added = await repo.addGoal({
-              name: data.linkTargetName || 'Savings Goal',
-              targetMinor: minor * 5n,
-              targetDate: '31 Dec 2027',
-              accountId: targetAccount.id,
-            });
-            if (added.ok) goal = added.value;
-          }
-          if (goal) {
-            await repo.allocateToGoal(goal.id, {
-              amount: minor,
-              fromAccountId: targetAccount.id,
-              date: today,
-            }).catch((e: unknown) => console.warn('Goal allocation:', e));
-          }
-        } else if (data.linkType === 'debt' && data.linkTargetId) {
-          let debt = dbDebts.find((d) => d.id === data.linkTargetId || d.name === data.linkTargetName);
-          if (!debt) {
-            const opened = await repo.openPersonDebt({
-              name: data.linkTargetName || 'Loan',
-              direction: 'iOwe',
-              amount: minor * 3n,
-              date: today,
-              accountId: targetAccount.id,
-              notes: 'Recorded via smart link',
-            });
-            if (opened.ok) debt = opened.value;
-          }
-          if (debt) {
-            await repo.recordDebtPayment(debt.id, {
-              accountId: targetAccount.id,
-              amount: minor,
-              date: today,
-            }).catch((e: unknown) => console.warn('Debt payment:', e));
-          }
-        } else if (data.linkType === 'investment' && data.linkTargetId) {
-          let holding = dbHoldings.find((h) => h.id === data.linkTargetId || h.symbol === data.linkTargetId || h.name === data.linkTargetName);
-          if (!holding) {
-            const created = await repo.createHolding({
-              name: data.linkTargetName || 'Stock Holding',
-              symbol: data.linkTargetId.length <= 10 ? data.linkTargetId : undefined,
-              type: 'stock',
-              accountId: targetAccount.id,
-              currentPriceMinor: minor,
-            });
-            if (created.ok) holding = created.value;
-          }
-          if (holding) {
-            await repo.buyHolding({
-              holdingId: holding.id,
-              units: '1',
-              pricePerUnit: minor,
-              cashAccountId: targetAccount.id,
-              date: today,
-            }).catch((e: unknown) => console.warn('Investment buy:', e));
-          }
-        }
-      } catch (err) {
-        console.warn('Error saving transaction to DB:', err);
-      }
-    }
-
-    const linkedText = data.linkTargetName ? ` & linked to ${data.linkTargetName}` : '';
-    setToastMessage(`Saved ${isExpense ? 'expense' : 'income'} of ₦${data.amount}${linkedText}`);
-    setToastVisible(true);
-    setAddTxSheetVisible(false);
-  };
-
-  // Bulk Categorize Handler
-  const handleBulkCategorize = (newCategory: string) => {
-    if (repo) {
-      const cat = dbCategories.find((c) => c.name.toLowerCase() === newCategory.toLowerCase());
-      if (cat) {
-        repo.bulkSetCategory(Array.from(selectedIds), cat.id).catch((e: unknown) => console.warn(e));
-      }
-    }
+  const handleBulkCategorize = (categoryId: string, newCategory: string) => {
+    repo.bulkSetCategory(Array.from(selectedIds), categoryId).catch((e: unknown) => console.warn(e));
     setLocalOverrides((prev) => {
       const next = { ...prev };
       selectedIds.forEach((id) => {
@@ -581,7 +454,10 @@ export function TransactionsScreen() {
         visible={addTxSheetVisible}
         onClose={() => setAddTxSheetVisible(false)}
         type={addTxType}
-        onSave={handleSaveTransaction}
+        onSaved={(message) => {
+          setToastMessage(message);
+          setToastVisible(true);
+        }}
       />
 
       {/* Popups & Sheets */}

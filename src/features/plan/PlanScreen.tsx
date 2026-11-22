@@ -27,6 +27,8 @@ import {
   DEFAULT_RECURRING_BILLS,
 } from './billsModel';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { resolveCategoryId } from '../categories/catalog';
+import { pickAccount } from '../accounts/pickAccount';
 
 export function PlanScreen() {
   const { colors, typography, spacing, radii } = useTheme();
@@ -105,17 +107,22 @@ export function PlanScreen() {
     setLocalBills(updated);
     saveBillsToStorage(updated);
 
-    if (repo && accounts.length > 0) {
-      const targetCat = categories.find((c) => c.name.toLowerCase() === b.category.toLowerCase()) || categories[0];
-      repo.addRecurring({
-        kind: 'bill',
-        name: b.name,
-        amountMinor: b.amountMinor.toString(),
-        accountId: accounts[0]!.id,
-        categoryId: targetCat?.id,
-        rule: { every: 'month', on: b.dueDay || 1 },
-        startDate: '2026-11-01',
-      }).catch((e: unknown) => console.warn('Failed to sync schedule to DB', e));
+    const payFrom = pickAccount(accounts, 'bills');
+    if (repo && payFrom) {
+      const today = new Date().toISOString().slice(0, 10);
+      void resolveCategoryId(repo, categories, b.category, 'expense')
+        .then((categoryId) =>
+          repo.addRecurring({
+            kind: 'bill',
+            name: b.name,
+            amountMinor: b.amountMinor.toString(),
+            accountId: payFrom.id,
+            categoryId,
+            rule: { every: 'month', on: b.dueDay || 1 },
+            startDate: today,
+          }),
+        )
+        .catch((e: unknown) => console.warn('Failed to sync schedule to DB', e));
     }
   };
 
@@ -125,17 +132,23 @@ export function PlanScreen() {
     saveBillsToStorage(updated);
 
     const bill = bills.find((b) => b.id === billId);
-    if (bill && repo && accounts.length > 0) {
-      const today = new Date().toISOString().split('T')[0]!;
-      const targetCat = categories.find((c) => c.name.toLowerCase() === bill.category.toLowerCase()) || categories[0];
-      repo.addTransaction({
-        kind: 'expense',
-        accountId: accounts[0]!.id,
-        parts: [{ amount: bill.amountMinor, categoryId: targetCat?.id || 'default' }],
-        date: today,
-        payeeName: bill.name,
-        notes: `Paid recurring bill: ${bill.name} (${bill.cadence})`,
-      }).catch((e: unknown) => console.warn('Failed to record paid bill in DB', e));
+    const schedule = dbRecurring.find((r) => r.id === billId);
+    const payFrom = accounts.find((a) => a.id === schedule?.accountId && !a.archived) ?? pickAccount(accounts, 'bills');
+    if (bill && repo && payFrom) {
+      const today = new Date().toISOString().slice(0, 10);
+      const known = schedule?.categoryId && categories.some((c) => c.id === schedule.categoryId) ? schedule.categoryId : null;
+      void (known ? Promise.resolve(known) : resolveCategoryId(repo, categories, bill.category, 'expense'))
+        .then((categoryId) =>
+          repo.addTransaction({
+            kind: 'expense',
+            accountId: payFrom.id,
+            parts: [{ amount: bill.amountMinor, categoryId }],
+            date: today,
+            payeeName: bill.name,
+            notes: `Paid recurring bill: ${bill.name} (${bill.cadence})`,
+          }),
+        )
+        .catch((e: unknown) => console.warn('Failed to record paid bill in DB', e));
     }
   };
 

@@ -296,7 +296,7 @@ export function AccountsScreen() {
                 maxWidth: 320,
               }}
             >
-              Tap "+ Add Account" to link your commercial banks, mobile wallets, or credit cards.
+              Tap + Add Account to link your commercial banks, mobile wallets, or credit cards.
             </Text>
           </View>
         ) : (

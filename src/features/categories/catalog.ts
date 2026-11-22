@@ -105,3 +105,30 @@ export function CategoryCatalogSync(): null {
 
   return null;
 }
+
+const MISC_EXPENSE_ID = 'exp-miscellaneous';
+const MISC_INCOME_ID = 'inc-miscellaneous';
+
+/**
+ * The workspace category id for a label from an older picker ("Food", "Food: Groceries" or an id).
+ * Unknown names land in Miscellaneous, made if needed, never in whichever category happens to be first.
+ */
+export async function resolveCategoryId(
+  repo: { ensureCatalogCategory: (input: { key: string; name: string; kind: 'income' | 'expense' }) => Promise<Category> },
+  categories: Category[],
+  label: string,
+  kind: 'income' | 'expense',
+): Promise<string> {
+  const byId = categories.find((c) => c.id === label && !c.deleted);
+  if (byId) return byId.id;
+  const name = (label.split(':')[0] ?? '').trim().toLowerCase();
+  const list = kind === 'income' ? INCOME_TAXONOMY : EXPENSE_TAXONOMY;
+  const own = categories.find((c) => c.kind === kind && !c.deleted && c.name.trim().toLowerCase() === name);
+  if (own) return own.id;
+  const def =
+    list.find((d) => d.name.toLowerCase() === name) ??
+    list.find((d) => d.id === (kind === 'income' ? MISC_INCOME_ID : MISC_EXPENSE_ID))!;
+  const existing = categoryForTaxonomy(categories, def);
+  if (existing) return existing.id;
+  return (await repo.ensureCatalogCategory({ key: def.id, name: def.name, kind })).id;
+}

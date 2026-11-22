@@ -27,7 +27,7 @@ import {
   scheduleUpdateBody,
 } from '../sync/serverRecords';
 import { debtScheduleRows } from '@/features/debts/schedule';
-import { t, type TextKey } from '@/i18n';
+import { t } from '@/i18n';
 import {
   buildAdjustment,
   buildCollect,

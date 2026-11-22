@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -13,12 +13,12 @@ import {
   ArrowDownLeft,
   Search,
 } from 'lucide-react-native';
-import { useTheme, Button, TextInput } from '../../design';
-import { formatNaira, parseAmount } from '../../money';
+import { useTheme, TextInput } from '../../design';
+import { formatNaira } from '../../money';
 import { CSVImportSheet } from './CSVImportSheet';
 import { StatementAIPopup } from './StatementAIPopup';
 import { EditAccountPopup } from './EditAccountPopup';
-import { AccountEntrySheet } from './AccountEntrySheet';
+import { QuickTransactionSheet } from '../dashboard/QuickTransactionSheet';
 import { AccountBalanceChart } from './AccountBalanceChart';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
@@ -61,8 +61,6 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
   // State
   const [search, setSearch] = useState('');
   const [customName, setAccountName] = useState<string | null>(null);
-  const [extraTx, setExtraTx] = useState<AccountLedgerItem[]>([]);
-  const [balanceDelta, setBalanceDelta] = useState<bigint>(0n);
 
   // Sheets
   const [csvSheetVisible, setCsvSheetVisible] = useState(false);
@@ -74,13 +72,13 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
   const institution = matched?.type === 'bank' || matched?.type === 'savings' ? 'Bank Account' : matched?.type || 'Account';
   const accountType = matched?.type || 'Asset';
   const baseBalanceMinor = matched ? (accountBalances.get(matched.id) ?? 0n) : 0n;
-  const balanceMinor = baseBalanceMinor + balanceDelta;
+  const balanceMinor = baseBalanceMinor;
   const clearedBalanceMinor = balanceMinor;
 
   // Real transactions from database
   const transactions: AccountLedgerItem[] = React.useMemo(() => {
-    if (!matched) return extraTx;
-    const list: AccountLedgerItem[] = [...extraTx];
+    if (!matched) return [];
+    const list: AccountLedgerItem[] = [];
     for (const ev of dbEvents) {
       const line = ev.lines.find((l) => l.ledgerAccountId === matched.id);
       if (!line) continue;
@@ -100,7 +98,7 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
       });
     }
     return list;
-  }, [matched, dbEvents, dbCategories, dbPayees, extraTx]);
+  }, [matched, dbEvents, dbCategories, dbPayees]);
 
   const filteredTx = transactions.filter(
     (tx) =>
@@ -500,32 +498,12 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
         onSave={({ name }) => setAccountName(name)}
       />
 
-      <AccountEntrySheet
+      <QuickTransactionSheet
         visible={addTxVisible}
         onClose={() => setAddTxVisible(false)}
-        currentAccountName={accountName}
-        onSaveEntry={(newEntry) => {
-          const isOutflow = newEntry.type === 'expense' || newEntry.type === 'transfer';
-          const newTx: AccountLedgerItem = {
-            id: `tx-${Date.now()}`,
-            date: 'Today',
-            payee: newEntry.payee,
-            category: newEntry.category,
-            amountMinor: newEntry.amountMinor,
-            type: isOutflow ? 'outflow' : 'inflow',
-            cleared: newEntry.cleared,
-          };
-
-          setExtraTx((prev) => [newTx, ...prev]);
-
-          // Dynamically adjust live balance
-          if (isOutflow) {
-            setBalanceDelta((prev) => prev - newEntry.amountMinor);
-          } else {
-            setBalanceDelta((prev) => prev + newEntry.amountMinor);
-          }
-          setAddTxVisible(false);
-        }}
+        type="expense"
+        allowTypeSwitch
+        defaultAccountId={accountId}
       />
     </View>
   );

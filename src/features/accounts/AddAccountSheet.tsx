@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, TextInput, CurrencyInput, Dropdown, Button } from '../../design';
 import { t } from '../../i18n';
@@ -32,9 +32,12 @@ export function AddAccountSheet({ visible, onClose, onSaveAccount, initialPurpos
   const [balance, setBalance] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  // Each time the sheet opens, start from the purpose it was opened for.
+  const [openedFor, setOpenedFor] = useState(false);
+  if (visible !== openedFor) {
+    setOpenedFor(visible);
     if (visible) setPurpose(initialPurpose);
-  }, [visible, initialPurpose]);
+  }
 
   const reset = () => {
     setName('');

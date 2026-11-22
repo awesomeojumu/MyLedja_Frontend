@@ -24,6 +24,18 @@ import {
   type RecurringBillItem,
 } from '../plan/billsModel';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
+import { categoryForTaxonomy, resolveCategoryId } from '../categories/catalog';
+import type { CategoryDefinition } from '../../data/categoriesTaxonomy';
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "November 2026" → "2026-11". */
+function monthCodeOf(label: string): string {
+  const [name = '', year = ''] = label.trim().split(/\s+/);
+  const index = MONTHS.findIndex((m) => m.toLowerCase() === name.toLowerCase());
+  if (index < 0 || !/^\d{4}$/.test(year)) return new Date().toISOString().slice(0, 7);
+  return `${year}-${String(index + 1).padStart(2, '0')}`;
+}
 
 const STORAGE_KEY_SUB_LIMITS = 'pref:budget_subcategory_limits_v1';
 const STORAGE_KEY_INCOME_BUDGETS = 'pref:budget_income_budgets_v1';
@@ -45,6 +57,8 @@ export function BudgetScreen() {
 
   // Live Database Hook
   const { repo, categories: dbCategories, events: dbEvents } = useDatabaseData();
+  // Budget rows come from the Settings catalogue; spending is recorded against the workspace category.
+  const dbIdOf = (def: CategoryDefinition) => categoryForTaxonomy(dbCategories, def)?.id ?? def.id;
 
   // Sheets State
   const [moveMoneyVisible, setMoveMoneyVisible] = useState(false);
@@ -214,18 +228,15 @@ export function BudgetScreen() {
 
       // Calculate real income received from Database events for this income category
       let realReceived = 0n;
-      const targetMonthCode = currentMonth.includes('Oct')
-        ? '2026-10'
-        : currentMonth.includes('Dec')
-        ? '2026-12'
-        : '2026-11';
+      const targetMonthCode = monthCodeOf(currentMonth);
 
       for (const ev of dbEvents) {
         if (ev.status !== 'posted' || ev.type !== 'income') continue;
         if (monthOf(ev.date) === targetMonthCode) {
           for (const line of ev.lines) {
-            if (line.ledgerAccountId === cat.id && line.amountMinor > 0n) {
-              realReceived += line.amountMinor;
+            // Income lines credit the category, so they carry a negative amount.
+            if (line.ledgerAccountId === dbIdOf(cat)) {
+              realReceived += line.amountMinor < 0n ? -line.amountMinor : line.amountMinor;
             }
           }
         }
@@ -340,18 +351,14 @@ export function BudgetScreen() {
           const totalPlanned = basePlanned + extraEarmark;
 
           // Calculate real spent from live database events for this category
-          const targetMonthCode = currentMonth.includes('Oct')
-            ? '2026-10'
-            : currentMonth.includes('Dec')
-            ? '2026-12'
-            : '2026-11';
+          const targetMonthCode = monthCodeOf(currentMonth);
 
           let realSpent = 0n;
           for (const ev of dbEvents) {
             if (ev.status !== 'posted' || ev.type !== 'expense') continue;
             if (monthOf(ev.date) === targetMonthCode) {
               for (const line of ev.lines) {
-                if (line.ledgerAccountId === cat.id && line.amountMinor > 0n) {
+                if (line.ledgerAccountId === dbIdOf(cat) && line.amountMinor > 0n) {
                   realSpent += line.amountMinor;
                 }
               }
@@ -567,12 +574,8 @@ export function BudgetScreen() {
 
     if (repo && selectedEnvelope) {
       try {
-        const cat = dbCategories.find(
-          (c) => c.name.toLowerCase() === selectedEnvelope.name.toLowerCase()
-        );
-        if (cat) {
-          await repo.setAssigned(cat.id, '2026-11', newLimitMinor);
-        }
+        const categoryId = await resolveCategoryId(repo, dbCategories, selectedEnvelope.name, 'expense');
+        await repo.setAssigned(categoryId, monthCodeOf(currentMonth), newLimitMinor);
       } catch (err) {
         console.warn('Failed to assign category limit in DB:', err);
       }

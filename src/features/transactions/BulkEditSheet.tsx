@@ -1,25 +1,17 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet } from '../../design';
+import { useCategoryChoices } from '../categories/catalog';
+import { t } from '../../i18n';
 
 export interface BulkEditSheetProps {
   visible: boolean;
   onClose: () => void;
   selectedCount: number;
-  onSelectCategory: (category: string) => void;
+  /** The workspace category id and its name. */
+  onSelectCategory: (categoryId: string, name: string) => void;
 }
 
-const CATEGORIES = [
-  'Food & Dining',
-  'Groceries',
-  'Transportation & Fuel',
-  'Utilities & Bills',
-  'Shopping',
-  'Healthcare',
-  'Entertainment',
-  'Salary / Income',
-  'Transfers',
-];
 
 export function BulkEditSheet({
   visible,
@@ -28,13 +20,16 @@ export function BulkEditSheet({
   onSelectCategory,
 }: BulkEditSheetProps) {
   const { colors, typography, spacing, radii } = useTheme();
+  const expense = useCategoryChoices('expense');
+  const income = useCategoryChoices('income');
+  const categories = [...expense, ...income];
 
   return (
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Categorize Transactions"
-      subtitle={`Choose a category for ${selectedCount} selected transactions`}
+      title={t('bulk.title')}
+      subtitle={t('bulk.subtitle', { n: selectedCount })}
     >
       <View style={styles.container}>
         <Text
@@ -48,15 +43,15 @@ export function BulkEditSheet({
             },
           ]}
         >
-          Tap any category below to immediately update all selected entries:
+          {t('bulk.instruction')}
         </Text>
 
         <View style={styles.list}>
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <TouchableOpacity
-              key={cat}
+              key={cat.id}
               onPress={() => {
-                onSelectCategory(cat);
+                onSelectCategory(cat.id, cat.name);
                 onClose();
               }}
               activeOpacity={0.7}
@@ -82,7 +77,7 @@ export function BulkEditSheet({
                   },
                 ]}
               >
-                {cat}
+                {cat.name}
               </Text>
             </TouchableOpacity>
           ))}

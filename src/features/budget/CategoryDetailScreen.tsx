@@ -463,7 +463,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
         visible={addTxVisible}
         onClose={() => setAddTxVisible(false)}
         type="expense"
-        onSave={() => setAddTxVisible(false)}
+        defaultCategoryId={categoryId}
       />
     </View>
   );
