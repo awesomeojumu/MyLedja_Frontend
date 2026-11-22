@@ -6,7 +6,9 @@ import { useTheme, BottomSheet } from '../../design';
 import { Toast } from '../../design/components/Toast';
 import { NetAssetsHero } from './NetAssetsHero';
 import { AccountCardRow, type AccountData } from './AccountCardRow';
-import { AddAccountSheet } from './AddAccountSheet';
+import { AddAccountSheet, type NewAccount } from './AddAccountSheet';
+import { purposeOf } from './purpose';
+import { t } from '../../i18n';
 import { UpdateAssetValueSheet } from './UpdateAssetValueSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
@@ -57,31 +59,32 @@ export function AccountsScreen() {
     repo,
   } = useDatabaseData();
 
-  const [rawAccounts, setAccounts] = useState<AccountData[]>([]);
+  const [rawAccounts] = useState<AccountData[]>([]);
 
   const accounts: AccountData[] = useMemo(() => {
     if (dbAccounts.length > 0) {
-      return dbAccounts.map((a, idx) => {
-        const bal = accountBalances.get(a.id) ?? 0n;
-        const types: AccountData['type'][] = [
-          'income', 'operating', 'bills', 'emergency', 'savings', 'investment', 'credit'
-        ];
-        const assignedType: AccountData['type'] = a.type === 'card' || a.type === 'loan' ? 'credit' : types[idx % types.length]!;
-        const catCategory =
-          a.type === 'card' || a.type === 'loan'
-            ? 'liability'
-            : a.type === 'property' || a.type === 'investment'
-            ? 'investment'
-            : 'liquid';
-        return {
-          id: a.id,
-          name: a.name,
-          institution: a.institution || 'Commercial Bank',
-          category: catCategory,
-          type: assignedType,
-          balanceMinor: bal,
-        };
-      });
+      return dbAccounts
+        .filter((a) => !a.archived || a.closedWithBalance)
+        .map((a) => {
+          const bal = accountBalances.get(a.id) ?? 0n;
+          const shown = purposeOf(a);
+          const assignedType: AccountData['type'] = shown;
+          const catCategory: AccountData['category'] =
+            shown === 'credit' || shown === 'loan'
+              ? 'liability'
+              : shown === 'investment' || shown === 'property'
+                ? 'investment'
+                : 'liquid';
+          return {
+            id: a.id,
+            name: a.name,
+            institution: a.institution || '',
+            category: catCategory,
+            type: assignedType,
+            balanceMinor: bal,
+            currency: a.currency,
+          };
+        });
     }
     return rawAccounts;
   }, [dbAccounts, accountBalances, rawAccounts]);
@@ -147,34 +150,34 @@ export function AccountsScreen() {
     return result;
   }, [filteredAccounts]);
 
-  const handleSaveAccount = async (newAcc: Omit<AccountData, 'id'>) => {
-    if (repo) {
-      try {
-        const kind = newAcc.category === 'liability' ? 'card' : 'bank';
-        await repo.addAccount({
-          name: newAcc.name,
-          type: kind,
-          currency: 'NGN',
-          countInBudget: true,
-          openingBalance: newAcc.balanceMinor,
-          openingDate: new Date().toISOString().slice(0, 10),
-          institution: newAcc.institution,
-        });
-      } catch (err) {
-        console.warn('Failed to save account to DB:', err);
-      }
+  const handleSaveAccount = async (newAcc: NewAccount) => {
+    const result = await repo.addAccount({
+      name: newAcc.name,
+      type: newAcc.type,
+      purpose: newAcc.purpose,
+      openingBalance: newAcc.balanceMinor,
+      openingDate: new Date().toISOString().slice(0, 10),
+      institution: newAcc.institution,
+    });
+    if (!result.ok) {
+      setToastMessage(t('accounts.addFailed'));
+      setToastVisible(true);
+      return;
     }
-    const acc: AccountData = { ...newAcc, id: `acc-${Date.now()}` };
-    setAccounts((prev) => [acc, ...prev]);
-    setToastMessage(`Added "${acc.name}" to Database`);
+    setToastMessage(t('accounts.added', { name: newAcc.name }));
     setToastVisible(true);
   };
 
-  const handleUpdateValue = (id: string, newBalanceMinor: bigint) => {
-    setAccounts((prev) =>
-      prev.map((acc) => (acc.id === id ? { ...acc, balanceMinor: newBalanceMinor } : acc))
-    );
-    setToastMessage('Account value updated');
+  const handleUpdateValue = async (id: string, newBalanceMinor: bigint) => {
+    const account = dbAccounts.find((a) => a.id === id);
+    if (!account) return;
+    const today = new Date().toISOString().slice(0, 10);
+    // Assets that change in value go to Revaluation; cash and bank corrections go to Adjustments. Never income.
+    const revalued = ['investment', 'pension', 'property', 'other_asset', 'fixed_deposit'].includes(account.type);
+    const result = revalued
+      ? await repo.updateValue(id, newBalanceMinor, today)
+      : await repo.correctOpeningBalance(id, newBalanceMinor, today);
+    setToastMessage(result.ok ? t('accounts.valueUpdated') : t('accounts.addFailed'));
     setToastVisible(true);
   };
 

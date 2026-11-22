@@ -37,6 +37,14 @@ export const ACCOUNT_KIND_INFO: Record<AccountKind, { group: AccountGroup; ledge
   other_liability: { group: 'other', ledger: 'liability', countInBudget: false },
 };
 
+/**
+ * What a person uses an account for. The ledger only needs the real kind (bank, savings, investment…);
+ * the purpose is kept beside it so Emergency, Bills and Project accounts keep their meaning everywhere.
+ * Matches the backend `ACCOUNT_PURPOSES`.
+ */
+export const ACCOUNT_PURPOSES = ['income', 'operating', 'bills', 'emergency', 'savings', 'investment', 'project'] as const;
+export type AccountPurpose = (typeof ACCOUNT_PURPOSES)[number];
+
 export type Account = {
   id: string;
   name: string;
@@ -45,6 +53,8 @@ export type Account = {
   institution?: string;
   /** Only ever the last 4 digits; MyLedja never stores a full account number (P08-04). */
   last4?: string;
+  /** What the account is for; absent on accounts made before purposes were saved. */
+  purpose?: AccountPurpose;
   countInBudget: boolean;
   archived: boolean;
   /** Archived while still holding a balance; still counts in net worth (PU-15). */
@@ -80,8 +90,11 @@ export type Category = {
   name: string;
   kind: 'income' | 'expense';
   group: string;
-  /** For starter categories, the catalogue key; the name follows the person's edits. */
-  key?: TextKey;
+  /**
+   * For starter categories, the catalogue key (a copy key such as `cat.rent`, or a taxonomy id such as
+   * `exp-food`); the name follows the person's edits. Dropdowns and the budget match on this, never on the name.
+   */
+  key?: string;
   /** Lucide icon name (PU-11). */
   icon?: string | null;
   /** Hide from the Budget page (P07-05). */

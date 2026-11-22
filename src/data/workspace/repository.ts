@@ -69,6 +69,7 @@ import {
   toStored,
   type Account,
   type AccountKind,
+  type AccountPurpose,
   type BudgetTemplate,
   type BudgetAssign,
   type BudgetType,
@@ -490,18 +491,20 @@ export class WorkspaceRepository {
   /** After Welcome: the accounts, categories and opening balances the person chose. */
   async seedFromSetup(body: SetupBody): Promise<void> {
     if ((await this.store.list('categories')).length > 0) return;
+    // A group called "Income" holds income categories, as on the server (POST /setup).
+    const isIncome = (group: string) => group.trim().toLowerCase() === 'income';
     for (const [i, c] of body.categories.entries()) {
-      const key = c.key.startsWith('cat.') ? (c.key as TextKey) : undefined;
+      const income = isIncome(c.group);
       await this.put(
         'categories',
         this.newId(),
         {
           name: c.name,
-          kind: 'expense',
-          group: c.group,
-          key,
+          kind: income ? 'income' : 'expense',
+          group: income ? 'group.income' : c.group,
+          key: c.key.startsWith('custom-') ? undefined : c.key,
           hidden: false,
-          countInBudget: true,
+          countInBudget: income ? c.key !== 'cat.gift' : true,
           order: i,
           budgetType: 'flexible',
           carryOver: false,
@@ -509,7 +512,9 @@ export class WorkspaceRepository {
         'category.create',
       );
     }
-    for (const key of STARTER_INCOME) {
+    // Older clients sent only spending categories; give them the starter income set.
+    const starterIncome = body.categories.some((c) => isIncome(c.group)) ? [] : STARTER_INCOME;
+    for (const key of starterIncome) {
       await this.put(
         'categories',
         this.newId(),
@@ -533,6 +538,7 @@ export class WorkspaceRepository {
       {
         budgetStyle: body.budgetStyle,
         currency: body.currency,
+        ...(body.workspaceName ? { workspaceName: body.workspaceName } : {}),
         preferredCurrencies: [
           ...new Set([body.currency, ...body.accounts.map((a) => a.currency).filter((code): code is string => !!code)]),
         ],
@@ -547,6 +553,7 @@ export class WorkspaceRepository {
         name: a.name,
         type,
         currency: a.currency,
+        ...(a.purpose ? { purpose: a.purpose } : {}),
         openingBalance: BigInt(a.openingBalance),
         openingDate: a.openingDate,
       });
@@ -567,6 +574,7 @@ export class WorkspaceRepository {
     type: AccountKind;
     institution?: string;
     last4?: string;
+    purpose?: AccountPurpose;
     currency?: string;
     countInBudget?: boolean;
     openingBalance: bigint;
@@ -580,6 +588,7 @@ export class WorkspaceRepository {
       currency: input.currency ?? snapshot.settings.currency ?? 'NGN',
       institution: input.institution,
       last4: input.last4?.slice(-4),
+      ...(input.purpose ? { purpose: input.purpose } : {}),
       countInBudget: input.countInBudget ?? ACCOUNT_KIND_INFO[input.type].countInBudget,
       archived: false,
       openedAt: input.openingDate,
@@ -1208,10 +1217,35 @@ export class WorkspaceRepository {
     }
   }
 
+  /**
+   * The category for a catalogue entry (a taxonomy id such as `exp-food`), made the first time it's needed.
+   * Matches on the key, then on the name, so renamed and synced copies are found too.
+   */
+  async ensureCatalogCategory(input: { key: string; name: string; kind: 'income' | 'expense' }): Promise<Category> {
+    const snapshot = await this.load();
+    const lower = input.name.trim().toLowerCase();
+    const found =
+      snapshot.categories.find((c) => c.key === input.key) ??
+      snapshot.categories.find((c) => c.kind === input.kind && c.name.trim().toLowerCase() === lower);
+    if (found) {
+      if (found.hidden) await this.updateCategory({ ...found, hidden: false });
+      return found;
+    }
+    const groupName = input.kind === 'income' ? 'Income' : 'Spending';
+    const groups = await this.store.list('category_groups');
+    const existingGroup = groups.find(
+      (g) => String(g.data.kind ?? '') === input.kind && String(g.data.name ?? '').toLowerCase() === groupName.toLowerCase(),
+    );
+    const groupId = existingGroup?.id ?? (await this.createCategoryGroup({ name: groupName, kind: input.kind })).id;
+    return this.addCategory({ name: input.name, kind: input.kind, group: groupId, key: input.key });
+  }
+
   async addCategory(input: {
     name: string;
     kind: 'income' | 'expense';
     group: string;
+    /** Catalogue key, for categories made from the starter catalogue. */
+    key?: string;
     icon?: string | null;
     budgetType?: BudgetType;
     essential?: boolean;
@@ -1224,6 +1258,7 @@ export class WorkspaceRepository {
       name: input.name.trim(),
       kind: input.kind,
       group: input.group,
+      ...(input.key ? { key: input.key } : {}),
       icon: input.icon ?? null,
       hidden: input.hidden ?? false,
       countInBudget: input.kind === 'expense',

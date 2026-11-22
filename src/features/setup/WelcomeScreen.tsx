@@ -1,622 +1,468 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import {
-  Building2,
-  Plus,
-  Trash2,
-  Check,
-  Briefcase,
-  ArrowRight,
-  ShieldCheck,
-  TrendingUp,
-  CreditCard,
-} from 'lucide-react-native';
-import { useTheme, TextInput, Button } from '../../design';
+import { v7 as uuidv7 } from 'uuid';
+import { Check, Plus, Trash2, ShieldCheck, PiggyBank, TrendingUp, LifeBuoy } from 'lucide-react-native';
+
+import { useTheme, TextInput, Button, Dropdown, CurrencyInput } from '../../design';
+import { t } from '../../i18n';
+import { formatNaira, parseAmount, toWire } from '../../money';
+import { authApi, type SetupBody } from '../../api/auth';
+import { NetworkError } from '../../api/client';
 import { useAuth } from '../auth/AuthProvider';
-import { QuickBankPickerSheet, type AddedBankAccount } from './QuickBankPickerSheet';
-import { formatNaira } from '../../money';
+import { useSync } from '../../data/sync/SyncProvider';
+import { WorkspaceRepository } from '../../data/workspace/repository';
+import { EXPENSE_TAXONOMY, INCOME_TAXONOMY, type CategoryDefinition } from '../../data/categoriesTaxonomy';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
+import { SAVE_OR_INVEST_TAXONOMY_ID } from '../categories/catalog';
+import { AddAccountSheet, type NewAccount } from '../accounts/AddAccountSheet';
+import { PURPOSE_INFO, type AccountPurpose } from '../accounts/purpose';
+import { CURRENCIES, currencyLabel } from './currencies';
+
+type Step = 'about' | 'budget' | 'accounts' | 'categories';
+const STEPS: Step[] = ['about', 'budget', 'accounts', 'categories'];
+/** Dashboard "Get started" numbers for a skipped step (P04-02): 3 accounts, 4 categories, 5 budget style. */
+const SKIP_NUMBER: Partial<Record<Step, number>> = { accounts: 3, categories: 4, budget: 5 };
+
+type BudgetChoice = 'envelope' | 'limits' | 'track';
+type WeekStart = SetupBody['weekStart'];
+type SetupAccountType = SetupBody['accounts'][number]['type'];
+
+const SPENDING_CHOICES = EXPENSE_TAXONOMY.filter((d) => d.id !== SAVE_OR_INVEST_TAXONOMY_ID);
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export function WelcomeScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
-  const { user, setSession } = useAuth();
-  const {
-    allIncomeCategories,
-    allExpenseCategories,
-    enabledIncomeIds,
-    enabledExpenseIds,
-    setIncomeCategories,
-    setExpenseCategories,
-  } = useCategoryPreferences();
+  const { user, workspaceId, client, setSession } = useAuth();
+  const { store, engine } = useSync();
+  const { enabledIncomeIds, enabledExpenseIds, setIncomeCategories, setExpenseCategories } = useCategoryPreferences();
 
-  const [workspaceName, setWorkspaceName] = useState('Personal');
-  const [bankAccounts, setBankAccounts] = useState<AddedBankAccount[]>([]);
-  const [selectedIncomeIds, setSelectedIncomeIds] = useState<string[]>(enabledIncomeIds);
-  const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>(enabledExpenseIds);
-  const [loading, setLoading] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [skipped, setSkipped] = useState<Set<Step>>(new Set());
 
-  // Sheets
-  const [bankSheetVisible, setBankSheetVisible] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState(user?.workspaceName || t('welcome.step1.default'));
+  const [currency, setCurrency] = useState('NGN');
+  const [weekStart, setWeekStart] = useState<WeekStart>('monday');
 
-  const toggleIncome = (id: string) => {
-    setSelectedIncomeIds((prev) =>
-      prev.includes(id)
-        ? prev.length > 1
-          ? prev.filter((item) => item !== id)
-          : prev
-        : [...prev, id]
-    );
+  const [budgetChoice, setBudgetChoice] = useState<BudgetChoice>('limits');
+  const [takeHome, setTakeHome] = useState('');
+
+  const [accounts, setAccounts] = useState<(NewAccount & { key: string })[]>([]);
+  const [sheetPurpose, setSheetPurpose] = useState<AccountPurpose | null>(null);
+
+  const [expenseIds, setExpenseIds] = useState<string[]>(() =>
+    enabledExpenseIds.filter((id) => id !== SAVE_OR_INVEST_TAXONOMY_ID),
+  );
+  const [incomeIds, setIncomeIds] = useState<string[]>(enabledIncomeIds);
+  const [showAllCategories, setShowAllCategories] = useState(false);
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const step = STEPS[stepIndex]!;
+  const isLast = stepIndex === STEPS.length - 1;
+
+  const currencyOptions = useMemo(
+    () => CURRENCIES.map((c) => ({ label: currencyLabel(c.code), value: c.code })),
+    [],
+  );
+  const weekOptions = [
+    { label: t('welcome.day.monday'), value: 'monday' },
+    { label: t('welcome.day.sunday'), value: 'sunday' },
+    { label: t('welcome.day.saturday'), value: 'saturday' },
+  ];
+
+  const toggle = (list: string[], id: string) =>
+    list.includes(id) ? (list.length > 1 ? list.filter((x) => x !== id) : list) : [...list, id];
+
+  const goNext = () => {
+    setError('');
+    if (isLast) void finish(skipped);
+    else setStepIndex((i) => i + 1);
   };
 
-  const toggleExpense = (id: string) => {
-    setSelectedExpenseIds((prev) =>
-      prev.includes(id)
-        ? prev.length > 1
-          ? prev.filter((item) => item !== id)
-          : prev
-        : [...prev, id]
-    );
+  const skipStep = () => {
+    const next = new Set(skipped).add(step);
+    setSkipped(next);
+    setError('');
+    if (isLast) void finish(next);
+    else setStepIndex((i) => i + 1);
   };
 
-  const handleAddAccount = (account: AddedBankAccount) => {
-    setBankAccounts((prev) => [...prev, account]);
+  const buildBody = (skippedSteps: Set<Step>): SetupBody => {
+    const take = parseAmount(takeHome);
+    const useAccounts = skippedSteps.has('accounts') ? [] : accounts;
+    const spending = skippedSteps.has('categories')
+      ? SPENDING_CHOICES.filter((d) => d.defaultActive)
+      : SPENDING_CHOICES.filter((d) => expenseIds.includes(d.id));
+    const income = skippedSteps.has('categories')
+      ? INCOME_TAXONOMY.filter((d) => d.defaultActive)
+      : INCOME_TAXONOMY.filter((d) => incomeIds.includes(d.id));
+    return {
+      workspaceName: workspaceName.trim() || t('welcome.step1.default'),
+      currency,
+      weekStart,
+      budgetStyle: budgetChoice === 'envelope' ? 'envelope' : 'tracking',
+      monthlyTakeHome:
+        !skippedSteps.has('budget') && budgetChoice !== 'track' && take.ok && take.minor > 0n ? toWire(take.minor) : null,
+      accounts: useAccounts.map((a) => ({
+        id: uuidv7(),
+        name: a.name,
+        type: a.type as SetupAccountType,
+        purpose: a.purpose,
+        openingBalance: toWire(a.balanceMinor),
+        openingDate: todayIso(),
+        currency,
+      })),
+      categories: [
+        ...spending.map((d) => ({ key: d.id, group: 'Spending', name: d.name })),
+        ...income.map((d) => ({ key: d.id, group: 'Income', name: d.name })),
+      ],
+      skippedSteps: [...skippedSteps].map((s) => SKIP_NUMBER[s]).filter((n): n is number => n !== undefined),
+    };
   };
 
-  const handleRemoveAccount = (id: string) => {
-    setBankAccounts((prev) => prev.filter((a) => a.id !== id));
-  };
-
-  const handleFinishSetup = async () => {
-    setLoading(true);
+  const finish = async (skippedSteps: Set<Step>) => {
+    setSaving(true);
+    setError('');
+    const body = buildBody(skippedSteps);
+    const wsId = workspaceId || user?.workspaceId;
     try {
-      // Save customized categories to preferences
-      setIncomeCategories(selectedIncomeIds);
-      setExpenseCategories(selectedExpenseIds);
-
-      if (user) {
-        await setSession({
-          ...user,
-          setupComplete: true,
-          workspaceName: workspaceName.trim() || 'Personal',
-        });
+      let finishedUser = user ? { ...user, setupComplete: true, workspaceName: body.workspaceName } : null;
+      if (client.hasAccessToken() && wsId) {
+        // The server creates the accounts, opening balances and categories; sync brings them to this device.
+        const saved = await authApi(client).finishSetup(wsId, body);
+        finishedUser = { ...saved, setupComplete: true };
+        void engine.wake();
+      } else if (wsId) {
+        // Not signed in to a server (demo and tests): seed this device.
+        await new WorkspaceRepository(store, engine, wsId).seedFromSetup(body);
       }
-      // Route to Home Dashboard
-      router.replace('/' as any);
-    } catch {
-      // Fallback redirect
-      router.replace('/' as any);
+      setExpenseCategories(body.categories.filter((c) => c.group === 'Spending').map((c) => c.key));
+      setIncomeCategories(body.categories.filter((c) => c.group === 'Income').map((c) => c.key));
+      if (finishedUser) await setSession(finishedUser);
+      router.replace('/' as never);
+    } catch (err) {
+      console.warn('Setup failed', err);
+      setError(t('setup.failed'));
+      if (!(err instanceof NetworkError)) setSkipped(skippedSteps);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.root,
+  const chip = (selected: boolean, label: string, onPress: () => void, key: string) => (
+    <TouchableOpacity
+      key={key}
+      onPress={onPress}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selected }}
+      style={[
+        styles.chip,
         {
-          backgroundColor: colors.background,
-          padding: spacing.xl,
+          backgroundColor: selected ? colors.primaryLight : colors.surfaceSubtle,
+          borderColor: selected ? colors.primary : colors.borderSubtle,
+          borderRadius: radii.full,
         },
       ]}
-      showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.card, { maxWidth: 620 }]}>
-        {/* Header */}
-        <View style={{ marginBottom: spacing.xl }}>
-          <View
-            style={[
-              styles.badge,
-              {
-                backgroundColor: colors.primaryLight,
-                borderRadius: radii.full,
-                alignSelf: 'flex-start',
-                marginBottom: spacing.sm,
-              },
-            ]}
-          >
+      {selected && <Check size={14} color={colors.primary} style={{ marginRight: 6 }} />}
+      <Text
+        style={{
+          color: selected ? colors.primary : colors.textSecondary,
+          fontFamily: typography.fonts.medium,
+          fontSize: typography.sizes.sm,
+        }}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const titleStyle = {
+    color: colors.textPrimary,
+    fontFamily: typography.fonts.semiBold,
+    fontSize: typography.sizes.xxl,
+  };
+  const bodyStyle = {
+    color: colors.textSecondary,
+    fontFamily: typography.fonts.regular,
+    fontSize: typography.sizes.body,
+    marginTop: spacing.xs,
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  };
+  const sectionLabel = {
+    color: colors.textPrimary,
+    fontFamily: typography.fonts.medium,
+    fontSize: typography.sizes.md,
+    marginBottom: spacing.sm,
+  };
+  const hint = {
+    color: colors.textSecondary,
+    fontFamily: typography.fonts.regular,
+    fontSize: typography.sizes.sm,
+  };
+
+  const renderCategoryList = (defs: CategoryDefinition[], selectedIds: string[], onToggle: (id: string) => void) => {
+    const visible = showAllCategories ? defs : defs.filter((d) => d.defaultActive || selectedIds.includes(d.id));
+    return <View style={styles.chipGrid}>{visible.map((d) => chip(selectedIds.includes(d.id), d.name, () => onToggle(d.id), d.id))}</View>;
+  };
+
+  const budgetCards: { id: BudgetChoice; title: string; body: string }[] = [
+    { id: 'limits', title: t('setup.budget.limits'), body: t('setup.budget.limitsBody') },
+    { id: 'envelope', title: t('setup.budget.envelope'), body: t('setup.budget.envelopeBody') },
+    { id: 'track', title: t('setup.budget.track'), body: t('setup.budget.trackBody') },
+  ];
+
+  const quickAdds: { purpose: AccountPurpose; label: string; icon: React.ReactNode }[] = [
+    { purpose: 'emergency', label: t('setup.accounts.quick.emergency'), icon: <LifeBuoy size={16} color={colors.primary} /> },
+    { purpose: 'savings', label: t('setup.accounts.quick.savings'), icon: <PiggyBank size={16} color={colors.primary} /> },
+    { purpose: 'investment', label: t('setup.accounts.quick.investment'), icon: <TrendingUp size={16} color={colors.primary} /> },
+  ];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        contentContainerStyle={[styles.root, { padding: spacing.xl }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.card}>
+          {/* Progress */}
+          <View style={[styles.badge, { backgroundColor: colors.primaryLight, borderRadius: radii.full, marginBottom: spacing.sm }]}>
             <ShieldCheck size={14} color={colors.primary} />
-            <Text
-              style={[
-                styles.badgeText,
-                {
-                  color: colors.primary,
-                  fontFamily: typography.fonts.semiBold,
-                  marginLeft: spacing.xs,
-                },
-              ]}
-            >
-              QUICK SETUP
+            <Text style={[styles.badgeText, { color: colors.primary, fontFamily: typography.fonts.semiBold, marginLeft: spacing.xs }]}>
+              {t('setup.stepOf', { n: stepIndex + 1, total: STEPS.length })}
             </Text>
           </View>
-          <Text
-            style={[
-              styles.title,
-              {
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.semiBold,
-                fontSize: typography.sizes.hero,
-              },
-            ]}
-          >
-            Set up your financial workspace
-          </Text>
-          <Text
-            style={[
-              styles.subtitle,
-              {
-                color: colors.textSecondary,
-                fontFamily: typography.fonts.regular,
-                fontSize: typography.sizes.body,
-                marginTop: spacing.xs,
-              },
-            ]}
-          >
-            Customize your income streams, link initial accounts, and pick your active transaction categories.
-          </Text>
-        </View>
-
-        {/* Section 1: Workspace Name & Currency */}
-        <View
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.borderSubtle,
-              borderRadius: radii.lg,
-              padding: spacing.lg,
-              marginBottom: spacing.lg,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.sectionTitle,
-              {
-                color: colors.textPrimary,
-                fontFamily: typography.fonts.medium,
-                fontSize: typography.sizes.lg,
-                marginBottom: spacing.md,
-              },
-            ]}
-          >
-            1. Workspace Details
-          </Text>
-
-          <View style={{ marginBottom: spacing.md }}>
-            <TextInput
-              label="Workspace Name"
-              value={workspaceName}
-              onChangeText={setWorkspaceName}
-              placeholder="e.g. Personal or Family"
-              leftElement={<Briefcase size={18} color={colors.textTertiary} />}
-            />
-          </View>
-
-          <View
-            style={[
-              styles.currencyRow,
-              {
-                backgroundColor: colors.surfaceSubtle,
-                borderRadius: radii.md,
-                padding: spacing.md,
-              },
-            ]}
-          >
-            <View>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: typography.sizes.sm,
-                  fontFamily: typography.fonts.medium,
-                }}
-              >
-                DEFAULT CURRENCY
-              </Text>
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontSize: typography.sizes.body,
-                  fontFamily: typography.fonts.semiBold,
-                  marginTop: 2,
-                }}
-              >
-                Nigerian Naira (₦ NGN)
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.curBadge,
-                {
-                  backgroundColor: colors.primaryLight,
-                  borderRadius: radii.full,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: 12,
-                }}
-              >
-                Primary
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Section 2: Bank Accounts */}
-        <View
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.borderSubtle,
-              borderRadius: radii.lg,
-              padding: spacing.lg,
-              marginBottom: spacing.lg,
-            },
-          ]}
-        >
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: spacing.md,
-            }}
-          >
-            <Text
-              style={[
-                styles.sectionTitle,
-                {
-                  color: colors.textPrimary,
-                  fontFamily: typography.fonts.medium,
-                  fontSize: typography.sizes.lg,
-                },
-              ]}
-            >
-              2. Bank & Purposeful Accounts
-            </Text>
-            <TouchableOpacity
-              onPress={() => setBankSheetVisible(true)}
-              style={[
-                styles.addBtn,
-                {
-                  backgroundColor: colors.primaryLight,
-                  borderRadius: radii.full,
-                },
-              ]}
-            >
-              <Plus size={14} color={colors.primary} />
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontSize: 12,
-                  fontFamily: typography.fonts.semiBold,
-                  marginLeft: 4,
-                }}
-              >
-                Add Account
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {bankAccounts.length === 0 ? (
-            <TouchableOpacity
-              onPress={() => setBankSheetVisible(true)}
-              style={[
-                styles.emptyAccountsCard,
-                {
-                  borderColor: colors.border,
-                  borderRadius: radii.md,
-                },
-              ]}
-            >
-              <Building2 size={24} color={colors.textTertiary} />
-              <Text
+          <View style={[styles.progressRow, { marginBottom: spacing.xl }]} accessibilityRole="progressbar">
+            {STEPS.map((s, i) => (
+              <View
+                key={s}
                 style={[
-                  styles.emptyAccountsText,
-                  {
-                    color: colors.textSecondary,
-                    fontFamily: typography.fonts.regular,
-                    marginTop: spacing.xs,
-                  },
+                  styles.progressBar,
+                  { backgroundColor: i <= stepIndex ? colors.primary : colors.borderSubtle, borderRadius: radii.full },
                 ]}
-              >
-                Tap here to add your first account (PremiumTrust, GTBank, Kuda...)
-              </Text>
-            </TouchableOpacity>
-          ) : (
+              />
+            ))}
+          </View>
+
+          {step === 'about' && (
             <View>
-              {bankAccounts.map((acc) => (
-                <View
-                  key={acc.id}
-                  style={[
-                    styles.accountItem,
-                    {
-                      backgroundColor: colors.surfaceSubtle,
-                      borderColor: colors.borderSubtle,
-                      borderRadius: radii.md,
-                      padding: spacing.md,
-                      marginBottom: spacing.sm,
-                    },
-                  ]}
-                >
-                  <View
+              <Text style={titleStyle}>{t('setup.about.title')}</Text>
+              <Text style={bodyStyle}>{t('setup.about.body')}</Text>
+              <View style={{ marginBottom: spacing.md }}>
+                <TextInput
+                  label={t('setup.about.name')}
+                  placeholder={t('setup.about.namePlaceholder')}
+                  value={workspaceName}
+                  onChangeText={setWorkspaceName}
+                />
+              </View>
+              <View style={{ marginBottom: spacing.md, zIndex: 20 }}>
+                <Dropdown label={t('setup.about.currency')} value={currency} options={currencyOptions} onSelect={setCurrency} />
+              </View>
+              <View style={{ zIndex: 10 }}>
+                <Dropdown
+                  label={t('setup.about.weekStart')}
+                  value={weekStart}
+                  options={weekOptions}
+                  onSelect={(v) => setWeekStart(v as WeekStart)}
+                />
+              </View>
+            </View>
+          )}
+
+          {step === 'budget' && (
+            <View>
+              <Text style={titleStyle}>{t('setup.budget.title')}</Text>
+              <Text style={bodyStyle}>{t('setup.budget.body')}</Text>
+              {budgetCards.map((c) => {
+                const selected = budgetChoice === c.id;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    onPress={() => setBudgetChoice(c.id)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
                     style={[
-                      styles.avatarBadge,
+                      styles.optionCard,
                       {
-                        backgroundColor: colors.primaryLight,
-                        borderRadius: radii.full,
+                        borderColor: selected ? colors.primary : colors.borderSubtle,
+                        backgroundColor: selected ? colors.primaryLight : colors.surface,
+                        borderRadius: radii.lg,
+                        padding: spacing.md,
+                        marginBottom: spacing.sm,
                       },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.avatarText,
-                        {
-                          color: colors.primary,
-                          fontFamily: typography.fonts.semiBold,
-                        },
-                      ]}
-                    >
-                      {acc.initials}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: spacing.md }}>
-                    <Text
-                      style={{
-                        color: colors.textPrimary,
-                        fontFamily: typography.fonts.medium,
-                      }}
-                    >
-                      {acc.name}
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontSize: typography.sizes.sm,
-                      }}
-                    >
-                      Opening balance: {formatNaira(acc.balanceMinor)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => handleRemoveAccount(acc.id)}
-                    style={{ padding: 4 }}
-                  >
-                    <Trash2 size={16} color={colors.statusDanger} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.body }}>
+                        {c.title}
+                      </Text>
+                      <Text style={[hint, { marginTop: 2 }]}>{c.body}</Text>
+                    </View>
+                    {selected && <Check size={18} color={colors.primary} />}
                   </TouchableOpacity>
+                );
+              })}
+              {budgetChoice !== 'track' && (
+                <View style={{ marginTop: spacing.md }}>
+                  <CurrencyInput label={t('setup.budget.takeHome')} value={takeHome} onChangeText={setTakeHome} />
+                  <Text style={[hint, { marginTop: spacing.xs }]}>{t('setup.budget.takeHomeHint')}</Text>
                 </View>
-              ))}
+              )}
             </View>
           )}
-        </View>
 
-        {/* Section 3: Select Your Income Streams */}
-        <View
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.borderSubtle,
-              borderRadius: radii.lg,
-              padding: spacing.lg,
-              marginBottom: spacing.lg,
-            },
-          ]}
-        >
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 4,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TrendingUp size={18} color={colors.statusSuccess} style={{ marginRight: 6 }} />
-              <Text
+          {step === 'accounts' && (
+            <View>
+              <Text style={titleStyle}>{t('setup.accounts.title')}</Text>
+              <Text style={bodyStyle}>{t('setup.accounts.body')}</Text>
+
+              {accounts.length === 0 ? (
+                <Text style={[hint, { marginBottom: spacing.md }]}>{t('setup.accounts.empty')}</Text>
+              ) : (
+                accounts.map((acc) => (
+                  <View
+                    key={acc.key}
+                    style={[
+                      styles.accountItem,
+                      {
+                        backgroundColor: colors.surfaceSubtle,
+                        borderColor: colors.borderSubtle,
+                        borderRadius: radii.md,
+                        padding: spacing.md,
+                        marginBottom: spacing.sm,
+                      },
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium }}>{acc.name}</Text>
+                      <Text style={hint}>
+                        {PURPOSE_INFO[acc.purpose].label}
+                        {' · '}
+                        {t('setup.accounts.opening', { amount: formatNaira(acc.balanceMinor) })}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setAccounts((prev) => prev.filter((a) => a.key !== acc.key))}
+                      accessibilityLabel={t('setup.accounts.remove', { name: acc.name })}
+                      style={{ padding: 4 }}
+                    >
+                      <Trash2 size={16} color={colors.statusDanger} />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+
+              <Button
+                label={t('setup.accounts.add')}
+                onPress={() => setSheetPurpose('operating')}
+                variant="secondary"
+                size="md"
+                icon={<Plus size={16} color={colors.primary} />}
+              />
+
+              <View
                 style={[
-                  styles.sectionTitle,
-                  {
-                    color: colors.textPrimary,
-                    fontFamily: typography.fonts.medium,
-                    fontSize: typography.sizes.lg,
-                  },
+                  styles.saveBox,
+                  { borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md, marginTop: spacing.lg },
                 ]}
               >
-                3. Income
-              </Text>
+                <Text style={sectionLabel}>{t('setup.accounts.saveQuestion')}</Text>
+                <Text style={[hint, { marginBottom: spacing.sm }]}>{t('setup.accounts.saveHint')}</Text>
+                <View style={styles.chipGrid}>
+                  {quickAdds.map((q) => (
+                    <TouchableOpacity
+                      key={q.purpose}
+                      onPress={() => setSheetPurpose(q.purpose)}
+                      style={[
+                        styles.chip,
+                        { backgroundColor: colors.surfaceSubtle, borderColor: colors.borderSubtle, borderRadius: radii.full },
+                      ]}
+                    >
+                      {q.icon}
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontFamily: typography.fonts.medium,
+                          fontSize: typography.sizes.sm,
+                          marginLeft: 6,
+                        }}
+                      >
+                        {q.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
             </View>
-            <View
-              style={[
-                styles.curBadge,
-                {
-                  backgroundColor: colors.statusSuccessLight,
-                  borderRadius: radii.full,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: colors.statusSuccess,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: 11,
-                }}
-              >
-                {selectedIncomeIds.length} Selected
-              </Text>
-            </View>
-          </View>
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontSize: typography.sizes.sm,
-              fontFamily: typography.fonts.regular,
-              marginBottom: spacing.md,
-            }}
-          >
-            Choose your sources of income. Only selected streams will appear in your income dropdowns.
-          </Text>
+          )}
 
-          <View style={styles.chipGrid}>
-            {allIncomeCategories.map((cat) => {
-              const selected = selectedIncomeIds.includes(cat.id);
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => toggleIncome(cat.id)}
-                  style={[
-                    styles.categoryChip,
-                    {
-                      backgroundColor: selected ? colors.primaryLight : colors.surfaceSubtle,
-                      borderColor: selected ? colors.primary : colors.borderSubtle,
-                      borderRadius: radii.full,
-                    },
-                  ]}
-                >
-                  {selected && (
-                    <Check size={14} color={colors.primary} style={{ marginRight: 6 }} />
-                  )}
-                  <Text
-                    style={{
-                      color: selected ? colors.primary : colors.textSecondary,
-                      fontFamily: typography.fonts.medium,
-                      fontSize: typography.sizes.sm,
-                    }}
-                  >
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+          {step === 'categories' && (
+            <View>
+              <Text style={titleStyle}>{t('setup.categories.title')}</Text>
+              <Text style={bodyStyle}>{t('setup.categories.body')}</Text>
+
+              <View style={styles.sectionHead}>
+                <Text style={sectionLabel}>{t('setup.categories.spending')}</Text>
+                <Text style={hint}>{t('setup.categories.selected', { n: expenseIds.length })}</Text>
+              </View>
+              {renderCategoryList(SPENDING_CHOICES, expenseIds, (id) => setExpenseIds((prev) => toggle(prev, id)))}
+
+              <View style={[styles.sectionHead, { marginTop: spacing.lg }]}>
+                <Text style={sectionLabel}>{t('setup.categories.income')}</Text>
+                <Text style={hint}>{t('setup.categories.selected', { n: incomeIds.length })}</Text>
+              </View>
+              {renderCategoryList(INCOME_TAXONOMY, incomeIds, (id) => setIncomeIds((prev) => toggle(prev, id)))}
+
+              <TouchableOpacity onPress={() => setShowAllCategories((v) => !v)} style={{ marginTop: spacing.md }}>
+                <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold }}>
+                  {showAllCategories ? t('setup.categories.showFewer') : t('setup.categories.showAll')}
+                </Text>
+              </TouchableOpacity>
+              <Text style={[hint, { marginTop: spacing.md }]}>{t('setup.categories.savingsNote')}</Text>
+            </View>
+          )}
+
+          {!!error && (
+            <Text style={{ color: colors.statusDanger, fontFamily: typography.fonts.medium, marginTop: spacing.lg }}>{error}</Text>
+          )}
+
+          {/* Footer */}
+          <View style={[styles.footer, { marginTop: spacing.xl }]}>
+            {stepIndex > 0 ? (
+              <Button label={t('setup.back')} onPress={() => setStepIndex((i) => i - 1)} variant="ghost" size="md" disabled={saving} />
+            ) : (
+              <View />
+            )}
+            <View style={styles.footerRight}>
+              {step !== 'about' && (
+                <Button label={t('setup.skip')} onPress={skipStep} variant="ghost" size="md" disabled={saving} />
+              )}
+              <Button
+                label={isLast ? t('setup.finish') : t('setup.next')}
+                onPress={goNext}
+                variant="primary"
+                size="md"
+                loading={saving}
+              />
+            </View>
           </View>
         </View>
+      </ScrollView>
 
-        {/* Section 4: Select Your Expense Categories */}
-        <View
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.borderSubtle,
-              borderRadius: radii.lg,
-              padding: spacing.lg,
-              marginBottom: spacing.xl,
-            },
-          ]}
-        >
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 4,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <CreditCard size={18} color={colors.primary} style={{ marginRight: 6 }} />
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  {
-                    color: colors.textPrimary,
-                    fontFamily: typography.fonts.medium,
-                    fontSize: typography.sizes.lg,
-                  },
-                ]}
-              >
-                4. Expense
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.curBadge,
-                {
-                  backgroundColor: colors.primaryLight,
-                  borderRadius: radii.full,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontFamily: typography.fonts.semiBold,
-                  fontSize: 11,
-                }}
-              >
-                {selectedExpenseIds.length} Selected
-              </Text>
-            </View>
-          </View>
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontSize: typography.sizes.sm,
-              fontFamily: typography.fonts.regular,
-              marginBottom: spacing.md,
-            }}
-          >
-            Select the spending categories you use. You can change these anytime in Settings.
-          </Text>
-
-          <View style={styles.chipGrid}>
-            {allExpenseCategories.map((cat) => {
-              const selected = selectedExpenseIds.includes(cat.id);
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => toggleExpense(cat.id)}
-                  style={[
-                    styles.categoryChip,
-                    {
-                      backgroundColor: selected ? colors.primaryLight : colors.surfaceSubtle,
-                      borderColor: selected ? colors.primary : colors.borderSubtle,
-                      borderRadius: radii.full,
-                    },
-                  ]}
-                >
-                  {selected && (
-                    <Check size={14} color={colors.primary} style={{ marginRight: 6 }} />
-                  )}
-                  <Text
-                    style={{
-                      color: selected ? colors.primary : colors.textSecondary,
-                      fontFamily: typography.fonts.medium,
-                      fontSize: typography.sizes.sm,
-                    }}
-                  >
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* CTA: Get Started */}
-        <Button
-          label="Get Started with MyLedja"
-          onPress={handleFinishSetup}
-          variant="primary"
-          size="lg"
-          loading={loading}
-          icon={<ArrowRight size={18} color="#FFFFFF" />}
-        />
-      </View>
-
-      {/* Sheets */}
-      <QuickBankPickerSheet
-        visible={bankSheetVisible}
-        onClose={() => setBankSheetVisible(false)}
-        onAddAccount={handleAddAccount}
+      <AddAccountSheet
+        visible={sheetPurpose !== null}
+        initialPurpose={sheetPurpose ?? 'operating'}
+        onClose={() => setSheetPurpose(null)}
+        onSaveAccount={(acc) => setAccounts((prev) => [...prev, { ...acc, key: `${Date.now()}-${prev.length}` }])}
       />
-    </ScrollView>
+    </View>
   );
 }
 
@@ -628,10 +474,12 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
+    maxWidth: 620,
   },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
@@ -639,66 +487,53 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.5,
   },
-  title: {
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    lineHeight: 22,
-  },
-  sectionCard: {
-    borderWidth: 1,
-  },
-  sectionTitle: {},
-  currencyRow: {
+  progressRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    gap: 6,
   },
-  curBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  progressBar: {
+    flex: 1,
+    height: 4,
   },
-  addBtn: {
+  optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  emptyAccountsCard: {
     borderWidth: 1,
-    borderStyle: 'dashed',
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyAccountsText: {
-    textAlign: 'center',
-    fontSize: 13,
   },
   accountItem: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
   },
-  avatarBadge: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+  saveBox: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
   },
-  avatarText: {
-    fontSize: 13,
+  sectionHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
   },
   chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  categoryChip: {
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderWidth: 1,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  footerRight: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
   },
 });

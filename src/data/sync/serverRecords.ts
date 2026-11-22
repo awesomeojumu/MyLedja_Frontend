@@ -235,6 +235,7 @@ export function localFromServer(collection: string, id: string, doc: unknown, wo
         currency: d.currency ?? 'NGN',
         institution: str(d.institution),
         last4: str(d.last4),
+        purpose: str(d.purpose),
         countInBudget: d.onBudget !== false,
         archived: d.archived === true,
         order: num(d.sortOrder) ?? 0,

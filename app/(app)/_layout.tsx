@@ -15,6 +15,7 @@ import { DesktopSidebar } from '../../src/features/frame/DesktopSidebar';
 import { AppHeader } from '../../src/features/frame/AppHeader';
 import { useAuth } from '../../src/features/auth/AuthProvider';
 import { WorkspaceProvider } from '../../src/data/workspace/WorkspaceProvider';
+import { CategoryCatalogSync } from '../../src/features/categories/catalog';
 
 export default function AppLayout() {
   const { colors, typography } = useTheme();
@@ -27,6 +28,7 @@ export default function AppLayout() {
   if (isDesktop && Platform.OS === 'web') {
     return (
       <WorkspaceProvider workspaceId={activeWsId}>
+        <CategoryCatalogSync />
         <View style={[styles.desktopRoot, { backgroundColor: colors.background }]}>
           <DesktopSidebar />
           <View style={styles.desktopMainContent}>
@@ -74,6 +76,7 @@ export default function AppLayout() {
   // Mobile & Small Screens: 5-Tab Bottom Navigation Bar
   return (
     <WorkspaceProvider workspaceId={activeWsId}>
+        <CategoryCatalogSync />
       <View style={[styles.mobileRoot, { backgroundColor: colors.background }]}>
       <AppHeader />
       <Tabs
