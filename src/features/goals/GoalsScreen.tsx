@@ -11,7 +11,10 @@ import {
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
-import { CreateGoalSheet, type AddedGoal } from './CreateGoalSheet';
+import { CreateGoalSheet, type NewGoal } from './CreateGoalSheet';
+import { Toast } from '../../design/components/Toast';
+import { t } from '../../i18n';
+import { resolveCategoryId } from '../categories/catalog';
 import { AddMoneyToGoalSheet } from './AddMoneyToGoalSheet';
 import { SpendFromGoalSheet } from './SpendFromGoalSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
@@ -22,6 +25,8 @@ interface GoalItemUI {
   targetMinor: bigint;
   currentMinor: bigint;
   targetDate?: string;
+  accountId: string;
+  categoryId?: string;
 }
 
 export function GoalsScreen() {
@@ -29,32 +34,31 @@ export function GoalsScreen() {
   const router = useRouter();
 
   // Live Database Hook
-  const { repo, goals: dbGoals, accounts: dbAccounts, allocations: dbAllocations } = useDatabaseData();
+  const { repo, goals: dbGoals, categories: dbCategories, allocations: dbAllocations } = useDatabaseData();
+  const [notice, setNotice] = useState('');
 
-  // State
-  const [localGoals, setLocalGoals] = useState<GoalItemUI[]>([]);
-
-  const goals: GoalItemUI[] = React.useMemo(() => {
-    if (dbGoals.length > 0) {
-      return dbGoals.map((g) => {
-        const currentSaved = dbAllocations
-          .filter((a) => a.goalId === g.id)
-          .reduce((sum, a) => {
-            const amt = BigInt(a.amountMinor || '0');
-            return a.kind === 'spend' ? sum - amt : sum + amt;
-          }, 0n);
-
-        return {
-          id: g.id,
-          name: g.name,
-          targetMinor: BigInt(g.targetMinor || '0'),
-          currentMinor: currentSaved > 0n ? currentSaved : 0n,
-          targetDate: g.targetDate,
-        };
-      });
-    }
-    return localGoals;
-  }, [dbGoals, dbAllocations, localGoals]);
+  const goals: GoalItemUI[] = React.useMemo(
+    () =>
+      dbGoals
+        .map((g) => {
+          const currentSaved = dbAllocations
+            .filter((a) => a.goalId === g.id)
+            .reduce((sum, a) => {
+              const amount = BigInt(a.amountMinor || '0');
+              return a.kind === 'spend' ? sum - amount : sum + amount;
+            }, 0n);
+          return {
+            id: g.id,
+            name: g.name,
+            targetMinor: BigInt(g.targetMinor || '0'),
+            currentMinor: currentSaved > 0n ? currentSaved : 0n,
+            targetDate: g.targetDate,
+            accountId: g.accountId,
+            categoryId: g.categoryId,
+          };
+        }),
+    [dbGoals, dbAllocations],
+  );
 
   // Sheets
   const [createSheetVisible, setCreateSheetVisible] = useState(false);
@@ -69,53 +73,76 @@ export function GoalsScreen() {
       ? Math.min(100, Math.round((Number(totalSavedMinor) / Number(totalTargetMinor)) * 100))
       : 0;
 
-  const handleCreateGoal = (g: AddedGoal) => {
-    if (repo && dbAccounts.length > 0) {
-      repo.addGoal({
-        name: g.name,
-        targetMinor: g.targetMinor,
-        targetDate: g.targetDate,
-        accountId: dbAccounts[0]!.id,
-      }).catch((e: unknown) => console.warn('Failed to add goal in DB', e));
+  const today = () => new Date().toISOString().slice(0, 10);
+
+  /** Makes the savings account and budget line when asked, then the goal kept in that account. */
+  const handleCreateGoal = async (g: NewGoal): Promise<boolean> => {
+    let accountId = g.accountId;
+    let alreadySaved: bigint | undefined;
+    if (!accountId && g.newAccount) {
+      const made = await repo.addAccount({
+        name: g.newAccount.name,
+        type: 'savings',
+        purpose: 'savings',
+        openingBalance: g.newAccount.balanceMinor,
+        openingDate: today(),
+      });
+      if (!made.ok) return false;
+      accountId = made.value.id;
+      // Money already sitting in a new savings account counts towards the goal kept there.
+      if (g.newAccount.balanceMinor > 0n) alreadySaved = g.newAccount.balanceMinor > g.targetMinor ? g.targetMinor : g.newAccount.balanceMinor;
     }
-    setLocalGoals((prev) => [
-      ...prev,
-      {
-        id: g.id,
-        name: g.name,
-        targetMinor: g.targetMinor,
-        currentMinor: 0n,
-        targetDate: g.targetDate,
-      },
-    ]);
+    if (!accountId) return false;
+
+    let categoryId: string | undefined;
+    if (g.budget === 'new') {
+      const existingGroup = dbCategories.find((c) => c.kind === 'expense' && c.budgetType === 'savings' && !c.deleted)?.group;
+      const group = existingGroup ?? (await repo.createCategoryGroup({ name: t('goals.savingsGroup'), kind: 'expense' })).id;
+      categoryId = (await repo.addCategory({ name: g.name, kind: 'expense', group, budgetType: 'savings' })).id;
+    } else if (g.budget) {
+      categoryId = g.budget;
+    }
+
+    const res = await repo.addGoal({
+      name: g.name,
+      targetMinor: g.targetMinor,
+      targetDate: g.targetDate,
+      accountId,
+      categoryId,
+      alreadySavedMinor: alreadySaved,
+    });
+    if (!res.ok) return false;
+
+    // With a date and a budget line, plan this month's share in the budget.
+    if (categoryId && g.targetDate) {
+      const [y, m] = g.targetDate.split('-').map(Number);
+      const now = new Date();
+      const months = y && m ? Math.max(1, (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth())) : 1;
+      const left = g.targetMinor - (alreadySaved ?? 0n);
+      if (left > 0n) await repo.setAssigned(categoryId, today().slice(0, 7), left / BigInt(months));
+    }
+    setNotice(t('goals.create.saved'));
+    return true;
   };
 
-  const handleDeposit = (goalId: string, amountMinor: bigint) => {
-    if (repo && dbAccounts.length > 0) {
-      repo.allocateToGoal(goalId, {
-        amount: amountMinor,
-        fromAccountId: dbAccounts[0]!.id,
-        date: new Date().toISOString().split('T')[0]!,
-      }).catch((e: unknown) => console.warn('Failed to allocate to goal in DB', e));
-    }
-    setLocalGoals((prev) =>
-      prev.map((g) => (g.id === goalId ? { ...g, currentMinor: g.currentMinor + amountMinor } : g))
-    );
+  const handleDeposit = async (goalId: string, amountMinor: bigint, fromAccountId: string): Promise<boolean> => {
+    const res = await repo.allocateToGoal(goalId, { amount: amountMinor, fromAccountId, date: today() });
+    return res.ok;
   };
 
-  const handleSpend = (goalId: string, amountMinor: bigint) => {
-    const targetGoal = goals.find((g) => g.id === goalId);
-    if (repo && dbAccounts.length > 0) {
-      repo.spendFromGoal(goalId, {
-        amount: amountMinor,
-        accountId: dbAccounts[0]!.id,
-        categoryId: 'cat-general',
-        date: new Date().toISOString().split('T')[0]!,
-      }).catch((e: unknown) => console.warn('Failed to spend from goal in DB', e));
-    }
-    setLocalGoals((prev) =>
-      prev.map((g) => (g.id === goalId ? { ...g, currentMinor: g.currentMinor - amountMinor } : g))
-    );
+  const handleSpend = async (goal: GoalItemUI, amountMinor: bigint, payee: string) => {
+    const categoryId =
+      goal.categoryId && dbCategories.some((c) => c.id === goal.categoryId)
+        ? goal.categoryId
+        : await resolveCategoryId(repo, dbCategories, payee || goal.name, 'expense');
+    const res = await repo.spendFromGoal(goal.id, {
+      amount: amountMinor,
+      accountId: goal.accountId,
+      categoryId,
+      date: today(),
+      payeeName: payee.trim() || undefined,
+    });
+    if (!res.ok) setNotice(t('goals.spend.failed'));
   };
 
   return (
@@ -502,12 +529,10 @@ export function GoalsScreen() {
           visible={Boolean(depositingGoal)}
           onClose={() => setDepositingGoal(null)}
           goalName={depositingGoal.name}
+          goalAccountId={depositingGoal.accountId}
           targetMinor={depositingGoal.targetMinor}
           currentMinor={depositingGoal.currentMinor}
-          onTransfer={(amount) => {
-            handleDeposit(depositingGoal.id, amount);
-            setDepositingGoal(null);
-          }}
+          onTransfer={(amount, fromAccountId) => handleDeposit(depositingGoal.id, amount, fromAccountId)}
         />
       )}
 
@@ -517,12 +542,14 @@ export function GoalsScreen() {
           onClose={() => setSpendingGoal(null)}
           goalName={spendingGoal.name}
           savedMinor={spendingGoal.currentMinor}
-          onSpend={(amount) => {
-            handleSpend(spendingGoal.id, amount);
+          onSpend={(amount, payee) => {
+            void handleSpend(spendingGoal, amount, payee);
             setSpendingGoal(null);
           }}
         />
       )}
+
+      <Toast visible={!!notice} message={notice} onDismiss={() => setNotice('')} />
     </View>
   );
 }
