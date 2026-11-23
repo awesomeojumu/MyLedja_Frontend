@@ -4364,8 +4364,8 @@
   "wiz.budget.payday": "Payday (day of the month)",
   "wiz.budget.sources": "Where does your money come from?",
   "wiz.budget.style": "How do you like to plan?",
-  "wiz.budget.style.envelope": "Plan every amount",
-  "wiz.budget.style.envelopeBody": "Give every naira a job before the month starts.",
+  "wiz.budget.style.envelope": "Zero-based: every naira a job",
+  "wiz.budget.style.envelopeBody": "Plan all of this month's money before you spend it. Leftover carries over.",
   "wiz.budget.style.limits": "Set limits",
   "wiz.budget.style.limitsBody": "Plan the categories you care about.",
   "wiz.budget.style.track": "Just track",
@@ -5144,5 +5144,16 @@
   "ui.transactionsScreen.noTransactionsRecordedYet": "No transactions recorded yet",
   "ui.transactionsScreen.logAnExpenseOrIncome": "Log an expense or income to track your activity in this ledger.",
   "ui.transactionsScreen.recordFirstTransaction": "+ Record First Transaction",
-  "ui.transactionsScreen.spent": "Spent:"
+  "ui.transactionsScreen.spent": "Spent:",
+  "wiz.step.income": "Income",
+  "wiz.step.structure": "Budget structure",
+  "wiz.income.title": "What do you earn each month?",
+  "wiz.income.body": "Enter what lands in your account after tax and deductions, and where it comes from.",
+  "wiz.income.perYear": "That's {amount} a year.",
+  "wiz.structure.title": "How should your money be shared?",
+  "wiz.structure.body": "Pick a structure, then shape the split. Every part shows in naira from your take-home pay.",
+  "wiz.structure.noIncome": "Add your take-home pay in the Income step to see naira amounts.",
+  "wiz.structure.less": "Less for {name}",
+  "wiz.structure.more": "More for {name}",
+  "wiz.bills.allCategories": "Every category and subcategory"
 }

@@ -32,7 +32,12 @@ export function BillsStep({ draft, update }: StepProps) {
   const payFrom = draft.accounts.filter((a) => isSpendingAccount({ type: a.type, archived: false }));
   const defaultAccount = (draft.accounts.find((a) => a.purpose === 'bills') ?? payFrom[0] ?? draft.accounts[0])?.id ?? '';
 
-  const entries = catalogEntries(draft.expenseIds, draft.incomeIds, draft.subcategories).filter((e) => e.kind === 'expense');
+  // Bills come before Categories, so offer every category and subcategory; picking one switches it on.
+  const entries = catalogEntries(
+    EXPENSE_TAXONOMY.map((d) => d.id),
+    draft.incomeIds,
+    Object.fromEntries(EXPENSE_TAXONOMY.map((d) => [d.id, d.subcategories])),
+  ).filter((e) => e.kind === 'expense');
   const categoryOptions = entries.map((e) => ({ label: e.sub ? `${e.group} · ${e.name}` : e.name, value: e.key }));
   const accountOptions = draft.accounts.map((a) => ({ label: a.name, value: a.id }));
 
@@ -56,6 +61,18 @@ export function BillsStep({ draft, update }: StepProps) {
 
   const setBill = (id: string, patch: Partial<DraftBill>) =>
     update((x) => ({ bills: x.bills.map((b) => (b.id === id ? { ...b, ...patch } : b)) }));
+
+  /** Files a bill under a category or subcategory, switching it on for the Categories step. */
+  const setBillCategory = (id: string, categoryKey: string) =>
+    update((x) => {
+      const entry = entries.find((e) => e.key === categoryKey);
+      const def = entry?.def;
+      const expenseIds = def && !x.expenseIds.includes(def.id) ? [...x.expenseIds, def.id] : x.expenseIds;
+      const subs = def ? (x.subcategories[def.id] ?? def.subcategories) : [];
+      const subcategories =
+        def && entry?.sub && !subs.includes(entry.sub) ? { ...x.subcategories, [def.id]: [...subs, entry.sub] } : x.subcategories;
+      return { expenseIds, subcategories, bills: x.bills.map((b) => (b.id === id ? { ...b, categoryKey } : b)) };
+    });
 
   // Bills plus monthly debt repayments: everything fixed that comes out first.
   const billsTotal = allBills(draft).reduce((s, b) => s + b.amount, 0n);
@@ -98,7 +115,7 @@ export function BillsStep({ draft, update }: StepProps) {
               </View>
             </View>
             <View style={{ marginTop: spacing.sm, zIndex: 2 }}>
-              <Dropdown label={t('wiz.bills.category')} value={b.categoryKey} options={categoryOptions} onSelect={(categoryKey) => setBill(b.id, { categoryKey })} />
+              <Dropdown label={t('wiz.bills.category')} value={b.categoryKey} options={categoryOptions} onSelect={(categoryKey) => setBillCategory(b.id, categoryKey)} />
             </View>
             {accountOptions.length > 0 && (
               <View style={{ marginTop: spacing.sm, zIndex: 1 }}>

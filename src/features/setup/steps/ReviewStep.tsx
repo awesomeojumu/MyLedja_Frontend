@@ -43,17 +43,17 @@ export function ReviewStep({ draft, goTo }: StepProps) {
       {section(t('wiz.review.income'), 2, [t('wiz.review.incomeLine', { amount: formatNaira(s.takeHome), day: draft.payday })])}
       {section(
         t('wiz.review.structure'),
-        2,
+        3,
         [fw.name, ...s.pillars.map((p) => t('wiz.review.pillarLine', { name: p.pillar.name, planned: formatNaira(p.planned), target: formatNaira(p.target) }))],
       )}
-      {section(t('wiz.review.categories'), 3, [
-        t('wiz.review.categoriesLine', { cats: cats.length + draft.customCategories.length, subs, income: draft.incomeIds.length }),
-      ])}
       {section(t('wiz.review.bills'), 4, [
         t('wiz.review.billsLine', { n: draft.bills.length, amount: formatNaira(s.billsTotal) }),
         t('wiz.review.debtsLine', { n: draft.debts.length, amount: formatNaira(s.debtsOwed) }),
       ])}
       {section(t('wiz.review.goals'), 5, [t('wiz.review.goalsLine', { n: draft.goals.length, amount: formatNaira(s.goalsMonthly) })])}
+      {section(t('wiz.review.categories'), 6, [
+        t('wiz.review.categoriesLine', { cats: cats.length + draft.customCategories.length, subs, income: draft.incomeIds.length }),
+      ])}
 
       <Card selected={toMinor(draft.takeHome) > 0n && left === 0n}>
         <View style={styles.row}>

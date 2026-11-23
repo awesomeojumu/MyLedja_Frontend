@@ -105,3 +105,24 @@ describe('saved structure', () => {
     expect(homes).toHaveLength(1);
   });
 });
+
+describe('budget structures', () => {
+  it('Faith and Purpose takes the tithe first and funds goals from Growth', () => {
+    const fw = frameworkOf({ frameworkId: 'faith_purpose_tithe_first', percents: {} });
+    expect(fw.pillars.map((p) => [p.id, p.percentage])).toEqual([
+      ['tithe', 10],
+      ['giving_family', 10],
+      ['living', 50],
+      ['growth', 30],
+    ]);
+    const parts = pillarAmounts(fw, 50000000n);
+    expect(parts.get('tithe')).toBe(5000000n);
+    expect(parts.get('growth')).toBe(15000000n);
+  });
+
+  it('every structure adds up to 100%, the custom split included', () => {
+    for (const id of ['classic_50_30_20', 'faith_purpose_tithe_first', 'user_50_10_10_20_10', 'wealth_builder_70_20_10', 'simple_80_20', 'custom_split']) {
+      expect(totalPercent(frameworkOf({ frameworkId: id, percents: {} }))).toBe(100);
+    }
+  });
+});

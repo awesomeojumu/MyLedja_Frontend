@@ -42,16 +42,17 @@ test('recover the password with the email code', async ({ page }) => {
   await expect(page.getByText(en['recover.doneTitle'])).toBeVisible();
 });
 
-test('sign up, the email code, all seven Welcome steps, then the Dashboard', async ({ page, isMobile }) => {
+test('sign up, the email code, all eight Welcome steps, then the Dashboard', async ({ page, isMobile }) => {
   test.setTimeout(90_000);
   await signUp(page, `tunde-${isMobile ? 'phone' : 'desktop'}@example.test`);
   const steps = [
     'wiz.step.space',
     'wiz.step.money',
-    'wiz.step.budget',
-    'wiz.step.categories',
+    'wiz.step.income',
+    'wiz.step.structure',
     'wiz.step.bills',
     'wiz.step.goals',
+    'wiz.step.categories',
     'wiz.step.review',
   ] as const;
   for (const [i, key] of steps.entries()) {

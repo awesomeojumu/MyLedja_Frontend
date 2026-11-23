@@ -15,18 +15,19 @@ test('Welcome sets up the budget, bills, debts and goals; spending and saving ea
   await expect(page.getByText(en['wiz.money.total'].replace('{amount}', naira(400000)))).toBeVisible();
   await next(page);
 
-  // 3. ₦500,000 take-home on 50/30/20.
+  // 3. Income: ₦500,000 take-home.
+  await expect(page.getByText(stepHeader(3, 'wiz.step.income'))).toBeVisible();
   await fieldAfter(page, en['wiz.budget.takeHome']).fill('500000');
+  await next(page);
+
+  // 4. Budget structure: 50/30/20 in naira.
+  await expect(page.getByText(stepHeader(4, 'wiz.step.structure'))).toBeVisible();
   await expect(page.getByText(naira(250000)).first()).toBeVisible();
   await expect(page.getByText(naira(150000)).first()).toBeVisible();
   await expect(page.getByText(naira(100000)).first()).toBeVisible();
   await next(page);
 
-  // 4. Categories, as suggested.
-  await expect(page.getByText(stepHeader(4, 'wiz.step.categories'))).toBeVisible();
-  await next(page);
-
-  // 5. Rent ₦150,000, and a ₦200,000 loan repaid ₦25,000 a month.
+  // 5. Bills: rent ₦150,000, and a ₦200,000 loan repaid ₦25,000 a month.
   await page.getByText(en['wiz.bills.preset.rent'], { exact: true }).click();
   await fieldAfter(page, en['wiz.bills.amount']).fill('150000');
   await page.getByText(en['wiz.debts.add'], { exact: true }).click();
@@ -41,8 +42,12 @@ test('Welcome sets up the budget, bills, debts and goals; spending and saving ea
   await fieldAfter(page, en['wiz.goals.target']).fill('600000');
   await next(page);
 
-  // 7. Review: bills include the repayment.
-  await expect(page.getByText(stepHeader(7, 'wiz.step.review'))).toBeVisible();
+  // 7. Categories, as suggested.
+  await expect(page.getByText(stepHeader(7, 'wiz.step.categories'))).toBeVisible();
+  await next(page);
+
+  // 8. Review: bills include the repayment.
+  await expect(page.getByText(stepHeader(8, 'wiz.step.review'))).toBeVisible();
   await expect(page.getByText(en['wiz.review.billsLine'].replace('{n}', '1').replace('{amount}', naira(175000)))).toBeVisible();
   await page.getByText(en['wiz.finish'], { exact: true }).click();
   await expect(page).toHaveURL(/\/$/);

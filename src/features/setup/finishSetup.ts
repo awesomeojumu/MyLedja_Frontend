@@ -18,7 +18,7 @@ import {
 } from './plan';
 
 /** Dashboard "Get started" numbers for skipped steps (P04-02): 3 accounts, 4 categories, 5 budget. */
-export const STEP_SKIP_NUMBER: Record<number, number> = { 1: 3, 2: 5, 3: 4 };
+export const STEP_SKIP_NUMBER: Record<number, number> = { 1: 3, 3: 5, 6: 4 };
 
 const today = () => new Date().toISOString().slice(0, 10);
 

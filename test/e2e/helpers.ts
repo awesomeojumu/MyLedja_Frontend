@@ -40,7 +40,7 @@ export async function signUp(page: Page, email: string) {
 }
 
 export const stepHeader = (n: number, key: keyof typeof en) =>
-  `${en['wiz.stepOf'].replace('{n}', String(n)).replace('{total}', '7')} · ${en[key]}`;
+  `${en['wiz.stepOf'].replace('{n}', String(n)).replace('{total}', '8')} · ${en[key]}`;
 
 export const next = (page: Page) => page.getByText(en['wiz.next'], { exact: true }).click();
 
@@ -58,8 +58,8 @@ export async function signUpAndSetUp(page: Page, email: string) {
   await signUp(page, email);
   await next(page);
   await addWelcomeAccount(page, 'wiz.money.quick.operating', 'GTBank Current', '100000');
-  for (let step = 2; step < 7; step++) await next(page);
-  await expect(page.getByText(stepHeader(7, 'wiz.step.review'))).toBeVisible();
+  for (let step = 2; step < 8; step++) await next(page);
+  await expect(page.getByText(stepHeader(8, 'wiz.step.review'))).toBeVisible();
   await page.getByText(en['wiz.finish'], { exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
 }

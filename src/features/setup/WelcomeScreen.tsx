@@ -18,19 +18,22 @@ import { defaultDraft, frameworkOf, toMinor, totalPercent, type SetupDraft } fro
 import { Hint } from './ui';
 import { SpaceStep } from './steps/SpaceStep';
 import { MoneyStep } from './steps/MoneyStep';
-import { BudgetStep } from './steps/BudgetStep';
+import { IncomeStep } from './steps/IncomeStep';
+import { StructureStep } from './steps/StructureStep';
 import { CategoriesStep } from './steps/CategoriesStep';
 import { BillsStep } from './steps/BillsStep';
 import { GoalsStep } from './steps/GoalsStep';
 import { ReviewStep } from './steps/ReviewStep';
 
-const STEPS: { key: TextKey; Component: typeof SpaceStep }[] = [
+/** The order money moves: where it is, what comes in, how it's shared, what's fixed, what it's for, then the detail. */
+export const STEPS: { key: TextKey; Component: typeof SpaceStep }[] = [
   { key: 'wiz.step.space', Component: SpaceStep },
   { key: 'wiz.step.money', Component: MoneyStep },
-  { key: 'wiz.step.budget', Component: BudgetStep },
-  { key: 'wiz.step.categories', Component: CategoriesStep },
+  { key: 'wiz.step.income', Component: IncomeStep },
+  { key: 'wiz.step.structure', Component: StructureStep },
   { key: 'wiz.step.bills', Component: BillsStep },
   { key: 'wiz.step.goals', Component: GoalsStep },
+  { key: 'wiz.step.categories', Component: CategoriesStep },
   { key: 'wiz.step.review', Component: ReviewStep },
 ];
 const LAST = STEPS.length - 1;
@@ -103,7 +106,7 @@ export function WelcomeScreen() {
   /** What stops this step going on, if anything. */
   const blocker = (): string => {
     if (step === 0 && !draft.workspaceName.trim()) return t('wiz.space.nameRequired');
-    if (step === 2) {
+    if (step === 3) {
       const total = totalPercent(frameworkOf(draft));
       if (total !== 100) return t('wiz.budget.mustBe100', { n: total });
     }
