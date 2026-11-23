@@ -2,6 +2,7 @@ import React from 'react';
 import { TouchableOpacity, StyleSheet, Text, View } from 'react-native';
 import { Sun, Moon } from 'lucide-react-native';
 import { useTheme } from '../theme';
+import { t } from '../../i18n';
 
 interface ThemeToggleProps {
   showLabel?: boolean;
@@ -16,7 +17,7 @@ export function ThemeToggle({ showLabel = false, size = 'md' }: ThemeToggleProps
   return (
     <TouchableOpacity
       accessibilityRole="button"
-      accessibilityLabel={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+      accessibilityLabel={isDark ? t('theme.toLight') : t('theme.toDark')}
       onPress={toggleTheme}
       activeOpacity={0.7}
       style={[
@@ -49,7 +50,7 @@ export function ThemeToggle({ showLabel = false, size = 'md' }: ThemeToggleProps
             },
           ]}
         >
-          {isDark ? 'Light Mode' : 'Dark Mode'}
+          {isDark ? t('theme.light') : t('theme.dark')}
         </Text>
       )}
     </TouchableOpacity>

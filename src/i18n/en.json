@@ -4314,5 +4314,9 @@
   "activity.debtOut": "Debt repayment",
   "activity.lend": "Money lent",
   "activity.loan": "Loan received",
-  "activity.writeOff": "Written off"
+  "activity.writeOff": "Written off",
+  "theme.toLight": "Switch to light mode",
+  "theme.toDark": "Switch to dark mode",
+  "theme.light": "Light mode",
+  "theme.dark": "Dark mode"
 }
