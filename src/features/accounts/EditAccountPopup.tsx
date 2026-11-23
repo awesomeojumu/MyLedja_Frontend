@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { Trash2 } from 'lucide-react-native';
 import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 
+import { t as i18nT } from '../../i18n';
 interface EditAccountPopupProps {
   visible: boolean;
   onClose: () => void;
@@ -41,11 +42,11 @@ export function EditAccountPopup({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Edit Account">
+    <BottomSheet visible={visible} onClose={onClose} title={i18nT('ui.editAccountPopup.editAccount')}>
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            label="Account Name"
+            label={i18nT('ui.editAccountPopup.accountName')}
             value={name}
             onChangeText={(t) => {
               setName(t);
@@ -57,8 +58,8 @@ export function EditAccountPopup({
 
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            label="Account Number (Optional)"
-            placeholder="e.g. 0123456789"
+            label={i18nT('ui.editAccountPopup.accountNumberOptional')}
+            placeholder={i18nT('ui.editAccountPopup.eG0123456789')}
             value={accountNumber}
             onChangeText={setAccountNumber}
             keyboardType="number-pad"
@@ -66,7 +67,7 @@ export function EditAccountPopup({
         </View>
 
         <Button
-          label="Save Changes"
+          label={i18nT('ui.editAccountPopup.saveChanges')}
           onPress={handleSave}
           variant="primary"
           size="lg"
@@ -96,7 +97,7 @@ export function EditAccountPopup({
                 marginLeft: spacing.xs,
               }}
             >
-              Close or Delete Account
+              {i18nT('ui.editAccountPopup.closeOrDeleteAccount')}
             </Text>
           </TouchableOpacity>
         )}

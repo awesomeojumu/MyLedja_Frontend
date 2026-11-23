@@ -8,6 +8,7 @@ import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import { balanceHistory } from './balanceHistory';
 import { purposeOf } from './purpose';
 
+import { t } from '../../i18n';
 export type TimeRange = '1W' | '1M' | '3M' | 'YTD' | 'ALL';
 export type AccountFilter =
   | 'all'
@@ -189,7 +190,7 @@ export function NetAssetsHero({
               },
             ]}
           >
-            Add Account
+            {t('ui.netAssetsHero.addAccount')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -408,7 +409,7 @@ export function NetAssetsHero({
                 },
               ]}
             >
-              Assets (What you own)
+              {t('ui.netAssetsHero.assetsWhatYouOwn')}
             </Text>
           </View>
           <Text
@@ -440,7 +441,7 @@ export function NetAssetsHero({
                 },
               ]}
             >
-              Liabilities (What you owe)
+              {t('ui.netAssetsHero.liabilitiesWhatYouOwe')}
             </Text>
           </View>
           <Text

@@ -4,6 +4,7 @@ import { Landmark, Wallet, CreditCard } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 
+import { t } from '../../i18n';
 export interface AccountItem {
   id: string;
   name: string;
@@ -52,7 +53,7 @@ export function AccountsCarousel({
             },
           ]}
         >
-          Accounts
+          {t('ui.accountsCarousel.accounts')}
         </Text>
         {onViewAll && (
           <TouchableOpacity onPress={onViewAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -63,7 +64,7 @@ export function AccountsCarousel({
                 fontSize: typography.sizes.xs,
               }}
             >
-              See all
+              {t('ui.accountsCarousel.seeAll')}
             </Text>
           </TouchableOpacity>
         )}
@@ -88,7 +89,7 @@ export function AccountsCarousel({
               fontSize: typography.sizes.xs,
             }}
           >
-            No accounts added yet. Tap See all to add an account.
+            {t('ui.accountsCarousel.noAccountsAddedYetTap')}
           </Text>
         </View>
       ) : (

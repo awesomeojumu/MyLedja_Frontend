@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useTheme, BottomSheet, TextInput, CurrencyInput, Button, Dropdown } from '../../design';
 import { parseAmount } from '../../money';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
 
+import { t as i18nT } from '../../i18n';
+import { useSyncOnChange } from '../../lib/useSyncOnChange';
 export interface AddedBill {
   id: string;
   name: string;
@@ -45,13 +47,14 @@ export function AddBillSheet({
   // Synchronize available subcategories whenever category changes
   const availableSubcategories = getSubcategoriesForExpense(category);
 
-  useEffect(() => {
+  // Fill the fields from the props when the sheet opens or what it shows changes.
+  useSyncOnChange([category], () => {
     if (availableSubcategories.length > 0) {
       setSubcategory(availableSubcategories[0]!);
     } else {
       setSubcategory('');
     }
-  }, [category]);
+  });
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -90,13 +93,13 @@ export function AddBillSheet({
   }));
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Add Recurring Bill & Plan">
+    <BottomSheet visible={visible} onClose={onClose} title={i18nT('ui.addBillSheet.addRecurringBillAndPlan')}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         {/* Bill Name */}
         <View style={{ marginBottom: spacing.sm }}>
           <TextInput
-            label="Bill or Subscription Name"
-            placeholder="e.g. Apple Cloud, MTN Home Internet, Electricity"
+            label={i18nT('ui.addBillSheet.billOrSubscriptionName')}
+            placeholder={i18nT('ui.addBillSheet.eGAppleCloudMtn')}
             value={name}
             onChangeText={(t) => {
               setName(t);
@@ -110,7 +113,7 @@ export function AddBillSheet({
         {/* Amount */}
         <View style={{ marginBottom: spacing.sm }}>
           <CurrencyInput
-            label="Scheduled Amount"
+            label={i18nT('ui.addBillSheet.scheduledAmount')}
             value={amountText}
             onChangeText={setAmountText}
             placeholder="0.00"
@@ -120,7 +123,7 @@ export function AddBillSheet({
         {/* Expense Category Dropdown */}
         <View style={{ marginBottom: spacing.sm }}>
           <Dropdown
-            label="Expense Category"
+            label={i18nT('ui.addBillSheet.expenseCategory')}
             options={categoryOptions}
             value={category}
             onSelect={(val) => setCategory(val)}
@@ -131,7 +134,7 @@ export function AddBillSheet({
         {subcategoryOptions.length > 0 && (
           <View style={{ marginBottom: spacing.sm }}>
             <Dropdown
-              label="Target Subcategory"
+              label={i18nT('ui.addBillSheet.targetSubcategory')}
               options={subcategoryOptions}
               value={subcategory}
               onSelect={(val) => setSubcategory(val)}
@@ -142,7 +145,7 @@ export function AddBillSheet({
         {/* Due Day */}
         <View style={{ marginBottom: spacing.sm }}>
           <TextInput
-            label="Due Day of Month"
+            label={i18nT('ui.addBillSheet.dueDayOfMonth')}
             value={dueDay}
             onChangeText={setDueDay}
             keyboardType="number-pad"
@@ -160,7 +163,7 @@ export function AddBillSheet({
               marginBottom: 4,
             }}
           >
-            Billing Frequency
+            {i18nT('ui.addBillSheet.billingFrequency')}
           </Text>
           <View
             style={[
@@ -203,7 +206,7 @@ export function AddBillSheet({
         </View>
 
         <Button
-          label="Save Recurring Bill to Budget Plan"
+          label={i18nT('ui.addBillSheet.saveRecurringBillToBudget')}
           onPress={handleSave}
           variant="primary"
           size="md"

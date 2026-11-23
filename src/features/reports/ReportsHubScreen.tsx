@@ -9,10 +9,10 @@ import {
   TrendingUp,
   Receipt,
   ChevronRight,
-  FileSpreadsheet,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
 
+import { t } from '../../i18n';
 interface ReportCardItem {
   id: string;
   title: string;
@@ -86,7 +86,7 @@ export function ReportsHubScreen() {
               },
             ]}
           >
-            Financial Reports
+            {t('ui.reportsHubScreen.financialReports')}
           </Text>
           <Text
             style={{
@@ -95,7 +95,7 @@ export function ReportsHubScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Analytics, Tax Statements & Trends
+            {t('ui.reportsHubScreen.analyticsTaxStatementsAndTrends')}
           </Text>
         </View>
 
@@ -120,7 +120,7 @@ export function ReportsHubScreen() {
               marginLeft: 4,
             }}
           >
-            Custom Report
+            {t('ui.reportsHubScreen.customReport')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -137,7 +137,7 @@ export function ReportsHubScreen() {
             marginBottom: spacing.md,
           }}
         >
-          Standard Reports Library
+          {t('ui.reportsHubScreen.standardReportsLibrary')}
         </Text>
 
         {standardReports.map((report) => {

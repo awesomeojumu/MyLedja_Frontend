@@ -13,6 +13,7 @@ import {
 import { X } from 'lucide-react-native';
 import { useTheme } from '../theme';
 
+import { t } from '../../i18n';
 export interface BottomSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -93,7 +94,7 @@ export function BottomSheet({ visible, onClose, title, subtitle, children }: Bot
 
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityLabel="Close"
+                  accessibilityLabel={t('ui.bottomSheet.close')}
                   onPress={onClose}
                   style={[
                     styles.closeButton,

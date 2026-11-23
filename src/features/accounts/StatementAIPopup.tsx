@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Sparkles, ShieldCheck } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 
+import { t } from '../../i18n';
 interface StatementAIPopupProps {
   visible: boolean;
   onClose: () => void;
@@ -17,7 +18,7 @@ export function StatementAIPopup({
   const { colors, typography, spacing, radii } = useTheme();
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Smart Statement Reader">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.statementAipopup.smartStatementReader')}>
       <View style={styles.container}>
         <View
           style={[
@@ -44,7 +45,7 @@ export function StatementAIPopup({
             },
           ]}
         >
-          Automate PDF & CSV Parsing
+          {t('ui.statementAipopup.automatePdfAndCsvParsing')}
         </Text>
 
         <Text
@@ -60,7 +61,7 @@ export function StatementAIPopup({
             },
           ]}
         >
-          MyLedja can automatically extract transaction narrations, bank transfer fees, VAT, and timestamps from your Nigerian bank PDF & CSV exports.
+          {t('ui.statementAipopup.myledjaCanAutomaticallyExtractTransaction')}
         </Text>
 
         <View
@@ -85,7 +86,7 @@ export function StatementAIPopup({
                 marginLeft: spacing.xs,
               }}
             >
-              On-Device Confidentiality
+              {t('ui.statementAipopup.onDeviceConfidentiality')}
             </Text>
           </View>
           <Text
@@ -96,12 +97,12 @@ export function StatementAIPopup({
               marginTop: spacing.xxs,
             }}
           >
-            All statement parsing happens on your local client. Your confidential financial data is never sent to third-party advertisers.
+            {t('ui.statementAipopup.allStatementParsingHappensOn')}
           </Text>
         </View>
 
         <Button
-          label="Enable Smart Assistant"
+          label={t('ui.statementAipopup.enableSmartAssistant')}
           onPress={() => {
             onEnable();
             onClose();

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, CurrencyInput, Button } from '../../design';
-import { parseAmount, formatNaira } from '../../money';
+import { parseAmount } from '../../money';
 
+import { t as i18nT } from '../../i18n';
 interface QuickRepaymentSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -47,7 +48,7 @@ export function QuickRepaymentSheet({
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.lg }}>
           <CurrencyInput
-            label="Payment Amount"
+            label={i18nT('ui.quickRepaymentSheet.paymentAmount')}
             value={amountText}
             onChangeText={(t) => {
               setAmountText(t);
@@ -58,7 +59,7 @@ export function QuickRepaymentSheet({
         </View>
 
         <Button
-          label="Record Payment"
+          label={i18nT('ui.quickRepaymentSheet.recordPayment')}
           onPress={handleSave}
           variant="primary"
           size="lg"

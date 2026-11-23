@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../theme';
 
+import { t } from '../../i18n';
 export interface ToastProps {
   visible: boolean;
   message: string;
@@ -74,7 +75,7 @@ export function Toast({
                 },
               ]}
             >
-              Undo
+              {t('ui.toast.undo')}
             </Text>
           </TouchableOpacity>
         )}

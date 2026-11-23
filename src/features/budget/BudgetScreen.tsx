@@ -459,6 +459,7 @@ export function BudgetScreen() {
     idsOf,
     dbAssigns,
     dbCategories,
+    getSubcategoriesForExpense,
   ]);
 
   // Aggregate Totals

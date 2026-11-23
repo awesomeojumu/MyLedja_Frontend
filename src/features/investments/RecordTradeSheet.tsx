@@ -19,7 +19,7 @@ import {
   type DropdownOption,
 } from '../../design';
 import { parseAmount } from '../../money';
-import { t } from '../../i18n';
+import { t as i18nT, t } from '../../i18n';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import { isSpendingAccount } from '../accounts/purpose';
 import { pickAccount } from '../accounts/pickAccount';
@@ -332,7 +332,7 @@ export function RecordTradeSheet({
                 fontSize: typography.sizes.xs,
               }}
             >
-              Acquire / Buy Asset
+              {i18nT('ui.recordTradeSheet.acquireBuyAsset')}
             </Text>
           </TouchableOpacity>
 
@@ -355,7 +355,7 @@ export function RecordTradeSheet({
                 fontSize: typography.sizes.xs,
               }}
             >
-              Liquidate / Sell Asset
+              {i18nT('ui.recordTradeSheet.liquidateSellAsset')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -364,7 +364,7 @@ export function RecordTradeSheet({
         {action === 'sell' && existingHoldings.length > 0 && (
           <View style={{ marginBottom: spacing.sm, zIndex: 20 }}>
             <Dropdown
-              label="Select Existing Holding to Liquidate"
+              label={i18nT('ui.recordTradeSheet.selectExistingHoldingToLiquidate')}
               value={selectedHoldingId}
               options={existingHoldings.map((h) => ({
                 label: `${h.name} (${h.units} ${h.unitType || 'units'} held)`,
@@ -379,7 +379,7 @@ export function RecordTradeSheet({
         {/* Investment Asset Class Dropdown */}
         <View style={{ marginBottom: spacing.md, zIndex: 10 }}>
           <Dropdown
-            label="Asset Class"
+            label={i18nT('ui.recordTradeSheet.assetClass')}
             value={category}
             options={dropdownOptions}
             onSelect={(val) => handleCategorySelect(val as HoldingType)}
@@ -390,8 +390,8 @@ export function RecordTradeSheet({
         {activeCategory.showTicker && (
           <View style={{ marginBottom: spacing.sm }}>
             <TextInput
-              label="Ticker or Symbol"
-              placeholder="e.g. MTNN, GTCO, VOO, BTC"
+              label={i18nT('ui.recordTradeSheet.tickerOrSymbol')}
+              placeholder={i18nT('ui.recordTradeSheet.eGMtnnGtcoVoo')}
               value={ticker}
               onChangeText={(t) => {
                 setTicker(t);
@@ -404,7 +404,7 @@ export function RecordTradeSheet({
 
         <View style={{ marginBottom: spacing.sm }}>
           <TextInput
-            label="Investment / Asset Description"
+            label={i18nT('ui.recordTradeSheet.investmentAssetDescription')}
             placeholder={activeCategory.namePlaceholder}
             value={name}
             onChangeText={(t) => {
@@ -419,8 +419,8 @@ export function RecordTradeSheet({
         {category === 'realEstate' && (
           <View style={{ marginBottom: spacing.sm }}>
             <TextInput
-              label="Location / Jurisdiction (Optional)"
-              placeholder="e.g. Epe, Lagos or Lekki Phase 1"
+              label={i18nT('ui.recordTradeSheet.locationJurisdictionOptional')}
+              placeholder={i18nT('ui.recordTradeSheet.eGEpeLagosOr')}
               value={location}
               onChangeText={setLocation}
             />

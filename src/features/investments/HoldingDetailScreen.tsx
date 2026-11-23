@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   TrendingUp,
   TrendingDown,
-  Plus,
   Coins,
   ArrowUpRight,
 } from 'lucide-react-native';
@@ -39,7 +38,6 @@ export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
   );
   const units = figures?.units ?? 0;
   const avgCostMinor = figures?.avgCostMinor ?? 0n;
-  const currentPriceMinor = figures?.priceMinor ?? 0n;
   const [notice, setNotice] = useState('');
 
   // Sheets
@@ -173,7 +171,7 @@ export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
               letterSpacing: 0.5,
             }}
           >
-            Holding Market Valuation
+            {t('ui.holdingDetailScreen.holdingMarketValuation')}
           </Text>
           <Text
             style={{
@@ -207,7 +205,7 @@ export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
                   fontFamily: typography.fonts.regular,
                 }}
               >
-                {units.toLocaleString()} units • Avg Cost: {formatNaira(avgCostMinor)}
+                {units.toLocaleString()}{' '}{t('ui.holdingDetailScreen.unitsAvgCost')}{' '}{formatNaira(avgCostMinor)}
               </Text>
             </View>
 
@@ -258,7 +256,7 @@ export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
                 },
               ]}
             >
-              + Dividend
+              {t('ui.holdingDetailScreen.dividend')}
             </Text>
           </TouchableOpacity>
 
@@ -286,7 +284,7 @@ export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
                 },
               ]}
             >
-              Sell Shares
+              {t('ui.holdingDetailScreen.sellShares')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -300,7 +298,7 @@ export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
             marginBottom: spacing.md,
           }}
         >
-          Activity Timeline
+          {t('ui.holdingDetailScreen.activityTimeline')}
         </Text>
 
         {events.length === 0 ? (
@@ -312,7 +310,7 @@ export function HoldingDetailScreen({ holdingId }: HoldingDetailScreenProps) {
                 fontSize: typography.sizes.bodySm,
               }}
             >
-              No trading or dividend history recorded for this holding yet.
+              {t('ui.holdingDetailScreen.noTradingOrDividendHistory')}
             </Text>
           </View>
         ) : (

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, CurrencyInput, Dropdown, Button } from '../../design';
-import { formatNaira } from '../../money';
+import { formatNaira, parseAmount } from '../../money';
 import type { CategoryEnvelope } from './CategoryEnvelopeRow';
 
+import { t } from '../../i18n';
 export interface MoveMoneySheetProps {
   visible: boolean;
   onClose: () => void;
@@ -25,8 +26,8 @@ export function MoveMoneySheet({
   const [error, setError] = useState('');
 
   const handleSave = () => {
-    const parsed = parseFloat(amount);
-    if (!amount || isNaN(parsed) || parsed <= 0) {
+    const parsed = parseAmount(amount);
+    if (!parsed.ok || parsed.minor <= 0n) {
       setError('Please enter a valid amount');
       return;
     }
@@ -35,7 +36,7 @@ export function MoveMoneySheet({
       return;
     }
     setError('');
-    const amountMinor = BigInt(Math.round(parsed * 100));
+    const amountMinor = parsed.minor;
     (onConfirmMove as (fromId: string, toId: string, amountMinor: bigint) => void)(fromId, toId, amountMinor);
     setAmount('');
     onClose();
@@ -51,7 +52,7 @@ export function MoveMoneySheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Move Money Between Envelopes"
+      title={t('ui.moveMoneySheet.moveMoneyBetweenEnvelopes')}
       subtitle="Reallocate funds between budget envelopes"
     >
       <View style={styles.form}>
@@ -68,7 +69,7 @@ export function MoveMoneySheet({
 
         {/* From Envelope Dropdown */}
         <Dropdown
-          label="Move From (Take money from)"
+          label={t('ui.moveMoneySheet.moveFromTakeMoneyFrom')}
           value={fromId}
           options={envelopeDropdownOptions}
           onSelect={(id) => {
@@ -80,7 +81,7 @@ export function MoveMoneySheet({
 
         {/* To Envelope Dropdown */}
         <Dropdown
-          label="Move To (Add money to)"
+          label={t('ui.moveMoneySheet.moveToAddMoneyTo')}
           value={toId}
           options={envelopeDropdownOptions}
           onSelect={(id) => {
@@ -92,7 +93,7 @@ export function MoveMoneySheet({
 
         {/* Save Button */}
         <View style={{ marginTop: spacing.xl }}>
-          <Button label="Confirm Move" onPress={handleSave} variant="primary" size="lg" />
+          <Button label={t('ui.moveMoneySheet.confirmMove')} onPress={handleSave} variant="primary" size="lg" />
         </View>
       </View>
     </BottomSheet>

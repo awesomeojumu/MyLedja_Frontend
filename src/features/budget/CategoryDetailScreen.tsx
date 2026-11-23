@@ -9,7 +9,7 @@ import {
   Plus,
   ArrowUpRight,
 } from 'lucide-react-native';
-import { useTheme, Button } from '../../design';
+import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 import { SetTargetSheet } from './SetTargetSheet';
 import { EditCategorySheet } from './EditCategorySheet';
@@ -19,6 +19,7 @@ import { QuickTransactionSheet } from '../dashboard/QuickTransactionSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import { budgetAssignId } from '../../data/workspace/model';
 
+import { t } from '../../i18n';
 interface CategoryDetailScreenProps {
   categoryId: string;
 }
@@ -49,12 +50,12 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
   // Real transactions from database
   const transactions = React.useMemo(() => {
     if (!matched) return [];
-    const list: Array<{
+    const list: {
       id: string;
       date: string;
       payee: string;
       amountMinor: bigint;
-    }> = [];
+    }[] = [];
 
     for (const ev of dbEvents) {
       if (ev.type !== 'expense' || ev.status !== 'posted') continue;
@@ -175,7 +176,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
               letterSpacing: 0.5,
             }}
           >
-            Envelope Remaining
+            {t('ui.categoryDetailScreen.envelopeRemaining')}
           </Text>
           <Text
             style={{
@@ -226,7 +227,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
                 fontSize: typography.sizes.xs,
               }}
             >
-              Spent {formatNaira(spentMinor)} ({percentSpent}%)
+              {t('ui.categoryDetailScreen.spent')}{' '}{formatNaira(spentMinor)} ({percentSpent}%)
             </Text>
             <Text
               style={{
@@ -235,7 +236,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
                 fontSize: typography.sizes.xs,
               }}
             >
-              Target {formatNaira(targetMinor)}
+              {t('ui.categoryDetailScreen.target')}{' '}{formatNaira(targetMinor)}
             </Text>
           </View>
         </View>
@@ -266,7 +267,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
                 },
               ]}
             >
-              Set Target
+              {t('ui.categoryDetailScreen.setTarget')}
             </Text>
           </TouchableOpacity>
 
@@ -294,7 +295,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
                 },
               ]}
             >
-              Move Money
+              {t('ui.categoryDetailScreen.moveMoney')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -315,7 +316,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
               fontSize: typography.sizes.md,
             }}
           >
-            Envelope Activity
+            {t('ui.categoryDetailScreen.envelopeActivity')}
           </Text>
           <TouchableOpacity
             onPress={() => setAddTxVisible(true)}
@@ -338,7 +339,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
                 marginLeft: 4,
               }}
             >
-              Add Expense
+              {t('ui.categoryDetailScreen.addExpense')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -352,7 +353,7 @@ export function CategoryDetailScreen({ categoryId }: CategoryDetailScreenProps) 
                 fontSize: typography.sizes.bodySm,
               }}
             >
-              No expenses recorded for this category yet.
+              {t('ui.categoryDetailScreen.noExpensesRecordedForThis')}
             </Text>
           </View>
         ) : (

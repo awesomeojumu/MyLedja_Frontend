@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, TextInput, CurrencyInput, Button } from '../../design';
 import { parseAmount, formatNaira } from '../../money';
 
+import { t as i18nT } from '../../i18n';
 interface SellHoldingSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -58,7 +59,7 @@ export function SellHoldingSheet({
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
             label={`Number of Units to Sell (Max: ${availableUnits})`}
-            placeholder="e.g. 500"
+            placeholder={i18nT('ui.sellHoldingSheet.eG500')}
             value={unitsText}
             onChangeText={(t) => {
               setUnitsText(t);
@@ -72,7 +73,7 @@ export function SellHoldingSheet({
 
         <View style={{ marginBottom: spacing.md }}>
           <CurrencyInput
-            label="Selling Price per Share"
+            label={i18nT('ui.sellHoldingSheet.sellingPricePerShare')}
             value={priceText}
             onChangeText={setPriceText}
           />
@@ -93,7 +94,7 @@ export function SellHoldingSheet({
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>
-                Total Proceeds
+                {i18nT('ui.sellHoldingSheet.totalProceeds')}
               </Text>
               <Text
                 style={{
@@ -114,7 +115,7 @@ export function SellHoldingSheet({
               }}
             >
               <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>
-                Est. Capital Gain / Loss
+                {i18nT('ui.sellHoldingSheet.estCapitalGainLoss')}
               </Text>
               <Text
                 style={{
@@ -131,7 +132,7 @@ export function SellHoldingSheet({
         )}
 
         <Button
-          label="Confirm Sale"
+          label={i18nT('ui.sellHoldingSheet.confirmSale')}
           onPress={handleSave}
           variant="primary"
           size="lg"

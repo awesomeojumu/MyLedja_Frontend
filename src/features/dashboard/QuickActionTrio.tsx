@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { Plus, ArrowDownLeft, ArrowLeftRight } from 'lucide-react-native';
 import { useTheme, Button } from '../../design';
 
+import { t } from '../../i18n';
 export interface QuickActionTrioProps {
   onAddExpense: () => void;
   onAddIncome: () => void;
@@ -16,7 +17,7 @@ export function QuickActionTrio({ onAddExpense, onAddIncome, onTransfer }: Quick
     <View style={[styles.container, { marginVertical: spacing.lg }]}>
       <View style={styles.buttonWrapper}>
         <Button
-          label="Add Expense"
+          label={t('ui.quickActionTrio.addExpense')}
           onPress={onAddExpense}
           variant="primary"
           icon={<Plus size={16} color="#FFFFFF" />}
@@ -25,7 +26,7 @@ export function QuickActionTrio({ onAddExpense, onAddIncome, onTransfer }: Quick
 
       <View style={styles.buttonWrapper}>
         <Button
-          label="Add Income"
+          label={t('ui.quickActionTrio.addIncome')}
           onPress={onAddIncome}
           variant="secondary"
           icon={<ArrowDownLeft size={16} color="#2563EB" />}
@@ -34,7 +35,7 @@ export function QuickActionTrio({ onAddExpense, onAddIncome, onTransfer }: Quick
 
       <View style={styles.buttonWrapper}>
         <Button
-          label="Transfer"
+          label={t('ui.quickActionTrio.transfer')}
           onPress={onTransfer}
           variant="secondary"
           icon={<ArrowLeftRight size={16} color="#64748B" />}

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { FileSpreadsheet, Download } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 
+import { t } from '../../i18n';
 export interface ExportTransactionsPopupProps {
   visible: boolean;
   onClose: () => void;
@@ -32,7 +33,7 @@ export function ExportTransactionsPopup({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Export Ledger"
+      title={t('ui.exportTransactionsPopup.exportLedger')}
       subtitle="Download your transactions as a spreadsheet"
     >
       <View style={styles.container}>
@@ -72,7 +73,7 @@ export function ExportTransactionsPopup({
               },
             ]}
           >
-            CSV Format Export
+            {t('ui.exportTransactionsPopup.csvFormatExport')}
           </Text>
           <Text
             style={[
@@ -86,7 +87,7 @@ export function ExportTransactionsPopup({
               },
             ]}
           >
-            Exporting {transactionCount} ledger entries with full dates, amounts, categories, accounts, and payees.
+            {t('ui.exportTransactionsPopup.exporting')}{' '}{transactionCount}{' '}{t('ui.exportTransactionsPopup.ledgerEntriesWithFullDates')}
           </Text>
         </View>
 

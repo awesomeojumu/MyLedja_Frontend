@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Sliders, Settings, RotateCcw, Check } from 'lucide-react-native';
+import { Settings, RotateCcw } from 'lucide-react-native';
 import { useTheme, BottomSheet, CurrencyInput, Button, formatCurrencyString } from '../../design';
 import { formatNaira, toInputText, parseAmount } from '../../money';
 import type { CategoryEnvelope } from './CategoryEnvelopeRow';
 
+import { t } from '../../i18n';
+import { useSyncOnChange } from '../../lib/useSyncOnChange';
 export interface EditEnvelopeLimitSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -34,7 +36,8 @@ export function EditEnvelopeLimitSheet({
   const [singleLimitText, setSingleLimitText] = useState('');
 
   // Initialize subcategory inputs when modal opens
-  useEffect(() => {
+  // Fill the fields from the props when the sheet opens or what it shows changes.
+  useSyncOnChange([envelope, visible, subcategories, currentSubBudgets], () => {
     if (!envelope || !visible) return;
 
     if (subcategories.length > 0) {
@@ -63,7 +66,7 @@ export function EditEnvelopeLimitSheet({
     } else {
       setSingleLimitText(formatCurrencyString(toInputText(envelope.plannedMinor)));
     }
-  }, [envelope, visible, subcategories, currentSubBudgets]);
+  });
 
   // Compute live total from all lined-up subcategory inputs
   const totalCalculatedMinor = useMemo(() => {
@@ -139,7 +142,7 @@ export function EditEnvelopeLimitSheet({
                   fontFamily: typography.fonts.semiBold,
                 }}
               >
-                Total {envelope.name} Budget
+                {t('ui.editEnvelopeLimitSheet.total')}{' '}{envelope.name}{' '}{t('ui.editEnvelopeLimitSheet.budget')}
               </Text>
               <Text
                 style={{
@@ -161,7 +164,7 @@ export function EditEnvelopeLimitSheet({
                   }}
                 >
                   {totalCalculatedMinor < envelope.scheduledBillsMinor ? '⚠️ ' : '📅 '}
-                  Scheduled bills: {formatNaira(envelope.scheduledBillsMinor)}/mo
+                  {t('ui.editEnvelopeLimitSheet.scheduledBills')}{' '}{formatNaira(envelope.scheduledBillsMinor)}{t('ui.editEnvelopeLimitSheet.mo')}
                 </Text>
               )}
             </View>
@@ -177,7 +180,7 @@ export function EditEnvelopeLimitSheet({
                   }}
                 >
                   <Text style={{ fontSize: 10, fontFamily: typography.fonts.semiBold, color: colors.primary }}>
-                    {subcategories.length} items
+                    {subcategories.length}{' '}{t('ui.editEnvelopeLimitSheet.items')}
                   </Text>
                 </View>
 
@@ -196,7 +199,7 @@ export function EditEnvelopeLimitSheet({
                 >
                   <RotateCcw size={9} color={colors.textSecondary} style={{ marginRight: 3 }} />
                   <Text style={{ fontSize: 10, color: colors.textSecondary, fontFamily: typography.fonts.medium }}>
-                    Split Evenly
+                    {t('ui.editEnvelopeLimitSheet.splitEvenly')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -225,7 +228,7 @@ export function EditEnvelopeLimitSheet({
                   letterSpacing: 0.5,
                 }}
               >
-                Active Subcategories (from Settings):
+                {t('ui.editEnvelopeLimitSheet.activeSubcategoriesFromSettings')}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -236,7 +239,7 @@ export function EditEnvelopeLimitSheet({
               >
                 <Settings size={10} color={colors.primary} style={{ marginRight: 3 }} />
                 <Text style={{ fontSize: 10, color: colors.primary, fontFamily: typography.fonts.medium }}>
-                  Settings
+                  {t('ui.editEnvelopeLimitSheet.settings')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -283,7 +286,7 @@ export function EditEnvelopeLimitSheet({
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 1 }}>
                         <Text style={{ fontSize: 9.5, color: colors.textTertiary }}>
-                          {subPct}% of {envelope.name}
+                          {subPct}{t('ui.editEnvelopeLimitSheet.of')}{' '}{envelope.name}
                         </Text>
                         {envelope.subScheduledBills?.[sub] !== undefined && envelope.subScheduledBills[sub] > 0n && (
                           <View
@@ -295,7 +298,7 @@ export function EditEnvelopeLimitSheet({
                             }}
                           >
                             <Text style={{ fontSize: 9, color: colors.primary, fontFamily: typography.fonts.semiBold }}>
-                              Bill: {formatNaira(envelope.subScheduledBills[sub])}/mo
+                              {t('ui.editEnvelopeLimitSheet.bill')}{' '}{formatNaira(envelope.subScheduledBills[sub])}{t('ui.editEnvelopeLimitSheet.mo')}
                             </Text>
                           </View>
                         )}
@@ -326,7 +329,7 @@ export function EditEnvelopeLimitSheet({
               placeholder="0.00"
             />
             <Text style={{ fontSize: 10.5, color: colors.textTertiary, marginTop: 4 }}>
-              No subcategories enabled for this category in Settings.
+              {t('ui.editEnvelopeLimitSheet.noSubcategoriesEnabledForThis')}
             </Text>
           </View>
         )}

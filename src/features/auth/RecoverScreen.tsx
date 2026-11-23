@@ -111,7 +111,7 @@ export function RecoverScreen() {
               },
             ]}
           >
-            Recover Account
+            {t('ui.recoverScreen.recoverAccount')}
           </Text>
           <Text
             style={[
@@ -172,8 +172,8 @@ export function RecoverScreen() {
         {step === 'request' ? (
           <>
             <TextInput
-              label="Email Address"
-              placeholder="you@domain.com"
+              label={t('ui.recoverScreen.emailAddress')}
+              placeholder={t('ui.recoverScreen.youDomainCom')}
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
@@ -186,7 +186,7 @@ export function RecoverScreen() {
 
             <View style={{ marginTop: spacing.xl }}>
               <Button
-                label="Send Recovery Code"
+                label={t('ui.recoverScreen.sendRecoveryCode')}
                 onPress={handleRequestCode}
                 variant="primary"
                 size="lg"
@@ -196,7 +196,7 @@ export function RecoverScreen() {
         ) : (
           <>
             <TextInput
-              label="6-Digit Code"
+              label={t('ui.recoverScreen.6DigitCode')}
               placeholder="123456"
               maxLength={6}
               keyboardType="numeric"
@@ -210,8 +210,8 @@ export function RecoverScreen() {
 
             <View style={{ marginTop: spacing.md }}>
               <TextInput
-                label="New Password"
-                placeholder="At least 8 characters"
+                label={t('ui.recoverScreen.newPassword')}
+                placeholder={t('ui.recoverScreen.atLeast8Characters')}
                 secureTextEntry
                 value={newPassword}
                 onChangeText={(v) => {
@@ -224,14 +224,14 @@ export function RecoverScreen() {
 
             <View style={{ marginTop: spacing.xl, gap: 8 }}>
               <Button
-                label="Reset Password"
+                label={t('ui.recoverScreen.resetPassword')}
                 onPress={handleResetPassword}
                 variant="primary"
                 size="lg"
                 loading={loading}
               />
               <Button
-                label="Back to Email"
+                label={t('ui.recoverScreen.backToEmail')}
                 onPress={() => setStep('request')}
                 variant="ghost"
               />
@@ -248,7 +248,7 @@ export function RecoverScreen() {
                 fontSize: typography.sizes.sm,
               }}
             >
-              Remember password? Sign In
+              {t('ui.recoverScreen.rememberPasswordSignIn')}
             </Text>
           </TouchableOpacity>
         </View>

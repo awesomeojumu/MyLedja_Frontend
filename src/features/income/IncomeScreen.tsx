@@ -4,11 +4,8 @@ import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
   Plus,
-  CheckCircle2,
-  Clock,
   Briefcase,
   Link2,
-  ChevronRight,
 } from 'lucide-react-native';
 import { useTheme, Button } from '../../design';
 import { formatNaira } from '../../money';
@@ -16,6 +13,7 @@ import { AddIncomeSheet, type AddedIncomeStream } from './AddIncomeSheet';
 import { MatchDepositSheet } from './MatchDepositSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 interface IncomeStreamUI {
   id: string;
   name: string;
@@ -139,7 +137,7 @@ export function IncomeScreen() {
               },
             ]}
           >
-            Income Planning
+            {t('ui.incomeScreen.incomePlanning')}
           </Text>
           <Text
             style={{
@@ -148,7 +146,7 @@ export function IncomeScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Monthly Cash Inflow Plan
+            {t('ui.incomeScreen.monthlyCashInflowPlan')}
           </Text>
         </View>
         <TouchableOpacity
@@ -172,7 +170,7 @@ export function IncomeScreen() {
               marginLeft: 4,
             }}
           >
-            Add Stream
+            {t('ui.incomeScreen.addStream')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -203,7 +201,7 @@ export function IncomeScreen() {
               letterSpacing: 0.5,
             }}
           >
-            Total Expected Inflows
+            {t('ui.incomeScreen.totalExpectedInflows')}
           </Text>
           <Text
             style={{
@@ -235,7 +233,7 @@ export function IncomeScreen() {
                   fontFamily: typography.fonts.regular,
                 }}
               >
-                Received
+                {t('ui.incomeScreen.received')}
               </Text>
               <Text
                 style={{
@@ -257,7 +255,7 @@ export function IncomeScreen() {
                   fontFamily: typography.fonts.regular,
                 }}
               >
-                Pending
+                {t('ui.incomeScreen.pending')}
               </Text>
               <Text
                 style={{
@@ -282,7 +280,7 @@ export function IncomeScreen() {
             marginBottom: spacing.md,
           }}
         >
-          Scheduled Income Streams
+          {t('ui.incomeScreen.scheduledIncomeStreams')}
         </Text>
 
         {streams.length === 0 ? (
@@ -308,7 +306,7 @@ export function IncomeScreen() {
                 marginBottom: 4,
               }}
             >
-              No Scheduled Income Streams
+              {t('ui.incomeScreen.noScheduledIncomeStreams')}
             </Text>
             <Text
               style={{
@@ -319,10 +317,10 @@ export function IncomeScreen() {
                 marginBottom: spacing.md,
               }}
             >
-              Add your salary, consulting retainer, or regular dividends to project monthly cash inflows.
+              {t('ui.incomeScreen.addYourSalaryConsultingRetainer')}
             </Text>
             <Button
-              label="Add Income Stream"
+              label={t('ui.incomeScreen.addIncomeStream')}
               variant="primary"
               size="sm"
               onPress={() => setAddSheetVisible(true)}
@@ -372,7 +370,7 @@ export function IncomeScreen() {
                       fontFamily: typography.fonts.regular,
                     }}
                   >
-                    Expected on {stream.payDay}th • {stream.mode === 'net' ? 'Net Pay' : 'Gross'}
+                    {t('ui.incomeScreen.expectedOn')}{' '}{stream.payDay}{t('ui.incomeScreen.th')}{' '}{stream.mode === 'net' ? 'Net Pay' : 'Gross'}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
@@ -446,7 +444,7 @@ export function IncomeScreen() {
                         marginLeft: 4,
                       }}
                     >
-                      Match Deposit
+                      {t('ui.incomeScreen.matchDeposit')}
                     </Text>
                   </TouchableOpacity>
                 </View>

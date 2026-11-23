@@ -4,6 +4,7 @@ import { useTheme, BottomSheet, Button } from '../../design';
 import { formatNaira } from '../../money';
 import type { LedgerTransaction } from './TransactionRow';
 
+import { t } from '../../i18n';
 export interface TransactionDetailSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -32,7 +33,7 @@ export function TransactionDetailSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Transaction Details"
+      title={t('ui.transactionDetailSheet.transactionDetails')}
       subtitle={`ID: ${transaction.id}`}
     >
       <View style={styles.container}>
@@ -81,7 +82,7 @@ export function TransactionDetailSheet({
         <View style={[styles.detailsGroup, { marginTop: spacing.lg }]}>
           <View style={[styles.detailRow, { paddingVertical: spacing.sm }]}>
             <Text style={[styles.detailLabel, { color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.bodySm }]}>
-              Description / Purpose
+              {t('ui.transactionDetailSheet.descriptionPurpose')}
             </Text>
             <Text style={[styles.detailValue, { color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }]}>
               {transaction.payee || 'None'}
@@ -90,7 +91,7 @@ export function TransactionDetailSheet({
 
           <View style={[styles.detailRow, { paddingVertical: spacing.sm, borderTopColor: colors.borderSubtle, borderTopWidth: StyleSheet.hairlineWidth }]}>
             <Text style={[styles.detailLabel, { color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.bodySm }]}>
-              Category
+              {t('ui.transactionDetailSheet.category')}
             </Text>
             <View style={[styles.catBadge, { backgroundColor: colors.primaryLight, borderRadius: radii.full, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs }]}>
               <Text style={{ color: colors.primary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.xs }}>
@@ -101,7 +102,7 @@ export function TransactionDetailSheet({
 
           <View style={[styles.detailRow, { paddingVertical: spacing.sm, borderTopColor: colors.borderSubtle, borderTopWidth: StyleSheet.hairlineWidth }]}>
             <Text style={[styles.detailLabel, { color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.bodySm }]}>
-              Account
+              {t('ui.transactionDetailSheet.account')}
             </Text>
             <Text style={[styles.detailValue, { color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }]}>
               {transaction.account}
@@ -110,7 +111,7 @@ export function TransactionDetailSheet({
 
           <View style={[styles.detailRow, { paddingVertical: spacing.sm, borderTopColor: colors.borderSubtle, borderTopWidth: StyleSheet.hairlineWidth }]}>
             <Text style={[styles.detailLabel, { color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.bodySm }]}>
-              Date
+              {t('ui.transactionDetailSheet.date')}
             </Text>
             <Text style={[styles.detailValue, { color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }]}>
               {transaction.date}
@@ -121,7 +122,7 @@ export function TransactionDetailSheet({
         {/* Action Buttons */}
         <View style={{ marginTop: spacing.xl, gap: 8 }}>
           <Button
-            label="Delete Transaction"
+            label={t('ui.transactionDetailSheet.deleteTransaction')}
             onPress={() => {
               onDelete(transaction.id);
               onClose();

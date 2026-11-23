@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Fingerprint } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 
+import { t } from '../../i18n';
 export interface PasskeyPromptSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -31,7 +32,7 @@ export function PasskeyPromptSheet({ visible, onClose, onAuthenticate }: Passkey
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Sign in with Passkey"
+      title={t('ui.passkeyPromptSheet.signInWithPasskey')}
       subtitle="Use Face ID, Touch ID, or your device screen lock"
     >
       <View style={styles.container}>
@@ -62,7 +63,7 @@ export function PasskeyPromptSheet({ visible, onClose, onAuthenticate }: Passkey
             },
           ]}
         >
-          Passkeys are end-to-end encrypted biometric credentials stored securely on your device.
+          {t('ui.passkeyPromptSheet.passkeysAreEndToEnd')}
         </Text>
 
         {error ? (
@@ -84,13 +85,13 @@ export function PasskeyPromptSheet({ visible, onClose, onAuthenticate }: Passkey
 
         <View style={{ gap: 8 }}>
           <Button
-            label="Scan Biometrics"
+            label={t('ui.passkeyPromptSheet.scanBiometrics')}
             onPress={handleTrigger}
             variant="primary"
             loading={loading}
             size="lg"
           />
-          <Button label="Cancel" onPress={onClose} variant="ghost" />
+          <Button label={t('ui.passkeyPromptSheet.cancel')} onPress={onClose} variant="ghost" />
         </View>
       </View>
     </BottomSheet>

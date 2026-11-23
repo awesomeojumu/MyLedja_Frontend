@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, CurrencyInput, TextInput, Button } from '../../design';
 import { parseAmount } from '../../money';
 
+import { t as i18nT } from '../../i18n';
 interface RecordInstallmentSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -37,11 +38,11 @@ export function RecordInstallmentSheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Record Payment Installment">
+    <BottomSheet visible={visible} onClose={onClose} title={i18nT('ui.recordInstallmentSheet.recordPaymentInstallment')}>
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.md }}>
           <CurrencyInput
-            label="Payment Amount"
+            label={i18nT('ui.recordInstallmentSheet.paymentAmount')}
             value={amountText}
             onChangeText={(t) => {
               setAmountText(t);
@@ -53,15 +54,15 @@ export function RecordInstallmentSheet({
 
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            label="Payment Note (Optional)"
-            placeholder="e.g. Bank transfer reference / partial cash"
+            label={i18nT('ui.recordInstallmentSheet.paymentNoteOptional')}
+            placeholder={i18nT('ui.recordInstallmentSheet.eGBankTransferReference')}
             value={note}
             onChangeText={setNote}
           />
         </View>
 
         <Button
-          label="Save Payment"
+          label={i18nT('ui.recordInstallmentSheet.savePayment')}
           onPress={handleSave}
           variant="primary"
           size="lg"

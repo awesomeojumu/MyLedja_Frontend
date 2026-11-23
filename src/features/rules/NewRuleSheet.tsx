@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 
+import { t as i18nT } from '../../i18n';
 export interface AddedRule {
   id: string;
   keyword: string;
@@ -52,12 +53,12 @@ export function NewRuleSheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Create Categorization Rule">
+    <BottomSheet visible={visible} onClose={onClose} title={i18nT('ui.newRuleSheet.createCategorizationRule')}>
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            label="When transaction narration contains"
-            placeholder="e.g. Bolt, Uber, Netflix, Total, Shoprite"
+            label={i18nT('ui.newRuleSheet.whenTransactionNarrationContains')}
+            placeholder={i18nT('ui.newRuleSheet.eGBoltUberNetflix')}
             value={keyword}
             onChangeText={(t) => {
               setKeyword(t);
@@ -76,7 +77,7 @@ export function NewRuleSheet({
             marginBottom: spacing.xs,
           }}
         >
-          Automatically assign category:
+          {i18nT('ui.newRuleSheet.automaticallyAssignCategory')}
         </Text>
 
         <View style={[styles.catGrid, { marginBottom: spacing.lg }]}>
@@ -110,7 +111,7 @@ export function NewRuleSheet({
         </View>
 
         <Button
-          label="Save & Apply Rule"
+          label={i18nT('ui.newRuleSheet.saveAndApplyRule')}
           onPress={handleSave}
           variant="primary"
           size="lg"

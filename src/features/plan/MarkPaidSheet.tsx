@@ -7,6 +7,7 @@ import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import { isSpendingAccount } from '../accounts/purpose';
 import { pickAccount } from '../accounts/pickAccount';
 
+import { t } from '../../i18n';
 interface MarkPaidSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -36,7 +37,7 @@ export function MarkPaidSheet({
   const nameOf = (id: string) => payable.find((a) => a.id === id)?.name ?? '';
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Confirm Bill Payment">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.markPaidSheet.confirmBillPayment')}>
       <View style={styles.container}>
         <View
           style={[
@@ -57,7 +58,7 @@ export function MarkPaidSheet({
               fontSize: typography.sizes.xs,
             }}
           >
-            Marking Paid
+            {t('ui.markPaidSheet.markingPaid')}
           </Text>
           <Text
             style={{
@@ -89,7 +90,7 @@ export function MarkPaidSheet({
             marginBottom: spacing.xs,
           }}
         >
-          Paid From Account
+          {t('ui.markPaidSheet.paidFromAccount')}
         </Text>
 
         {accounts.map((acc) => (
@@ -130,7 +131,7 @@ export function MarkPaidSheet({
 
         <View style={{ marginTop: spacing.lg }}>
           <Button
-            label="Confirm & Mark Paid"
+            label={t('ui.markPaidSheet.confirmAndMarkPaid')}
             onPress={() => {
               onConfirmPaid(selectedAccount);
               onClose();

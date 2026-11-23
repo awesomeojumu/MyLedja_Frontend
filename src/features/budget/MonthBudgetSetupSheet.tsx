@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
-import { Check, Sparkles, Sliders, Tag, Plus, Trash2 } from 'lucide-react-native';
+import { Check, Plus, Trash2 } from 'lucide-react-native';
 import { useTheme, BottomSheet, CurrencyInput, TextInput, Dropdown, Button } from '../../design';
 import { AllocationFramework, STANDARD_FRAMEWORK_PRESETS } from '../../data/rulesModel';
 import { EXPENSE_TAXONOMY } from '../../data/categoriesTaxonomy';
 import { parseAmount, formatNaira } from '../../money';
 
+import { t } from '../../i18n';
 export interface ExpectedEarmark {
   id: string;
   name: string;
@@ -130,7 +131,7 @@ export function MonthBudgetSetupSheet({
               },
             ]}
           >
-            Select Budget Framework for this Month
+            {t('ui.monthBudgetSetupSheet.selectBudgetFrameworkForThis')}
           </Text>
 
           <View style={{ marginBottom: spacing.lg }}>
@@ -189,10 +190,10 @@ export function MonthBudgetSetupSheet({
                     fontSize: typography.sizes.bodySm,
                   }}
                 >
-                  Expected Earmarked Funds ({earmarks.length})
+                  {t('ui.monthBudgetSetupSheet.expectedEarmarkedFunds')}{earmarks.length})
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
-                  100% direct pass-through to target envelope (not split, untaxed, non-tithable)
+                  {t('ui.monthBudgetSetupSheet.100DirectPassThroughTo')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -257,28 +258,28 @@ export function MonthBudgetSetupSheet({
                 ]}
               >
                 <TextInput
-                  label="Description / Purpose"
-                  placeholder="e.g. Rent Support Gift, Project Capital"
+                  label={t('ui.monthBudgetSetupSheet.descriptionPurpose')}
+                  placeholder={t('ui.monthBudgetSetupSheet.eGRentSupportGift')}
                   value={newEarmarkName}
                   onChangeText={setNewEarmarkName}
                   containerStyle={{ marginBottom: spacing.sm }}
                 />
                 <View style={{ marginBottom: spacing.sm }}>
                   <CurrencyInput
-                    label="Earmarked Amount"
+                    label={t('ui.monthBudgetSetupSheet.earmarkedAmount')}
                     placeholder="500,000.00"
                     value={newEarmarkAmount}
                     onChangeText={setNewEarmarkAmount}
                   />
                 </View>
                 <Dropdown
-                  label="Target Category Envelope (100% Allocation)"
+                  label={t('ui.monthBudgetSetupSheet.targetCategoryEnvelope100Allocation')}
                   value={newEarmarkCategory}
                   options={CATEGORY_OPTIONS}
                   onSelect={setNewEarmarkCategory}
                   containerStyle={{ marginBottom: spacing.sm }}
                 />
-                <Button label="Save Earmark" onPress={handleAddEarmark} variant="primary" size="md" />
+                <Button label={t('ui.monthBudgetSetupSheet.saveEarmark')} onPress={handleAddEarmark} variant="primary" size="md" />
               </View>
             )}
           </View>
@@ -299,10 +300,10 @@ export function MonthBudgetSetupSheet({
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
               <View>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }}>
-                  Tithe / Spiritual Giving (10%)
+                  {t('ui.monthBudgetSetupSheet.titheSpiritualGiving10')}
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                  Deduct 10% off general income before living splits
+                  {t('ui.monthBudgetSetupSheet.deduct10OffGeneralIncome')}
                 </Text>
               </View>
               <Switch
@@ -315,10 +316,10 @@ export function MonthBudgetSetupSheet({
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.bodySm }}>
-                  Tax Provision (Withholding)
+                  {t('ui.monthBudgetSetupSheet.taxProvisionWithholding')}
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                  Set aside tax reserve for business/freelance income
+                  {t('ui.monthBudgetSetupSheet.setAsideTaxReserveFor')}
                 </Text>
               </View>
               <Switch

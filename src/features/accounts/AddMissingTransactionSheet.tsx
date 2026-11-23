@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, TextInput, CurrencyInput, Button } from '../../design';
 import { parseAmount } from '../../money';
 
+import { t as i18nT } from '../../i18n';
 interface AddMissingTransactionSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -18,7 +19,7 @@ export function AddMissingTransactionSheet({
 
   const [payee, setPayee] = useState('');
   const [amountText, setAmountText] = useState('');
-  const [isDeposit, setIsDeposit] = useState(false);
+  const [isDeposit] = useState(false);
   const [error, setError] = useState('');
 
   const handleSave = () => {
@@ -44,17 +45,17 @@ export function AddMissingTransactionSheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Add Missing Transaction">
+    <BottomSheet visible={visible} onClose={onClose} title={i18nT('ui.addMissingTransactionSheet.addMissingTransaction')}>
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            label="Description / Narration"
+            label={i18nT('ui.addMissingTransactionSheet.descriptionNarration')}
             value={payee}
             onChangeText={(t) => {
               setPayee(t);
               if (error) setError('');
             }}
-            placeholder="e.g. Bank SMS charge, POS Fee"
+            placeholder={i18nT('ui.addMissingTransactionSheet.eGBankSmsCharge')}
             error={error}
             autoFocus
           />
@@ -62,14 +63,14 @@ export function AddMissingTransactionSheet({
 
         <View style={{ marginBottom: spacing.lg }}>
           <CurrencyInput
-            label="Amount"
+            label={i18nT('ui.addMissingTransactionSheet.amount')}
             value={amountText}
             onChangeText={setAmountText}
           />
         </View>
 
         <Button
-          label="Add & Mark Cleared"
+          label={i18nT('ui.addMissingTransactionSheet.addAndMarkCleared')}
           onPress={handleSave}
           variant="primary"
           size="lg"

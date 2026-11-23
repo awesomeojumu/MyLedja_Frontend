@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Fingerprint } from 'lucide-react-native';
 import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 
+import { t } from '../../i18n';
 interface PasskeySheetProps {
   visible: boolean;
   onClose: () => void;
@@ -29,7 +30,7 @@ export function PasskeySheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Enroll Passkey">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.passkeySheet.enrollPasskey')}>
       <View style={styles.container}>
         <View
           style={[
@@ -53,7 +54,7 @@ export function PasskeySheet({
             marginBottom: spacing.xs,
           }}
         >
-          Passwordless Biometric Sign-In
+          {t('ui.passkeySheet.passwordlessBiometricSignIn')}
         </Text>
         <Text
           style={{
@@ -65,20 +66,20 @@ export function PasskeySheet({
             marginBottom: spacing.lg,
           }}
         >
-          Sign in instantly using Touch ID, Face ID, or Windows Hello without entering passwords.
+          {t('ui.passkeySheet.signInInstantlyUsingTouch')}
         </Text>
 
         <View style={{ marginBottom: spacing.lg, width: '100%' }}>
           <TextInput
-            label="Device Nickname"
+            label={t('ui.passkeySheet.deviceNickname')}
             value={deviceName}
             onChangeText={setDeviceName}
-            placeholder="e.g. Work MacBook, iPhone 15"
+            placeholder={t('ui.passkeySheet.eGWorkMacbookIphone')}
           />
         </View>
 
         <Button
-          label="Activate Biometric Passkey"
+          label={t('ui.passkeySheet.activateBiometricPasskey')}
           onPress={handleEnroll}
           variant="primary"
           size="lg"

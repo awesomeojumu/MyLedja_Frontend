@@ -5,14 +5,10 @@ import {
   ArrowLeft,
   Plus,
   CheckCircle2,
-  Calendar,
   Sparkles,
-  Clock,
-  RotateCcw,
   ArrowRight,
   Layers,
   Trash2,
-  Check,
 } from 'lucide-react-native';
 import { useTheme, useResponsive, Button } from '../../design';
 import { formatNaira } from '../../money';
@@ -24,12 +20,12 @@ import {
   saveBillsToStorage,
   getMonthlyEquivalentMinor,
   type RecurringBillItem,
-  DEFAULT_RECURRING_BILLS,
 } from './billsModel';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import { resolveCategoryId } from '../categories/catalog';
 import { pickAccount } from '../accounts/pickAccount';
 
+import { t } from '../../i18n';
 export function PlanScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const { isDesktop } = useResponsive();
@@ -40,7 +36,7 @@ export function PlanScreen() {
 
   // State
   const [localBills, setLocalBills] = useState<RecurringBillItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<'all' | 'unpaid' | 'paid'>('all');
 
   // Sheets
@@ -209,7 +205,7 @@ export function PlanScreen() {
               fontSize: 10,
             }}
           >
-            Nov
+            {t('ui.planScreen.nov')}
           </Text>
         </View>
 
@@ -293,7 +289,7 @@ export function PlanScreen() {
                     marginLeft: 3,
                   }}
                 >
-                  Paid
+                  {t('ui.planScreen.paid')}
                 </Text>
               </TouchableOpacity>
             ) : (
@@ -316,7 +312,7 @@ export function PlanScreen() {
                     fontSize: 11,
                   }}
                 >
-                  Mark Paid
+                  {t('ui.planScreen.markPaid')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -365,7 +361,7 @@ export function PlanScreen() {
                 },
               ]}
             >
-              Bills & Recurring
+              {t('ui.planScreen.billsAndRecurring')}
             </Text>
           </View>
 
@@ -405,7 +401,7 @@ export function PlanScreen() {
                 marginLeft: 4,
               }}
             >
-              Add
+              {t('ui.planScreen.add')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -434,7 +430,7 @@ export function PlanScreen() {
                   fontSize: typography.sizes.xl,
                 }}
               >
-                Scheduled Obligations & Subscriptions
+                {t('ui.planScreen.scheduledObligationsAndSubscriptions')}
               </Text>
               <Text
                 style={{
@@ -444,20 +440,20 @@ export function PlanScreen() {
                   marginTop: 2,
                 }}
               >
-                Track upcoming due dates, recurring bills, and category integrations
+                {t('ui.planScreen.trackUpcomingDueDatesRecurring')}
               </Text>
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Button
-                label="Suggestions"
+                label={t('ui.planScreen.suggestions')}
                 variant="secondary"
                 size="sm"
                 icon={<Sparkles size={14} color={colors.primary} />}
                 onPress={() => setSuggestSheetVisible(true)}
               />
               <Button
-                label="+ Add Bill"
+                label={t('ui.planScreen.addBill')}
                 variant="primary"
                 size="sm"
                 onPress={() => setAddSheetVisible(true)}
@@ -488,7 +484,7 @@ export function PlanScreen() {
               letterSpacing: 0.5,
             }}
           >
-            Remaining Bills This Month
+            {t('ui.planScreen.remainingBillsThisMonth')}
           </Text>
           <Text
             style={{
@@ -521,7 +517,7 @@ export function PlanScreen() {
                   fontFamily: typography.fonts.regular,
                 }}
               >
-                Total Scheduled
+                {t('ui.planScreen.totalScheduled')}
               </Text>
               <Text
                 style={{
@@ -543,7 +539,7 @@ export function PlanScreen() {
                   fontFamily: typography.fonts.regular,
                 }}
               >
-                Paid so Far
+                {t('ui.planScreen.paidSoFar')}
               </Text>
               <Text
                 style={{
@@ -599,7 +595,7 @@ export function PlanScreen() {
                   fontSize: 13,
                 }}
               >
-                Connected to Category Envelopes
+                {t('ui.planScreen.connectedToCategoryEnvelopes')}
               </Text>
               <Text
                 style={{
@@ -609,7 +605,7 @@ export function PlanScreen() {
                   marginTop: 1,
                 }}
               >
-                Bills feed directly into your /budget subcategory planned allocations
+                {t('ui.planScreen.billsFeedDirectlyIntoYour')}
               </Text>
             </View>
           </View>
@@ -622,7 +618,7 @@ export function PlanScreen() {
                 marginRight: 3,
               }}
             >
-              Budget
+              {t('ui.planScreen.budget')}
             </Text>
             <ArrowRight size={13} color={colors.primary} />
           </View>
@@ -679,7 +675,7 @@ export function PlanScreen() {
                     marginBottom: spacing.xs,
                   }}
                 >
-                  Pending & Upcoming ({unpaidBills.length})
+                  {t('ui.planScreen.pendingAndUpcoming')}{unpaidBills.length})
                 </Text>
                 {unpaidBills.map(renderBillCard)}
               </View>
@@ -698,7 +694,7 @@ export function PlanScreen() {
                     marginBottom: spacing.xs,
                   }}
                 >
-                  Paid This Month ({paidBills.length})
+                  {t('ui.planScreen.paidThisMonth')}{paidBills.length})
                 </Text>
                 {paidBills.map(renderBillCard)}
               </View>
@@ -707,7 +703,7 @@ export function PlanScreen() {
             {bills.length === 0 && (
               <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.md, padding: spacing.xl }]}>
                 <Text style={{ color: colors.textSecondary, textAlign: 'center', fontSize: 13 }}>
-                  No scheduled bills yet. Tap "+ Add Bill" to record your recurring outflows.
+                  {t('ui.planScreen.noScheduledBillsYetTap')}
                 </Text>
               </View>
             )}
@@ -719,7 +715,7 @@ export function PlanScreen() {
             ) : (
               <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.md, padding: spacing.xl }]}>
                 <Text style={{ color: colors.statusSuccess, textAlign: 'center', fontSize: 13, fontFamily: typography.fonts.medium }}>
-                  🎉 All bills paid! No pending obligations this month.
+                  {t('ui.planScreen.allBillsPaidNoPending')}
                 </Text>
               </View>
             )}
@@ -731,7 +727,7 @@ export function PlanScreen() {
             ) : (
               <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.md, padding: spacing.xl }]}>
                 <Text style={{ color: colors.textSecondary, textAlign: 'center', fontSize: 13 }}>
-                  No bills marked as paid yet this month.
+                  {t('ui.planScreen.noBillsMarkedAsPaid')}
                 </Text>
               </View>
             )}

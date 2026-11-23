@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 
+import { t as i18nT } from '../../i18n';
 export interface PayeeItem {
   id: string;
   name: string;
@@ -48,11 +49,11 @@ export function EditPayeeSheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Edit Payee & Rules">
+    <BottomSheet visible={visible} onClose={onClose} title={i18nT('ui.editPayeeSheet.editPayeeAndRules')}>
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            label="Payee / Merchant Display Name"
+            label={i18nT('ui.editPayeeSheet.payeeMerchantDisplayName')}
             value={name}
             onChangeText={(t) => {
               setName(t);
@@ -71,7 +72,7 @@ export function EditPayeeSheet({
               marginBottom: spacing.xs,
             }}
           >
-            Default Auto-Assigned Category
+            {i18nT('ui.editPayeeSheet.defaultAutoAssignedCategory')}
           </Text>
           <View style={styles.catGrid}>
             {categories.map((c) => (
@@ -105,15 +106,15 @@ export function EditPayeeSheet({
 
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            label="Bank Statement Match String (Optional)"
-            placeholder="e.g. SHOPRITE LEKKI or UBER *TRIP"
+            label={i18nT('ui.editPayeeSheet.bankStatementMatchStringOptional')}
+            placeholder={i18nT('ui.editPayeeSheet.eGShopriteLekkiOr')}
             value={matchPattern}
             onChangeText={setMatchPattern}
           />
         </View>
 
         <Button
-          label="Save Payee Settings"
+          label={i18nT('ui.editPayeeSheet.savePayeeSettings')}
           onPress={handleSave}
           variant="primary"
           size="lg"
@@ -141,7 +142,7 @@ export function EditPayeeSheet({
                 textAlign: 'center',
               }}
             >
-              Merge with Another Payee
+              {i18nT('ui.editPayeeSheet.mergeWithAnotherPayee')}
             </Text>
           </TouchableOpacity>
         )}

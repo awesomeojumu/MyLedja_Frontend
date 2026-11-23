@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Info, CheckCircle2 } from 'lucide-react-native';
+import { CheckCircle2 } from 'lucide-react-native';
 import { useTheme, BottomSheet } from '../../design';
 
+import { t } from '../../i18n';
 interface PillarFormulaSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -46,7 +47,7 @@ export function PillarFormulaSheet({
               textTransform: 'uppercase',
             }}
           >
-            Pillar Score
+            {t('ui.pillarFormulaSheet.pillarScore')}
           </Text>
           <Text
             style={{
@@ -93,7 +94,7 @@ export function PillarFormulaSheet({
               marginBottom: 4,
             }}
           >
-            Metric Formula
+            {t('ui.pillarFormulaSheet.metricFormula')}
           </Text>
           <Text
             style={{
@@ -127,7 +128,7 @@ export function PillarFormulaSheet({
                 marginLeft: spacing.xs,
               }}
             >
-              Actionable Recommendation
+              {t('ui.pillarFormulaSheet.actionableRecommendation')}
             </Text>
           </View>
           <Text

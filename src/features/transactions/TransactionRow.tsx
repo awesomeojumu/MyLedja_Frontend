@@ -11,7 +11,6 @@ import {
   Briefcase,
   ArrowLeftRight,
   Tag,
-  ArrowDownLeft,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';

@@ -5,6 +5,7 @@ import { useTheme } from '../../design';
 import { useResponsive } from '../../design/size';
 import { formatNaira } from '../../money';
 
+import { t } from '../../i18n';
 export interface CategoryEnvelope {
   id: string;
   name: string;
@@ -106,7 +107,7 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
                     fontFamily: typography.fonts.medium,
                   }}
                 >
-                  {formatNaira(envelope.scheduledBillsMinor)} bill
+                  {formatNaira(envelope.scheduledBillsMinor)}{' '}{t('ui.categoryEnvelopeRow.bill')}
                 </Text>
               </View>
             )}
@@ -203,7 +204,7 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
               },
             ]}
           >
-            Spent: {formatNaira(envelope.spentMinor)} of {formatNaira(envelope.plannedMinor)}
+            {t('ui.categoryEnvelopeRow.spent')}{' '}{formatNaira(envelope.spentMinor)}{' '}{t('ui.categoryEnvelopeRow.of')}{' '}{formatNaira(envelope.plannedMinor)}
           </Text>
 
           <Text
@@ -265,7 +266,7 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
                         }}
                       >
                         <Text style={{ fontSize: 9, color: colors.primary, fontFamily: typography.fonts.medium }}>
-                          bill: {formatNaira(subBill)}
+                          {t('ui.categoryEnvelopeRow.bill2')}{' '}{formatNaira(subBill)}
                         </Text>
                       </View>
                     )}
@@ -327,7 +328,7 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
                   fontFamily: typography.fonts.medium,
                 }}
               >
-                {formatNaira(envelope.scheduledBillsMinor)} bill
+                {formatNaira(envelope.scheduledBillsMinor)}{' '}{t('ui.categoryEnvelopeRow.bill')}
               </Text>
             </View>
           )}
@@ -425,7 +426,7 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
             },
           ]}
         >
-          Spent: {formatNaira(envelope.spentMinor)} of {formatNaira(envelope.plannedMinor)}
+          {t('ui.categoryEnvelopeRow.spent')}{' '}{formatNaira(envelope.spentMinor)}{' '}{t('ui.categoryEnvelopeRow.of')}{' '}{formatNaira(envelope.plannedMinor)}
         </Text>
 
         <Text
@@ -487,7 +488,7 @@ export function CategoryEnvelopeRow({ envelope, onPress }: CategoryEnvelopeRowPr
                       }}
                     >
                       <Text style={{ fontSize: 9.5, color: colors.primary, fontFamily: typography.fonts.medium }}>
-                        bill: {formatNaira(subBill)}
+                        {t('ui.categoryEnvelopeRow.bill2')}{' '}{formatNaira(subBill)}
                       </Text>
                     </View>
                   )}

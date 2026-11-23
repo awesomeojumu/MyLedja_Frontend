@@ -118,7 +118,7 @@ export function SignInScreen() {
               },
             ]}
           >
-            MyLedja
+            {t('ui.signInScreen.myledja')}
           </Text>
           <Text
             style={[
@@ -131,7 +131,7 @@ export function SignInScreen() {
               },
             ]}
           >
-            Sign in to access your financial ledger
+            {t('ui.signInScreen.signInToAccessYour')}
           </Text>
         </View>
 
@@ -164,8 +164,8 @@ export function SignInScreen() {
 
         {/* Email Input */}
         <TextInput
-          label="Email Address"
-          placeholder="you@domain.com"
+          label={t('ui.signInScreen.emailAddress')}
+          placeholder={t('ui.signInScreen.youDomainCom')}
           keyboardType="email-address"
           autoCapitalize="none"
           value={email}
@@ -179,7 +179,7 @@ export function SignInScreen() {
         {/* Password Input */}
         <View style={{ marginTop: spacing.md }}>
           <TextInput
-            label="Password"
+            label={t('ui.signInScreen.password')}
             placeholder="••••••••••••"
             secureTextEntry={!showPassword}
             value={password}
@@ -229,7 +229,7 @@ export function SignInScreen() {
                 },
               ]}
             >
-              Stay signed in
+              {t('ui.signInScreen.staySignedIn')}
             </Text>
           </TouchableOpacity>
 
@@ -244,14 +244,14 @@ export function SignInScreen() {
                 },
               ]}
             >
-              Forgot password?
+              {t('ui.signInScreen.forgotPassword')}
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Primary CTA */}
         <Button
-          label="Sign In"
+          label={t('ui.signInScreen.signIn')}
           onPress={handleSignIn}
           variant="primary"
           size="lg"
@@ -272,7 +272,7 @@ export function SignInScreen() {
               },
             ]}
           >
-            OR
+            {t('ui.signInScreen.or')}
           </Text>
           <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
         </View>
@@ -280,14 +280,14 @@ export function SignInScreen() {
         {/* Secondary Auth Options */}
         <View style={{ gap: 8 }}>
           <Button
-            label="Sign in with Passkey / Biometrics"
+            label={t('ui.signInScreen.signInWithPasskeyBiometrics')}
             onPress={() => setPasskeyVisible(true)}
             variant="secondary"
             icon={<Fingerprint size={18} color={colors.primary} />}
           />
 
           <Button
-            label="Continue with Google"
+            label={t('ui.signInScreen.continueWithGoogle')}
             onPress={handleSocialGoogle}
             variant="secondary"
             icon={<Globe size={18} color={colors.textSecondary} />}
@@ -319,7 +319,7 @@ export function SignInScreen() {
                 },
               ]}
             >
-              Sign Up
+              {t('ui.signInScreen.signUp')}
             </Text>
           </TouchableOpacity>
         </View>

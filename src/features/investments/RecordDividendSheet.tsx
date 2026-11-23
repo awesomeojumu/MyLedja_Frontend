@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, CurrencyInput, Button } from '../../design';
 import { parseAmount } from '../../money';
 
+import { t as i18nT } from '../../i18n';
 interface RecordDividendSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -38,7 +39,7 @@ export function RecordDividendSheet({
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.lg }}>
           <CurrencyInput
-            label="Net Dividend Received"
+            label={i18nT('ui.recordDividendSheet.netDividendReceived')}
             value={amountText}
             onChangeText={(t) => {
               setAmountText(t);
@@ -49,7 +50,7 @@ export function RecordDividendSheet({
         </View>
 
         <Button
-          label="Save Dividend Inflow"
+          label={i18nT('ui.recordDividendSheet.saveDividendInflow')}
           onPress={handleSave}
           variant="primary"
           size="lg"

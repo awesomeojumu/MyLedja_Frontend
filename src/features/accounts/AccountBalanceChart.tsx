@@ -7,6 +7,7 @@ import { formatNaira } from '../../money';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import { balanceHistory } from './balanceHistory';
 
+import { t } from '../../i18n';
 type TimeRange = '1W' | '1M' | '3M' | 'YTD' | 'ALL';
 
 
@@ -113,7 +114,7 @@ export function AccountBalanceChart({ accountId, currentBalanceMinor, accountTyp
               },
             ]}
           >
-            BALANCE TREND
+            {t('ui.accountBalanceChart.balanceTrend')}
           </Text>
           <View style={styles.deltaRow}>
             <Text

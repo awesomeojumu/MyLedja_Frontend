@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bell } from 'lucide-react-native';
 import { useTheme, ThemeToggle, useResponsive } from '../../design';
 
+import { t } from '../../i18n';
 interface AppHeaderProps {
   title?: string;
   subtitle?: string;
@@ -130,7 +131,7 @@ export function AppHeader({ title, subtitle, unreadNotifications = 0 }: AppHeade
 
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel="Open notifications"
+          accessibilityLabel={t('ui.appHeader.openNotifications')}
           onPress={() => router.push('/notifications' as any)}
           style={[
             styles.iconButton,

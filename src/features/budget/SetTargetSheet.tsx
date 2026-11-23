@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, CurrencyInput, TextInput, Button } from '../../design';
 import { parseAmount } from '../../money';
 
+import { t as i18nT } from '../../i18n';
 interface SetTargetSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -42,7 +43,7 @@ export function SetTargetSheet({
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.md }}>
           <CurrencyInput
-            label="Monthly Spending Target"
+            label={i18nT('ui.setTargetSheet.monthlySpendingTarget')}
             value={amountText}
             onChangeText={(t) => {
               setAmountText(t);
@@ -54,8 +55,8 @@ export function SetTargetSheet({
 
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            label="Target Due Day of Month (Optional)"
-            placeholder="e.g. 25 (e.g. rent or utility deadline)"
+            label={i18nT('ui.setTargetSheet.targetDueDayOfMonth')}
+            placeholder={i18nT('ui.setTargetSheet.eG25EG')}
             value={dueDay}
             onChangeText={setDueDay}
             keyboardType="number-pad"
@@ -63,7 +64,7 @@ export function SetTargetSheet({
         </View>
 
         <Button
-          label="Save Target"
+          label={i18nT('ui.setTargetSheet.saveTarget')}
           onPress={handleSave}
           variant="primary"
           size="lg"

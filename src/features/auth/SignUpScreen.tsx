@@ -110,7 +110,7 @@ export function SignUpScreen() {
               },
             ]}
           >
-            MyLedja
+            {t('ui.signUpScreen.myledja')}
           </Text>
           <Text
             style={[
@@ -157,8 +157,8 @@ export function SignUpScreen() {
           <>
             {/* Step 1: Registration Form */}
             <TextInput
-              label="Full Name"
-              placeholder="e.g. Tunde Adebayo"
+              label={t('ui.signUpScreen.fullName')}
+              placeholder={t('ui.signUpScreen.eGTundeAdebayo')}
               value={name}
               onChangeText={(v) => {
                 setName(v);
@@ -169,8 +169,8 @@ export function SignUpScreen() {
 
             <View style={{ marginTop: spacing.md }}>
               <TextInput
-                label="Email Address"
-                placeholder="you@domain.com"
+                label={t('ui.signUpScreen.emailAddress')}
+                placeholder={t('ui.signUpScreen.youDomainCom')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
@@ -184,7 +184,7 @@ export function SignUpScreen() {
 
             <View style={{ marginTop: spacing.md }}>
               <TextInput
-                label="Create Password"
+                label={t('ui.signUpScreen.createPassword')}
                 placeholder={t('signUp.rule.length')}
                 secureTextEntry
                 value={password}
@@ -207,13 +207,13 @@ export function SignUpScreen() {
               <View style={styles.ruleItem}>
                 <View style={[styles.ruleDot, { backgroundColor: hasNumber ? colors.statusSuccess : colors.border }]} />
                 <Text style={[styles.ruleText, { color: hasNumber ? colors.statusSuccess : colors.textTertiary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs }]}>
-                  1+ number
+                  {t('ui.signUpScreen.1Number')}
                 </Text>
               </View>
               <View style={styles.ruleItem}>
                 <View style={[styles.ruleDot, { backgroundColor: hasSymbol ? colors.statusSuccess : colors.border }]} />
                 <Text style={[styles.ruleText, { color: hasSymbol ? colors.statusSuccess : colors.textTertiary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs }]}>
-                  1+ symbol
+                  {t('ui.signUpScreen.1Symbol')}
                 </Text>
               </View>
             </View>
@@ -245,18 +245,18 @@ export function SignUpScreen() {
                   },
                 ]}
               >
-                I agree to the{' '}
+                {t('ui.signUpScreen.iAgreeToThe')}{' '}
                 <Text
                   onPress={() => setTermsVisible(true)}
                   style={{ color: colors.primary, fontFamily: typography.fonts.medium }}
                 >
-                  Terms of Service & Privacy Policy
+                  {t('ui.signUpScreen.termsOfServiceAndPrivacy')}
                 </Text>
               </Text>
             </View>
 
             <Button
-              label="Create Account"
+              label={t('ui.signUpScreen.createAccount')}
               onPress={handleCreateAccount}
               variant="primary"
               size="lg"
@@ -265,7 +265,7 @@ export function SignUpScreen() {
             {/* Google needs the platform sign-in SDK, which isn't in this build yet. */}
             <View style={{ marginTop: spacing.md }}>
               <Button
-                label="Sign up with Google"
+                label={t('ui.signUpScreen.signUpWithGoogle')}
                 onPress={() => setError(t('signIn.googleUnavailable'))}
                 variant="secondary"
                 icon={<Globe size={18} color={colors.textSecondary} />}
@@ -287,14 +287,14 @@ export function SignUpScreen() {
                 },
               ]}
             >
-              We sent a 6-digit confirmation code to{' '}
+              {t('ui.signUpScreen.weSentA6Digit')}{' '}
               <Text style={{ fontFamily: typography.fonts.medium, color: colors.textPrimary }}>
                 {email}
               </Text>
             </Text>
 
             <TextInput
-              label="6-Digit Verification Code"
+              label={t('ui.signUpScreen.6DigitVerificationCode')}
               placeholder="123456"
               maxLength={6}
               keyboardType="numeric"
@@ -311,14 +311,14 @@ export function SignUpScreen() {
 
             <View style={{ marginTop: spacing.xl, gap: 8 }}>
               <Button
-                label="Verify Code"
+                label={t('ui.signUpScreen.verifyCode')}
                 onPress={() => handleVerifyOtp(otp)}
                 variant="primary"
                 size="lg"
                 loading={loading}
               />
               <Button
-                label="Wrong email? Change it"
+                label={t('ui.signUpScreen.wrongEmailChangeIt')}
                 onPress={() => {
                   setStep('form');
                   setOtp('');
@@ -341,7 +341,7 @@ export function SignUpScreen() {
               },
             ]}
           >
-            Already have an account?{' '}
+            {t('ui.signUpScreen.alreadyHaveAnAccount')}{' '}
           </Text>
           <TouchableOpacity onPress={() => router.push('/sign-in' as any)}>
             <Text
@@ -354,7 +354,7 @@ export function SignUpScreen() {
                 },
               ]}
             >
-              Sign In
+              {t('ui.signUpScreen.signIn')}
             </Text>
           </TouchableOpacity>
         </View>

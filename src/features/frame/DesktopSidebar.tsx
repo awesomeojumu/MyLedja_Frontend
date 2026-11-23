@@ -20,6 +20,7 @@ import {
 import { useTheme } from '../../design';
 import { useAuth } from '../auth/AuthProvider';
 
+import { t } from '../../i18n';
 export function DesktopSidebar() {
   const { colors, typography, spacing, radii } = useTheme();
   const pathname = usePathname();
@@ -85,7 +86,7 @@ export function DesktopSidebar() {
             },
           ]}
         >
-          MyLedja
+          {t('ui.desktopSidebar.myledja')}
         </Text>
       </View>
 
@@ -303,7 +304,7 @@ export function DesktopSidebar() {
                   },
                 ]}
               >
-                Log Out
+                {t('ui.desktopSidebar.logOut')}
               </Text>
             </TouchableOpacity>
           </View>

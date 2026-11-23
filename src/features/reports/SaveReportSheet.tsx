@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 
+import { t as i18nT } from '../../i18n';
 interface SaveReportSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -29,12 +30,12 @@ export function SaveReportSheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Save Custom Report">
+    <BottomSheet visible={visible} onClose={onClose} title={i18nT('ui.saveReportSheet.saveCustomReport')}>
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            label="Report Title"
-            placeholder="e.g. Q4 Business Travel Expenses"
+            label={i18nT('ui.saveReportSheet.reportTitle')}
+            placeholder={i18nT('ui.saveReportSheet.eGQ4BusinessTravel')}
             value={title}
             onChangeText={(t) => {
               setTitle(t);
@@ -46,7 +47,7 @@ export function SaveReportSheet({
         </View>
 
         <Button
-          label="Save Report"
+          label={i18nT('ui.saveReportSheet.saveReport')}
           onPress={handleSave}
           variant="primary"
           size="lg"

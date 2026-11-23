@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react-native';
 import { useTheme } from '../../design';
 
+import { t } from '../../i18n';
 export interface MonthScopeBarProps {
   currentMonth: string;
   isCurrentMonth?: boolean;
@@ -26,7 +27,7 @@ export function MonthScopeBar({
         <View style={styles.navigator}>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Previous month"
+            accessibilityLabel={t('ui.monthScopeBar.previousMonth')}
             onPress={onPrevMonth}
             style={[
               styles.navBtn,
@@ -90,7 +91,7 @@ export function MonthScopeBar({
                     },
                   ]}
                 >
-                  This Month
+                  {t('ui.monthScopeBar.thisMonth')}
                 </Text>
               </View>
             ) : (
@@ -116,7 +117,7 @@ export function MonthScopeBar({
                       },
                     ]}
                   >
-                    Go to current
+                    {t('ui.monthScopeBar.goToCurrent')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -125,7 +126,7 @@ export function MonthScopeBar({
 
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Next month"
+            accessibilityLabel={t('ui.monthScopeBar.nextMonth')}
             onPress={onNextMonth}
             style={[
               styles.navBtn,

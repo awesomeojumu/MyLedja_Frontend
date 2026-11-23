@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { ShieldCheck } from 'lucide-react-native';
 import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 
+import { t } from '../../i18n';
 export interface TwoFactorChallengeSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -35,7 +36,7 @@ export function TwoFactorChallengeSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Two-Factor Verification"
+      title={t('ui.twoFactorChallengeSheet.twoFactorVerification')}
       subtitle={useBackupCode ? 'Enter one of your 8-digit emergency backup codes' : 'Enter the 6-digit code from your authenticator app'}
     >
       <View style={styles.container}>
@@ -74,7 +75,7 @@ export function TwoFactorChallengeSheet({
         />
 
         <View style={{ marginTop: spacing.lg, gap: 8 }}>
-          <Button label="Verify & Sign In" onPress={handleVerify} variant="primary" size="lg" />
+          <Button label={t('ui.twoFactorChallengeSheet.verifyAndSignIn')} onPress={handleVerify} variant="primary" size="lg" />
           <Button
             label={useBackupCode ? 'Use Authenticator App' : 'Use a backup code instead'}
             onPress={() => {

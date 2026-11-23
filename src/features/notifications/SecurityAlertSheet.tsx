@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { ShieldAlert, Laptop } from 'lucide-react-native';
+import { ShieldAlert } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 
+import { t } from '../../i18n';
 interface SecurityAlertSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -23,7 +24,7 @@ export function SecurityAlertSheet({
   const { colors, typography, spacing, radii } = useTheme();
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Security Alert: New Sign-In">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.securityAlertSheet.securityAlertNewSignIn')}>
       <View style={styles.container}>
         <View
           style={[
@@ -47,7 +48,7 @@ export function SecurityAlertSheet({
                 marginLeft: spacing.xs,
               }}
             >
-              Unrecognized Device Detected
+              {t('ui.securityAlertSheet.unrecognizedDeviceDetected')}
             </Text>
           </View>
           <Text
@@ -58,13 +59,13 @@ export function SecurityAlertSheet({
               marginTop: spacing.xs,
             }}
           >
-            A new session was initiated from {deviceInfo} in {location} at {timestamp}.
+            {t('ui.securityAlertSheet.aNewSessionWasInitiated')}{' '}{deviceInfo}{' '}{t('ui.securityAlertSheet.in')}{' '}{location}{' '}{t('ui.securityAlertSheet.at')}{' '}{timestamp}.
           </Text>
         </View>
 
         <View style={{ marginBottom: spacing.lg }}>
           <Button
-            label="This Was Me (Dismiss)"
+            label={t('ui.securityAlertSheet.thisWasMeDismiss')}
             onPress={onClose}
             variant="secondary"
             size="lg"
@@ -72,7 +73,7 @@ export function SecurityAlertSheet({
         </View>
 
         <Button
-          label="Sign Out All Other Devices"
+          label={t('ui.securityAlertSheet.signOutAllOtherDevices')}
           onPress={() => {
             onSignOutOthers();
             onClose();

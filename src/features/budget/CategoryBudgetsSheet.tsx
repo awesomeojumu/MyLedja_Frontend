@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useTheme, BottomSheet, CurrencyInput, Button } from '../../design';
 import { formatNaira, toInputText, parseAmount } from '../../money';
 import type { CategoryEnvelope } from './CategoryEnvelopeRow';
 
+import { t } from '../../i18n';
+import { useSyncOnChange } from '../../lib/useSyncOnChange';
 export interface CategoryBudgetsSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -23,7 +25,8 @@ export function CategoryBudgetsSheet({
 
   const [inputMap, setInputMap] = useState<Record<string, string>>({});
 
-  useEffect(() => {
+  // Fill the fields from the props when the sheet opens or what it shows changes.
+  useSyncOnChange([visible, envelopes], () => {
     if (visible) {
       const map: Record<string, string> = {};
       envelopes.forEach((env) => {
@@ -31,7 +34,7 @@ export function CategoryBudgetsSheet({
       });
       setInputMap(map);
     }
-  }, [visible, envelopes]);
+  });
 
   // Compute live total planned
   const totalPlannedMinor = Object.values(inputMap).reduce((sum, str) => {
@@ -57,7 +60,7 @@ export function CategoryBudgetsSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Category Budgets"
+      title={t('ui.categoryBudgetsSheet.categoryBudgets')}
       subtitle="Set target monthly envelope limits for each active category"
     >
       <View style={{ width: '100%' }}>
@@ -77,7 +80,7 @@ export function CategoryBudgetsSheet({
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View>
               <Text style={{ fontSize: 10, textTransform: 'uppercase', color: colors.textSecondary, letterSpacing: 0.5 }}>
-                Expected Income
+                {t('ui.categoryBudgetsSheet.expectedIncome')}
               </Text>
               <Text style={{ fontSize: 14, fontFamily: typography.fonts.semiBold, color: colors.textPrimary, marginTop: 1 }}>
                 {formatNaira(expectedIncomeMinor)}
@@ -86,7 +89,7 @@ export function CategoryBudgetsSheet({
 
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 10, textTransform: 'uppercase', color: colors.textSecondary, letterSpacing: 0.5 }}>
-                Total Budgeted
+                {t('ui.categoryBudgetsSheet.totalBudgeted')}
               </Text>
               <Text style={{ fontSize: 14, fontFamily: typography.fonts.semiBold, color: colors.primary, marginTop: 1 }}>
                 {formatNaira(totalPlannedMinor)}
@@ -156,7 +159,7 @@ export function CategoryBudgetsSheet({
         </ScrollView>
 
         <View style={{ marginTop: spacing.lg }}>
-          <Button label="Save All Category Budgets" onPress={handleSave} variant="primary" size="lg" />
+          <Button label={t('ui.categoryBudgetsSheet.saveAllCategoryBudgets')} onPress={handleSave} variant="primary" size="lg" />
         </View>
       </View>
     </BottomSheet>

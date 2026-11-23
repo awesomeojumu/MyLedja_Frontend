@@ -39,7 +39,7 @@ export function AccountsScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
 
-  const [privacyMode, setPrivacyMode] = useState(false);
+  const [privacyMode] = useState(false);
   const [activeFilter, setActiveFilter] = useState<AccountFilter>('all');
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -53,7 +53,6 @@ export function AccountsScreen() {
   // 7 Purposeful Accounts Data Structure (Total Assets: ₦13,095,000 | Liabilities: ₦12,000 | Net: ₦13,083,000)
   // Live Database Data
   const {
-    isReady,
     accounts: dbAccounts,
     accountBalances,
     repo,
@@ -285,7 +284,7 @@ export function AccountsScreen() {
                 marginBottom: 4,
               }}
             >
-              No Accounts Added Yet
+              {t('ui.accountsScreen.noAccountsAddedYet')}
             </Text>
             <Text
               style={{
@@ -296,7 +295,7 @@ export function AccountsScreen() {
                 maxWidth: 320,
               }}
             >
-              Tap + Add Account to link your commercial banks, mobile wallets, or credit cards.
+              {t('ui.accountsScreen.tapAddAccountToLink')}
             </Text>
           </View>
         ) : (
@@ -353,7 +352,7 @@ export function AccountsScreen() {
       <BottomSheet
         visible={filterModalVisible}
         onClose={() => setFilterModalVisible(false)}
-        title="Filter Accounts by Purpose"
+        title={t('ui.accountsScreen.filterAccountsByPurpose')}
         subtitle="Filter accounts by their designated financial role"
       >
         <View style={{ width: '100%', gap: 6 }}>

@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { Trash2 } from 'lucide-react-native';
 import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 
+import { t as i18nT } from '../../i18n';
 interface EditCategorySheetProps {
   visible: boolean;
   onClose: () => void;
@@ -41,11 +42,11 @@ export function EditCategorySheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Edit Envelope">
+    <BottomSheet visible={visible} onClose={onClose} title={i18nT('ui.editCategorySheet.editEnvelope')}>
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            label="Category Name"
+            label={i18nT('ui.editCategorySheet.categoryName')}
             value={name}
             onChangeText={(t) => {
               setName(t);
@@ -57,15 +58,15 @@ export function EditCategorySheet({
 
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            label="Category Group"
+            label={i18nT('ui.editCategorySheet.categoryGroup')}
             value={group}
             onChangeText={setGroup}
-            placeholder="e.g. Daily, Home, Family"
+            placeholder={i18nT('ui.editCategorySheet.eGDailyHomeFamily')}
           />
         </View>
 
         <Button
-          label="Save Envelope"
+          label={i18nT('ui.editCategorySheet.saveEnvelope')}
           onPress={handleSave}
           variant="primary"
           size="lg"
@@ -95,7 +96,7 @@ export function EditCategorySheet({
                 marginLeft: spacing.xs,
               }}
             >
-              Delete Category Envelope
+              {i18nT('ui.editCategorySheet.deleteCategoryEnvelope')}
             </Text>
           </TouchableOpacity>
         )}

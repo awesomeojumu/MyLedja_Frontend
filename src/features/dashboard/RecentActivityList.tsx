@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 
+import { t } from '../../i18n';
 export interface RecentTransactionItem {
   id: string;
   payee: string;
@@ -33,7 +34,7 @@ export function RecentActivityList({ transactions, privacyMode }: RecentActivity
           },
         ]}
       >
-        Recent Activity
+        {t('ui.recentActivityList.recentActivity')}
       </Text>
 
       <View
@@ -58,7 +59,7 @@ export function RecentActivityList({ transactions, privacyMode }: RecentActivity
                 },
               ]}
             >
-              No transactions recorded yet. Tap "+ Add Expense" above!
+              {t('ui.recentActivityList.noTransactionsRecordedYetTap')}
             </Text>
           </View>
         ) : (

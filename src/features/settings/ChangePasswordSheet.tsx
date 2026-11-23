@@ -5,6 +5,7 @@ import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 import { useAuth } from '../auth/AuthProvider';
 import { securityApi } from '../../api/security';
 
+import { t as i18nT } from '../../i18n';
 interface ChangePasswordSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -86,7 +87,7 @@ export function ChangePasswordSheet({ visible, onClose, onSuccess }: ChangePassw
   };
 
   return (
-    <BottomSheet visible={visible} onClose={handleClose} title="Change Password">
+    <BottomSheet visible={visible} onClose={handleClose} title={i18nT('ui.changePasswordSheet.changePassword')}>
       <View style={styles.container}>
         {success ? (
           <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
@@ -114,7 +115,7 @@ export function ChangePasswordSheet({ visible, onClose, onSuccess }: ChangePassw
                 marginBottom: 4,
               }}
             >
-              Password Changed Successfully
+              {i18nT('ui.changePasswordSheet.passwordChangedSuccessfully')}
             </Text>
             <Text
               style={{
@@ -140,7 +141,7 @@ export function ChangePasswordSheet({ visible, onClose, onSuccess }: ChangePassw
                 lineHeight: 18,
               }}
             >
-              Create a strong password with at least 10 characters. Avoid common or easily guessable phrases.
+              {i18nT('ui.changePasswordSheet.createAStrongPasswordWith')}
             </Text>
 
             {error && (
@@ -172,7 +173,7 @@ export function ChangePasswordSheet({ visible, onClose, onSuccess }: ChangePassw
               {/* Current Password */}
               <View>
                 <TextInput
-                  label="Current Password"
+                  label={i18nT('ui.changePasswordSheet.currentPassword')}
                   value={currentPassword}
                   onChangeText={(t) => {
                     setCurrentPassword(t);
@@ -189,14 +190,14 @@ export function ChangePasswordSheet({ visible, onClose, onSuccess }: ChangePassw
                       )}
                     </TouchableOpacity>
                   }
-                  placeholder="Enter current password"
+                  placeholder={i18nT('ui.changePasswordSheet.enterCurrentPassword')}
                 />
               </View>
 
               {/* New Password */}
               <View>
                 <TextInput
-                  label="New Password"
+                  label={i18nT('ui.changePasswordSheet.newPassword')}
                   value={newPassword}
                   onChangeText={(t) => {
                     setNewPassword(t);
@@ -213,7 +214,7 @@ export function ChangePasswordSheet({ visible, onClose, onSuccess }: ChangePassw
                       )}
                     </TouchableOpacity>
                   }
-                  placeholder="At least 10 characters"
+                  placeholder={i18nT('ui.changePasswordSheet.atLeast10Characters')}
                 />
                 <Text
                   style={{
@@ -230,7 +231,7 @@ export function ChangePasswordSheet({ visible, onClose, onSuccess }: ChangePassw
               {/* Confirm Password */}
               <View>
                 <TextInput
-                  label="Confirm New Password"
+                  label={i18nT('ui.changePasswordSheet.confirmNewPassword')}
                   value={confirmPassword}
                   onChangeText={(t) => {
                     setConfirmPassword(t);
@@ -247,7 +248,7 @@ export function ChangePasswordSheet({ visible, onClose, onSuccess }: ChangePassw
                       )}
                     </TouchableOpacity>
                   }
-                  placeholder="Re-type new password"
+                  placeholder={i18nT('ui.changePasswordSheet.reTypeNewPassword')}
                 />
               </View>
             </View>
@@ -275,7 +276,7 @@ export function ChangePasswordSheet({ visible, onClose, onSuccess }: ChangePassw
                     fontSize: typography.sizes.bodySm,
                   }}
                 >
-                  Sign Out Other Devices
+                  {i18nT('ui.changePasswordSheet.signOutOtherDevices')}
                 </Text>
                 <Text
                   style={{
@@ -284,7 +285,7 @@ export function ChangePasswordSheet({ visible, onClose, onSuccess }: ChangePassw
                     marginTop: 1,
                   }}
                 >
-                  Revoke sessions on all other phones and browsers for maximum security.
+                  {i18nT('ui.changePasswordSheet.revokeSessionsOnAllOther')}
                 </Text>
               </View>
               <Switch

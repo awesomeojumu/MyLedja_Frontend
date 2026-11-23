@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t as i18nT } from '../../i18n';
 export interface FilterOptions {
   dateRange: 'all' | 'this-month' | 'last-30' | 'this-year';
   account: string;
@@ -63,14 +64,14 @@ export function FilterDrawerSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Filter Ledger"
+      title={i18nT('ui.filterDrawerSheet.filterLedger')}
       subtitle="Refine transactions displayed in your ledger"
     >
       <View style={styles.container}>
         {/* Date Range */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.sm, marginBottom: spacing.xs }]}>
-            Date Range
+            {i18nT('ui.filterDrawerSheet.dateRange')}
           </Text>
           <View style={styles.chipRow}>
             {DATE_RANGES.map((d) => {
@@ -104,7 +105,7 @@ export function FilterDrawerSheet({
         {/* Account Filter */}
         <View style={[styles.section, { marginTop: spacing.md }]}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.sm, marginBottom: spacing.xs }]}>
-            Account
+            {i18nT('ui.filterDrawerSheet.account')}
           </Text>
           <View style={styles.chipRow}>
             {ACCOUNTS.map((acc) => {
@@ -138,7 +139,7 @@ export function FilterDrawerSheet({
         {/* Type Filter */}
         <View style={[styles.section, { marginTop: spacing.md }]}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.sm, marginBottom: spacing.xs }]}>
-            Transaction Type
+            {i18nT('ui.filterDrawerSheet.transactionType')}
           </Text>
           <View style={styles.chipRow}>
             {TYPES.map((t) => {
@@ -171,8 +172,8 @@ export function FilterDrawerSheet({
 
         {/* Buttons */}
         <View style={{ marginTop: spacing.xl, gap: 8 }}>
-          <Button label="Apply Filters" onPress={handleApply} variant="primary" />
-          <Button label="Reset to Default" onPress={handleReset} variant="secondary" />
+          <Button label={i18nT('ui.filterDrawerSheet.applyFilters')} onPress={handleApply} variant="primary" />
+          <Button label={i18nT('ui.filterDrawerSheet.resetToDefault')} onPress={handleReset} variant="secondary" />
         </View>
       </View>
     </BottomSheet>

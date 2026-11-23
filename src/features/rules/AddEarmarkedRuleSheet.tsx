@@ -4,6 +4,7 @@ import { useTheme, BottomSheet, TextInput, Dropdown, Button } from '../../design
 import { EarmarkedRule } from '../../data/rulesModel';
 import { EXPENSE_TAXONOMY } from '../../data/categoriesTaxonomy';
 
+import { t } from '../../i18n';
 export interface AddEarmarkedRuleSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -75,15 +76,15 @@ export function AddEarmarkedRuleSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="New Earmarked Inflow Rule"
+      title={t('ui.addEarmarkedRuleSheet.newEarmarkedInflowRule')}
       subtitle="Bypass percentage splits and allocate 100% directly to a target purpose"
     >
       <View style={styles.form}>
         {/* Rule Name */}
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            label="Rule Name"
-            placeholder="e.g. Rent Support Gift, Project Capital, Medical Aid"
+            label={t('ui.addEarmarkedRuleSheet.ruleName')}
+            placeholder={t('ui.addEarmarkedRuleSheet.eGRentSupportGift')}
             value={name}
             onChangeText={(v) => {
               setName(v);
@@ -96,7 +97,7 @@ export function AddEarmarkedRuleSheet({
         {/* Trigger Type */}
         <View style={{ marginBottom: spacing.md }}>
           <Dropdown
-            label="When To Trigger"
+            label={t('ui.addEarmarkedRuleSheet.whenToTrigger')}
             value={triggerType}
             options={TRIGGER_TYPE_OPTIONS}
             onSelect={(val) => setTriggerType(val as any)}
@@ -120,7 +121,7 @@ export function AddEarmarkedRuleSheet({
         {/* Target Category */}
         <View style={{ marginBottom: spacing.md }}>
           <Dropdown
-            label="Target Expense Category (100% Pass-Through)"
+            label={t('ui.addEarmarkedRuleSheet.targetExpenseCategory100Pass')}
             value={targetCategory}
             options={CATEGORY_OPTIONS}
             onSelect={setTargetCategory}
@@ -130,7 +131,7 @@ export function AddEarmarkedRuleSheet({
         {/* Target Purposeful Account */}
         <View style={{ marginBottom: spacing.lg }}>
           <Dropdown
-            label="Target Account Purpose"
+            label={t('ui.addEarmarkedRuleSheet.targetAccountPurpose')}
             value={targetAccountType}
             options={ACCOUNT_TYPE_OPTIONS}
             onSelect={(val) => setTargetAccountType(val as any)}
@@ -139,7 +140,7 @@ export function AddEarmarkedRuleSheet({
 
         {/* Submit */}
         <Button
-          label="Create Earmarked Rule"
+          label={t('ui.addEarmarkedRuleSheet.createEarmarkedRule')}
           onPress={handleSave}
           variant="primary"
           size="lg"

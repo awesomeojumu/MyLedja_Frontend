@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { Search, SlidersHorizontal, Download, CheckSquare } from 'lucide-react-native';
 import { useTheme, TextInput } from '../../design';
 
+import { t } from '../../i18n';
 export type FilterPreset = 'all' | 'expense' | 'income' | 'transfers' | 'uncategorized';
 
 export interface FilterBarProps {
@@ -40,7 +41,7 @@ export function FilterBar({
     <View style={[styles.container, { marginBottom: spacing.md }]}>
       {/* Search Input */}
       <TextInput
-        placeholder="Search payee, category, note..."
+        placeholder={t('ui.filterBar.searchPayeeCategoryNote')}
         value={searchQuery}
         onChangeText={onSearchChange}
         leftElement={<Search size={18} color={colors.textTertiary} />}
@@ -94,7 +95,7 @@ export function FilterBar({
         <View style={styles.actionButtons}>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Filter parameters"
+            accessibilityLabel={t('ui.filterBar.filterParameters')}
             onPress={onOpenFilterDrawer}
             style={[
               styles.iconBtn,
@@ -111,7 +112,7 @@ export function FilterBar({
 
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Export or Import CSV"
+            accessibilityLabel={t('ui.filterBar.exportOrImportCsv')}
             onPress={onOpenExport}
             style={[
               styles.iconBtn,
@@ -128,7 +129,7 @@ export function FilterBar({
 
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Multi-select mode"
+            accessibilityLabel={t('ui.filterBar.multiSelectMode')}
             onPress={onToggleSelectionMode}
             style={[
               styles.iconBtn,

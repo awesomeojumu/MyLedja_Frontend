@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { FileText, FileSpreadsheet, Image as ImageIcon } from 'lucide-react-native';
-import { useTheme, BottomSheet, Button } from '../../design';
+import { useTheme, BottomSheet } from '../../design';
 
+import { t } from '../../i18n';
 interface ExportMenuSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -29,7 +30,7 @@ export function ExportMenuSheet({
             marginBottom: spacing.md,
           }}
         >
-          Choose your preferred download format:
+          {t('ui.exportMenuSheet.chooseYourPreferredDownloadFormat')}
         </Text>
 
         {[

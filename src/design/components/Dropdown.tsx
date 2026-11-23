@@ -21,7 +21,7 @@ export interface DropdownProps {
   label?: string;
   placeholder?: string;
   value?: string;
-  options: Array<string | DropdownOption>;
+  options: (string | DropdownOption)[];
   onSelect: (value: string) => void;
   error?: string;
   containerStyle?: ViewStyle;

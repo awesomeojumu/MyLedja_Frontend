@@ -13,14 +13,13 @@ import {
   Coins,
   Shield,
   Briefcase,
-  MapPin,
   SlidersHorizontal,
   ChevronDown,
   Check,
   X,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
-import { formatNaira, parseAmount } from '../../money';
+import { formatNaira } from '../../money';
 import { RecordTradeSheet, type AddedTrade } from './RecordTradeSheet';
 import { holdingFigures } from './positions';
 import { t } from '../../i18n';
@@ -250,7 +249,7 @@ export function InvestmentsScreen() {
               },
             ]}
           >
-            Investments Portfolio
+            {t('ui.investmentsScreen.investmentsPortfolio')}
           </Text>
           <Text
             style={{
@@ -259,7 +258,7 @@ export function InvestmentsScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Equities & Asset Holdings
+            {t('ui.investmentsScreen.equitiesAndAssetHoldings')}
           </Text>
         </View>
 
@@ -284,7 +283,7 @@ export function InvestmentsScreen() {
               marginLeft: 4,
             }}
           >
-            Record Investment
+            {t('ui.investmentsScreen.recordInvestment')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -315,7 +314,7 @@ export function InvestmentsScreen() {
               letterSpacing: 0.5,
             }}
           >
-            Total Portfolio Value
+            {t('ui.investmentsScreen.totalPortfolioValue')}
           </Text>
           <Text
             style={{
@@ -349,7 +348,7 @@ export function InvestmentsScreen() {
                   fontFamily: typography.fonts.regular,
                 }}
               >
-                Cost Basis: {formatNaira(totalCostMinor)}
+                {t('ui.investmentsScreen.costBasis')}{' '}{formatNaira(totalCostMinor)}
               </Text>
             </View>
 
@@ -392,7 +391,7 @@ export function InvestmentsScreen() {
               fontSize: typography.sizes.md,
             }}
           >
-            Assets & Holdings ({filteredHoldings.length})
+            {t('ui.investmentsScreen.assetsAndHoldings')}{filteredHoldings.length})
           </Text>
 
           {/* Single Filter Button */}
@@ -574,7 +573,7 @@ export function InvestmentsScreen() {
                 maxWidth: 320,
               }}
             >
-              Tap "+ Record Investment" to acquire Stocks, Real Estate, Fixed Deposits, Funds, or Crypto.
+              {t('ui.investmentsScreen.tapRecordInvestmentToAcquire')}
             </Text>
           </View>
         ) : (

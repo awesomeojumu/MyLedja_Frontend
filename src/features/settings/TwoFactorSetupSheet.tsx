@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { ShieldCheck, Copy, Check } from 'lucide-react-native';
+import { Copy, Check } from 'lucide-react-native';
 import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 
+import { t as i18nT } from '../../i18n';
 interface TwoFactorSetupSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -39,7 +40,7 @@ export function TwoFactorSetupSheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Set Up Two-Factor Authentication">
+    <BottomSheet visible={visible} onClose={onClose} title={i18nT('ui.twoFactorSetupSheet.setUpTwoFactorAuthentication')}>
       <View style={styles.container}>
         <Text
           style={{
@@ -50,7 +51,7 @@ export function TwoFactorSetupSheet({
             lineHeight: 20,
           }}
         >
-          Add an extra layer of security. Enter this setup key into Google Authenticator or 1Password:
+          {i18nT('ui.twoFactorSetupSheet.addAnExtraLayerOf')}
         </Text>
 
         <TouchableOpacity
@@ -88,7 +89,7 @@ export function TwoFactorSetupSheet({
 
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            label="Enter 6-Digit Authenticator Code"
+            label={i18nT('ui.twoFactorSetupSheet.enter6DigitAuthenticatorCode')}
             placeholder="123456"
             value={otp}
             onChangeText={(t) => {
@@ -102,7 +103,7 @@ export function TwoFactorSetupSheet({
         </View>
 
         <Button
-          label="Verify & Activate 2FA"
+          label={i18nT('ui.twoFactorSetupSheet.verifyAndActivate2fa')}
           onPress={handleVerify}
           variant="primary"
           size="lg"

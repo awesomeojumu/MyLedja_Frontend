@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { AlertCircle } from 'lucide-react-native';
 import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 
+import { t } from '../../i18n';
 interface DeleteAccountModalProps {
   visible: boolean;
   onClose: () => void;
@@ -20,7 +21,7 @@ export function DeleteAccountModal({
   const canDelete = confirmText.trim().toUpperCase() === 'DELETE';
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Delete Account & Workspace">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.deleteAccountModal.deleteAccountAndWorkspace')}>
       <View style={styles.container}>
         <View
           style={[
@@ -44,7 +45,7 @@ export function DeleteAccountModal({
                 marginLeft: spacing.xs,
               }}
             >
-              Irreversible Action
+              {t('ui.deleteAccountModal.irreversibleAction')}
             </Text>
           </View>
           <Text
@@ -55,22 +56,22 @@ export function DeleteAccountModal({
               marginTop: spacing.xs,
             }}
           >
-            All bank accounts, historical transactions, envelope budgets, and tax statements will be permanently purged from this device and workspace.
+            {t('ui.deleteAccountModal.allBankAccountsHistoricalTransactions')}
           </Text>
         </View>
 
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            label='Type "DELETE" to confirm'
+            label={t('ui.deleteAccountModal.typeDeleteToConfirm')}
             value={confirmText}
             onChangeText={setConfirmText}
-            placeholder="DELETE"
+            placeholder={t('ui.deleteAccountModal.delete')}
             autoCapitalize="characters"
           />
         </View>
 
         <Button
-          label="Permanently Delete Workspace"
+          label={t('ui.deleteAccountModal.permanentlyDeleteWorkspace')}
           onPress={() => {
             if (canDelete) {
               onConfirmDelete();

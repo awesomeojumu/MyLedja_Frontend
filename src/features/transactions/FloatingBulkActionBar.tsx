@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Tag, Trash2, X } from 'lucide-react-native';
 import { useTheme } from '../../design';
 
+import { t } from '../../i18n';
 export interface FloatingBulkActionBarProps {
   selectedCount: number;
   onCategorize: () => void;
@@ -45,7 +46,7 @@ export function FloatingBulkActionBar({
             },
           ]}
         >
-          {selectedCount} selected
+          {selectedCount}{' '}{t('ui.floatingBulkActionBar.selected')}
         </Text>
 
         <TouchableOpacity
@@ -74,7 +75,7 @@ export function FloatingBulkActionBar({
               },
             ]}
           >
-            Categorize
+            {t('ui.floatingBulkActionBar.categorize')}
           </Text>
         </TouchableOpacity>
 
@@ -104,13 +105,13 @@ export function FloatingBulkActionBar({
               },
             ]}
           >
-            Delete
+            {t('ui.floatingBulkActionBar.delete')}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel="Clear selection"
+          accessibilityLabel={t('ui.floatingBulkActionBar.clearSelection')}
           onPress={onCancel}
           style={[styles.closeBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
         >

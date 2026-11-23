@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme, BottomSheet, TextInput, CurrencyInput, Button, DatePicker } from '../../design';
 import { parseAmount } from '../../money';
 
+import { t as i18nT } from '../../i18n';
 export interface AddedDebt {
   id: string;
   type: 'lent' | 'borrowed';
@@ -99,7 +100,7 @@ export function RecordDebtSheet({
                 fontSize: typography.sizes.xs,
               }}
             >
-              I Lent Money (Receivable)
+              {i18nT('ui.recordDebtSheet.iLentMoneyReceivable')}
             </Text>
           </TouchableOpacity>
 
@@ -123,7 +124,7 @@ export function RecordDebtSheet({
                 fontSize: typography.sizes.xs,
               }}
             >
-              I Borrowed Money (Payable)
+              {i18nT('ui.recordDebtSheet.iBorrowedMoneyPayable')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -131,7 +132,7 @@ export function RecordDebtSheet({
         <View style={{ marginBottom: spacing.sm }}>
           <TextInput
             label={type === 'lent' ? 'Borrower Name / Who took it?' : 'Lender Name / Who lent you?'}
-            placeholder="e.g. Tunde Alabi, Stanbic Quick Loan"
+            placeholder={i18nT('ui.recordDebtSheet.eGTundeAlabiStanbic')}
             value={person}
             onChangeText={(t) => {
               setPerson(t);
@@ -144,7 +145,7 @@ export function RecordDebtSheet({
 
         <View style={{ marginBottom: spacing.sm }}>
           <CurrencyInput
-            label="Total Principal Amount"
+            label={i18nT('ui.recordDebtSheet.totalPrincipalAmount')}
             value={amountText}
             onChangeText={setAmountText}
           />
@@ -152,8 +153,8 @@ export function RecordDebtSheet({
 
         <View style={{ marginBottom: spacing.sm, zIndex: 20 }}>
           <DatePicker
-            label="Expected Repayment Date (Optional)"
-            placeholder="Select repayment date..."
+            label={i18nT('ui.recordDebtSheet.expectedRepaymentDateOptional')}
+            placeholder={i18nT('ui.recordDebtSheet.selectRepaymentDate')}
             value={dueDate}
             onChange={setDueDate}
           />
@@ -161,15 +162,15 @@ export function RecordDebtSheet({
 
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            label="Notes (Optional)"
-            placeholder="e.g. Urgent car repair loan, interest-free"
+            label={i18nT('ui.recordDebtSheet.notesOptional')}
+            placeholder={i18nT('ui.recordDebtSheet.eGUrgentCarRepair')}
             value={notes}
             onChangeText={setNotes}
           />
         </View>
 
         <Button
-          label="Save Debt Record"
+          label={i18nT('ui.recordDebtSheet.saveDebtRecord')}
           onPress={handleSave}
           variant="primary"
           size="md"

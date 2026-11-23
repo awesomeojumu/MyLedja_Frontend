@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, CurrencyInput, Button } from '../../design';
-import { toInputText } from '../../money';
+import { parseAmount, toInputText } from '../../money';
 import type { AccountData } from './AccountCardRow';
 
+import { t } from '../../i18n';
+import { useSyncOnChange } from '../../lib/useSyncOnChange';
 export interface UpdateAssetValueSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -22,22 +24,24 @@ export function UpdateAssetValueSheet({
   const [valText, setValText] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  // Fill the fields from the props when the sheet opens or what it shows changes.
+  useSyncOnChange([account], () => {
     if (account) {
       const absMinor = account.balanceMinor < 0n ? -account.balanceMinor : account.balanceMinor;
       setValText(toInputText(absMinor));
     }
-  }, [account]);
+  });
 
   if (!account) return null;
 
   const handleSave = () => {
-    if (!valText || parseFloat(valText) < 0) {
-      setError('Please enter a valid asset valuation');
+    const parsed = parseAmount(valText);
+    if (!parsed.ok || parsed.minor < 0n) {
+      setError(t('quick.amountRequired'));
       return;
     }
     setError('');
-    const minor = BigInt(Math.round(parseFloat(valText) * 100));
+    const minor = parsed.minor;
     onUpdateValue(account.id, minor);
     onClose();
   };
@@ -56,7 +60,7 @@ export function UpdateAssetValueSheet({
             setValText(v);
             if (error) setError('');
           }}
-          label="Current Market Value"
+          label={t('ui.updateAssetValueSheet.currentMarketValue')}
           error={error}
         />
 
@@ -71,11 +75,11 @@ export function UpdateAssetValueSheet({
             },
           ]}
         >
-          Changes in property or asset values represent unrealized capital balance adjustments, not taxable income.
+          {t('ui.updateAssetValueSheet.changesInPropertyOrAsset')}
         </Text>
 
         <View style={{ marginTop: spacing.xl }}>
-          <Button label="Save New Value" onPress={handleSave} variant="primary" size="lg" />
+          <Button label={t('ui.updateAssetValueSheet.saveNewValue')} onPress={handleSave} variant="primary" size="lg" />
         </View>
       </View>
     </BottomSheet>

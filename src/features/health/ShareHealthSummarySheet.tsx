@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { ShieldCheck, Share2 } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 
+import { t } from '../../i18n';
 interface ShareHealthSummarySheetProps {
   visible: boolean;
   onClose: () => void;
@@ -19,7 +20,7 @@ export function ShareHealthSummarySheet({
   const { colors, typography, spacing, radii } = useTheme();
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Share Health Card">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.shareHealthSummarySheet.shareHealthCard')}>
       <View style={styles.container}>
         <View
           style={[
@@ -53,7 +54,7 @@ export function ShareHealthSummarySheet({
                 fontSize: 11,
               }}
             >
-              MYLEDJA FINANCIAL HEALTH
+              {t('ui.shareHealthSummarySheet.myledjaFinancialHealth')}
             </Text>
           </View>
 
@@ -98,13 +99,13 @@ export function ShareHealthSummarySheet({
                 marginLeft: 4,
               }}
             >
-              Private financial numbers & account balances are completely masked.
+              {t('ui.shareHealthSummarySheet.privateFinancialNumbersAndAccount')}
             </Text>
           </View>
         </View>
 
         <Button
-          label="Copy Shareable Link"
+          label={t('ui.shareHealthSummarySheet.copyShareableLink')}
           onPress={onClose}
           variant="primary"
           size="lg"

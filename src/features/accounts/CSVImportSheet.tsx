@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { FileSpreadsheet, UploadCloud, CheckCircle2, AlertCircle } from 'lucide-react-native';
+import { FileSpreadsheet, UploadCloud, CheckCircle2 } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 
+import { t } from '../../i18n';
 interface CSVImportSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -76,7 +77,7 @@ export function CSVImportSheet({
                 },
               ]}
             >
-              Choose bank statement CSV
+              {t('ui.csvimportSheet.chooseBankStatementCsv')}
             </Text>
             <Text
               style={[
@@ -90,7 +91,7 @@ export function CSVImportSheet({
                 },
               ]}
             >
-              Supports GTBank, Access, Zenith, Kuda, Moniepoint & standard bank exports.
+              {t('ui.csvimportSheet.supportsGtbankAccessZenithKuda')}
             </Text>
           </TouchableOpacity>
         ) : (
@@ -126,7 +127,7 @@ export function CSVImportSheet({
                       fontSize: typography.sizes.xs,
                     }}
                   >
-                    Ready • {parsedCount} transactions detected
+                    {t('ui.csvimportSheet.ready')}{' '}{parsedCount}{' '}{t('ui.csvimportSheet.transactionsDetected')}
                   </Text>
                 </View>
                 <CheckCircle2 size={20} color={colors.statusSuccess} />
@@ -150,7 +151,7 @@ export function CSVImportSheet({
                     fontFamily: typography.fonts.regular,
                   }}
                 >
-                  Columns matched: Date ➔ Date, Narration ➔ Description, Amount ➔ Amount
+                  {t('ui.csvimportSheet.columnsMatchedDateDateNarration')}
                 </Text>
               </View>
             </View>

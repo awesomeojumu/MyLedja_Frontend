@@ -22,6 +22,7 @@ import { QuickTransactionSheet } from '../dashboard/QuickTransactionSheet';
 import { AccountBalanceChart } from './AccountBalanceChart';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 export interface AccountLedgerItem {
   id: string;
   date: string;
@@ -200,7 +201,7 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
                   letterSpacing: 0.5,
                 }}
               >
-                Current Balance
+                {t('ui.accountDetailScreen.currentBalance')}
               </Text>
               <View style={styles.amountBadgeRow}>
                 <Text
@@ -231,7 +232,7 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
                       fontSize: 11,
                     }}
                   >
-                    Cleared: {formatNaira(clearedBalanceMinor)}
+                    {t('ui.accountDetailScreen.cleared')}{' '}{formatNaira(clearedBalanceMinor)}
                   </Text>
                 </View>
               </View>
@@ -272,7 +273,7 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
                   marginLeft: 4,
                 }}
               >
-                Reconcile
+                {t('ui.accountDetailScreen.reconcile')}
               </Text>
             </TouchableOpacity>
 
@@ -298,7 +299,7 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
                   marginLeft: 4,
                 }}
               >
-                Import CSV
+                {t('ui.accountDetailScreen.importCsv')}
               </Text>
             </TouchableOpacity>
 
@@ -324,7 +325,7 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
                   marginLeft: 4,
                 }}
               >
-                Smart Reader
+                {t('ui.accountDetailScreen.smartReader')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -353,7 +354,7 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
               fontSize: typography.sizes.md,
             }}
           >
-            Account Activity
+            {t('ui.accountDetailScreen.accountActivity')}
           </Text>
           <TouchableOpacity
             onPress={() => setAddTxVisible(true)}
@@ -376,14 +377,14 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
                 marginLeft: 4,
               }}
             >
-              Add Entry
+              {t('ui.accountDetailScreen.addEntry')}
             </Text>
           </TouchableOpacity>
         </View>
 
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            placeholder="Search transactions..."
+            placeholder={t('ui.accountDetailScreen.searchTransactions')}
             value={search}
             onChangeText={setSearch}
             leftElement={<Search size={16} color={colors.textTertiary} />}
@@ -399,7 +400,7 @@ export function AccountDetailScreen({ accountId }: AccountDetailScreenProps) {
                 fontSize: typography.sizes.bodySm,
               }}
             >
-              No transactions recorded for this account yet.
+              {t('ui.accountDetailScreen.noTransactionsRecordedForThis')}
             </Text>
           </View>
         ) : (

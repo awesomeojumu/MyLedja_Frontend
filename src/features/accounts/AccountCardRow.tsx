@@ -51,39 +51,39 @@ const TYPE_LABELS: Record<string, string> = {
   property: 'Property Asset',
 };
 
+/** The icon for an account's purpose. */
+function iconFor(type: AccountData['type']) {
+  switch (type) {
+    case 'income':
+      return Coins;
+    case 'operating':
+    case 'wallet':
+      return Wallet;
+    case 'bills':
+      return Receipt;
+    case 'emergency':
+      return ShieldCheck;
+    case 'savings':
+    case 'checking':
+    case 'current':
+      return Landmark;
+    case 'investment':
+      return TrendingUp;
+    case 'project':
+      return Target;
+    case 'credit':
+    case 'loan':
+      return CreditCard;
+    case 'property':
+      return Building;
+    default:
+      return Landmark;
+  }
+}
+
 export function AccountCardRow({ account, privacyMode, onPress }: AccountCardRowProps) {
   const { colors, typography, spacing, radii } = useTheme();
 
-  const getIcon = () => {
-    switch (account.type) {
-      case 'income':
-        return Coins;
-      case 'operating':
-      case 'wallet':
-        return Wallet;
-      case 'bills':
-        return Receipt;
-      case 'emergency':
-        return ShieldCheck;
-      case 'savings':
-      case 'checking':
-      case 'current':
-        return Landmark;
-      case 'investment':
-        return TrendingUp;
-      case 'project':
-        return Target;
-      case 'credit':
-      case 'loan':
-        return CreditCard;
-      case 'property':
-        return Building;
-      default:
-        return Landmark;
-    }
-  };
-
-  const IconComponent = getIcon();
   const isNegative = account.balanceMinor < 0n;
   const balanceColor = isNegative ? colors.statusDanger : colors.textPrimary;
   const formattedBalance = privacyMode
@@ -117,7 +117,7 @@ export function AccountCardRow({ account, privacyMode, onPress }: AccountCardRow
             },
           ]}
         >
-          <IconComponent size={18} color={isNegative ? colors.statusDanger : colors.primary} />
+          {React.createElement(iconFor(account.type), { size: 18, color: isNegative ? colors.statusDanger : colors.primary })}
         </View>
 
         <View style={styles.textContainer}>

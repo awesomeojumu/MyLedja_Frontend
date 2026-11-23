@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { useTheme, BottomSheet, CurrencyInput, TextInput, Button } from '../../design';
 import { parseAmount } from '../../money';
 
+import { t as i18nT } from '../../i18n';
 interface SpendFromGoalSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -51,8 +52,8 @@ export function SpendFromGoalSheet({
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            label="What are you buying?"
-            placeholder="e.g. Flight ticket, Mac Studio down payment"
+            label={i18nT('ui.spendFromGoalSheet.whatAreYouBuying')}
+            placeholder={i18nT('ui.spendFromGoalSheet.eGFlightTicketMac')}
             value={payee}
             onChangeText={(t) => {
               setPayee(t);
@@ -65,7 +66,7 @@ export function SpendFromGoalSheet({
 
         <View style={{ marginBottom: spacing.lg }}>
           <CurrencyInput
-            label="Amount to Spend"
+            label={i18nT('ui.spendFromGoalSheet.amountToSpend')}
             value={amountText}
             onChangeText={(t) => {
               setAmountText(t);
@@ -75,7 +76,7 @@ export function SpendFromGoalSheet({
         </View>
 
         <Button
-          label="Confirm Purchase"
+          label={i18nT('ui.spendFromGoalSheet.confirmPurchase')}
           onPress={handleSave}
           variant="primary"
           size="lg"

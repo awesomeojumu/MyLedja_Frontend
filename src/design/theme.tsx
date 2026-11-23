@@ -64,7 +64,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemColorScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>(getInitialThemeMode);
   const [accent, setAccentState] = useState<ThemeAccent>(getInitialAccent);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [, setIsLoaded] = useState(false);
 
   useEffect(() => {
     async function loadSavedTheme() {
@@ -126,10 +126,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return mode === 'dark';
   }, [mode, systemColorScheme]);
 
-  const toggleTheme = () => {
-    setThemeMode(isDark ? 'light' : 'dark');
-  };
-
   const colors = useMemo(() => {
     const base = isDark ? darkColors : lightColors;
     const accentDef = THEME_ACCENTS.find((a) => a.id === accent) ?? THEME_ACCENTS[0]!;
@@ -151,7 +147,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       radii,
       setThemeMode,
       setAccent,
-      toggleTheme,
+      toggleTheme: () => setThemeMode(isDark ? 'light' : 'dark'),
     }),
     [mode, isDark, accent, colors]
   );

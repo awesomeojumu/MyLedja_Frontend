@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  TextInput as RNTextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -14,34 +13,37 @@ import {
   Plus,
   Minus,
   Zap,
-  Sliders,
-  ShieldCheck,
   Check,
   CheckCircle2,
   RotateCcw,
-  Sparkles,
-  HelpCircle,
   Tag,
   AlertTriangle,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
-  TrendingUp,
-  Receipt,
-  Heart,
-  Landmark,
   Trash2,
   Settings,
-  Layers,
 } from 'lucide-react-native';
-import { useTheme, Button, CurrencyInput } from '../../design';
+import { useTheme, CurrencyInput } from '../../design';
 import { useFinancialRules } from './RulesContext';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
 import { AllocationPillar } from '../../data/rulesModel';
 import { AddEarmarkedRuleSheet } from './AddEarmarkedRuleSheet';
 import { formatNaira, parseAmount } from '../../money';
 
+import { t } from '../../i18n';
 type RulesTab = 'framework' | 'tax_tithe' | 'earmarked' | 'sub_allocation';
+
+/** Shown when the structure has no pillars at all. */
+const FALLBACK_PILLAR: AllocationPillar = {
+  id: 'living_needs',
+  name: 'Living & Needs',
+  percentage: 50,
+  color: '#2563EB',
+  icon: 'Home',
+  purposeAccountType: 'operating',
+  description: 'Living expenses',
+  mappedExpenseCategories: ['Housing', 'Food', 'Transportation', 'Utilities', 'Healthcare'],
+};
 
 export function RulesScreen() {
   const { colors, typography, spacing, radii } = useTheme();
@@ -53,7 +55,6 @@ export function RulesScreen() {
     taxRule,
     titheRule,
     earmarkedRules,
-    subAllocation,
     applyPresetFramework,
     updatePillarPercentage,
     updateTaxRule,
@@ -66,7 +67,6 @@ export function RulesScreen() {
     totalPercentage,
     isTotal100Percent,
     setCategorySubAllocation,
-    setSubcategoryAllocation,
     autoBalanceCategories,
     getCategoryPercentage,
   } = useFinancialRules();
@@ -78,16 +78,6 @@ export function RulesScreen() {
   const [selectedPillarId, setSelectedPillarId] = useState<string>('living_needs');
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
 
-  const fallbackPillar: AllocationPillar = {
-    id: 'living_needs',
-    name: 'Living & Needs',
-    percentage: 50,
-    color: '#2563EB',
-    icon: 'Home',
-    purposeAccountType: 'operating',
-    description: 'Living expenses',
-    mappedExpenseCategories: ['Housing', 'Food', 'Transportation', 'Utilities', 'Healthcare'],
-  };
 
   // Active pillar to sub-allocate
   const selectedPillar: AllocationPillar = useMemo(() => {
@@ -97,7 +87,7 @@ export function RulesScreen() {
         (p) => p.id === 'living_needs' || p.id === 'living' || p.id === 'needs' || p.id === 'spending'
       ) ||
       activeFramework.pillars[0] ||
-      fallbackPillar
+      FALLBACK_PILLAR
     );
   }, [activeFramework, selectedPillarId]);
 
@@ -116,7 +106,7 @@ export function RulesScreen() {
     return targetCategories.reduce((sum, cat) => {
       return sum + getCategoryPercentage(cat.name, 0);
     }, 0);
-  }, [targetCategories, getCategoryPercentage, subAllocation]);
+  }, [targetCategories, getCategoryPercentage]);
 
   const isPillarSubBalanced = totalPillarAllocated === 100;
 
@@ -162,7 +152,7 @@ export function RulesScreen() {
               },
             ]}
           >
-            Financial Blueprint & Rules
+            {t('ui.rulesScreen.financialBlueprintAndRules')}
           </Text>
           <Text
             style={{
@@ -171,7 +161,7 @@ export function RulesScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Automate how every incoming Naira is allocated across life & wealth
+            {t('ui.rulesScreen.automateHowEveryIncomingNaira')}
           </Text>
         </View>
 
@@ -197,7 +187,7 @@ export function RulesScreen() {
               marginLeft: 4,
             }}
           >
-            Reset
+            {t('ui.rulesScreen.reset')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -236,7 +226,7 @@ export function RulesScreen() {
                   fontSize: typography.sizes.bodySm,
                 }}
               >
-                Live Allocation Simulator
+                {t('ui.rulesScreen.liveAllocationSimulator')}
               </Text>
             </View>
             <View
@@ -272,14 +262,14 @@ export function RulesScreen() {
               marginBottom: spacing.md,
             }}
           >
-            Test how an incoming payment of any size splits through your financial rules:
+            {t('ui.rulesScreen.testHowAnIncomingPayment')}
           </Text>
 
           {/* Amount & Scenario Row */}
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: spacing.md }}>
             <View style={{ flex: 1 }}>
               <CurrencyInput
-                label="Simulated Inflow"
+                label={t('ui.rulesScreen.simulatedInflow')}
                 value={testAmountStr}
                 onChangeText={setTestAmountStr}
                 placeholder="100,000.00"
@@ -312,7 +302,7 @@ export function RulesScreen() {
                   ]}
                 >
                   <Text style={{ fontSize: 11, fontFamily: typography.fonts.medium, color: colors.textPrimary }}>
-                    ₦100k Salary
+                    {t('ui.rulesScreen.100kSalary')}
                   </Text>
                 </TouchableOpacity>
 
@@ -328,7 +318,7 @@ export function RulesScreen() {
                   ]}
                 >
                   <Text style={{ fontSize: 11, fontFamily: typography.fonts.medium, color: colors.textPrimary }}>
-                    ₦1M Rent Gift
+                    {t('ui.rulesScreen.1mRentGift')}
                   </Text>
                 </TouchableOpacity>
 
@@ -344,7 +334,7 @@ export function RulesScreen() {
                   ]}
                 >
                   <Text style={{ fontSize: 11, fontFamily: typography.fonts.medium, color: colors.textPrimary }}>
-                    ₦500k Business
+                    {t('ui.rulesScreen.500kBusiness')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -377,7 +367,7 @@ export function RulesScreen() {
                 {simulation.taxAmountMinor > 0n && (
                   <View style={styles.deductionPill}>
                     <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-                      Tax Provision ({taxRule.ratePercentage}%):{' '}
+                      {t('ui.rulesScreen.taxProvision')}{taxRule.ratePercentage}%):{' '}
                       <Text style={{ color: colors.statusDanger, fontFamily: typography.fonts.semiBold }}>
                         {formatNaira(simulation.taxAmountMinor)}
                       </Text>
@@ -387,7 +377,7 @@ export function RulesScreen() {
                 {simulation.titheAmountMinor > 0n && (
                   <View style={styles.deductionPill}>
                     <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-                      Tithe / Spiritual ({titheRule.ratePercentage}%):{' '}
+                      {t('ui.rulesScreen.titheSpiritual')}{titheRule.ratePercentage}%):{' '}
                       <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold }}>
                         {formatNaira(simulation.titheAmountMinor)}
                       </Text>
@@ -442,7 +432,7 @@ export function RulesScreen() {
                       marginTop: 2,
                     }}
                   >
-                    → {item.pillar.purposeAccountType} account
+                    → {item.pillar.purposeAccountType}{' '}{t('ui.rulesScreen.account')}
                   </Text>
                 </View>
               ))}
@@ -484,7 +474,7 @@ export function RulesScreen() {
                 fontSize: typography.sizes.xs,
               }}
             >
-              Framework ({totalPercentage}%)
+              {t('ui.rulesScreen.framework')}{totalPercentage}%)
             </Text>
           </TouchableOpacity>
 
@@ -510,7 +500,7 @@ export function RulesScreen() {
                 fontSize: typography.sizes.xs,
               }}
             >
-              Tax & Tithe
+              {t('ui.rulesScreen.taxAndTithe')}
             </Text>
           </TouchableOpacity>
 
@@ -536,7 +526,7 @@ export function RulesScreen() {
                 fontSize: typography.sizes.xs,
               }}
             >
-              Earmarked ({earmarkedRules.filter((r) => r.active).length})
+              {t('ui.rulesScreen.earmarked')}{earmarkedRules.filter((r) => r.active).length})
             </Text>
           </TouchableOpacity>
 
@@ -564,7 +554,7 @@ export function RulesScreen() {
                 fontSize: typography.sizes.xs,
               }}
             >
-              Sub-Allocations
+              {t('ui.rulesScreen.subAllocations')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -579,7 +569,7 @@ export function RulesScreen() {
                 { color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: typography.sizes.xs },
               ]}
             >
-              POPULAR BLUEPRINT PRESETS
+              {t('ui.rulesScreen.popularBlueprintPresets')}
             </Text>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
@@ -726,7 +716,7 @@ export function RulesScreen() {
                       ]}
                     >
                       <Text style={{ fontSize: 10, color: colors.textSecondary, fontFamily: typography.fonts.medium }}>
-                        Maps to: {pillar.purposeAccountType} account
+                        {t('ui.rulesScreen.mapsTo')}{' '}{pillar.purposeAccountType}{' '}{t('ui.rulesScreen.account')}
                       </Text>
                     </View>
                   </View>
@@ -788,10 +778,10 @@ export function RulesScreen() {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                    Tithe & Spiritual Giving (Off-The-Top)
+                    {t('ui.rulesScreen.titheAndSpiritualGivingOff')}
                   </Text>
                   <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
-                    Automatically sets aside religious tithes before distributing to living expenses
+                    {t('ui.rulesScreen.automaticallySetsAsideReligiousTithes')}
                   </Text>
                 </View>
                 <Switch
@@ -805,7 +795,7 @@ export function RulesScreen() {
                 <View style={{ paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm }}>
                     <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>
-                      Tithe Percentage:
+                      {t('ui.rulesScreen.tithePercentage')}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 6 }}>
                       {[10, 15, 20].map((rate) => (
@@ -837,7 +827,7 @@ export function RulesScreen() {
 
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>
-                      Calculation Base:
+                      {t('ui.rulesScreen.calculationBase')}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 6 }}>
                       <TouchableOpacity
@@ -852,7 +842,7 @@ export function RulesScreen() {
                         ]}
                       >
                         <Text style={{ fontSize: 11, color: titheRule.base === 'gross' ? colors.primary : colors.textPrimary }}>
-                          Gross Income
+                          {t('ui.rulesScreen.grossIncome')}
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -867,7 +857,7 @@ export function RulesScreen() {
                         ]}
                       >
                         <Text style={{ fontSize: 11, color: titheRule.base === 'net_after_tax' ? colors.primary : colors.textPrimary }}>
-                          Net After Tax
+                          {t('ui.rulesScreen.netAfterTax')}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -892,10 +882,10 @@ export function RulesScreen() {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                    Tax Withholding / Self-Employed Provision
+                    {t('ui.rulesScreen.taxWithholdingSelfEmployedProvision')}
                   </Text>
                   <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
-                    Withhold tax provision from business & freelance income before splitting
+                    {t('ui.rulesScreen.withholdTaxProvisionFromBusiness')}
                   </Text>
                 </View>
                 <Switch
@@ -909,7 +899,7 @@ export function RulesScreen() {
                 <View style={{ paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
                     <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>
-                      Tax Provision Rate:
+                      {t('ui.rulesScreen.taxProvisionRate')}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 6 }}>
                       {[5, 10, 15, 20].map((rate) => (
@@ -940,7 +930,7 @@ export function RulesScreen() {
                   </View>
 
                   <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginBottom: 6 }}>
-                    Exempt Sources (Tax is NOT deducted from these):
+                    {t('ui.rulesScreen.exemptSourcesTaxIsNot')}
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                     {['Employment (PAYE already deducted)', 'Gifts & Support', 'Government Grants'].map((source, i) => (
@@ -981,10 +971,10 @@ export function RulesScreen() {
             >
               <View>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                  Earmarked Inflows (100% Pass-Through)
+                  {t('ui.rulesScreen.earmarkedInflows100PassThrough')}
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
-                  When funds are meant for a specific bill or goal, bypass all splits and route 100% directly.
+                  {t('ui.rulesScreen.whenFundsAreMeantFor')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -996,7 +986,7 @@ export function RulesScreen() {
               >
                 <Plus size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
                 <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: typography.fonts.semiBold }}>
-                  New Rule
+                  {t('ui.rulesScreen.newRule')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1029,19 +1019,21 @@ export function RulesScreen() {
                         ]}
                       >
                         <Text style={{ color: colors.primary, fontSize: 10, fontFamily: typography.fonts.semiBold }}>
-                          100% Direct
+                          {t('ui.rulesScreen.100Direct')}
                         </Text>
                       </View>
                     </View>
 
                     <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 4 }}>
-                      When {rule.triggerType === 'keyword' ? 'note contains' : 'source is'}:{' '}
+                      {t('ui.rulesScreen.when')}{' '}{rule.triggerType === 'keyword' ? 'note contains' : 'source is'}:{' '}
                       <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold }}>
-                        "{rule.triggerValue}"
+                        {'\u201C'}
+                        {rule.triggerValue}
+                        {'\u201D'}
                       </Text>{' '}
-                      → routes directly to{' '}
+                      {t('ui.rulesScreen.routesDirectlyTo')}{' '}
                       <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold }}>
-                        {rule.targetCategory} ({rule.targetAccountType} account)
+                        {rule.targetCategory} ({rule.targetAccountType}{' '}{t('ui.rulesScreen.account2')}
                       </Text>
                     </Text>
                   </View>
@@ -1081,7 +1073,7 @@ export function RulesScreen() {
                     fontSize: typography.sizes.bodySm,
                   }}
                 >
-                  {selectedPillar.name} Sub-Allocation ({selectedPillar.percentage}% Pillar)
+                  {selectedPillar.name}{' '}{t('ui.rulesScreen.subAllocation')}{selectedPillar.percentage}{t('ui.rulesScreen.pillar')}
                 </Text>
                 <Text
                   style={{
@@ -1090,7 +1082,7 @@ export function RulesScreen() {
                     marginTop: 2,
                   }}
                 >
-                  Target budget envelope ratios across your major categories and subcategories enabled in Settings.
+                  {t('ui.rulesScreen.targetBudgetEnvelopeRatiosAcross')}
                 </Text>
               </View>
 
@@ -1109,7 +1101,7 @@ export function RulesScreen() {
               >
                 <Settings size={12} color={colors.primary} style={{ marginRight: 4 }} />
                 <Text style={{ fontSize: 11, color: colors.primary, fontFamily: typography.fonts.medium }}>
-                  Settings
+                  {t('ui.rulesScreen.settings')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1192,7 +1184,7 @@ export function RulesScreen() {
                     marginTop: 2,
                   }}
                 >
-                  {targetCategories.length} major active categories from your Settings are allocated below.
+                  {targetCategories.length}{' '}{t('ui.rulesScreen.majorActiveCategoriesFromYour')}
                 </Text>
               </View>
 
@@ -1214,7 +1206,7 @@ export function RulesScreen() {
                     color: isPillarSubBalanced ? colors.primary : '#B45309',
                   }}
                 >
-                  Auto-Balance
+                  {t('ui.rulesScreen.autoBalance')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1275,7 +1267,7 @@ export function RulesScreen() {
                             fontFamily: typography.fonts.medium,
                           }}
                         >
-                          {activeSubs.length} active subcategories
+                          {activeSubs.length}{' '}{t('ui.rulesScreen.activeSubcategories')}
                         </Text>
                         {isExpanded ? (
                           <ChevronUp size={13} color={colors.primary} style={{ marginLeft: 3 }} />
@@ -1346,7 +1338,7 @@ export function RulesScreen() {
                           marginTop: 3,
                         }}
                       >
-                        {incomeEquivalent}% of total income
+                        {incomeEquivalent}{t('ui.rulesScreen.ofTotalIncome')}
                       </Text>
                     </View>
                   </View>
@@ -1378,7 +1370,7 @@ export function RulesScreen() {
                             letterSpacing: 0.5,
                           }}
                         >
-                          Subcategories (Enabled in Settings):
+                          {t('ui.rulesScreen.subcategoriesEnabledInSettings')}
                         </Text>
                         <TouchableOpacity
                           onPress={() => router.push('/settings')}
@@ -1391,14 +1383,14 @@ export function RulesScreen() {
                               fontFamily: typography.fonts.medium,
                             }}
                           >
-                            Edit in Settings →
+                            {t('ui.rulesScreen.editInSettings')}
                           </Text>
                         </TouchableOpacity>
                       </View>
 
                       {activeSubs.length === 0 ? (
                         <Text style={{ fontSize: 11, color: colors.textTertiary, fontStyle: 'italic', marginVertical: 4 }}>
-                          No subcategories enabled in Settings. All expenses under this category share the main envelope.
+                          {t('ui.rulesScreen.noSubcategoriesEnabledInSettings')}
                         </Text>
                       ) : (
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>

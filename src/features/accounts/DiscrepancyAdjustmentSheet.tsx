@@ -4,6 +4,7 @@ import { AlertCircle } from 'lucide-react-native';
 import { useTheme, BottomSheet, TextInput, Button } from '../../design';
 import { formatNaira } from '../../money';
 
+import { t } from '../../i18n';
 interface DiscrepancyAdjustmentSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -21,7 +22,7 @@ export function DiscrepancyAdjustmentSheet({
   const [reason, setReason] = useState('Reconciliation Adjustment');
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Balance Adjustment">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.discrepancyAdjustmentSheet.balanceAdjustment')}>
       <View style={styles.container}>
         <View
           style={[
@@ -45,7 +46,7 @@ export function DiscrepancyAdjustmentSheet({
                 marginLeft: spacing.xs,
               }}
             >
-              Unexplained Difference
+              {t('ui.discrepancyAdjustmentSheet.unexplainedDifference')}
             </Text>
           </View>
           <Text
@@ -56,25 +57,25 @@ export function DiscrepancyAdjustmentSheet({
               marginTop: spacing.xs,
             }}
           >
-            Your cleared balance differs from your bank statement by{' '}
+            {t('ui.discrepancyAdjustmentSheet.yourClearedBalanceDiffersFrom')}{' '}
             <Text style={{ fontFamily: typography.fonts.semiBold }}>
               {formatNaira(discrepancyMinor)}
             </Text>
-            . We can create a balancing entry to bring your ledger in sync.
+            {t('ui.discrepancyAdjustmentSheet.weCanCreateABalancing')}
           </Text>
         </View>
 
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            label="Adjustment Reason"
+            label={t('ui.discrepancyAdjustmentSheet.adjustmentReason')}
             value={reason}
             onChangeText={setReason}
-            placeholder="e.g. Unaccounted bank fee or rounding"
+            placeholder={t('ui.discrepancyAdjustmentSheet.eGUnaccountedBankFee')}
           />
         </View>
 
         <Button
-          label="Post Adjustment & Finish"
+          label={t('ui.discrepancyAdjustmentSheet.postAdjustmentAndFinish')}
           onPress={() => {
             onConfirmAdjustment(reason);
             onClose();

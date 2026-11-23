@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Sparkles, Plus, Check } from 'lucide-react-native';
-import { useTheme, BottomSheet, Button } from '../../design';
+import { Sparkles, Plus } from 'lucide-react-native';
+import { useTheme, BottomSheet } from '../../design';
 import { formatNaira } from '../../money';
 
+import { t } from '../../i18n';
 interface DetectedCharge {
   id: string;
   name: string;
@@ -32,7 +33,7 @@ export function RecurringSuggestionsPopup({
   ];
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Detected Recurring Bills">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.recurringSuggestionsPopup.detectedRecurringBills')}>
       <View style={styles.container}>
         <View
           style={[
@@ -55,7 +56,7 @@ export function RecurringSuggestionsPopup({
                 marginLeft: spacing.xs,
               }}
             >
-              Smart Pattern Detection
+              {t('ui.recurringSuggestionsPopup.smartPatternDetection')}
             </Text>
           </View>
           <Text
@@ -66,7 +67,7 @@ export function RecurringSuggestionsPopup({
               marginTop: 4,
             }}
           >
-            We noticed these charges recurring on similar days across recent months. Tap to add them to your Plan.
+            {t('ui.recurringSuggestionsPopup.weNoticedTheseChargesRecurring')}
           </Text>
         </View>
 
@@ -97,7 +98,7 @@ export function RecurringSuggestionsPopup({
                   fontSize: typography.sizes.xs,
                 }}
               >
-                Due on the {item.dueDay}th • Monthly
+                {t('ui.recurringSuggestionsPopup.dueOnThe')}{' '}{item.dueDay}{t('ui.recurringSuggestionsPopup.thMonthly')}
               </Text>
             </View>
 
@@ -133,7 +134,7 @@ export function RecurringSuggestionsPopup({
                     marginLeft: 2,
                   }}
                 >
-                  Add
+                  {t('ui.recurringSuggestionsPopup.add')}
                 </Text>
               </TouchableOpacity>
             </View>

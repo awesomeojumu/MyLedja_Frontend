@@ -3,8 +3,6 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
-  Bell,
-  CheckCircle2,
   AlertTriangle,
   ShieldAlert,
   Calendar,
@@ -14,6 +12,7 @@ import { useTheme } from '../../design';
 import { SecurityAlertSheet } from './SecurityAlertSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 interface NotificationItemUI {
   id: string;
   title: string;
@@ -124,7 +123,7 @@ export function NotificationsScreen() {
               },
             ]}
           >
-            Notifications
+            {t('ui.notificationsScreen.notifications')}
           </Text>
           <Text
             style={{
@@ -133,7 +132,7 @@ export function NotificationsScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Alerts & Activity Updates
+            {t('ui.notificationsScreen.alertsAndActivityUpdates')}
           </Text>
         </View>
 
@@ -158,7 +157,7 @@ export function NotificationsScreen() {
               marginLeft: 4,
             }}
           >
-            Mark all read
+            {t('ui.notificationsScreen.markAllRead')}
           </Text>
         </TouchableOpacity>
       </View>

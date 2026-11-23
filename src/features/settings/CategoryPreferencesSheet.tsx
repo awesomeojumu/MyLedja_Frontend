@@ -9,18 +9,17 @@ import {
   TextInput as RNTextInput,
 } from 'react-native';
 import {
-  Layers,
   Search,
   Check,
   ChevronDown,
   ChevronUp,
   RotateCcw,
-  Sparkles,
 } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
 import { CategoryDefinition } from '../../data/categoriesTaxonomy';
 
+import { t } from '../../i18n';
 interface CategoryPreferencesSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -69,7 +68,7 @@ export function CategoryPreferencesSheet({ visible, onClose }: CategoryPreferenc
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Customize Categories"
+      title={t('ui.categoryPreferencesSheet.customizeCategories')}
       subtitle="Choose which categories appear in your entry dropdowns"
     >
       <View style={styles.container}>
@@ -113,7 +112,7 @@ export function CategoryPreferencesSheet({ visible, onClose }: CategoryPreferenc
                 },
               ]}
             >
-              Income ({enabledIncomeIds.length}/{allIncomeCategories.length})
+              {t('ui.categoryPreferencesSheet.income')}{enabledIncomeIds.length}/{allIncomeCategories.length})
             </Text>
           </TouchableOpacity>
 
@@ -145,7 +144,7 @@ export function CategoryPreferencesSheet({ visible, onClose }: CategoryPreferenc
                 },
               ]}
             >
-              Expense ({enabledExpenseIds.length}/{allExpenseCategories.length})
+              {t('ui.categoryPreferencesSheet.expense')}{enabledExpenseIds.length}/{allExpenseCategories.length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -200,7 +199,7 @@ export function CategoryPreferencesSheet({ visible, onClose }: CategoryPreferenc
                 marginLeft: 4,
               }}
             >
-              Reset
+              {t('ui.categoryPreferencesSheet.reset')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -262,7 +261,7 @@ export function CategoryPreferencesSheet({ visible, onClose }: CategoryPreferenc
                               fontFamily: typography.fonts.semiBold,
                             }}
                           >
-                            ACTIVE
+                            {t('ui.categoryPreferencesSheet.active')}
                           </Text>
                         </View>
                       )}
@@ -303,7 +302,7 @@ export function CategoryPreferencesSheet({ visible, onClose }: CategoryPreferenc
                           marginRight: 2,
                         }}
                       >
-                        {activeSubCount}/{totalSubCount} subs
+                        {activeSubCount}/{totalSubCount}{' '}{t('ui.categoryPreferencesSheet.subs')}
                       </Text>
                       {isExpanded ? (
                         <ChevronUp size={14} color={colors.textTertiary} />
@@ -349,7 +348,7 @@ export function CategoryPreferencesSheet({ visible, onClose }: CategoryPreferenc
                           textTransform: 'uppercase',
                         }}
                       >
-                        Select Subcategories ({activeSubCount}/{totalSubCount}):
+                        {t('ui.categoryPreferencesSheet.selectSubcategories')}{activeSubCount}/{totalSubCount}):
                       </Text>
                       <View style={{ flexDirection: 'row', gap: 8 }}>
                         <TouchableOpacity
@@ -363,7 +362,7 @@ export function CategoryPreferencesSheet({ visible, onClose }: CategoryPreferenc
                               fontFamily: typography.fonts.semiBold,
                             }}
                           >
-                            Select All
+                            {t('ui.categoryPreferencesSheet.selectAll')}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -377,7 +376,7 @@ export function CategoryPreferencesSheet({ visible, onClose }: CategoryPreferenc
                               fontFamily: typography.fonts.medium,
                             }}
                           >
-                            Clear All
+                            {t('ui.categoryPreferencesSheet.clearAll')}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -427,7 +426,7 @@ export function CategoryPreferencesSheet({ visible, onClose }: CategoryPreferenc
         </ScrollView>
 
         <View style={{ marginTop: spacing.md }}>
-          <Button label="Done Customizing" onPress={onClose} variant="primary" size="lg" />
+          <Button label={t('ui.categoryPreferencesSheet.doneCustomizing')} onPress={onClose} variant="primary" size="lg" />
         </View>
       </View>
     </BottomSheet>

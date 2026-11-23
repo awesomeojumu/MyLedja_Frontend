@@ -7,8 +7,6 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   ChevronRight,
-  User,
-  Building,
   CreditCard,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
@@ -17,6 +15,7 @@ import { RecordDebtSheet, type AddedDebt } from './RecordDebtSheet';
 import { QuickRepaymentSheet } from './QuickRepaymentSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 interface DebtItemUI {
   id: string;
   type: 'lent' | 'borrowed';
@@ -150,7 +149,7 @@ export function DebtsScreen() {
               },
             ]}
           >
-            Debts & Lending
+            {t('ui.debtsScreen.debtsAndLending')}
           </Text>
           <Text
             style={{
@@ -159,7 +158,7 @@ export function DebtsScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Receivables & Borrowed Money
+            {t('ui.debtsScreen.receivablesAndBorrowedMoney')}
           </Text>
         </View>
 
@@ -184,7 +183,7 @@ export function DebtsScreen() {
               marginLeft: 4,
             }}
           >
-            Record Debt
+            {t('ui.debtsScreen.recordDebt')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -215,7 +214,7 @@ export function DebtsScreen() {
               letterSpacing: 0.5,
             }}
           >
-            Net Debt Position
+            {t('ui.debtsScreen.netDebtPosition')}
           </Text>
           <Text
             style={{
@@ -250,7 +249,7 @@ export function DebtsScreen() {
                   fontFamily: typography.fonts.regular,
                 }}
               >
-                Money Lent (People owe you)
+                {t('ui.debtsScreen.moneyLentPeopleOweYou')}
               </Text>
               <Text
                 style={{
@@ -272,7 +271,7 @@ export function DebtsScreen() {
                   fontFamily: typography.fonts.regular,
                 }}
               >
-                Money Borrowed (You owe)
+                {t('ui.debtsScreen.moneyBorrowedYouOwe')}
               </Text>
               <Text
                 style={{
@@ -320,7 +319,7 @@ export function DebtsScreen() {
                 fontSize: typography.sizes.xs,
               }}
             >
-              Money I Lent ({debts.filter((d) => d.type === 'lent').length})
+              {t('ui.debtsScreen.moneyILent')}{debts.filter((d) => d.type === 'lent').length})
             </Text>
           </TouchableOpacity>
 
@@ -344,7 +343,7 @@ export function DebtsScreen() {
                 fontSize: typography.sizes.xs,
               }}
             >
-              Money I Borrowed ({debts.filter((d) => d.type === 'borrowed').length})
+              {t('ui.debtsScreen.moneyIBorrowed')}{debts.filter((d) => d.type === 'borrowed').length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -381,7 +380,7 @@ export function DebtsScreen() {
                 maxWidth: 320,
               }}
             >
-              Tap "+ Record Debt" to track personal loans, credit balances, or money owed to you.
+              {t('ui.debtsScreen.tapRecordDebtToTrack')}
             </Text>
           </View>
         ) : (
@@ -455,7 +454,7 @@ export function DebtsScreen() {
                     fontSize: 10,
                   }}
                 >
-                  of {formatNaira(item.originalMinor)}
+                  {t('ui.debtsScreen.of')}{' '}{formatNaira(item.originalMinor)}
                 </Text>
               </View>
               <ChevronRight size={16} color={colors.textTertiary} style={{ marginLeft: 6 }} />

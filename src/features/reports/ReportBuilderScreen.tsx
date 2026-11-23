@@ -3,15 +3,12 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
-  Sparkles,
-  BarChart,
-  PieChart,
-  Calendar,
   Check,
 } from 'lucide-react-native';
 import { useTheme, Button } from '../../design';
 import { SaveReportSheet } from './SaveReportSheet';
 
+import { t as i18nT } from '../../i18n';
 export function ReportBuilderScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
@@ -51,7 +48,7 @@ export function ReportBuilderScreen() {
               },
             ]}
           >
-            Custom Report Builder
+            {i18nT('ui.reportBuilderScreen.customReportBuilder')}
           </Text>
           <Text
             style={{
@@ -60,7 +57,7 @@ export function ReportBuilderScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            3-Step Analytical Query
+            {i18nT('ui.reportBuilderScreen.3StepAnalyticalQuery')}
           </Text>
         </View>
       </View>
@@ -82,7 +79,7 @@ export function ReportBuilderScreen() {
               },
             ]}
           >
-            1. Select Primary Metric
+            {i18nT('ui.reportBuilderScreen.1SelectPrimaryMetric')}
           </Text>
           <View style={[styles.pillGrid, { gap: spacing.xs }]}>
             {[
@@ -134,7 +131,7 @@ export function ReportBuilderScreen() {
               },
             ]}
           >
-            2. Group & Slice By
+            {i18nT('ui.reportBuilderScreen.2GroupAndSliceBy')}
           </Text>
           <View style={[styles.pillGrid, { gap: spacing.xs }]}>
             {[
@@ -186,7 +183,7 @@ export function ReportBuilderScreen() {
               },
             ]}
           >
-            3. Date Timeframe
+            {i18nT('ui.reportBuilderScreen.3DateTimeframe')}
           </Text>
           <View style={[styles.timeRow, { gap: spacing.xs }]}>
             {[
@@ -225,7 +222,7 @@ export function ReportBuilderScreen() {
 
         {/* Save Report CTA */}
         <Button
-          label="Save & Generate Report"
+          label={i18nT('ui.reportBuilderScreen.saveAndGenerateReport')}
           onPress={() => setSaveSheetVisible(true)}
           variant="primary"
           size="lg"

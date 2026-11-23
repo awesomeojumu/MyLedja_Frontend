@@ -4,6 +4,7 @@ import { MessageSquare, Copy } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 import { formatNaira } from '../../money';
 
+import { t } from '../../i18n';
 interface ReminderMessageSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -27,7 +28,7 @@ export function ReminderMessageSheet({
   }. Whenever you're ready to make a transfer, please send to my GTBank account. Thanks!`;
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="WhatsApp Reminder Generator">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.reminderMessageSheet.whatsappReminderGenerator')}>
       <View style={styles.container}>
         <View
           style={[
@@ -51,7 +52,7 @@ export function ReminderMessageSheet({
                 marginLeft: 4,
               }}
             >
-              PREVIEW MESSAGE
+              {t('ui.reminderMessageSheet.previewMessage')}
             </Text>
           </View>
           <Text
@@ -67,7 +68,7 @@ export function ReminderMessageSheet({
         </View>
 
         <Button
-          label="Copy Message to Clipboard"
+          label={t('ui.reminderMessageSheet.copyMessageToClipboard')}
           onPress={onClose}
           variant="primary"
           size="lg"

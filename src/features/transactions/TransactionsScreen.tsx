@@ -14,6 +14,7 @@ import { ExportTransactionsPopup } from './ExportTransactionsPopup';
 import { QuickTransactionSheet } from '../dashboard/QuickTransactionSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 export function TransactionsScreen() {
   const { colors, typography, spacing, radii } = useTheme();
 
@@ -21,7 +22,6 @@ export function TransactionsScreen() {
   const {
     events: dbEvents,
     accounts: dbAccounts,
-    categories: dbCategories,
     repo,
   } = useDatabaseData();
 
@@ -222,7 +222,7 @@ export function TransactionsScreen() {
                 },
               ]}
             >
-              Transactions Ledger
+              {t('ui.transactionsScreen.transactionsLedger')}
             </Text>
             <Text
               style={{
@@ -232,13 +232,13 @@ export function TransactionsScreen() {
                 marginTop: 2,
               }}
             >
-              Track, organize and review all financial movements
+              {t('ui.transactionsScreen.trackOrganizeAndReviewAll')}
             </Text>
           </View>
 
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Button
-              label="+ Income"
+              label={t('ui.transactionsScreen.income')}
               variant="secondary"
               size="sm"
               onPress={() => {
@@ -247,7 +247,7 @@ export function TransactionsScreen() {
               }}
             />
             <Button
-              label="+ Expense"
+              label={t('ui.transactionsScreen.expense')}
               variant="primary"
               size="sm"
               onPress={() => {
@@ -274,7 +274,7 @@ export function TransactionsScreen() {
         >
           <View style={styles.summaryCol}>
             <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: 11 }}>
-              INFLOW
+              {t('ui.transactionsScreen.inflow')}
             </Text>
             <Text style={{ color: colors.statusSuccess, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.sm + 1, marginTop: 2 }}>
               +{formatNaira(totalInflowMinor)}
@@ -285,7 +285,7 @@ export function TransactionsScreen() {
 
           <View style={styles.summaryCol}>
             <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: 11 }}>
-              OUTFLOW
+              {t('ui.transactionsScreen.outflow')}
             </Text>
             <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.sm + 1, marginTop: 2 }}>
               -{formatNaira(totalOutflowMinor)}
@@ -296,7 +296,7 @@ export function TransactionsScreen() {
 
           <View style={styles.summaryCol}>
             <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.medium, fontSize: 11 }}>
-              NET CASH
+              {t('ui.transactionsScreen.netCash')}
             </Text>
             <Text
               style={{
@@ -351,7 +351,7 @@ export function TransactionsScreen() {
                 },
               ]}
             >
-              No transactions recorded yet
+              {t('ui.transactionsScreen.noTransactionsRecordedYet')}
             </Text>
             <Text
               style={[
@@ -365,10 +365,10 @@ export function TransactionsScreen() {
                 },
               ]}
             >
-              Log an expense or income to track your activity in this ledger.
+              {t('ui.transactionsScreen.logAnExpenseOrIncome')}
             </Text>
             <Button
-              label="+ Record First Transaction"
+              label={t('ui.transactionsScreen.recordFirstTransaction')}
               variant="primary"
               size="sm"
               style={{ marginTop: spacing.md }}
@@ -400,7 +400,7 @@ export function TransactionsScreen() {
                   </Text>
                   {group.dayTotalMinor > 0n && (
                     <Text style={{ color: colors.textTertiary, fontFamily: typography.fonts.regular, fontSize: 11 }}>
-                      Spent: {formatNaira(group.dayTotalMinor)}
+                      {t('ui.transactionsScreen.spent')}{' '}{formatNaira(group.dayTotalMinor)}
                     </Text>
                   )}
                 </View>

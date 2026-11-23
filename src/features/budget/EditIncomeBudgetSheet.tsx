@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { RotateCcw, Settings, ChevronDown, ChevronUp, Tag } from 'lucide-react-native';
+import { Settings, ChevronDown, ChevronUp, Tag } from 'lucide-react-native';
 import { useTheme, BottomSheet, CurrencyInput, Button, Dropdown, formatCurrencyString } from '../../design';
 import { formatNaira, toInputText, parseAmount } from '../../money';
 import { EXPENSE_TAXONOMY } from '../../data/categoriesTaxonomy';
-import type { IncomeStreamItem } from './IncomeProgressCard';
 
+import { t } from '../../i18n';
+import { useSyncOnChange } from '../../lib/useSyncOnChange';
 export interface IncomeCategoryConfig {
   id: string;
   name: string;
@@ -39,7 +40,7 @@ export function EditIncomeBudgetSheet({
   currentIncomeBudgets,
   onSaveIncomeBudgets,
 }: EditIncomeBudgetSheetProps) {
-  const { colors, typography, spacing, radii } = useTheme();
+  const { colors, typography, radii } = useTheme();
   const router = useRouter();
 
   // categoryId -> subcategoryName -> input string
@@ -52,7 +53,8 @@ export function EditIncomeBudgetSheet({
   >({});
 
   // Initialize inputs on open
-  useEffect(() => {
+  // Fill the fields from the props when the sheet opens or what it shows changes.
+  useSyncOnChange([visible, activeIncomeCategories, currentIncomeBudgets], () => {
     if (!visible) return;
 
     const initialSubInputs: Record<string, Record<string, string>> = {};
@@ -87,7 +89,7 @@ export function EditIncomeBudgetSheet({
 
     setSubInputs(initialSubInputs);
     setEarmarkMap(initialEarmarks);
-  }, [visible, activeIncomeCategories, currentIncomeBudgets]);
+  });
 
   // Compute live category totals and total expected income
   const { categoryTotals, totalExpectedMinor } = useMemo(() => {
@@ -145,7 +147,7 @@ export function EditIncomeBudgetSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Plan Monthly Income"
+      title={t('ui.editIncomeBudgetSheet.planMonthlyIncome')}
       subtitle="Configure expected earnings by income stream & subcategory"
     >
       <View style={{ width: '100%' }}>
@@ -174,7 +176,7 @@ export function EditIncomeBudgetSheet({
                   fontFamily: typography.fonts.semiBold,
                 }}
               >
-                Total Expected Income
+                {t('ui.editIncomeBudgetSheet.totalExpectedIncome')}
               </Text>
               <Text
                 style={{
@@ -198,7 +200,7 @@ export function EditIncomeBudgetSheet({
                 }}
               >
                 <Text style={{ fontSize: 10, fontFamily: typography.fonts.semiBold, color: colors.statusSuccess }}>
-                  {activeIncomeCategories.length} Streams
+                  {activeIncomeCategories.length}{' '}{t('ui.editIncomeBudgetSheet.streams')}
                 </Text>
               </View>
 
@@ -211,7 +213,7 @@ export function EditIncomeBudgetSheet({
               >
                 <Settings size={10} color={colors.primary} style={{ marginRight: 3 }} />
                 <Text style={{ fontSize: 10, color: colors.primary, fontFamily: typography.fonts.medium }}>
-                  Settings
+                  {t('ui.editIncomeBudgetSheet.settings')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -270,7 +272,7 @@ export function EditIncomeBudgetSheet({
                         }}
                       >
                         <Text style={{ fontSize: 9.5, color: colors.statusWarning, fontFamily: typography.fonts.medium }}>
-                          Earmarked ({earmark.targetCategory})
+                          {t('ui.editIncomeBudgetSheet.earmarked')}{earmark.targetCategory})
                         </Text>
                       </View>
                     )}

@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-  ArrowLeftRight,
   TrendingUp,
   CalendarDays,
   CreditCard,
@@ -22,6 +21,7 @@ import { useTheme, TextInput } from '../../design';
 import { useAuth } from '../auth/AuthProvider';
 import { ToolTileItem } from './ToolTileItem';
 
+import { t as i18nT } from '../../i18n';
 interface ToolItem {
   id: string;
   title: string;
@@ -39,7 +39,7 @@ export function MoreHubScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
 
-  const tools: ToolItem[] = [
+  const tools: ToolItem[] = useMemo(() => [
     // 1. Planning & Income
     {
       id: 'income',
@@ -133,7 +133,7 @@ export function MoreHubScreen() {
       icon: Settings,
       group: 'tools',
     },
-  ];
+  ], []);
 
   const filteredTools = useMemo(() => {
     if (!searchQuery.trim()) return tools;
@@ -186,7 +186,7 @@ export function MoreHubScreen() {
               },
             ]}
           >
-            More Financial Tools
+            {i18nT('ui.moreHubScreen.moreFinancialTools')}
           </Text>
           <Text
             style={[
@@ -199,14 +199,14 @@ export function MoreHubScreen() {
               },
             ]}
           >
-            Launchpad for wealth planning, reports, automations, and settings
+            {i18nT('ui.moreHubScreen.launchpadForWealthPlanningReports')}
           </Text>
         </View>
 
         {/* Search Bar */}
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            placeholder="Search all 13 tools & features..."
+            placeholder={i18nT('ui.moreHubScreen.searchAll13ToolsAnd')}
             value={searchQuery}
             onChangeText={setSearchQuery}
             leftElement={<Search size={18} color={colors.textTertiary} />}
@@ -279,7 +279,7 @@ export function MoreHubScreen() {
               },
             ]}
           >
-            Active Workspace: <Text style={{ fontFamily: typography.fonts.medium, color: colors.textPrimary }}>{workspaceId ?? 'Personal'}</Text>
+            {i18nT('ui.moreHubScreen.activeWorkspace')}{' '}<Text style={{ fontFamily: typography.fonts.medium, color: colors.textPrimary }}>{workspaceId ?? 'Personal'}</Text>
             {user?.email ? ` • Signed in as ${user.email}` : ''}
           </Text>
         </View>

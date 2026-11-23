@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { AlertCircle } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 
+import { t } from '../../i18n';
 interface DeleteCategorySheetProps {
   visible: boolean;
   onClose: () => void;
@@ -19,7 +20,7 @@ export function DeleteCategorySheet({
   const { colors, typography, spacing, radii } = useTheme();
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Delete Category">
+    <BottomSheet visible={visible} onClose={onClose} title={t('ui.deleteCategorySheet.deleteCategory')}>
       <View style={styles.container}>
         <View
           style={[
@@ -43,7 +44,7 @@ export function DeleteCategorySheet({
                 marginLeft: spacing.xs,
               }}
             >
-              Confirm Deletion
+              {t('ui.deleteCategorySheet.confirmDeletion')}
             </Text>
           </View>
           <Text
@@ -54,12 +55,12 @@ export function DeleteCategorySheet({
               marginTop: spacing.xs,
             }}
           >
-            Are you sure you want to delete <Text style={{ fontFamily: typography.fonts.semiBold }}>{categoryName}</Text>? Past transactions will be moved to Uncategorized.
+            {t('ui.deleteCategorySheet.areYouSureYouWant')}{' '}<Text style={{ fontFamily: typography.fonts.semiBold }}>{categoryName}</Text>{t('ui.deleteCategorySheet.pastTransactionsWillBeMoved')}
           </Text>
         </View>
 
         <Button
-          label="Delete Envelope"
+          label={t('ui.deleteCategorySheet.deleteEnvelope')}
           onPress={() => {
             onConfirmDelete();
             onClose();

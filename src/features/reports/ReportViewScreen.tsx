@@ -8,26 +8,19 @@ import {
   TrendingUp,
   TrendingDown,
   ShieldCheck,
-  Wallet,
-  PieChart,
-  BarChart3,
   ArrowUpRight,
   ArrowDownRight,
-  Building2,
   Landmark,
   Plus,
-  Calendar,
   Info,
-  CreditCard,
   PiggyBank,
-  Receipt,
-  CheckCircle2,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 import { ExportMenuSheet } from './ExportMenuSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 type TimeHorizon = '1M' | '3M' | '6M' | 'YTD' | 'ALL';
 
 export function ReportViewScreen() {
@@ -66,9 +59,9 @@ export function ReportViewScreen() {
     let assets = 0n;
     let liabilities = 0n;
 
-    const liquid: Array<{ id: string; name: string; type: string; balanceMinor: bigint }> = [];
-    const investments: Array<{ id: string; name: string; type: string; balanceMinor: bigint }> = [];
-    const liab: Array<{ id: string; name: string; type: string; balanceMinor: bigint }> = [];
+    const liquid: { id: string; name: string; type: string; balanceMinor: bigint }[] = [];
+    const investments: { id: string; name: string; type: string; balanceMinor: bigint }[] = [];
+    const liab: { id: string; name: string; type: string; balanceMinor: bigint }[] = [];
 
     for (const acc of dbAccounts) {
       if (acc.archived) continue;
@@ -394,7 +387,7 @@ export function ReportViewScreen() {
               marginLeft: 5,
             }}
           >
-            Export
+            {t('ui.reportViewScreen.export')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -480,7 +473,7 @@ export function ReportViewScreen() {
                       letterSpacing: 0.5,
                     }}
                   >
-                    Current Net Worth
+                    {t('ui.reportViewScreen.currentNetWorth')}
                   </Text>
                   <Text
                     style={{
@@ -513,7 +506,7 @@ export function ReportViewScreen() {
                       marginLeft: 4,
                     }}
                   >
-                    Audited Balance Sheet
+                    {t('ui.reportViewScreen.auditedBalanceSheet')}
                   </Text>
                 </View>
               </View>
@@ -525,7 +518,7 @@ export function ReportViewScreen() {
                   marginTop: spacing.xs,
                 }}
               >
-                Consolidated balance of active banking accounts, assets, portfolios, and credit facilities.
+                {t('ui.reportViewScreen.consolidatedBalanceOfActiveBanking')}
               </Text>
             </View>
 
@@ -552,7 +545,7 @@ export function ReportViewScreen() {
                       marginLeft: 6,
                     }}
                   >
-                    Total Assets
+                    {t('ui.reportViewScreen.totalAssets')}
                   </Text>
                 </View>
                 <Text
@@ -572,7 +565,7 @@ export function ReportViewScreen() {
                     marginTop: 2,
                   }}
                 >
-                  {liquidAccounts.length + investmentAccounts.length} active holdings
+                  {liquidAccounts.length + investmentAccounts.length}{' '}{t('ui.reportViewScreen.activeHoldings')}
                 </Text>
               </View>
 
@@ -597,7 +590,7 @@ export function ReportViewScreen() {
                       marginLeft: 6,
                     }}
                   >
-                    Total Liabilities
+                    {t('ui.reportViewScreen.totalLiabilities')}
                   </Text>
                 </View>
                 <Text
@@ -617,7 +610,7 @@ export function ReportViewScreen() {
                     marginTop: 2,
                   }}
                 >
-                  {liabilityAccounts.length} debt accounts
+                  {liabilityAccounts.length}{' '}{t('ui.reportViewScreen.debtAccounts')}
                 </Text>
               </View>
 
@@ -642,7 +635,7 @@ export function ReportViewScreen() {
                       marginLeft: 6,
                     }}
                   >
-                    Debt Ratio
+                    {t('ui.reportViewScreen.debtRatio')}
                   </Text>
                 </View>
                 <Text
@@ -662,7 +655,7 @@ export function ReportViewScreen() {
                     marginTop: 2,
                   }}
                 >
-                  Leverage safety index
+                  {t('ui.reportViewScreen.useSafetyIndex')}
                 </Text>
               </View>
             </View>
@@ -689,7 +682,7 @@ export function ReportViewScreen() {
                     fontSize: typography.sizes.bodySm,
                   }}
                 >
-                  Equity Progression Curve
+                  {t('ui.reportViewScreen.equityProgressionCurve')}
                 </Text>
                 <Text
                   style={{
@@ -698,7 +691,7 @@ export function ReportViewScreen() {
                     fontSize: typography.sizes.xs,
                   }}
                 >
-                  Horizon: {timeHorizon}
+                  {t('ui.reportViewScreen.horizon')}{' '}{timeHorizon}
                 </Text>
               </View>
 
@@ -779,7 +772,7 @@ export function ReportViewScreen() {
                 marginBottom: spacing.md,
               }}
             >
-              Balance Sheet Account Allocation
+              {t('ui.reportViewScreen.balanceSheetAccountAllocation')}
             </Text>
 
             {dbAccounts.length === 0 ? (
@@ -804,7 +797,7 @@ export function ReportViewScreen() {
                     marginTop: spacing.md,
                   }}
                 >
-                  No Accounts Linked Yet
+                  {t('ui.reportViewScreen.noAccountsLinkedYet')}
                 </Text>
                 <Text
                   style={{
@@ -816,7 +809,7 @@ export function ReportViewScreen() {
                     maxWidth: 360,
                   }}
                 >
-                  Link your bank accounts, investment portfolios, and loan facilities in the Accounts hub to track genuine balance sheet net worth.
+                  {t('ui.reportViewScreen.linkYourBankAccountsInvestment')}
                 </Text>
                 <TouchableOpacity
                   onPress={() => router.push('/accounts' as any)}
@@ -842,7 +835,7 @@ export function ReportViewScreen() {
                       marginLeft: 6,
                     }}
                   >
-                    Add First Account
+                    {t('ui.reportViewScreen.addFirstAccount')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -852,7 +845,7 @@ export function ReportViewScreen() {
                 {liquidAccounts.length > 0 && (
                   <View style={{ marginBottom: spacing.lg }}>
                     <Text style={[styles.classHeader, { color: colors.textSecondary }]}>
-                      Liquid Cash & Banking ({liquidAccounts.length})
+                      {t('ui.reportViewScreen.liquidCashAndBanking')}{liquidAccounts.length})
                     </Text>
                     {liquidAccounts.map((acc) => (
                       <View
@@ -874,7 +867,7 @@ export function ReportViewScreen() {
                               {acc.name}
                             </Text>
                             <Text style={{ color: colors.textTertiary, fontSize: 11, textTransform: 'capitalize' }}>
-                              {acc.type} account
+                              {acc.type}{' '}{t('ui.reportViewScreen.account')}
                             </Text>
                           </View>
                           <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold }}>
@@ -890,7 +883,7 @@ export function ReportViewScreen() {
                 {investmentAccounts.length > 0 && (
                   <View style={{ marginBottom: spacing.lg }}>
                     <Text style={[styles.classHeader, { color: colors.textSecondary }]}>
-                      Investments, Pension & Property ({investmentAccounts.length})
+                      {t('ui.reportViewScreen.investmentsPensionAndProperty')}{investmentAccounts.length})
                     </Text>
                     {investmentAccounts.map((acc) => (
                       <View
@@ -912,7 +905,7 @@ export function ReportViewScreen() {
                               {acc.name}
                             </Text>
                             <Text style={{ color: colors.textTertiary, fontSize: 11, textTransform: 'capitalize' }}>
-                              {acc.type} portfolio
+                              {acc.type}{' '}{t('ui.reportViewScreen.portfolio')}
                             </Text>
                           </View>
                           <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold }}>
@@ -928,7 +921,7 @@ export function ReportViewScreen() {
                 {liabilityAccounts.length > 0 && (
                   <View style={{ marginBottom: spacing.lg }}>
                     <Text style={[styles.classHeader, { color: colors.textSecondary }]}>
-                      Liabilities & Outstanding Debts ({liabilityAccounts.length})
+                      {t('ui.reportViewScreen.liabilitiesAndOutstandingDebts')}{liabilityAccounts.length})
                     </Text>
                     {liabilityAccounts.map((acc) => (
                       <View
@@ -950,7 +943,7 @@ export function ReportViewScreen() {
                               {acc.name}
                             </Text>
                             <Text style={{ color: colors.textTertiary, fontSize: 11, textTransform: 'capitalize' }}>
-                              {acc.type} obligation
+                              {acc.type}{' '}{t('ui.reportViewScreen.obligation')}
                             </Text>
                           </View>
                           <Text style={{ color: colors.statusDanger, fontFamily: typography.fonts.semiBold }}>
@@ -985,34 +978,34 @@ export function ReportViewScreen() {
               ]}
             >
               <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Total Category Spending
+                {t('ui.reportViewScreen.totalCategorySpending')}
               </Text>
               <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: 32, marginTop: 4 }}>
                 {formatNaira(totalCategoryExpense)}
               </Text>
               <Text style={{ color: colors.textTertiary, fontSize: typography.sizes.xs, marginTop: spacing.xs }}>
-                Tracked against active monthly envelope allocations and transaction ledgers.
+                {t('ui.reportViewScreen.trackedAgainstActiveMonthlyEnvelope')}
               </Text>
             </View>
 
             {/* 3 Metric Cards */}
             <View style={styles.metricsGrid}>
               <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md }]}>
-                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>Top Category</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>{t('ui.reportViewScreen.topCategory')}</Text>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginTop: 2 }}>
                   {topCategoryName}
                 </Text>
               </View>
               <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md }]}>
-                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>Active Envelopes</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>{t('ui.reportViewScreen.activeEnvelopes')}</Text>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginTop: 2 }}>
-                  {categoryRows.length} Envelopes
+                  {categoryRows.length}{' '}{t('ui.reportViewScreen.envelopes')}
                 </Text>
               </View>
               <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md }]}>
-                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>Daily Run-Rate</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>{t('ui.reportViewScreen.dailyRunRate')}</Text>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginTop: 2 }}>
-                  ₦0.00 / day
+                  {t('ui.reportViewScreen.000Day')}
                 </Text>
               </View>
             </View>
@@ -1031,7 +1024,7 @@ export function ReportViewScreen() {
               ]}
             >
               <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm, marginBottom: spacing.xs }}>
-                50 / 30 / 20 Budget Tier Alignment
+                {t('ui.reportViewScreen.503020BudgetTier')}
               </Text>
               <View style={[styles.tierBarBg, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full, height: 10, marginVertical: spacing.sm, overflow: 'hidden', flexDirection: 'row' }]}>
                 <View style={{ width: totalCategoryExpense > 0n ? `${Math.round((Number(tierBreakdown.needsMinor) / Number(totalCategoryExpense)) * 100)}%` : '0%', backgroundColor: colors.primary }} />
@@ -1039,21 +1032,21 @@ export function ReportViewScreen() {
                 <View style={{ width: totalCategoryExpense > 0n ? `${Math.round((Number(tierBreakdown.savingsMinor) / Number(totalCategoryExpense)) * 100)}%` : '0%', backgroundColor: colors.statusSuccess }} />
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                <Text style={{ fontSize: 11, color: colors.textSecondary }}>Needs & Living: {formatNaira(tierBreakdown.needsMinor)}</Text>
-                <Text style={{ fontSize: 11, color: colors.textSecondary }}>Wants: {formatNaira(tierBreakdown.wantsMinor)}</Text>
-                <Text style={{ fontSize: 11, color: colors.textSecondary }}>Reserves: {formatNaira(tierBreakdown.savingsMinor)}</Text>
+                <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('ui.reportViewScreen.needsAndLiving')}{' '}{formatNaira(tierBreakdown.needsMinor)}</Text>
+                <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('ui.reportViewScreen.wants')}{' '}{formatNaira(tierBreakdown.wantsMinor)}</Text>
+                <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('ui.reportViewScreen.reserves')}{' '}{formatNaira(tierBreakdown.savingsMinor)}</Text>
               </View>
             </View>
 
             {/* Envelopes Schedule */}
             <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md, marginBottom: spacing.md }}>
-              Category Envelope Breakdown
+              {t('ui.reportViewScreen.categoryEnvelopeBreakdown')}
             </Text>
 
             {categoryRows.length === 0 ? (
               <View style={[styles.zeroBox, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.md, padding: spacing.xl, alignItems: 'center' }]}>
                 <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.bodySm }}>
-                  No category expenses recorded in this period.
+                  {t('ui.reportViewScreen.noCategoryExpensesRecordedIn')}
                 </Text>
               </View>
             ) : (
@@ -1079,7 +1072,7 @@ export function ReportViewScreen() {
                     <View style={[styles.barFill, { width: `${cat.percent}%`, backgroundColor: colors.primary, borderRadius: radii.full }]} />
                   </View>
                   <Text style={{ color: colors.textSecondary, fontSize: 10, marginTop: 4 }}>
-                    {cat.percent}% of total category burn
+                    {cat.percent}{t('ui.reportViewScreen.ofTotalCategoryBurn')}
                   </Text>
                 </View>
               ))
@@ -1106,13 +1099,13 @@ export function ReportViewScreen() {
               ]}
             >
               <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Net Cash Retention Surplus
+                {t('ui.reportViewScreen.netCashRetentionSurplus')}
               </Text>
               <Text style={{ color: netCashSurplus >= 0n ? colors.statusSuccess : colors.statusDanger, fontFamily: typography.fonts.semiBold, fontSize: 32, marginTop: 4 }}>
                 {netCashSurplus >= 0n ? `+${formatNaira(netCashSurplus)}` : `-${formatNaira(-netCashSurplus)}`}
               </Text>
               <Text style={{ color: colors.textTertiary, fontSize: typography.sizes.xs, marginTop: spacing.xs }}>
-                Operating cash surplus retained after funding living expenses and statutory commitments.
+                {t('ui.reportViewScreen.operatingCashSurplusRetainedAfter')}
               </Text>
             </View>
 
@@ -1121,59 +1114,59 @@ export function ReportViewScreen() {
               <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <ArrowUpRight size={16} color={colors.statusSuccess} />
-                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginLeft: 6 }}>Total Inflow</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginLeft: 6 }}>{t('ui.reportViewScreen.totalInflow')}</Text>
                 </View>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md, marginTop: 4 }}>
                   {formatNaira(totalInflow)}
                 </Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>Salary & Inflows</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>{t('ui.reportViewScreen.salaryAndInflows')}</Text>
               </View>
 
               <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <ArrowDownRight size={16} color={colors.statusDanger} />
-                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginLeft: 6 }}>Total Outflow</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginLeft: 6 }}>{t('ui.reportViewScreen.totalOutflow')}</Text>
                 </View>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md, marginTop: 4 }}>
                   {formatNaira(totalOutflow)}
                 </Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>Living burn & bills</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>{t('ui.reportViewScreen.livingBurnAndBills')}</Text>
               </View>
 
               <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <PiggyBank size={16} color={colors.primary} />
-                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginLeft: 6 }}>Retention Rate</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginLeft: 6 }}>{t('ui.reportViewScreen.retentionRate')}</Text>
                 </View>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md, marginTop: 4 }}>
                   {retentionRate}.0%
                 </Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>Savings yield</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>{t('ui.reportViewScreen.savingsYield')}</Text>
               </View>
             </View>
 
             {/* Schedule */}
             <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md, marginBottom: spacing.md }}>
-              Cash Flow Delta Schedule
+              {t('ui.reportViewScreen.cashFlowDeltaSchedule')}
             </Text>
 
             <View style={[styles.accountRow, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.md, padding: spacing.md, marginBottom: spacing.sm }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium }}>Total Earned Inflow</Text>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium }}>{t('ui.reportViewScreen.totalEarnedInflow')}</Text>
                 <Text style={{ color: colors.statusSuccess, fontFamily: typography.fonts.semiBold }}>+{formatNaira(totalInflow)}</Text>
               </View>
             </View>
 
             <View style={[styles.accountRow, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.md, padding: spacing.md, marginBottom: spacing.sm }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium }}>Total Living & Fixed Outflows</Text>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium }}>{t('ui.reportViewScreen.totalLivingAndFixedOutflows')}</Text>
                 <Text style={{ color: colors.statusDanger, fontFamily: typography.fonts.semiBold }}>-{formatNaira(totalOutflow)}</Text>
               </View>
             </View>
 
             <View style={[styles.accountRow, { backgroundColor: colors.surfaceSubtle, borderColor: colors.borderSubtle, borderRadius: radii.md, padding: spacing.md, marginBottom: spacing.sm }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold }}>Net Retained Surplus</Text>
+                <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold }}>{t('ui.reportViewScreen.netRetainedSurplus')}</Text>
                 <Text style={{ color: netCashSurplus >= 0n ? colors.statusSuccess : colors.statusDanger, fontFamily: typography.fonts.semiBold }}>
                   {netCashSurplus >= 0n ? `+${formatNaira(netCashSurplus)}` : `-${formatNaira(-netCashSurplus)}`}
                 </Text>
@@ -1201,40 +1194,40 @@ export function ReportViewScreen() {
               ]}
             >
               <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Total Statutory Deductions
+                {t('ui.reportViewScreen.totalStatutoryDeductions')}
               </Text>
               <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: 32, marginTop: 4 }}>
                 {formatNaira(totalStatutoryDeductions)}
               </Text>
               <Text style={{ color: colors.textTertiary, fontSize: typography.sizes.xs, marginTop: spacing.xs }}>
-                Audited statement of Nigerian PAYE personal income tax, pension contributions, and statutory withholdings.
+                {t('ui.reportViewScreen.auditedStatementOfNigerianPaye')}
               </Text>
             </View>
 
             {/* 3 Metric Cards */}
             <View style={styles.metricsGrid}>
               <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md }]}>
-                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>PAYE Income Tax</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>{t('ui.reportViewScreen.payeIncomeTax')}</Text>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md, marginTop: 4 }}>
                   {formatNaira(payeMinor)}
                 </Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>State IRS / FIRS</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>{t('ui.reportViewScreen.stateIrsFirs')}</Text>
               </View>
 
               <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md }]}>
-                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>Pension (8% RSA)</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>{t('ui.reportViewScreen.pension8Rsa')}</Text>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md, marginTop: 4 }}>
                   {formatNaira(pensionMinor)}
                 </Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>PRA 2014 compliant</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>{t('ui.reportViewScreen.pra2014Compliant')}</Text>
               </View>
 
               <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md }]}>
-                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>NHF & Levies</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs }}>{t('ui.reportViewScreen.nhfAndLevies')}</Text>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md, marginTop: 4 }}>
                   {formatNaira(nhfMinor)}
                 </Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>Housing & estate</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2 }}>{t('ui.reportViewScreen.housingAndEstate')}</Text>
               </View>
             </View>
 
@@ -1255,23 +1248,23 @@ export function ReportViewScreen() {
               <Info size={18} color={colors.primary} style={{ marginTop: 2 }} />
               <View style={{ flex: 1, marginLeft: spacing.sm }}>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                  Nigerian Statutory Compliance Note
+                  {t('ui.reportViewScreen.nigerianStatutoryComplianceNote')}
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs, marginTop: 2, lineHeight: 18 }}>
-                  Under the Nigerian Personal Income Tax Act (PITA) and Pension Reform Act (PRA 2014), the 8% mandatory employee pension and NHF contributions qualify as statutory tax-exempt deductions prior to Consolidated Relief Allowance (CRA) computation.
+                  {t('ui.reportViewScreen.underTheNigerianPersonalIncome')}
                 </Text>
               </View>
             </View>
 
             {/* Deductions Schedule */}
             <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md, marginBottom: spacing.md }}>
-              Statutory Line Item Breakdown
+              {t('ui.reportViewScreen.statutoryLineItemBreakdown')}
             </Text>
 
             {statutoryRows.length === 0 ? (
               <View style={[styles.zeroBox, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, borderRadius: radii.md, padding: spacing.xl, alignItems: 'center' }]}>
                 <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.bodySm }}>
-                  No statutory deductions recorded in this period.
+                  {t('ui.reportViewScreen.noStatutoryDeductionsRecordedIn')}
                 </Text>
               </View>
             ) : (
@@ -1297,7 +1290,7 @@ export function ReportViewScreen() {
                     <View style={[styles.barFill, { width: `${row.percent}%`, backgroundColor: colors.primary, borderRadius: radii.full }]} />
                   </View>
                   <Text style={{ color: colors.textSecondary, fontSize: 10, marginTop: 4 }}>
-                    {row.percent}% of total statutory deductions
+                    {row.percent}{t('ui.reportViewScreen.ofTotalStatutoryDeductions')}
                   </Text>
                 </View>
               ))

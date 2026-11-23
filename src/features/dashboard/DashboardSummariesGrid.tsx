@@ -13,6 +13,7 @@ import { formatNaira } from '../../money';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import { monthCodeOf, thisMonthLabel } from '../../lib/months';
 
+import { t } from '../../i18n';
 export interface DashboardSummariesGridProps {
   privacyMode: boolean;
   currentMonth?: string;
@@ -115,7 +116,7 @@ export function DashboardSummariesGrid({
           },
         ]}
       >
-        Financial Overview · {currentMonth}
+        {t('ui.dashboardSummariesGrid.financialOverview')}{' '}{currentMonth}
       </Text>
 
       <View style={[styles.grid, isWide && styles.gridWide]}>
@@ -151,7 +152,7 @@ export function DashboardSummariesGrid({
                   },
                 ]}
               >
-                Budget Progress
+                {t('ui.dashboardSummariesGrid.budgetProgress')}
               </Text>
             </View>
             <ChevronRight size={16} color={colors.textTertiary} />
@@ -166,7 +167,7 @@ export function DashboardSummariesGrid({
                   fontSize: typography.sizes.xs,
                 }}
               >
-                No budget planned for this month.
+                {t('ui.dashboardSummariesGrid.noBudgetPlannedForThis')}
               </Text>
               <Text
                 style={{
@@ -176,7 +177,7 @@ export function DashboardSummariesGrid({
                   marginTop: 4,
                 }}
               >
-                Tap to plan budgets →
+                {t('ui.dashboardSummariesGrid.tapToPlanBudgets')}
               </Text>
             </View>
           ) : (
@@ -193,7 +194,7 @@ export function DashboardSummariesGrid({
               >
                 {privacyMode ? '₦••••••••' : formatNaira(budgetLeftMinor)}{' '}
                 <Text style={{ fontSize: typography.sizes.xs, color: colors.textSecondary, fontFamily: typography.fonts.regular }}>
-                  left of {privacyMode ? '••••' : formatNaira(budgetTotalMinor)}
+                  {t('ui.dashboardSummariesGrid.leftOf')}{' '}{privacyMode ? '••••' : formatNaira(budgetTotalMinor)}
                 </Text>
               </Text>
 
@@ -246,7 +247,7 @@ export function DashboardSummariesGrid({
                   },
                 ]}
               >
-                Coming Up (14 Days)
+                {t('ui.dashboardSummariesGrid.comingUp14Days')}
               </Text>
             </View>
             <ChevronRight size={16} color={colors.textTertiary} />
@@ -262,7 +263,7 @@ export function DashboardSummariesGrid({
                     fontSize: typography.sizes.xs,
                   }}
                 >
-                  No upcoming bills scheduled.
+                  {t('ui.dashboardSummariesGrid.noUpcomingBillsScheduled')}
                 </Text>
                 <Text
                   style={{
@@ -272,7 +273,7 @@ export function DashboardSummariesGrid({
                     marginTop: 4,
                   }}
                 >
-                  Tap to add bills & recurring →
+                  {t('ui.dashboardSummariesGrid.tapToAddBillsAnd')}
                 </Text>
               </View>
             ) : (
@@ -283,7 +284,7 @@ export function DashboardSummariesGrid({
                       {bill.name}
                     </Text>
                     <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: 11, marginTop: 1 }}>
-                      Due in {bill.daysLeft} days
+                      {t('ui.dashboardSummariesGrid.dueIn')}{' '}{bill.daysLeft}{' '}{t('ui.dashboardSummariesGrid.days')}
                     </Text>
                   </View>
                   <Text
@@ -333,7 +334,7 @@ export function DashboardSummariesGrid({
                   },
                 ]}
               >
-                Debts & Loans
+                {t('ui.dashboardSummariesGrid.debtsAndLoans')}
               </Text>
             </View>
             <ChevronRight size={16} color={colors.textTertiary} />
@@ -342,7 +343,7 @@ export function DashboardSummariesGrid({
           <View style={[styles.debtColumns, { marginTop: spacing.sm }]}>
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs }}>
-                Owed to You
+                {t('ui.dashboardSummariesGrid.owedToYou')}
               </Text>
               <Text
                 style={{
@@ -360,7 +361,7 @@ export function DashboardSummariesGrid({
 
             <View style={{ flex: 1, paddingLeft: spacing.md }}>
               <Text style={{ color: colors.textSecondary, fontFamily: typography.fonts.regular, fontSize: typography.sizes.xs }}>
-                You Owe
+                {t('ui.dashboardSummariesGrid.youOwe')}
               </Text>
               <Text
                 style={{
@@ -408,7 +409,7 @@ export function DashboardSummariesGrid({
                   },
                 ]}
               >
-                Savings Goals
+                {t('ui.dashboardSummariesGrid.savingsGoals')}
               </Text>
             </View>
             <ChevronRight size={16} color={colors.textTertiary} />
@@ -424,7 +425,7 @@ export function DashboardSummariesGrid({
                     fontSize: typography.sizes.xs,
                   }}
                 >
-                  No savings goals created yet.
+                  {t('ui.dashboardSummariesGrid.noSavingsGoalsCreatedYet')}
                 </Text>
                 <Text
                   style={{
@@ -434,7 +435,7 @@ export function DashboardSummariesGrid({
                     marginTop: 4,
                   }}
                 >
-                  Tap to create a goal →
+                  {t('ui.dashboardSummariesGrid.tapToCreateAGoal')}
                 </Text>
               </View>
             ) : (

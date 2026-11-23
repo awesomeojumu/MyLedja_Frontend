@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Users, Check } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 import type { PayeeItem } from './EditPayeeSheet';
 
+import { t } from '../../i18n';
 interface MergePayeeSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -34,7 +35,7 @@ export function MergePayeeSheet({
             marginBottom: spacing.md,
           }}
         >
-          Select the master payee to combine all past transactions and aliases under:
+          {t('ui.mergePayeeSheet.selectTheMasterPayeeTo')}
         </Text>
 
         {otherPayees.map((p) => (
@@ -71,7 +72,7 @@ export function MergePayeeSheet({
                   fontSize: typography.sizes.xs,
                 }}
               >
-                {p.txCount} transactions
+                {p.txCount}{' '}{t('ui.mergePayeeSheet.transactions')}
               </Text>
             </View>
             {targetId === p.id && <Check size={16} color={colors.primary} />}
@@ -80,7 +81,7 @@ export function MergePayeeSheet({
 
         <View style={{ marginTop: spacing.lg }}>
           <Button
-            label="Confirm & Merge Payees"
+            label={t('ui.mergePayeeSheet.confirmAndMergePayees')}
             onPress={() => {
               if (targetId) onConfirmMerge(targetId);
               onClose();

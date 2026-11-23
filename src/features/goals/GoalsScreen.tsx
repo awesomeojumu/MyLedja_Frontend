@@ -5,8 +5,6 @@ import {
   ArrowLeft,
   Plus,
   Target,
-  ArrowUpRight,
-  Sparkles,
   ShoppingBag,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
@@ -175,7 +173,7 @@ export function GoalsScreen() {
               },
             ]}
           >
-            Savings Goals
+            {t('ui.goalsScreen.savingsGoals')}
           </Text>
           <Text
             style={{
@@ -184,7 +182,7 @@ export function GoalsScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Target Funds & Vaults
+            {t('ui.goalsScreen.targetFundsAndVaults')}
           </Text>
         </View>
 
@@ -209,7 +207,7 @@ export function GoalsScreen() {
               marginLeft: 4,
             }}
           >
-            New Goal
+            {t('ui.goalsScreen.newGoal')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -240,7 +238,7 @@ export function GoalsScreen() {
               letterSpacing: 0.5,
             }}
           >
-            Total Saved in Goals
+            {t('ui.goalsScreen.totalSavedInGoals')}
           </Text>
           <Text
             style={{
@@ -291,7 +289,7 @@ export function GoalsScreen() {
                 fontFamily: typography.fonts.regular,
               }}
             >
-              Overall Progress: {overallPercent}%
+              {t('ui.goalsScreen.overallProgress')}{' '}{overallPercent}%
             </Text>
             <Text
               style={{
@@ -300,7 +298,7 @@ export function GoalsScreen() {
                 fontFamily: typography.fonts.regular,
               }}
             >
-              Total Targets: {formatNaira(totalTargetMinor)}
+              {t('ui.goalsScreen.totalTargets')}{' '}{formatNaira(totalTargetMinor)}
             </Text>
           </View>
         </View>
@@ -314,7 +312,7 @@ export function GoalsScreen() {
             marginBottom: spacing.md,
           }}
         >
-          Active Goals ({goals.length})
+          {t('ui.goalsScreen.activeGoals')}{goals.length})
         </Text>
 
         {goals.length === 0 ? (
@@ -337,7 +335,7 @@ export function GoalsScreen() {
                 marginBottom: 4,
               }}
             >
-              No Savings Goals Yet
+              {t('ui.goalsScreen.noSavingsGoalsYet')}
             </Text>
             <Text
               style={{
@@ -348,7 +346,7 @@ export function GoalsScreen() {
                 maxWidth: 320,
               }}
             >
-              Tap "+ New Goal" or allocate from a transaction to begin building your reserves.
+              {t('ui.goalsScreen.tapNewGoalOrAllocate')}
             </Text>
           </View>
         ) : (
@@ -422,7 +420,7 @@ export function GoalsScreen() {
                       fontSize: 10,
                     }}
                   >
-                    of {formatNaira(g.targetMinor)}
+                    {t('ui.goalsScreen.of')}{' '}{formatNaira(g.targetMinor)}
                   </Text>
                 </View>
               </View>
@@ -483,7 +481,7 @@ export function GoalsScreen() {
                       marginLeft: 4,
                     }}
                   >
-                    Spend
+                    {t('ui.goalsScreen.spend')}
                   </Text>
                 </TouchableOpacity>
 
@@ -508,7 +506,7 @@ export function GoalsScreen() {
                       marginLeft: 4,
                     }}
                   >
-                    Add Money
+                    {t('ui.goalsScreen.addMoney')}
                   </Text>
                 </TouchableOpacity>
               </View>

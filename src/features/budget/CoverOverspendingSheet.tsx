@@ -4,6 +4,7 @@ import { useTheme, BottomSheet, Dropdown, Button } from '../../design';
 import { formatNaira } from '../../money';
 import type { CategoryEnvelope } from './CategoryEnvelopeRow';
 
+import { t } from '../../i18n';
 export interface CoverOverspendingSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -49,13 +50,13 @@ export function CoverOverspendingSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Cover Overspending"
+      title={t('ui.coverOverspendingSheet.coverOverspending')}
       subtitle="Rebalance overspent envelopes instantly"
     >
       <View style={styles.container}>
         {/* Step 1: Which envelope is overspent */}
         <Dropdown
-          label="Overspent Envelope"
+          label={t('ui.coverOverspendingSheet.overspentEnvelope')}
           value={selectedOverspent}
           options={overspentOptions}
           onSelect={setSelectedOverspent}
@@ -64,7 +65,7 @@ export function CoverOverspendingSheet({
 
         {/* Step 2: Where to pull the money from */}
         <Dropdown
-          label="Take Money From"
+          label={t('ui.coverOverspendingSheet.takeMoneyFrom')}
           value={selectedSource}
           options={fundedOptions}
           onSelect={setSelectedSource}

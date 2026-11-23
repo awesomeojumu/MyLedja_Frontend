@@ -6,15 +6,14 @@ import {
   MessageSquare,
   Plus,
   CheckCircle2,
-  Clock,
-  ArrowDownLeft,
 } from 'lucide-react-native';
-import { useTheme, Button } from '../../design';
+import { useTheme } from '../../design';
 import { formatNaira } from '../../money';
 import { ReminderMessageSheet } from './ReminderMessageSheet';
 import { RecordInstallmentSheet } from './RecordInstallmentSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 interface DebtDetailScreenProps {
   debtId: string;
 }
@@ -38,12 +37,12 @@ export function DebtDetailScreen({ debtId }: DebtDetailScreenProps) {
   const [installmentVisible, setInstallmentVisible] = useState(false);
 
   // Installment history
-  const [history, setHistory] = useState<Array<{
+  const [history, setHistory] = useState<{
     id: string;
     date: string;
     amountMinor: bigint;
     note: string;
-  }>>([]);
+  }[]>([]);
 
   const repaidMinor = originalMinor - remainingMinor;
   const percentRepaid =
@@ -133,7 +132,7 @@ export function DebtDetailScreen({ debtId }: DebtDetailScreenProps) {
               letterSpacing: 0.5,
             }}
           >
-            Outstanding Balance
+            {t('ui.debtDetailScreen.outstandingBalance')}
           </Text>
           <Text
             style={{
@@ -184,7 +183,7 @@ export function DebtDetailScreen({ debtId }: DebtDetailScreenProps) {
                 fontFamily: typography.fonts.regular,
               }}
             >
-              Repaid {formatNaira(repaidMinor)} ({percentRepaid}%)
+              {t('ui.debtDetailScreen.repaid')}{' '}{formatNaira(repaidMinor)} ({percentRepaid}%)
             </Text>
             <Text
               style={{
@@ -193,7 +192,7 @@ export function DebtDetailScreen({ debtId }: DebtDetailScreenProps) {
                 fontFamily: typography.fonts.regular,
               }}
             >
-              Principal {formatNaira(originalMinor)}
+              {t('ui.debtDetailScreen.principal')}{' '}{formatNaira(originalMinor)}
             </Text>
           </View>
         </View>
@@ -224,7 +223,7 @@ export function DebtDetailScreen({ debtId }: DebtDetailScreenProps) {
                 },
               ]}
             >
-              Record Payment
+              {t('ui.debtDetailScreen.recordPayment')}
             </Text>
           </TouchableOpacity>
 
@@ -253,7 +252,7 @@ export function DebtDetailScreen({ debtId }: DebtDetailScreenProps) {
                   },
                 ]}
               >
-                Send Reminder
+                {t('ui.debtDetailScreen.sendReminder')}
               </Text>
             </TouchableOpacity>
           )}
@@ -268,7 +267,7 @@ export function DebtDetailScreen({ debtId }: DebtDetailScreenProps) {
             marginBottom: spacing.md,
           }}
         >
-          Payment Timeline
+          {t('ui.debtDetailScreen.paymentTimeline')}
         </Text>
 
         {history.length === 0 ? (
@@ -280,7 +279,7 @@ export function DebtDetailScreen({ debtId }: DebtDetailScreenProps) {
                 fontSize: typography.sizes.bodySm,
               }}
             >
-              No repayment installments recorded yet.
+              {t('ui.debtDetailScreen.noRepaymentInstallmentsRecordedYet')}
             </Text>
           </View>
         ) : (

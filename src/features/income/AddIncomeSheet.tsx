@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme, BottomSheet, TextInput, CurrencyInput, Button } from '../../design';
 import { parseAmount } from '../../money';
 
+import { t as i18nT } from '../../i18n';
 export interface AddedIncomeStream {
   id: string;
   name: string;
@@ -55,12 +56,12 @@ export function AddIncomeSheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Add Income Stream">
+    <BottomSheet visible={visible} onClose={onClose} title={i18nT('ui.addIncomeSheet.addIncomeStream')}>
       <View style={styles.container}>
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            label="Stream Name"
-            placeholder="e.g. Primary Tech Salary, Consulting Client"
+            label={i18nT('ui.addIncomeSheet.streamName')}
+            placeholder={i18nT('ui.addIncomeSheet.eGPrimaryTechSalary')}
             value={name}
             onChangeText={(t) => {
               setName(t);
@@ -73,7 +74,7 @@ export function AddIncomeSheet({
 
         <View style={{ marginBottom: spacing.md }}>
           <CurrencyInput
-            label="Expected Monthly Amount"
+            label={i18nT('ui.addIncomeSheet.expectedMonthlyAmount')}
             value={amountText}
             onChangeText={setAmountText}
           />
@@ -89,7 +90,7 @@ export function AddIncomeSheet({
               marginBottom: spacing.xs,
             }}
           >
-            Income Calculation Mode
+            {i18nT('ui.addIncomeSheet.incomeCalculationMode')}
           </Text>
           <View
             style={[
@@ -121,7 +122,7 @@ export function AddIncomeSheet({
                   fontSize: typography.sizes.xs,
                 }}
               >
-                Net Take-Home
+                {i18nT('ui.addIncomeSheet.netTakeHome')}
               </Text>
             </TouchableOpacity>
 
@@ -145,7 +146,7 @@ export function AddIncomeSheet({
                   fontSize: typography.sizes.xs,
                 }}
               >
-                Gross (With Deductions)
+                {i18nT('ui.addIncomeSheet.grossWithDeductions')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -153,7 +154,7 @@ export function AddIncomeSheet({
 
         <View style={{ marginBottom: spacing.lg }}>
           <TextInput
-            label="Expected Pay Day of Month"
+            label={i18nT('ui.addIncomeSheet.expectedPayDayOfMonth')}
             value={payDay}
             onChangeText={setPayDay}
             keyboardType="number-pad"
@@ -162,7 +163,7 @@ export function AddIncomeSheet({
         </View>
 
         <Button
-          label="Save Income Stream"
+          label={i18nT('ui.addIncomeSheet.saveIncomeStream')}
           onPress={handleSave}
           variant="primary"
           size="lg"

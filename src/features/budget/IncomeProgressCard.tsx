@@ -5,6 +5,7 @@ import { useTheme } from '../../design';
 import { useResponsive } from '../../design/size';
 import { formatNaira } from '../../money';
 
+import { t } from '../../i18n';
 export interface IncomeStreamItem {
   id: string;
   name: string;
@@ -91,7 +92,7 @@ export function IncomeProgressCard({
                   letterSpacing: 0.5,
                 }}
               >
-                Expected Income Streams
+                {t('ui.incomeProgressCard.expectedIncomeStreams')}
               </Text>
 
               <View
@@ -109,13 +110,13 @@ export function IncomeProgressCard({
                     color: isFullyReceived ? colors.statusSuccess : colors.primary,
                   }}
                 >
-                  {pct}% received
+                  {pct}{t('ui.incomeProgressCard.received')}
                 </Text>
               </View>
             </View>
 
             <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 1 }}>
-              Received {formatNaira(totalReceivedMinor)} of {formatNaira(totalExpectedMinor)}
+              {t('ui.incomeProgressCard.received2')}{' '}{formatNaira(totalReceivedMinor)}{' '}{t('ui.incomeProgressCard.of')}{' '}{formatNaira(totalExpectedMinor)}
             </Text>
           </View>
 
@@ -144,7 +145,7 @@ export function IncomeProgressCard({
         >
           <Pencil size={11} color={colors.textSecondary} />
           <Text style={{ fontSize: 10.5, fontFamily: typography.fonts.medium, color: colors.textSecondary }}>
-            Plan Income
+            {t('ui.incomeProgressCard.planIncome')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -223,7 +224,7 @@ export function IncomeProgressCard({
                         }}
                       >
                         <Text style={{ fontSize: 9, color: colors.statusWarning, fontFamily: typography.fonts.medium }}>
-                          Earmarked ({stream.targetExpenseCategory || 'Needs'})
+                          {t('ui.incomeProgressCard.earmarked')}{stream.targetExpenseCategory || 'Needs'})
                         </Text>
                       </View>
                     )}
@@ -242,7 +243,7 @@ export function IncomeProgressCard({
                     {formatNaira(stream.expectedMinor)}
                   </Text>
                   <Text style={{ fontSize: 9.5, color: colors.textTertiary, marginTop: 1 }}>
-                    {formatNaira(stream.receivedMinor)} received ({streamPct}%)
+                    {formatNaira(stream.receivedMinor)}{' '}{t('ui.incomeProgressCard.received3')}{streamPct}%)
                   </Text>
                 </View>
               </TouchableOpacity>

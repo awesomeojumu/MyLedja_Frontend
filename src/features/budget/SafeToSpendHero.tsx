@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { ChevronLeft, ChevronRight, ArrowLeftRight, AlertCircle, Sliders, Pencil } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, AlertCircle, Sliders, Pencil } from 'lucide-react-native';
 import { useTheme, Button } from '../../design';
 import { useResponsive } from '../../design/size';
 import { formatNaira } from '../../money';
 
+import { t } from '../../i18n';
 export interface SafeToSpendHeroProps {
   currentMonth: string;
   onPrevMonth: () => void;
@@ -58,7 +59,7 @@ export function SafeToSpendHero({
           <View style={styles.monthNav}>
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel="Previous month"
+              accessibilityLabel={t('ui.safeToSpendHero.previousMonth')}
               onPress={onPrevMonth}
               style={[styles.arrowBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
             >
@@ -81,7 +82,7 @@ export function SafeToSpendHero({
 
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel="Next month"
+              accessibilityLabel={t('ui.safeToSpendHero.nextMonth')}
               onPress={onNextMonth}
               style={[styles.arrowBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
             >
@@ -132,7 +133,7 @@ export function SafeToSpendHero({
               >
                 <AlertCircle size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
                 <Text style={{ fontSize: 11, color: '#FFFFFF', fontFamily: typography.fonts.semiBold }}>
-                  Cover ({overspentCount})
+                  {t('ui.safeToSpendHero.cover')}{overspentCount})
                 </Text>
               </TouchableOpacity>
             )}
@@ -176,7 +177,7 @@ export function SafeToSpendHero({
               style={styles.metricItem}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>Expected</Text>
+                <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>{t('ui.safeToSpendHero.expected')}</Text>
                 {onOpenIncomeBudget && <Pencil size={9} color={colors.primary} />}
               </View>
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
@@ -185,14 +186,14 @@ export function SafeToSpendHero({
             </TouchableOpacity>
             <View style={[styles.metricSep, { backgroundColor: colors.borderSubtle }]} />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>Planned</Text>
+              <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>{t('ui.safeToSpendHero.planned')}</Text>
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
                 {formatNaira(totalPlannedMinor)}
               </Text>
             </View>
             <View style={[styles.metricSep, { backgroundColor: colors.borderSubtle }]} />
             <View style={styles.metricItem}>
-              <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>Spent</Text>
+              <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>{t('ui.safeToSpendHero.spent')}</Text>
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
                 {formatNaira(totalSpentMinor)}
               </Text>
@@ -221,7 +222,7 @@ export function SafeToSpendHero({
       <View style={styles.mobileMonthRow}>
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel="Previous month"
+          accessibilityLabel={t('ui.safeToSpendHero.previousMonth')}
           onPress={onPrevMonth}
           style={[styles.mobileArrowBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
         >
@@ -273,7 +274,7 @@ export function SafeToSpendHero({
 
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel="Next month"
+          accessibilityLabel={t('ui.safeToSpendHero.nextMonth')}
           onPress={onNextMonth}
           style={[styles.mobileArrowBtn, { backgroundColor: colors.surfaceSubtle, borderRadius: radii.full }]}
         >
@@ -315,7 +316,7 @@ export function SafeToSpendHero({
           style={styles.metric}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Expected</Text>
+            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{t('ui.safeToSpendHero.expected')}</Text>
             {onOpenIncomeBudget && <Pencil size={10} color={colors.primary} />}
           </View>
           <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
@@ -324,14 +325,14 @@ export function SafeToSpendHero({
         </TouchableOpacity>
         <View style={[styles.metricDivider, { backgroundColor: colors.borderSubtle }]} />
         <View style={styles.metric}>
-          <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Planned</Text>
+          <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{t('ui.safeToSpendHero.planned')}</Text>
           <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
             {formatNaira(totalPlannedMinor)}
           </Text>
         </View>
         <View style={[styles.metricDivider, { backgroundColor: colors.borderSubtle }]} />
         <View style={styles.metric}>
-          <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Spent</Text>
+          <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{t('ui.safeToSpendHero.spent')}</Text>
           <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
             {formatNaira(totalSpentMinor)}
           </Text>

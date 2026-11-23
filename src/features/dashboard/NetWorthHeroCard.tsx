@@ -5,6 +5,7 @@ import { Eye, EyeOff, TrendingUp, TrendingDown, Wallet } from 'lucide-react-nati
 import { useTheme, useResponsive } from '../../design';
 import { formatNaira } from '../../money';
 
+import { t } from '../../i18n';
 export interface NetWorthHeroCardProps {
   netWorthMinor: bigint;
   monthlyDeltaMinor: bigint;
@@ -65,7 +66,7 @@ export function NetWorthHeroCard({
             },
           ]}
         >
-          Total Net Worth
+          {t('ui.netWorthHeroCard.totalNetWorth')}
         </Text>
 
         <TouchableOpacity
@@ -154,7 +155,7 @@ export function NetWorthHeroCard({
             letterSpacing: 0.5,
           }}
         >
-          Cash Flow · {currentMonth}
+          {t('ui.netWorthHeroCard.cashFlow')}{' '}{currentMonth}
         </Text>
       </View>
 
@@ -190,7 +191,7 @@ export function NetWorthHeroCard({
                 },
               ]}
             >
-              Income
+              {t('ui.netWorthHeroCard.income')}
             </Text>
           </View>
 
@@ -238,7 +239,7 @@ export function NetWorthHeroCard({
                 },
               ]}
             >
-              Spent
+              {t('ui.netWorthHeroCard.spent')}
             </Text>
           </View>
 
@@ -289,7 +290,7 @@ export function NetWorthHeroCard({
                 },
               ]}
             >
-              Net Cash
+              {t('ui.netWorthHeroCard.netCash')}
             </Text>
           </View>
 

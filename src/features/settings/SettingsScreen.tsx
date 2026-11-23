@@ -15,26 +15,17 @@ import {
   Moon,
   Sun,
   Shield,
-  ShieldCheck,
   Fingerprint,
   Download,
   Trash2,
-  ChevronRight,
   Check,
   Sliders,
-  Layers,
-  Coins,
   Palette,
   Database,
-  Key,
-  Lock,
-  RefreshCw,
   FileSpreadsheet,
   FileJson,
-  Smartphone,
   AlertTriangle,
   Mail,
-  Calendar,
   KeyRound,
 } from 'lucide-react-native';
 import { useTheme, Button, TextInput, THEME_ACCENTS } from '../../design';
@@ -46,10 +37,11 @@ import { DeleteAccountModal } from './DeleteAccountModal';
 import { CategoryPreferencesSheet } from './CategoryPreferencesSheet';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
 
+import { t } from '../../i18n';
 type SettingsTab = 'account' | 'categories' | 'preferences' | 'data';
 
 export function SettingsScreen() {
-  const { colors, typography, spacing, radii, isDark, toggleTheme, setThemeMode, accent, setAccent } = useTheme();
+  const { colors, typography, spacing, radii, isDark, setThemeMode, accent, setAccent } = useTheme();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
@@ -74,7 +66,7 @@ export function SettingsScreen() {
   // Security States
   const [passwordSheetVisible, setPasswordSheetVisible] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [passkeys, setPasskeys] = useState<Array<{ name: string; enrolledAt: string }>>([]);
+  const [passkeys, setPasskeys] = useState<{ name: string; enrolledAt: string }[]>([]);
 
   // Sheets & Modals
   const [twoFactorVisible, setTwoFactorVisible] = useState(false);
@@ -90,7 +82,7 @@ export function SettingsScreen() {
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
-  const tabs: Array<{ id: SettingsTab; label: string; icon: any }> = [
+  const tabs: { id: SettingsTab; label: string; icon: any }[] = [
     { id: 'account', label: 'Account & Security', icon: User },
     { id: 'categories', label: 'Categories', icon: Sliders },
     { id: 'preferences', label: 'Preferences', icon: Palette },
@@ -127,7 +119,7 @@ export function SettingsScreen() {
               },
             ]}
           >
-            Preferences & Settings
+            {t('ui.settingsScreen.preferencesAndSettings')}
           </Text>
           <Text
             style={{
@@ -136,7 +128,7 @@ export function SettingsScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Account settings, security, regional preferences & data management
+            {t('ui.settingsScreen.accountSettingsSecurityRegionalPreferences')}
           </Text>
         </View>
       </View>
@@ -282,7 +274,7 @@ export function SettingsScreen() {
           <View>
             {/* User Profile Card */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Account Profile
+              {t('ui.settingsScreen.accountProfile')}
             </Text>
             <View
               style={[
@@ -313,7 +305,7 @@ export function SettingsScreen() {
                       fontSize: 18,
                     }}
                   >
-                    AO
+                    {t('ui.settingsScreen.ao')}
                   </Text>
                 </View>
                 <View style={{ flex: 1, marginLeft: spacing.md }}>
@@ -340,7 +332,7 @@ export function SettingsScreen() {
                       ]}
                     >
                       <Text style={{ color: colors.primary, fontSize: 10, fontFamily: typography.fonts.semiBold }}>
-                        Account Owner
+                        {t('ui.settingsScreen.accountOwner')}
                       </Text>
                     </View>
                   </View>
@@ -359,13 +351,13 @@ export function SettingsScreen() {
 
               <View style={{ gap: 14 }}>
                 <TextInput
-                  label="Display Full Name"
+                  label={t('ui.settingsScreen.displayFullName')}
                   value={fullName}
                   onChangeText={setFullName}
                   leftElement={<User size={16} color={colors.textTertiary} />}
                 />
                 <TextInput
-                  label="Registered Email Address"
+                  label={t('ui.settingsScreen.registeredEmailAddress')}
                   value={userEmail}
                   onChangeText={setUserEmail}
                   leftElement={<Mail size={16} color={colors.textTertiary} />}
@@ -375,11 +367,11 @@ export function SettingsScreen() {
               <View style={{ marginTop: spacing.lg, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
                 {savedSuccess && (
                   <Text style={{ color: colors.statusSuccess, fontSize: 12, marginRight: spacing.md, fontFamily: typography.fonts.medium }}>
-                    ✓ Profile updated successfully
+                    {t('ui.settingsScreen.profileUpdatedSuccessfully')}
                   </Text>
                 )}
                 <Button
-                  label="Save Profile Changes"
+                  label={t('ui.settingsScreen.saveProfileChanges')}
                   onPress={handleSaveGeneral}
                   variant="primary"
                   size="md"
@@ -389,7 +381,7 @@ export function SettingsScreen() {
 
             {/* Password Management */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Password & Authentication
+              {t('ui.settingsScreen.passwordAndAuthentication')}
             </Text>
             <View
               style={[
@@ -422,10 +414,10 @@ export function SettingsScreen() {
                   </View>
                   <View style={{ marginLeft: spacing.md, flex: 1 }}>
                     <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                      Account Password
+                      {t('ui.settingsScreen.accountPassword')}
                     </Text>
                     <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
-                      Secured with end-to-end cryptographic hashing. Minimum 10 characters.
+                      {t('ui.settingsScreen.securedWithEndToEnd')}
                     </Text>
                   </View>
                 </View>
@@ -442,7 +434,7 @@ export function SettingsScreen() {
                   ]}
                 >
                   <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 12 }}>
-                    Change Password
+                    {t('ui.settingsScreen.changePassword')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -450,7 +442,7 @@ export function SettingsScreen() {
 
             {/* Two-Factor Authentication */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Two-Factor Authentication (2FA)
+              {t('ui.settingsScreen.twoFactorAuthentication2fa')}
             </Text>
             <View
               style={[
@@ -483,7 +475,7 @@ export function SettingsScreen() {
                   </View>
                   <View style={{ marginLeft: spacing.md, flex: 1 }}>
                     <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                      Authenticator App Verification
+                      {t('ui.settingsScreen.authenticatorAppVerification')}
                     </Text>
                     <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 1 }}>
                       {twoFactorEnabled ? 'Active • Requires 6-digit TOTP code on login' : 'Disabled • Protect against unauthorized access'}
@@ -503,7 +495,7 @@ export function SettingsScreen() {
 
             {/* Passkeys */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              FIDO2 Biometric Passkeys
+              {t('ui.settingsScreen.fido2BiometricPasskeys')}
             </Text>
             <View
               style={[
@@ -519,7 +511,7 @@ export function SettingsScreen() {
             >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                  Registered Hardware Tokens
+                  {t('ui.settingsScreen.registeredHardwareTokens')}
                 </Text>
                 <TouchableOpacity
                   onPress={() => setPasskeyVisible(true)}
@@ -534,7 +526,7 @@ export function SettingsScreen() {
                   ]}
                 >
                   <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: 11 }}>
-                    + Register Device
+                    {t('ui.settingsScreen.registerDevice')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -561,7 +553,7 @@ export function SettingsScreen() {
                       marginTop: spacing.sm,
                     }}
                   >
-                    No Biometric Passkeys Registered
+                    {t('ui.settingsScreen.noBiometricPasskeysRegistered')}
                   </Text>
                   <Text
                     style={{
@@ -573,7 +565,7 @@ export function SettingsScreen() {
                       maxWidth: 320,
                     }}
                   >
-                    Register Touch ID, Face ID, or Windows Hello for instant passwordless sign-in with your hardware security enclave.
+                    {t('ui.settingsScreen.registerTouchIdFaceId')}
                   </Text>
                 </View>
               ) : (
@@ -616,7 +608,7 @@ export function SettingsScreen() {
                         ]}
                       >
                         <Text style={{ color: colors.statusSuccess, fontSize: 10, fontFamily: typography.fonts.semiBold }}>
-                          Hardware Verified
+                          {t('ui.settingsScreen.hardwareVerified')}
                         </Text>
                       </View>
                     </View>
@@ -633,7 +625,7 @@ export function SettingsScreen() {
         {activeTab === 'categories' && (
           <View>
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Transaction Category Taxonomies
+              {t('ui.settingsScreen.transactionCategoryTaxonomies')}
             </Text>
             <View
               style={[
@@ -665,10 +657,10 @@ export function SettingsScreen() {
                 </View>
                 <View style={{ flex: 1, marginLeft: spacing.md }}>
                   <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.md }}>
-                    Personalized Dropdown Manager
+                    {t('ui.settingsScreen.personalizedDropdownManager')}
                   </Text>
                   <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2 }}>
-                    Tailor which income streams, expense envelopes, and subcategories appear across your ledger forms.
+                    {t('ui.settingsScreen.tailorWhichIncomeStreamsExpense')}
                   </Text>
                 </View>
               </View>
@@ -692,7 +684,7 @@ export function SettingsScreen() {
                     {enabledIncomeIds.length}
                   </Text>
                   <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-                    Income Streams
+                    {t('ui.settingsScreen.incomeStreams')}
                   </Text>
                 </View>
                 <View style={{ width: 1, backgroundColor: colors.borderSubtle }} />
@@ -701,7 +693,7 @@ export function SettingsScreen() {
                     {enabledExpenseIds.length}
                   </Text>
                   <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-                    Expense Envelopes
+                    {t('ui.settingsScreen.expenseEnvelopes')}
                   </Text>
                 </View>
                 <View style={{ width: 1, backgroundColor: colors.borderSubtle }} />
@@ -710,13 +702,13 @@ export function SettingsScreen() {
                     140+
                   </Text>
                   <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-                    Subcategories
+                    {t('ui.settingsScreen.subcategories')}
                   </Text>
                 </View>
               </View>
 
               <Button
-                label="Open Category Customizer"
+                label={t('ui.settingsScreen.openCategoryCustomizer')}
                 onPress={() => setCategorySheetVisible(true)}
                 variant="primary"
                 size="md"
@@ -733,7 +725,7 @@ export function SettingsScreen() {
           <View>
             {/* Color Theme & Appearance Card */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Theme & Appearance
+              {t('ui.settingsScreen.themeAndAppearance')}
             </Text>
             <View
               style={[
@@ -773,7 +765,7 @@ export function SettingsScreen() {
                       fontSize: typography.sizes.xs,
                     }}
                   >
-                    Pure White
+                    {t('ui.settingsScreen.pureWhite')}
                   </Text>
                   {!isDark && <Check size={13} color={colors.primary} />}
                 </TouchableOpacity>
@@ -802,7 +794,7 @@ export function SettingsScreen() {
                       fontSize: typography.sizes.xs,
                     }}
                   >
-                    Midnight Slate
+                    {t('ui.settingsScreen.midnightSlate')}
                   </Text>
                   {isDark && <Check size={13} color={colors.primary} />}
                 </TouchableOpacity>
@@ -811,7 +803,7 @@ export function SettingsScreen() {
               {/* Theme Colors (Accent Palettes) */}
               <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs, marginBottom: 6 }}>
-                  Theme Accent Color
+                  {t('ui.settingsScreen.themeAccentColor')}
                 </Text>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
@@ -862,7 +854,7 @@ export function SettingsScreen() {
               {/* Interface Density */}
               <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs, marginBottom: 6 }}>
-                  Interface Density
+                  {t('ui.settingsScreen.interfaceDensity')}
                 </Text>
 
                 <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -887,7 +879,7 @@ export function SettingsScreen() {
                         fontSize: typography.sizes.xs,
                       }}
                     >
-                      Comfortable
+                      {t('ui.settingsScreen.comfortable')}
                     </Text>
                   </TouchableOpacity>
 
@@ -912,7 +904,7 @@ export function SettingsScreen() {
                         fontSize: typography.sizes.xs,
                       }}
                     >
-                      High Density
+                      {t('ui.settingsScreen.highDensity')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -921,7 +913,7 @@ export function SettingsScreen() {
 
             {/* Regional & Formatting */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Regional Currency & Date Formatting
+              {t('ui.settingsScreen.regionalCurrencyAndDateFormatting')}
             </Text>
             <View
               style={[
@@ -936,7 +928,7 @@ export function SettingsScreen() {
               ]}
             >
               <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs, marginBottom: 6 }}>
-                Primary Ledger Currency
+                {t('ui.settingsScreen.primaryLedgerCurrency')}
               </Text>
 
               {/* 4 Currencies in a Single Row */}
@@ -980,7 +972,7 @@ export function SettingsScreen() {
               {/* Date & Calendar Formatting */}
               <View style={{ paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
                 <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs, marginBottom: 6 }}>
-                  Date & Calendar Formatting
+                  {t('ui.settingsScreen.dateAndCalendarFormatting')}
                 </Text>
 
                 <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -1026,7 +1018,7 @@ export function SettingsScreen() {
 
             {/* Financial Alerts & Notifications */}
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Financial Alerts & Notifications
+              {t('ui.settingsScreen.financialAlertsAndNotifications')}
             </Text>
             <View
               style={[
@@ -1045,10 +1037,10 @@ export function SettingsScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flex: 1, marginRight: spacing.md }}>
                     <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs }}>
-                      Upcoming Bill Due Reminders
+                      {t('ui.settingsScreen.upcomingBillDueReminders')}
                     </Text>
                     <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
-                      Alert 3 days and 1 day prior to scheduled subscription renewals
+                      {t('ui.settingsScreen.alert3DaysAnd1')}
                     </Text>
                   </View>
                   <Switch
@@ -1064,10 +1056,10 @@ export function SettingsScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flex: 1, marginRight: spacing.md }}>
                     <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs }}>
-                      Envelope Limit Threshold Warnings
+                      {t('ui.settingsScreen.envelopeLimitThresholdWarnings')}
                     </Text>
                     <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
-                      Alert when category spending reaches 80% or 100% of planned monthly allocation
+                      {t('ui.settingsScreen.alertWhenCategorySpendingReaches')}
                     </Text>
                   </View>
                   <Switch
@@ -1083,10 +1075,10 @@ export function SettingsScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View style={{ flex: 1, marginRight: spacing.md }}>
                     <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.xs }}>
-                      Weekly Cash Flow Digest
+                      {t('ui.settingsScreen.weeklyCashFlowDigest')}
                     </Text>
                     <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
-                      Weekly summary of net cash retained, top spenders, and portfolio variance
+                      {t('ui.settingsScreen.weeklySummaryOfNetCash')}
                     </Text>
                   </View>
                   <Switch
@@ -1106,7 +1098,7 @@ export function SettingsScreen() {
         {activeTab === 'data' && (
           <View>
             <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-              Portability & Ledger Backups
+              {t('ui.settingsScreen.portabilityAndLedgerBackups')}
             </Text>
             <View
               style={[
@@ -1121,7 +1113,7 @@ export function SettingsScreen() {
               ]}
             >
               <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.bodySm, marginBottom: spacing.md }}>
-                Download your complete unencrypted financial records anytime. Fully compliant with open financial data standards.
+                {t('ui.settingsScreen.downloadYourCompleteUnencryptedFinancial')}
               </Text>
 
               <View style={{ gap: 10 }}>
@@ -1145,10 +1137,10 @@ export function SettingsScreen() {
                     <FileSpreadsheet size={22} color={colors.primary} />
                     <View style={{ marginLeft: spacing.md }}>
                       <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                        Export Ledger Transactions (CSV)
+                        {t('ui.settingsScreen.exportLedgerTransactionsCsv')}
                       </Text>
                       <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
-                        Compatible with Microsoft Excel, Google Sheets, and Apple Numbers
+                        {t('ui.settingsScreen.compatibleWithMicrosoftExcelGoogle')}
                       </Text>
                     </View>
                   </View>
@@ -1175,10 +1167,10 @@ export function SettingsScreen() {
                     <FileJson size={22} color={colors.primary} />
                     <View style={{ marginLeft: spacing.md }}>
                       <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                        Export Complete Workspace Snapshot (JSON)
+                        {t('ui.settingsScreen.exportCompleteWorkspaceSnapshotJson')}
                       </Text>
                       <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
-                        Includes accounts, budget envelopes, rules, and money events
+                        {t('ui.settingsScreen.includesAccountsBudgetEnvelopesRules')}
                       </Text>
                     </View>
                   </View>
@@ -1189,7 +1181,7 @@ export function SettingsScreen() {
 
             {/* Danger Zone */}
             <Text style={[styles.sectionHeading, { color: colors.statusDanger }]}>
-              Danger Zone
+              {t('ui.settingsScreen.dangerZone')}
             </Text>
             <View
               style={[
@@ -1208,10 +1200,10 @@ export function SettingsScreen() {
                 <AlertTriangle size={20} color={colors.statusDanger} style={{ marginTop: 2 }} />
                 <View style={{ flex: 1, marginLeft: spacing.md }}>
                   <Text style={{ color: colors.statusDanger, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.bodySm }}>
-                    Irreversible Account & Workspace Deletion
+                    {t('ui.settingsScreen.irreversibleAccountAndWorkspaceDeletion')}
                   </Text>
                   <Text style={{ color: colors.textSecondary, fontSize: typography.sizes.xs, marginTop: 2, lineHeight: 18 }}>
-                    Deleting your account permanently erases your workspace, encrypted local SQLite database, and all transaction history. This action cannot be reversed.
+                    {t('ui.settingsScreen.deletingYourAccountPermanentlyErases')}
                   </Text>
                   <TouchableOpacity
                     onPress={() => setDeleteModalVisible(true)}
@@ -1233,7 +1225,7 @@ export function SettingsScreen() {
                   >
                     <Trash2 size={14} color={colors.statusDanger} />
                     <Text style={{ color: colors.statusDanger, fontFamily: typography.fonts.semiBold, fontSize: 12, marginLeft: 6 }}>
-                      Delete Account & Workspace
+                      {t('ui.settingsScreen.deleteAccountAndWorkspace')}
                     </Text>
                   </TouchableOpacity>
                 </View>

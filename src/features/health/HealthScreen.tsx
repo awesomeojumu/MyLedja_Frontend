@@ -4,18 +4,15 @@ import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
   Share2,
-  ShieldAlert,
   ChevronRight,
   Sliders,
-  TrendingUp,
-  Percent,
-  Wallet,
 } from 'lucide-react-native';
 import { useTheme } from '../../design';
 import { PillarFormulaSheet } from './PillarFormulaSheet';
 import { ShareHealthSummarySheet } from './ShareHealthSummarySheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 interface Pillar {
   id: string;
   name: string;
@@ -231,7 +228,7 @@ export function HealthScreen() {
               },
             ]}
           >
-            Financial Health
+            {t('ui.healthScreen.financialHealth')}
           </Text>
           <Text
             style={{
@@ -240,7 +237,7 @@ export function HealthScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            Vulnerability & Resilience Score
+            {t('ui.healthScreen.vulnerabilityAndResilienceScore')}
           </Text>
         </View>
         <TouchableOpacity
@@ -284,7 +281,7 @@ export function HealthScreen() {
               letterSpacing: 0.5,
             }}
           >
-            Overall Resilience Score
+            {t('ui.healthScreen.overallResilienceScore')}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: spacing.xxs }}>
             <Text
@@ -361,7 +358,7 @@ export function HealthScreen() {
                 fontSize: typography.sizes.xs,
               }}
             >
-              5 Pillars Breakdown
+              {t('ui.healthScreen.5PillarsBreakdown')}
             </Text>
           </TouchableOpacity>
 
@@ -385,7 +382,7 @@ export function HealthScreen() {
                 fontSize: typography.sizes.xs,
               }}
             >
-              Stress Test Simulator
+              {t('ui.healthScreen.stressTestSimulator')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -495,7 +492,7 @@ export function HealthScreen() {
                   marginLeft: spacing.xs,
                 }}
               >
-                Income Shock Simulator
+                {t('ui.healthScreen.incomeShockSimulator')}
               </Text>
             </View>
 
@@ -508,7 +505,7 @@ export function HealthScreen() {
                 marginBottom: spacing.lg,
               }}
             >
-              Simulate an economic disruption or salary delay to see how long your cash reserves hold.
+              {t('ui.healthScreen.simulateAnEconomicDisruptionOr')}
             </Text>
 
             <Text
@@ -520,7 +517,7 @@ export function HealthScreen() {
                 marginBottom: spacing.xs,
               }}
             >
-              Simulate Income Drop
+              {t('ui.healthScreen.simulateIncomeDrop')}
             </Text>
 
             {/* Shock Preset Pills */}
@@ -583,7 +580,7 @@ export function HealthScreen() {
                   textTransform: 'uppercase',
                 }}
               >
-                Calculated Runway Duration
+                {t('ui.healthScreen.calculatedRunwayDuration')}
               </Text>
               <Text
                 style={{
@@ -595,7 +592,7 @@ export function HealthScreen() {
               >
                 {simulatedRunway}{' '}
                 <Text style={{ fontSize: typography.sizes.body, color: colors.textSecondary }}>
-                  Months
+                  {t('ui.healthScreen.months')}
                 </Text>
               </Text>
               <Text
@@ -606,8 +603,8 @@ export function HealthScreen() {
                   marginTop: 2,
                 }}
               >
-                At this rate, your emergency reserves can cover all fixed essentials for{' '}
-                {simulatedRunway} months.
+                {t('ui.healthScreen.atThisRateYourEmergency')}{' '}
+                {simulatedRunway}{' '}{t('ui.healthScreen.months2')}
               </Text>
             </View>
           </View>

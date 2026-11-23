@@ -6,13 +6,13 @@ import {
   Search,
   Store,
   ChevronRight,
-  Sparkles,
 } from 'lucide-react-native';
 import { useTheme, TextInput } from '../../design';
 import { EditPayeeSheet, type PayeeItem } from './EditPayeeSheet';
 import { MergePayeeSheet } from './MergePayeeSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 export function PayeesScreen() {
   const { colors, typography, spacing, radii } = useTheme();
   const router = useRouter();
@@ -154,7 +154,7 @@ export function PayeesScreen() {
               },
             ]}
           >
-            Payees & Merchants
+            {t('ui.payeesScreen.payeesAndMerchants')}
           </Text>
           <Text
             style={{
@@ -163,7 +163,7 @@ export function PayeesScreen() {
               fontSize: typography.sizes.xs,
             }}
           >
-            {payees.length} Verified Counterparties
+            {payees.length}{' '}{t('ui.payeesScreen.verifiedCounterparties')}
           </Text>
         </View>
       </View>
@@ -175,7 +175,7 @@ export function PayeesScreen() {
         {/* Search */}
         <View style={{ marginBottom: spacing.md }}>
           <TextInput
-            placeholder="Search payees or merchants..."
+            placeholder={t('ui.payeesScreen.searchPayeesOrMerchants')}
             value={search}
             onChangeText={setSearch}
             leftElement={<Search size={16} color={colors.textTertiary} />}
@@ -227,7 +227,7 @@ export function PayeesScreen() {
                     fontFamily: typography.fonts.regular,
                   }}
                 >
-                  {item.txCount} transactions • Auto: {item.defaultCategory || 'None'}
+                  {item.txCount}{' '}{t('ui.payeesScreen.transactionsAuto')}{' '}{item.defaultCategory || 'None'}
                 </Text>
               </View>
 

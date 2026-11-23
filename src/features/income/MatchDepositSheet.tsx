@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Check, ArrowDownLeft } from 'lucide-react-native';
+import { ArrowDownLeft } from 'lucide-react-native';
 import { useTheme, BottomSheet, Button } from '../../design';
 import { formatNaira } from '../../money';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 interface MatchDepositSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -27,13 +28,13 @@ export function MatchDepositSheet({
 
   // Real unlinked deposit transactions from database
   const unlinkedDeposits = React.useMemo(() => {
-    const list: Array<{
+    const list: {
       id: string;
       date: string;
       narration: string;
       account: string;
       amountMinor: bigint;
-    }> = [];
+    }[] = [];
 
     for (const ev of dbEvents) {
       if (ev.type !== 'income' || ev.status !== 'posted') continue;
@@ -68,7 +69,7 @@ export function MatchDepositSheet({
             marginBottom: spacing.md,
           }}
         >
-          Select an incoming deposit to mark this stream as received for the month.
+          {t('ui.matchDepositSheet.selectAnIncomingDepositTo')}
         </Text>
 
         {unlinkedDeposits.length === 0 ? (
@@ -80,7 +81,7 @@ export function MatchDepositSheet({
                 fontSize: typography.sizes.bodySm,
               }}
             >
-              No unlinked income deposits found in your ledger.
+              {t('ui.matchDepositSheet.noUnlinkedIncomeDepositsFound')}
             </Text>
           </View>
         ) : (
@@ -147,7 +148,7 @@ export function MatchDepositSheet({
 
         <View style={{ marginTop: spacing.lg }}>
           <Button
-            label="Link Deposit to Stream"
+            label={t('ui.matchDepositSheet.linkDepositToStream')}
             onPress={() => {
               if (selectedTxId) {
                 onLinkTransaction(selectedTxId);

@@ -16,6 +16,7 @@ import { DiscrepancyAdjustmentSheet } from './DiscrepancyAdjustmentSheet';
 import { AddMissingTransactionSheet } from './AddMissingTransactionSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 
+import { t } from '../../i18n';
 interface ReconcileItem {
   id: string;
   date: string;
@@ -75,14 +76,6 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
   const parsedStatement = parseAmount(statementText);
   const statementMinor = parsedStatement.ok ? parsedStatement.minor : 0n;
 
-  const clearedInflows = items
-    .filter((i) => i.cleared && i.type === 'inflow')
-    .reduce((sum, i) => sum + i.amountMinor, 0n);
-
-  const clearedOutflows = items
-    .filter((i) => i.cleared && i.type === 'outflow')
-    .reduce((sum, i) => sum + i.amountMinor, 0n);
-
   // Live cleared ledger balance
   const clearedTotalMinor = currentBal;
   const differenceMinor = statementMinor - clearedTotalMinor;
@@ -133,7 +126,7 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
               },
             ]}
           >
-            Reconcile Account
+            {t('ui.reconcileScreen.reconcileAccount')}
           </Text>
           <Text
             style={{
@@ -165,7 +158,7 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
           ]}
         >
           <CurrencyInput
-            label="Bank Statement Closing Balance"
+            label={t('ui.reconcileScreen.bankStatementClosingBalance')}
             value={statementText}
             onChangeText={setStatementText}
           />
@@ -193,7 +186,7 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
                   fontFamily: typography.fonts.medium,
                 }}
               >
-                STATEMENT BALANCE
+                {t('ui.reconcileScreen.statementBalance')}
               </Text>
               <Text
                 style={{
@@ -215,7 +208,7 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
                   fontFamily: typography.fonts.medium,
                 }}
               >
-                CLEARED BALANCE
+                {t('ui.reconcileScreen.clearedBalance')}
               </Text>
               <Text
                 style={{
@@ -288,7 +281,7 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
               fontSize: typography.sizes.md,
             }}
           >
-            Match Transactions
+            {t('ui.reconcileScreen.matchTransactions')}
           </Text>
           <TouchableOpacity
             onPress={() => setMissingVisible(true)}
@@ -311,7 +304,7 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
                 marginLeft: 4,
               }}
             >
-              Add Missing
+              {t('ui.reconcileScreen.addMissing')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -325,7 +318,7 @@ export function ReconcileScreen({ accountId }: ReconcileScreenProps) {
                 fontSize: typography.sizes.bodySm,
               }}
             >
-              No ledger transactions found to reconcile for this account.
+              {t('ui.reconcileScreen.noLedgerTransactionsFoundTo')}
             </Text>
           </View>
         ) : (
