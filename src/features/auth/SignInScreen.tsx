@@ -265,7 +265,7 @@ export function SignInScreen() {
             style={[
               styles.dividerText,
               {
-                color: colors.textTertiary,
+                color: colors.textSecondary,
                 fontFamily: typography.fonts.regular,
                 fontSize: typography.sizes.xs,
                 marginHorizontal: spacing.sm,

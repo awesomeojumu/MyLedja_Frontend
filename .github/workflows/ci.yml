@@ -30,7 +30,12 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL: http://localhost:4000
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      # The browser tests run on the built-in mock (demo person, no backend), so build without an API URL.
+      - name: Build the demo web app for browser tests
+        run: npx expo export --platform web
+        env:
+          EXPO_PUBLIC_API_URL: ''
+      - run: npm run test:e2e -- --trace off
       - run: npm run cases:check
       - run: npm run api:check
       - uses: gitleaks/gitleaks-action@v2

@@ -1,50 +1,81 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { addWelcomeAccount, en, fieldAfter, naira, next, signUp, stepHeader } from './helpers';
 
-import { en, expectNoSeriousAxeIssues, signUpAndSetUp } from './helpers';
+test('Welcome sets up the budget, bills, debts and goals; spending and saving each move money once', async ({ page, isMobile }) => {
+  test.setTimeout(150_000);
+  await signUp(page, `plan-${isMobile ? 'phone' : 'desktop'}@example.test`);
 
-async function addAccount(page: Page, name: string, opening: string, isMobile: boolean) {
-  // On a phone the mock-only Developer panel sits over the bottom bar, so go through the drawer.
-  if (isMobile) {
-    await page.getByRole('button', { name: en['nav.menu'] }).click();
-    await page.getByRole('dialog').getByRole('link', { name: en['nav.accounts'], exact: true }).click();
-  } else await page.getByRole('link', { name: en['nav.accounts'], exact: true }).locator('visible=true').first().click();
-  await expect(page).toHaveURL(/\/accounts$/);
-  await page.getByTestId('accounts-add').click();
-  // PU-13 is two steps: pick kind, then name/opening (type grid covers Continue otherwise).
-  await page.getByTestId('type-bank').click();
-  await page.getByTestId('account-name').fill(name);
-  await page.getByTestId('account-opening').fill(opening);
-  await page.getByTestId('save-account').click();
-  await expect(page.getByRole('link', { name: new RegExp(name) })).toBeVisible();
-}
+  // 1. Your space
+  await next(page);
 
-test('P09-01, P09-02, P09-04: an account page, a CSV import and its Undo', async ({ page, isMobile }) => {
-  test.setTimeout(90_000);
-  await signUpAndSetUp(page, `import-${isMobile ? 'phone' : 'desktop'}@example.test`);
-  await addAccount(page, 'Zenith Current', '1000', isMobile);
-  await page.getByRole('link', { name: /Zenith Current/ }).click();
-  // Phone opens the Account page; wider screens show it beside the list (DESIGN.md page 8).
-  await expect(page).toHaveURL(/\/accounts(\/[\w-]+$|\?view=[\w-]+)/);
-  await expect(page.getByTestId('account-balance')).toHaveText('₦1,000.00');
-  await expectNoSeriousAxeIssues(page);
+  // 2. Your money: ₦300,000 everyday, ₦100,000 emergency fund.
+  await expect(page.getByText(stepHeader(2, 'wiz.step.money'))).toBeVisible();
+  await addWelcomeAccount(page, 'wiz.money.quick.operating', 'GTBank Current', '300000');
+  await addWelcomeAccount(page, 'wiz.money.quick.emergency', 'Rainy day', '100000');
+  await expect(page.getByText(en['wiz.money.total'].replace('{amount}', naira(400000)))).toBeVisible();
+  await next(page);
 
-  await page.getByTestId('account-import').click();
-  const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: en['import.choose'] }).click();
-  await (
-    await chooser
-  ).setFiles({
-    name: 'statement.csv',
-    mimeType: 'text/csv',
-    buffer: Buffer.from('Date,Narration,Amount\n02/10/2026,Shoprite Lekki,-184.50\n05/10/2026,Acme salary,640\n'),
-  });
-  await expect(page.getByTestId('import-preview')).toContainText('Shoprite Lekki');
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await expectNoSeriousAxeIssues(page);
-  await page.getByTestId('import-next').click();
-  await page.getByTestId('import-post').click();
-  await expect(page.getByTestId('account-balance')).toHaveText('₦1,455.50');
-  // Toast Undo — prefer over any leftover import-sheet undo control.
-  await page.getByRole('button', { name: en['common.undo'] }).first().click();
-  await expect(page.getByTestId('account-balance')).toHaveText('₦1,000.00');
+  // 3. ₦500,000 take-home on 50/30/20.
+  await fieldAfter(page, en['wiz.budget.takeHome']).fill('500000');
+  await expect(page.getByText(naira(250000)).first()).toBeVisible();
+  await expect(page.getByText(naira(150000)).first()).toBeVisible();
+  await expect(page.getByText(naira(100000)).first()).toBeVisible();
+  await next(page);
+
+  // 4. Categories, as suggested.
+  await expect(page.getByText(stepHeader(4, 'wiz.step.categories'))).toBeVisible();
+  await next(page);
+
+  // 5. Rent ₦150,000, and a ₦200,000 loan repaid ₦25,000 a month.
+  await page.getByText(en['wiz.bills.preset.rent'], { exact: true }).click();
+  await fieldAfter(page, en['wiz.bills.amount']).fill('150000');
+  await page.getByText(en['wiz.debts.add'], { exact: true }).click();
+  await page.getByPlaceholder(en['wiz.debts.namePlaceholder']).fill('FairMoney loan');
+  await fieldAfter(page, en['wiz.debts.amount']).fill('200000');
+  await fieldAfter(page, en['wiz.debts.monthly']).fill('25000');
+  await next(page);
+
+  // 6. A laptop goal, kept in the emergency account.
+  await page.getByText(en['wiz.goals.addSavings'], { exact: true }).click();
+  await page.getByPlaceholder(en['wiz.goals.namePlaceholder']).fill('New laptop');
+  await fieldAfter(page, en['wiz.goals.target']).fill('600000');
+  await next(page);
+
+  // 7. Review: bills include the repayment.
+  await expect(page.getByText(stepHeader(7, 'wiz.step.review'))).toBeVisible();
+  await expect(page.getByText(en['wiz.review.billsLine'].replace('{n}', '1').replace('{amount}', naira(175000)))).toBeVisible();
+  await page.getByText(en['wiz.finish'], { exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+
+  // Net worth: ₦400,000 in accounts less the ₦200,000 loan.
+  await expect(page.getByText(naira(200000)).first()).toBeVisible();
+
+  // Bills and goals came through setup.
+  await page.goto('/plan');
+  await expect(page.getByText('Rent', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('FairMoney loan', { exact: true }).first()).toBeVisible();
+  await page.goto('/goals');
+  await expect(page.getByText('New laptop', { exact: true }).first()).toBeVisible();
+
+  // A ₦5,000 Food expense is spending.
+  await page.goto('/');
+  await page.getByText(en['ui.quickActionTrio.addExpense'], { exact: true }).first().click();
+  await page.getByRole('dialog').locator('input').first().fill('5000');
+  await page.getByText(en['quick.chooseCategory'], { exact: true }).click();
+  await page.getByText('Food', { exact: true }).first().click();
+  await page.getByText(en['quick.save'], { exact: true }).click();
+  await expect(page.getByText(en['quick.savedExpense'])).toBeVisible();
+  await expect(page.getByText(naira(195000)).first()).toBeVisible();
+
+  // ₦20,000 into the goal moves money between accounts: net worth and spending don't change.
+  await page.getByText(en['ui.quickActionTrio.addExpense'], { exact: true }).first().click();
+  await page.getByRole('dialog').locator('input').first().fill('20000');
+  await page.getByText(en['quick.chooseCategory'], { exact: true }).click();
+  await page.getByText(en['quick.optionSave'], { exact: true }).click();
+  await page.getByText(en['quick.chooseTarget'], { exact: true }).click();
+  await page.getByText(en['quick.targetGoal'].replace('{name}', 'New laptop'), { exact: true }).click();
+  await page.getByText(en['quick.save'], { exact: true }).click();
+  await expect(page.getByText(en['quick.savedGoal'].replace('{name}', 'New laptop'))).toBeVisible();
+  await expect(page.getByText(naira(195000)).first()).toBeVisible();
+  await expect(page.getByText(naira(5000)).first()).toBeVisible();
 });

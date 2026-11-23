@@ -211,7 +211,7 @@ export function RecoverScreen() {
             <View style={{ marginTop: spacing.md }}>
               <TextInput
                 label={t('ui.recoverScreen.newPassword')}
-                placeholder={t('ui.recoverScreen.atLeast8Characters')}
+                placeholder={t('signUp.rule.length')}
                 secureTextEntry
                 value={newPassword}
                 onChangeText={(v) => {

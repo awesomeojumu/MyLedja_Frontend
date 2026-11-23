@@ -78,6 +78,9 @@ export function Dropdown({
         activeOpacity={0.7}
         accessibilityRole="combobox"
         accessibilityLabel={label || placeholder}
+        // A combobox must say whether its list is open (WCAG 4.1.2).
+        accessibilityState={{ expanded: isOpen, disabled: !!disabled }}
+        aria-expanded={isOpen}
         style={[
           styles.trigger,
           {

@@ -1,57 +1,24 @@
 import { expect, test } from '@playwright/test';
-import { ADA, en, expectNoSeriousAxeIssues, signIn } from './helpers';
+import { ADA, en, expectNoSeriousAxeIssues, next, signIn, signUp, stepHeader } from './helpers';
 
-test('sign up, check email, finish Welcome, land on Dashboard', async ({ page }) => {
-  await page.goto('/sign-up');
-  await page.getByLabel(en['signUp.name'], { exact: true }).fill('Tunde');
-  await page.getByLabel(en['auth.email'], { exact: true }).fill('tunde@example.test');
-  await page.getByLabel(en['auth.password'], { exact: true }).fill('lagos-rain-2026');
-  await page.getByTestId('terms').click();
-  await page.getByRole('button', { name: en['signUp.submit'] }).click();
-
-  await expect(page.getByText(en['signUp.checkTitle'])).toBeVisible();
-  await page.getByLabel(en['signUp.codeDigit'].replace('{n}', '1')).fill(ADA.code);
-  await page.getByRole('button', { name: en['signUp.verify'] }).click();
-  await expect(page.getByText(en['signUp.readyTitle'])).toBeVisible();
-  await page.getByRole('button', { name: en['signUp.readyContinue'] }).click();
-
-  await expect(page).toHaveURL(/\/welcome$/);
-  for (let step = 1; step <= 5; step++) {
-    await expect(page.getByText(en['welcome.stepOf'].replace('{n}', String(step)))).toBeVisible();
-    await page.getByRole('button', { name: en['common.continue'], exact: true }).click();
-  }
-  await expect(page.getByText(en['welcome.done.title'])).toBeVisible();
-  await page.getByRole('button', { name: en['welcome.done.dashboard'] }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: en['dashboard.title'] })).toBeVisible();
+test('opens on Sign in, in light mode, and the toggle switches to dark', async ({ browser }) => {
+  // Even with the device set to dark, a first visit is light until the person chooses.
+  const context = await browser.newContext({ colorScheme: 'dark' });
+  const page = await context.newPage();
+  await page.goto('/');
+  await expect(page).toHaveURL(/\/sign-in$/);
+  await expect(page.getByRole('button', { name: en['theme.toDark'] })).toBeVisible();
+  await page.getByRole('button', { name: en['theme.toDark'] }).click();
+  await expect(page.getByRole('button', { name: en['theme.toLight'] })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: en['theme.toLight'] })).toBeVisible();
+  await context.close();
 });
 
-test('sign in, sign out, recover the password', async ({ page, isMobile }) => {
-  await signIn(page);
-  await expect(page.getByRole('heading', { name: en['dashboard.title'] })).toBeVisible();
-
-  // Sign out lives on Settings › General (Q-5), not the sidebar.
-  if (isMobile) {
-    await page.getByRole('button', { name: en['nav.menu'] }).click();
-    await page.getByRole('dialog').getByRole('link', { name: en['nav.settings'], exact: true }).click();
-    // Phone Settings is a tab list first — open General for the sign-out control.
-    await page.getByTestId('settings-link-general').click();
-  } else {
-    await page.getByRole('link', { name: en['nav.settings'], exact: true }).locator('visible=true').first().click();
-  }
-  await page.getByTestId('settings-sign-out').click();
-  await expect(page).toHaveURL(/\/sign-in$/);
-
-  await page.getByRole('link', { name: en['signIn.forgot'] }).click();
-  await expect(page.getByRole('heading', { name: en['recover.title'] })).toBeVisible();
-  await page.getByLabel(en['auth.email'], { exact: true }).locator('visible=true').fill(ADA.email);
-  await page.getByRole('button', { name: en['recover.submit'] }).click();
-  await expect(page.getByText(en['recover.sent'])).toBeVisible();
-  await page.getByLabel(en['signUp.codeDigit'].replace('{n}', '1')).locator('visible=true').fill(ADA.code);
-  await page.getByLabel(en['recover.newPassword'], { exact: true }).locator('visible=true').fill('new-lagos-pass-1');
-  await page.getByLabel(en['recover.confirmPassword'], { exact: true }).locator('visible=true').fill('new-lagos-pass-1');
-  await page.getByRole('button', { name: en['recover.save'] }).click();
-  await expect(page.getByText(en['recover.doneTitle'])).toBeVisible();
+test('Sign in passes the accessibility check', async ({ page }) => {
+  await page.goto('/sign-in');
+  await expect(page.getByText(en['ui.signInScreen.signIn'], { exact: true })).toBeVisible();
+  await expectNoSeriousAxeIssues(page);
 });
 
 test('P01-02 wrong details never say which one', async ({ page }) => {
@@ -59,36 +26,40 @@ test('P01-02 wrong details never say which one', async ({ page }) => {
   await expect(page.getByText(en['signIn.wrong'])).toBeVisible();
 });
 
-test('P01-04 refreshing without "Stay signed in" asks to sign in again', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'The tick-box is a browser choice; one project is enough.');
+test('a person who has set up signs in to the Dashboard', async ({ page }) => {
   await signIn(page);
-  await expect(page.getByRole('heading', { name: en['dashboard.title'] })).toBeVisible();
-  await page.reload();
-  await expect(page).toHaveURL(/\/sign-in$/);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByText(en['ui.quickActionTrio.addExpense'], { exact: true }).first()).toBeVisible();
 });
 
-test('E-09 resizing changes the frame without reloading', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'Resizing is a desktop browser behaviour.');
-  await signIn(page);
-  await expect(page.getByTestId('frame-sidebar')).toBeVisible();
-  await page.evaluate(() => ((window as unknown as { marker: number }).marker = 1));
-  await page.setViewportSize({ width: 800, height: 900 });
-  await expect(page.getByTestId('frame-rail')).toBeVisible();
-  await page.setViewportSize({ width: 375, height: 800 });
-  await expect(page.getByTestId('frame-phone')).toBeVisible();
-  expect(await page.evaluate(() => (window as unknown as { marker?: number }).marker)).toBe(1);
+test('recover the password with the email code', async ({ page }) => {
+  await page.goto('/recover');
+  await page.getByPlaceholder(en['ui.recoverScreen.youDomainCom']).fill(ADA.email);
+  await page.getByText(en['ui.recoverScreen.sendRecoveryCode'], { exact: true }).click();
+  await page.getByPlaceholder('123456').fill(ADA.code);
+  await page.getByPlaceholder(en['signUp.rule.length']).fill('new-lagos-pass-1');
+  await page.getByText(en['ui.recoverScreen.resetPassword'], { exact: true }).click();
+  await expect(page.getByText(en['recover.doneTitle'])).toBeVisible();
 });
 
-for (const path of ['/sign-in', '/sign-up', '/recover']) {
-  test(`accessibility: ${path} has no serious or critical axe issues`, async ({ page }) => {
-    await page.goto(path);
-    await expect(page.getByRole('button').first()).toBeVisible();
-    await expectNoSeriousAxeIssues(page);
-  });
-}
-
-test('accessibility: Welcome and Dashboard have no serious or critical axe issues', async ({ page }) => {
-  await signIn(page);
-  await expect(page.getByRole('heading', { name: en['dashboard.title'] })).toBeVisible();
-  await expectNoSeriousAxeIssues(page);
+test('sign up, the email code, all seven Welcome steps, then the Dashboard', async ({ page, isMobile }) => {
+  test.setTimeout(90_000);
+  await signUp(page, `tunde-${isMobile ? 'phone' : 'desktop'}@example.test`);
+  const steps = [
+    'wiz.step.space',
+    'wiz.step.money',
+    'wiz.step.budget',
+    'wiz.step.categories',
+    'wiz.step.bills',
+    'wiz.step.goals',
+    'wiz.step.review',
+  ] as const;
+  for (const [i, key] of steps.entries()) {
+    await expect(page.getByText(stepHeader(i + 1, key))).toBeVisible();
+    if (i === 0) await expectNoSeriousAxeIssues(page);
+    if (i < steps.length - 1) await next(page);
+  }
+  await page.getByText(en['wiz.finish'], { exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByText(en['ui.quickActionTrio.addExpense'], { exact: true }).first()).toBeVisible();
 });

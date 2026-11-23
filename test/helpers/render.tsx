@@ -2,7 +2,7 @@ import { render } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Transport } from '@/api/client';
-import { createMemorySessionStore, type SessionStore } from '@/data/session';
+import { type SessionStore } from '@/data/session';
 import { ThemeProvider } from '@/design';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { MockSyncServer } from '@/api/mocks/sync';
