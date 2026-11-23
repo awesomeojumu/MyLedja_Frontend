@@ -24,7 +24,8 @@ import {
   type RecurringBillItem,
 } from '../plan/billsModel';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
-import { resolveCategoryId, taxonomyFor } from '../categories/catalog';
+import { categoryForTaxonomy, resolveCategoryId, taxonomyFor } from '../categories/catalog';
+import { budgetAssignId } from '../../data/workspace/model';
 import type { CategoryDefinition } from '../../data/categoriesTaxonomy';
 import { monthCodeOf, shiftMonth, thisMonthLabel } from '../../lib/months';
 
@@ -48,7 +49,7 @@ export function BudgetScreen() {
   const [toastVisible, setToastVisible] = useState(false);
 
   // Live Database Hook
-  const { repo, categories: dbCategories, events: dbEvents } = useDatabaseData();
+  const { repo, categories: dbCategories, events: dbEvents, assigns: dbAssigns } = useDatabaseData();
   // Budget rows come from the Settings catalogue; spending is recorded against the workspace category.
   // A budget row counts its general line and every subcategory under it.
   const idsOf = useMemo(() => {
@@ -252,7 +253,8 @@ export function BudgetScreen() {
         month: currentMonth,
         expectedIncomeMinor: 0n,
         frameworkId: activeFramework.id,
-        titheEnabled: true,
+        // A tithe is its own pillar in the structures that have one; taking it off the top as well counts it twice.
+        titheEnabled: false,
         taxEnabled: false,
         earmarkedInflows: [],
       };
@@ -326,7 +328,10 @@ export function BudgetScreen() {
           // Get category ratio / percentage of pillar
           const defaultShare = Math.floor(100 / pillarCategories.length);
           const catPct = BigInt(getCategoryPercentage(cat.name, defaultShare));
-          const basePlanned = (pillarAllocated * catPct) / 100n;
+          // The amount assigned in the workspace for this month (Welcome, or an earlier edit) wins over the share.
+          const general = categoryForTaxonomy(dbCategories, cat);
+          const assigned = general ? (dbAssigns.get(budgetAssignId(general.id, monthCodeOf(currentMonth))) ?? 0n) : 0n;
+          const basePlanned = assigned > 0n ? assigned : (pillarAllocated * catPct) / 100n;
           const extraEarmark = earmarkMap[cat.name] || 0n;
           const totalPlanned = basePlanned + extraEarmark;
 
@@ -452,6 +457,8 @@ export function BudgetScreen() {
     categoryScheduledBillsMap,
     dbEvents,
     idsOf,
+    dbAssigns,
+    dbCategories,
   ]);
 
   // Aggregate Totals

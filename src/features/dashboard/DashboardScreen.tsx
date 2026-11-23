@@ -13,6 +13,7 @@ import { QuickTransactionSheet } from './QuickTransactionSheet';
 import { QuickTransferSheet } from './QuickTransferSheet';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
 import { t, type TextKey } from '../../i18n';
+import { ACCOUNT_KIND_INFO } from '../../data/workspace/model';
 import { monthCodeOf, shiftMonth, thisMonthLabel } from '../../lib/months';
 
 export function DashboardScreen() {
@@ -105,7 +106,15 @@ export function DashboardScreen() {
         for (const line of ev.lines) {
           if (line.amountMinor > 0n) amount += line.amountMinor;
         }
-        const kind = kindOf[ev.type] ?? { label: 'activity.expense' as TextKey, type: 'expense' as const };
+        let kind = kindOf[ev.type] ?? { label: 'activity.expense' as TextKey, type: 'expense' as const };
+        // An opening balance is money you have (shown as in) or, on a card or loan, money you owe (shown as out).
+        if (ev.type === 'opening_balance') {
+          const owed = ev.lines.some((l) => {
+            const acc = dbAccounts.find((a) => a.id === l.ledgerAccountId);
+            return acc ? ACCOUNT_KIND_INFO[acc.type].ledger === 'liability' : false;
+          });
+          kind = { label: 'activity.opening', type: owed ? 'expense' : 'income' };
+        }
         return {
           id: ev.id,
           payee: ev.payeeName || t(kind.label),
@@ -115,7 +124,7 @@ export function DashboardScreen() {
           type: kind.type,
         };
       });
-  }, [dbEvents]);
+  }, [dbEvents, dbAccounts]);
 
   const showSaved = (message: string) => {
     setToastMessage(message);

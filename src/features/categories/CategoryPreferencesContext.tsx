@@ -25,6 +25,8 @@ export interface CategoryPreferencesContextType {
   setExpenseCategories: (ids: string[]) => void;
   setIncomeCategories: (ids: string[]) => void;
   toggleSubcategory: (categoryId: string, subcategory: string) => void;
+  /** Replaces every category's switched-on subcategories at once (Welcome). */
+  setSubcategories: (map: Record<string, string[]>) => void;
   selectAllSubcategories: (categoryId: string) => void;
   deselectAllSubcategories: (categoryId: string) => void;
   isSubcategoryEnabled: (categoryId: string, subcategory: string) => boolean;
@@ -180,6 +182,10 @@ export function CategoryPreferencesProvider({ children }: { children: React.Reac
     saveSubcategories(nextMap);
   };
 
+  const setSubcategories = (map: Record<string, string[]>) => {
+    saveSubcategories({ ...enabledSubcategories, ...map });
+  };
+
   const selectAllSubcategories = (categoryId: string) => {
     const cat = [...EXPENSE_TAXONOMY, ...INCOME_TAXONOMY].find((c) => c.id === categoryId);
     if (!cat) return;
@@ -286,6 +292,7 @@ export function CategoryPreferencesProvider({ children }: { children: React.Reac
     setExpenseCategories,
     setIncomeCategories,
     toggleSubcategory,
+    setSubcategories,
     selectAllSubcategories,
     deselectAllSubcategories,
     isSubcategoryEnabled,
@@ -323,6 +330,7 @@ export function useCategoryPreferences(): CategoryPreferencesContextType {
       setExpenseCategories: () => {},
       setIncomeCategories: () => {},
       toggleSubcategory: () => {},
+      setSubcategories: () => {},
       selectAllSubcategories: () => {},
       deselectAllSubcategories: () => {},
       isSubcategoryEnabled: () => true,

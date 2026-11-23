@@ -33,6 +33,8 @@ export interface RulesContextType {
   earmarkedRules: EarmarkedRule[];
   subAllocation: SubAllocationConfig;
   applyPresetFramework: (presetId: string) => void;
+  /** Welcome: the chosen structure (with the person's split and mapping) and each category's share of its pillar. */
+  applyOnboardingPlan: (framework: AllocationFramework, categoryPercentages: Record<string, number>) => Promise<void>;
   updatePillarPercentage: (pillarId: string, newPercentage: number) => void;
   updateTaxRule: (updates: Partial<TaxRuleConfig>) => void;
   updateTitheRule: (updates: Partial<TitheRuleConfig>) => void;
@@ -179,6 +181,16 @@ export function RulesProvider({ children }: { children: React.ReactNode }) {
       setActiveFramework(found);
       saveState(found);
     }
+  };
+
+  const applyOnboardingPlan = async (framework: AllocationFramework, categoryPercentages: Record<string, number>) => {
+    const next: SubAllocationConfig = {
+      ...subAllocation,
+      categoryPercentages: { ...(subAllocation.categoryPercentages || {}), ...categoryPercentages },
+    };
+    setActiveFramework(framework);
+    setSubAllocation(next);
+    await saveState(framework, taxRule, titheRule, earmarkedRules, next);
   };
 
   const updatePillarPercentage = (pillarId: string, newPercentage: number) => {
@@ -471,6 +483,7 @@ export function RulesProvider({ children }: { children: React.ReactNode }) {
     earmarkedRules,
     subAllocation,
     applyPresetFramework,
+    applyOnboardingPlan,
     updatePillarPercentage,
     updateTaxRule,
     updateTitheRule,

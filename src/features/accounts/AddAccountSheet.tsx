@@ -21,9 +21,13 @@ interface AddAccountSheetProps {
   onSaveAccount: (account: NewAccount) => void;
   /** Opens with this purpose picked, for "Add a savings account" shortcuts. */
   initialPurpose?: AccountPurpose;
+  /** Opens with this name filled in. */
+  initialName?: string;
+  /** Saves as this kind instead of the purpose's usual one (cash on hand is an everyday account of kind cash). */
+  kind?: AccountKind;
 }
 
-export function AddAccountSheet({ visible, onClose, onSaveAccount, initialPurpose = 'operating' }: AddAccountSheetProps) {
+export function AddAccountSheet({ visible, onClose, onSaveAccount, initialPurpose = 'operating', initialName, kind }: AddAccountSheetProps) {
   const { spacing } = useTheme();
 
   const [purpose, setPurpose] = useState<AccountPurpose>(initialPurpose);
@@ -36,7 +40,10 @@ export function AddAccountSheet({ visible, onClose, onSaveAccount, initialPurpos
   const [openedFor, setOpenedFor] = useState(false);
   if (visible !== openedFor) {
     setOpenedFor(visible);
-    if (visible) setPurpose(initialPurpose);
+    if (visible) {
+      setPurpose(initialPurpose);
+      setName(initialName ?? '');
+    }
   }
 
   const reset = () => {
@@ -58,7 +65,7 @@ export function AddAccountSheet({ visible, onClose, onSaveAccount, initialPurpos
       name: finalName,
       institution: institution.trim() || undefined,
       purpose,
-      type: info.kind,
+      type: kind ?? info.kind,
       balanceMinor: parsed.ok && parsed.minor > 0n ? parsed.minor : 0n,
     });
     reset();

@@ -1,540 +1,271 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { v7 as uuidv7 } from 'uuid';
-import { Check, Plus, Trash2, ShieldCheck, PiggyBank, TrendingUp, LifeBuoy } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 
-import { useTheme, TextInput, Button, Dropdown, CurrencyInput } from '../../design';
-import { t } from '../../i18n';
-import { formatNaira, parseAmount, toWire } from '../../money';
-import { authApi, type SetupBody } from '../../api/auth';
-import { NetworkError } from '../../api/client';
+import { useTheme, Button, useResponsive } from '../../design';
+import { t, type TextKey } from '../../i18n';
+import { authApi } from '../../api/auth';
 import { useAuth } from '../auth/AuthProvider';
 import { useSync } from '../../data/sync/SyncProvider';
 import { WorkspaceRepository } from '../../data/workspace/repository';
-import { EXPENSE_TAXONOMY, INCOME_TAXONOMY, type CategoryDefinition } from '../../data/categoriesTaxonomy';
+import { openKeyValue } from '../../data/kv';
+import { INCOME_TAXONOMY } from '../../data/categoriesTaxonomy';
 import { useCategoryPreferences } from '../categories/CategoryPreferencesContext';
-import { SAVE_OR_INVEST_TAXONOMY_ID } from '../categories/catalog';
-import { AddAccountSheet, type NewAccount } from '../accounts/AddAccountSheet';
-import { PURPOSE_INFO, type AccountPurpose } from '../accounts/purpose';
-import { CURRENCIES, currencyLabel } from './currencies';
+import { useFinancialRules } from '../rules/RulesContext';
+import { categoryPercentages, finishSetup, savedFramework } from './finishSetup';
+import { defaultDraft, frameworkOf, toMinor, totalPercent, type SetupDraft } from './plan';
+import { Hint } from './ui';
+import { SpaceStep } from './steps/SpaceStep';
+import { MoneyStep } from './steps/MoneyStep';
+import { BudgetStep } from './steps/BudgetStep';
+import { CategoriesStep } from './steps/CategoriesStep';
+import { BillsStep } from './steps/BillsStep';
+import { GoalsStep } from './steps/GoalsStep';
+import { ReviewStep } from './steps/ReviewStep';
 
-type Step = 'about' | 'budget' | 'accounts' | 'categories';
-const STEPS: Step[] = ['about', 'budget', 'accounts', 'categories'];
-/** Dashboard "Get started" numbers for a skipped step (P04-02): 3 accounts, 4 categories, 5 budget style. */
-const SKIP_NUMBER: Partial<Record<Step, number>> = { accounts: 3, categories: 4, budget: 5 };
+const STEPS: { key: TextKey; Component: typeof SpaceStep }[] = [
+  { key: 'wiz.step.space', Component: SpaceStep },
+  { key: 'wiz.step.money', Component: MoneyStep },
+  { key: 'wiz.step.budget', Component: BudgetStep },
+  { key: 'wiz.step.categories', Component: CategoriesStep },
+  { key: 'wiz.step.bills', Component: BillsStep },
+  { key: 'wiz.step.goals', Component: GoalsStep },
+  { key: 'wiz.step.review', Component: ReviewStep },
+];
+const LAST = STEPS.length - 1;
 
-type BudgetChoice = 'envelope' | 'limits' | 'track';
-type WeekStart = SetupBody['weekStart'];
-type SetupAccountType = SetupBody['accounts'][number]['type'];
-
-const SPENDING_CHOICES = EXPENSE_TAXONOMY.filter((d) => d.id !== SAVE_OR_INVEST_TAXONOMY_ID);
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const DRAFT_KEY = 'setup:draft_v1';
+/** Where the Budget page keeps expected income per income source (BudgetScreen). */
+const INCOME_BUDGETS_KEY = 'pref:budget_income_budgets_v1';
 
 export function WelcomeScreen() {
   const { colors, typography, spacing, radii } = useTheme();
+  const { isDesktop } = useResponsive();
   const router = useRouter();
   const { user, workspaceId, client, source, setSession } = useAuth();
   const { store, engine } = useSync();
-  const { enabledIncomeIds, enabledExpenseIds, setIncomeCategories, setExpenseCategories } = useCategoryPreferences();
+  const prefs = useCategoryPreferences();
+  const rules = useFinancialRules();
 
-  const [stepIndex, setStepIndex] = useState(0);
-  const [skipped, setSkipped] = useState<Set<Step>>(new Set());
-
-  const [workspaceName, setWorkspaceName] = useState(user?.workspaceName || t('welcome.step1.default'));
-  const [currency, setCurrency] = useState('NGN');
-  const [weekStart, setWeekStart] = useState<WeekStart>('monday');
-
-  const [budgetChoice, setBudgetChoice] = useState<BudgetChoice>('limits');
-  const [takeHome, setTakeHome] = useState('');
-
-  const [accounts, setAccounts] = useState<(NewAccount & { key: string })[]>([]);
-  const [sheetPurpose, setSheetPurpose] = useState<AccountPurpose | null>(null);
-
-  const [expenseIds, setExpenseIds] = useState<string[]>(() =>
-    enabledExpenseIds.filter((id) => id !== SAVE_OR_INVEST_TAXONOMY_ID),
+  const [draft, setDraft] = useState<SetupDraft>(() =>
+    defaultDraft(user?.workspaceName || t('welcome.step1.default'), prefs.enabledExpenseIds, prefs.enabledIncomeIds, prefs.enabledSubcategories),
   );
-  const [incomeIds, setIncomeIds] = useState<string[]>(enabledIncomeIds);
-  const [showAllCategories, setShowAllCategories] = useState(false);
-
-  const [saving, setSaving] = useState(false);
+  const [restored, setRestored] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
+  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const loaded = useRef(false);
 
-  const step = STEPS[stepIndex]!;
-  const isLast = stepIndex === STEPS.length - 1;
+  // Bring back what was typed last time, so closing the app halfway loses nothing.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const raw = await openKeyValue('myledja').get(DRAFT_KEY);
+        if (raw) {
+          const saved = JSON.parse(raw) as SetupDraft;
+          if (saved?.version === 1) {
+            setDraft((d) => ({ ...d, ...saved }));
+            setRestored(true);
+          }
+        }
+      } catch {
+        // A broken draft just starts fresh.
+      } finally {
+        loaded.current = true;
+      }
+    })();
+  }, []);
 
-  const currencyOptions = useMemo(
-    () => CURRENCIES.map((c) => ({ label: currencyLabel(c.code), value: c.code })),
-    [],
-  );
-  const weekOptions = [
-    { label: t('welcome.day.monday'), value: 'monday' },
-    { label: t('welcome.day.sunday'), value: 'sunday' },
-    { label: t('welcome.day.saturday'), value: 'saturday' },
-  ];
+  useEffect(() => {
+    if (!loaded.current) return;
+    const timer = setTimeout(() => {
+      void openKeyValue('myledja')
+        .set([[DRAFT_KEY, JSON.stringify(draft)]])
+        .catch(() => undefined);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [draft]);
 
-  const toggle = (list: string[], id: string) =>
-    list.includes(id) ? (list.length > 1 ? list.filter((x) => x !== id) : list) : [...list, id];
+  const update = (patch: Partial<SetupDraft> | ((d: SetupDraft) => Partial<SetupDraft>)) =>
+    setDraft((d) => ({ ...d, ...(typeof patch === 'function' ? patch(d) : patch) }));
 
-  const goNext = () => {
+  const goTo = (step: number) => {
     setError('');
-    if (isLast) void finish(skipped);
-    else setStepIndex((i) => i + 1);
+    update({ step: Math.max(0, Math.min(LAST, step)) });
+    scroll.current?.scrollTo({ y: 0, animated: false });
   };
 
-  const skipStep = () => {
-    const next = new Set(skipped).add(step);
-    setSkipped(next);
-    setError('');
-    if (isLast) void finish(next);
-    else setStepIndex((i) => i + 1);
+  const step = draft.step;
+  const Step = STEPS[step]!.Component;
+
+  /** What stops this step going on, if anything. */
+  const blocker = (): string => {
+    if (step === 0 && !draft.workspaceName.trim()) return t('wiz.space.nameRequired');
+    if (step === 2) {
+      const total = totalPercent(frameworkOf(draft));
+      if (total !== 100) return t('wiz.budget.mustBe100', { n: total });
+    }
+    return '';
   };
 
-  const buildBody = (skippedSteps: Set<Step>): SetupBody => {
-    const take = parseAmount(takeHome);
-    const useAccounts = skippedSteps.has('accounts') ? [] : accounts;
-    const spending = skippedSteps.has('categories')
-      ? SPENDING_CHOICES.filter((d) => d.defaultActive)
-      : SPENDING_CHOICES.filter((d) => expenseIds.includes(d.id));
-    const income = skippedSteps.has('categories')
-      ? INCOME_TAXONOMY.filter((d) => d.defaultActive)
-      : INCOME_TAXONOMY.filter((d) => incomeIds.includes(d.id));
-    return {
-      workspaceName: workspaceName.trim() || t('welcome.step1.default'),
-      currency,
-      weekStart,
-      budgetStyle: budgetChoice === 'envelope' ? 'envelope' : 'tracking',
-      monthlyTakeHome:
-        !skippedSteps.has('budget') && budgetChoice !== 'track' && take.ok && take.minor > 0n ? toWire(take.minor) : null,
-      accounts: useAccounts.map((a) => ({
-        id: uuidv7(),
-        name: a.name,
-        type: a.type as SetupAccountType,
-        purpose: a.purpose,
-        openingBalance: toWire(a.balanceMinor),
-        openingDate: todayIso(),
-        currency,
-      })),
-      categories: [
-        ...spending.map((d) => ({ key: d.id, group: 'Spending', name: d.name })),
-        ...income.map((d) => ({ key: d.id, group: 'Income', name: d.name })),
-      ],
-      skippedSteps: [...skippedSteps].map((s) => SKIP_NUMBER[s]).filter((n): n is number => n !== undefined),
-    };
+  const next = () => {
+    const problem = blocker();
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    if (step === LAST) void finish();
+    else goTo(step + 1);
   };
 
-  const finish = async (skippedSteps: Set<Step>) => {
+  const skip = () => {
+    update((d) => ({ skipped: [...new Set([...d.skipped, step])] }));
+    goTo(step + 1);
+  };
+
+  const finish = async () => {
+    const wsId = workspaceId || user?.workspaceId;
+    if (!wsId) return;
     setSaving(true);
     setError('');
-    const body = buildBody(skippedSteps);
-    const wsId = workspaceId || user?.workspaceId;
     try {
-      let finishedUser = user ? { ...user, setupComplete: true, workspaceName: body.workspaceName } : null;
-      if (source !== 'mock' && wsId) {
-        // The server creates the accounts, opening balances and categories; sync brings them to this device.
-        const saved = await authApi(client).finishSetup(wsId, body);
-        finishedUser = { ...saved, setupComplete: true };
-        void engine.wake();
-      } else if (wsId) {
-        // Demo and tests run on the built-in mock: seed this device, and tell the mock setup is done.
-        await new WorkspaceRepository(store, engine, wsId).seedFromSetup(body);
-        if (client.hasAccessToken()) await authApi(client).finishSetup(wsId, body).catch(() => undefined);
+      const repo = new WorkspaceRepository(store, engine, wsId);
+      const onServer = source !== 'mock';
+      let finishedUser = user ? { ...user, setupComplete: true, workspaceName: draft.workspaceName.trim() || user.workspaceName } : null;
+      const result = await finishSetup(draft, {
+        repo,
+        sendSetup: onServer
+          ? async (body) => {
+              const saved = await authApi(client).finishSetup(wsId, body);
+              finishedUser = { ...saved, setupComplete: true };
+            }
+          : null,
+        syncNow: () => engine.sync({ force: true }),
+      });
+      // The demo mock keeps its own record of setup too.
+      if (!onServer && client.hasAccessToken()) {
+        await authApi(client)
+          .finishSetup(wsId, { workspaceName: draft.workspaceName, currency: draft.currency, weekStart: draft.weekStart, accounts: [], categories: [], budgetStyle: 'tracking', monthlyTakeHome: null, skippedSteps: [] })
+          .catch(() => undefined);
       }
-      setExpenseCategories(body.categories.filter((c) => c.group === 'Spending').map((c) => c.key));
-      setIncomeCategories(body.categories.filter((c) => c.group === 'Income').map((c) => c.key));
+
+      // This device's planning settings: the structure, each category's share, and the Budget page's income.
+      await rules.applyOnboardingPlan(savedFramework(draft), categoryPercentages(draft));
+      prefs.setExpenseCategories(draft.expenseIds);
+      prefs.setIncomeCategories(draft.incomeIds);
+      prefs.setSubcategories(draft.subcategories);
+      const incomeDef = INCOME_TAXONOMY.find((d) => draft.incomeIds.includes(d.id));
+      const take = toMinor(draft.takeHome);
+      const kv = openKeyValue('myledja');
+      if (incomeDef && take > 0n) {
+        await kv
+          .set([[INCOME_BUDGETS_KEY, JSON.stringify({ [incomeDef.id]: { id: incomeDef.id, name: incomeDef.name, totalPlannedMinor: take.toString(), subBudgets: {} } })]])
+          .catch(() => undefined);
+      }
+      await kv.remove([DRAFT_KEY]).catch(() => undefined);
+
       if (finishedUser) await setSession(finishedUser);
-      router.replace('/' as never);
+      if (result.failed.length > 0) {
+        setNotice(t('wiz.partial', { items: result.failed.join(', ') }));
+        setTimeout(() => router.replace('/' as never), 3500);
+      } else {
+        router.replace('/' as never);
+      }
     } catch (err) {
       console.warn('Setup failed', err);
-      setError(t('setup.failed'));
-      if (!(err instanceof NetworkError)) setSkipped(skippedSteps);
+      setError(t('wiz.failed'));
     } finally {
       setSaving(false);
     }
   };
 
-  const chip = (selected: boolean, label: string, onPress: () => void, key: string) => (
-    <TouchableOpacity
-      key={key}
-      onPress={onPress}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: selected }}
-      style={[
-        styles.chip,
-        {
-          backgroundColor: selected ? colors.primaryLight : colors.surfaceSubtle,
-          borderColor: selected ? colors.primary : colors.borderSubtle,
-          borderRadius: radii.full,
-        },
-      ]}
-    >
-      {selected && <Check size={14} color={colors.primary} style={{ marginRight: 6 }} />}
-      <Text
-        style={{
-          color: selected ? colors.primary : colors.textSecondary,
-          fontFamily: typography.fonts.medium,
-          fontSize: typography.sizes.sm,
-        }}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  const titleStyle = {
-    color: colors.textPrimary,
-    fontFamily: typography.fonts.semiBold,
-    fontSize: typography.sizes.xxl,
-  };
-  const bodyStyle = {
-    color: colors.textSecondary,
-    fontFamily: typography.fonts.regular,
-    fontSize: typography.sizes.body,
-    marginTop: spacing.xs,
-    marginBottom: spacing.lg,
-    lineHeight: 22,
-  };
-  const sectionLabel = {
-    color: colors.textPrimary,
-    fontFamily: typography.fonts.medium,
-    fontSize: typography.sizes.md,
-    marginBottom: spacing.sm,
-  };
-  const hint = {
-    color: colors.textSecondary,
-    fontFamily: typography.fonts.regular,
-    fontSize: typography.sizes.sm,
-  };
-
-  const renderCategoryList = (defs: CategoryDefinition[], selectedIds: string[], onToggle: (id: string) => void) => {
-    const visible = showAllCategories ? defs : defs.filter((d) => d.defaultActive || selectedIds.includes(d.id));
-    return <View style={styles.chipGrid}>{visible.map((d) => chip(selectedIds.includes(d.id), d.name, () => onToggle(d.id), d.id))}</View>;
-  };
-
-  const budgetCards: { id: BudgetChoice; title: string; body: string }[] = [
-    { id: 'limits', title: t('setup.budget.limits'), body: t('setup.budget.limitsBody') },
-    { id: 'envelope', title: t('setup.budget.envelope'), body: t('setup.budget.envelopeBody') },
-    { id: 'track', title: t('setup.budget.track'), body: t('setup.budget.trackBody') },
-  ];
-
-  const quickAdds: { purpose: AccountPurpose; label: string; icon: React.ReactNode }[] = [
-    { purpose: 'emergency', label: t('setup.accounts.quick.emergency'), icon: <LifeBuoy size={16} color={colors.primary} /> },
-    { purpose: 'savings', label: t('setup.accounts.quick.savings'), icon: <PiggyBank size={16} color={colors.primary} /> },
-    { purpose: 'investment', label: t('setup.accounts.quick.investment'), icon: <TrendingUp size={16} color={colors.primary} /> },
-  ];
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView
-        contentContainerStyle={[styles.root, { padding: spacing.xl }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView ref={scroll} contentContainerStyle={[styles.root, { padding: spacing.xl }]} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
-          {/* Progress */}
-          <View style={[styles.badge, { backgroundColor: colors.primaryLight, borderRadius: radii.full, marginBottom: spacing.sm }]}>
-            <ShieldCheck size={14} color={colors.primary} />
-            <Text style={[styles.badgeText, { color: colors.primary, fontFamily: typography.fonts.semiBold, marginLeft: spacing.xs }]}>
-              {t('setup.stepOf', { n: stepIndex + 1, total: STEPS.length })}
-            </Text>
-          </View>
-          <View style={[styles.progressRow, { marginBottom: spacing.xl }]} accessibilityRole="progressbar">
-            {STEPS.map((s, i) => (
-              <View
-                key={s}
-                style={[
-                  styles.progressBar,
-                  { backgroundColor: i <= stepIndex ? colors.primary : colors.borderSubtle, borderRadius: radii.full },
-                ]}
-              />
-            ))}
-          </View>
-
-          {step === 'about' && (
-            <View>
-              <Text style={titleStyle}>{t('setup.about.title')}</Text>
-              <Text style={bodyStyle}>{t('setup.about.body')}</Text>
-              <View style={{ marginBottom: spacing.md }}>
-                <TextInput
-                  label={t('setup.about.name')}
-                  placeholder={t('setup.about.namePlaceholder')}
-                  value={workspaceName}
-                  onChangeText={setWorkspaceName}
-                />
-              </View>
-              <View style={{ marginBottom: spacing.md, zIndex: 20 }}>
-                <Dropdown label={t('setup.about.currency')} value={currency} options={currencyOptions} onSelect={setCurrency} />
-              </View>
-              <View style={{ zIndex: 10 }}>
-                <Dropdown
-                  label={t('setup.about.weekStart')}
-                  value={weekStart}
-                  options={weekOptions}
-                  onSelect={(v) => setWeekStart(v as WeekStart)}
-                />
-              </View>
-            </View>
-          )}
-
-          {step === 'budget' && (
-            <View>
-              <Text style={titleStyle}>{t('setup.budget.title')}</Text>
-              <Text style={bodyStyle}>{t('setup.budget.body')}</Text>
-              {budgetCards.map((c) => {
-                const selected = budgetChoice === c.id;
+          {/* Roadmap: every step by name; done steps can be revisited. */}
+          <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.sm, marginBottom: spacing.xs }}>
+            {`${t('wiz.stepOf', { n: step + 1, total: STEPS.length })} · ${t(STEPS[step]!.key)}`}
+          </Text>
+          <View style={{ marginBottom: spacing.xl }}>
+            <View style={[styles.roadmap, { gap: isDesktop ? 8 : 6 }]}>
+              {STEPS.map((s, i) => {
+                const done = i < step;
+                const current = i === step;
                 return (
                   <TouchableOpacity
-                    key={c.id}
-                    onPress={() => setBudgetChoice(c.id)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
+                    key={s.key}
+                    disabled={i > step}
+                    onPress={() => goTo(i)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: current, disabled: i > step }}
                     style={[
-                      styles.optionCard,
+                      styles.roadStep,
                       {
-                        borderColor: selected ? colors.primary : colors.borderSubtle,
-                        backgroundColor: selected ? colors.primaryLight : colors.surface,
-                        borderRadius: radii.lg,
-                        padding: spacing.md,
-                        marginBottom: spacing.sm,
+                        borderRadius: radii.full,
+                        backgroundColor: current ? colors.primary : done ? colors.primaryLight : colors.surfaceSubtle,
                       },
                     ]}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.semiBold, fontSize: typography.sizes.body }}>
-                        {c.title}
+                    {done ? (
+                      <Check size={12} color={colors.primary} />
+                    ) : (
+                      <Text style={{ color: current ? '#FFFFFF' : colors.textSecondary, fontFamily: typography.fonts.semiBold, fontSize: 11 }}>
+                        {i + 1}
                       </Text>
-                      <Text style={[hint, { marginTop: 2 }]}>{c.body}</Text>
-                    </View>
-                    {selected && <Check size={18} color={colors.primary} />}
+                    )}
+                    <Text
+                      style={{
+                        color: current ? '#FFFFFF' : done ? colors.primary : colors.textSecondary,
+                        fontFamily: typography.fonts.medium,
+                        fontSize: 12,
+                        marginLeft: 6,
+                      }}
+                    >
+                      {t(s.key)}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
-              {budgetChoice !== 'track' && (
-                <View style={{ marginTop: spacing.md }}>
-                  <CurrencyInput label={t('setup.budget.takeHome')} value={takeHome} onChangeText={setTakeHome} />
-                  <Text style={[hint, { marginTop: spacing.xs }]}>{t('setup.budget.takeHomeHint')}</Text>
-                </View>
-              )}
             </View>
-          )}
+          </View>
 
-          {step === 'accounts' && (
-            <View>
-              <Text style={titleStyle}>{t('setup.accounts.title')}</Text>
-              <Text style={bodyStyle}>{t('setup.accounts.body')}</Text>
+          {restored && step === 0 && <Hint style={{ marginBottom: spacing.md }}>{t('wiz.draftRestored')}</Hint>}
 
-              {accounts.length === 0 ? (
-                <Text style={[hint, { marginBottom: spacing.md }]}>{t('setup.accounts.empty')}</Text>
-              ) : (
-                accounts.map((acc) => (
-                  <View
-                    key={acc.key}
-                    style={[
-                      styles.accountItem,
-                      {
-                        backgroundColor: colors.surfaceSubtle,
-                        borderColor: colors.borderSubtle,
-                        borderRadius: radii.md,
-                        padding: spacing.md,
-                        marginBottom: spacing.sm,
-                      },
-                    ]}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.textPrimary, fontFamily: typography.fonts.medium }}>{acc.name}</Text>
-                      <Text style={hint}>
-                        {PURPOSE_INFO[acc.purpose].label}
-                        {' · '}
-                        {t('setup.accounts.opening', { amount: formatNaira(acc.balanceMinor) })}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => setAccounts((prev) => prev.filter((a) => a.key !== acc.key))}
-                      accessibilityLabel={t('setup.accounts.remove', { name: acc.name })}
-                      style={{ padding: 4 }}
-                    >
-                      <Trash2 size={16} color={colors.statusDanger} />
-                    </TouchableOpacity>
-                  </View>
-                ))
-              )}
-
-              <Button
-                label={t('setup.accounts.add')}
-                onPress={() => setSheetPurpose('operating')}
-                variant="secondary"
-                size="md"
-                icon={<Plus size={16} color={colors.primary} />}
-              />
-
-              <View
-                style={[
-                  styles.saveBox,
-                  { borderColor: colors.borderSubtle, borderRadius: radii.lg, padding: spacing.md, marginTop: spacing.lg },
-                ]}
-              >
-                <Text style={sectionLabel}>{t('setup.accounts.saveQuestion')}</Text>
-                <Text style={[hint, { marginBottom: spacing.sm }]}>{t('setup.accounts.saveHint')}</Text>
-                <View style={styles.chipGrid}>
-                  {quickAdds.map((q) => (
-                    <TouchableOpacity
-                      key={q.purpose}
-                      onPress={() => setSheetPurpose(q.purpose)}
-                      style={[
-                        styles.chip,
-                        { backgroundColor: colors.surfaceSubtle, borderColor: colors.borderSubtle, borderRadius: radii.full },
-                      ]}
-                    >
-                      {q.icon}
-                      <Text
-                        style={{
-                          color: colors.textPrimary,
-                          fontFamily: typography.fonts.medium,
-                          fontSize: typography.sizes.sm,
-                          marginLeft: 6,
-                        }}
-                      >
-                        {q.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </View>
-          )}
-
-          {step === 'categories' && (
-            <View>
-              <Text style={titleStyle}>{t('setup.categories.title')}</Text>
-              <Text style={bodyStyle}>{t('setup.categories.body')}</Text>
-
-              <View style={styles.sectionHead}>
-                <Text style={sectionLabel}>{t('setup.categories.spending')}</Text>
-                <Text style={hint}>{t('setup.categories.selected', { n: expenseIds.length })}</Text>
-              </View>
-              {renderCategoryList(SPENDING_CHOICES, expenseIds, (id) => setExpenseIds((prev) => toggle(prev, id)))}
-
-              <View style={[styles.sectionHead, { marginTop: spacing.lg }]}>
-                <Text style={sectionLabel}>{t('setup.categories.income')}</Text>
-                <Text style={hint}>{t('setup.categories.selected', { n: incomeIds.length })}</Text>
-              </View>
-              {renderCategoryList(INCOME_TAXONOMY, incomeIds, (id) => setIncomeIds((prev) => toggle(prev, id)))}
-
-              <TouchableOpacity onPress={() => setShowAllCategories((v) => !v)} style={{ marginTop: spacing.md }}>
-                <Text style={{ color: colors.primary, fontFamily: typography.fonts.semiBold }}>
-                  {showAllCategories ? t('setup.categories.showFewer') : t('setup.categories.showAll')}
-                </Text>
-              </TouchableOpacity>
-              <Text style={[hint, { marginTop: spacing.md }]}>{t('setup.categories.savingsNote')}</Text>
-            </View>
-          )}
+          <Step draft={draft} update={update} goTo={goTo} />
 
           {!!error && (
             <Text style={{ color: colors.statusDanger, fontFamily: typography.fonts.medium, marginTop: spacing.lg }}>{error}</Text>
           )}
+          {!!notice && <Hint style={{ marginTop: spacing.lg }}>{notice}</Hint>}
 
-          {/* Footer */}
           <View style={[styles.footer, { marginTop: spacing.xl }]}>
-            {stepIndex > 0 ? (
-              <Button label={t('setup.back')} onPress={() => setStepIndex((i) => i - 1)} variant="ghost" size="md" disabled={saving} />
-            ) : (
-              <View />
-            )}
+            {step > 0 ? <Button label={t('wiz.back')} onPress={() => goTo(step - 1)} variant="ghost" size="md" disabled={saving} /> : <View />}
             <View style={styles.footerRight}>
-              {step !== 'about' && (
-                <Button label={t('setup.skip')} onPress={skipStep} variant="ghost" size="md" disabled={saving} />
-              )}
-              <Button
-                label={isLast ? t('setup.finish') : t('setup.next')}
-                onPress={goNext}
-                variant="primary"
-                size="md"
-                loading={saving}
-              />
+              {step > 0 && step < LAST && <Button label={t('wiz.skip')} onPress={skip} variant="ghost" size="md" disabled={saving} />}
+              <Button label={step === LAST ? t('wiz.finish') : t('wiz.next')} onPress={next} variant="primary" size="md" loading={saving} />
             </View>
           </View>
+          {saving && (
+            <View style={[styles.saving, { marginTop: spacing.md }]}>
+              <ActivityIndicator color={colors.primary} />
+              <Hint style={{ marginLeft: spacing.sm }}>{t('wiz.saving')}</Hint>
+            </View>
+          )}
         </View>
       </ScrollView>
-
-      <AddAccountSheet
-        visible={sheetPurpose !== null}
-        initialPurpose={sheetPurpose ?? 'operating'}
-        onClose={() => setSheetPurpose(null)}
-        onSaveAccount={(acc) => setAccounts((prev) => [...prev, { ...acc, key: `${Date.now()}-${prev.length}` }])}
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  card: {
-    width: '100%',
-    maxWidth: 620,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  badgeText: {
-    fontSize: 11,
-    letterSpacing: 0.5,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  progressBar: {
-    flex: 1,
-    height: 4,
-  },
-  optionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  accountItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  saveBox: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-  },
-  sectionHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-  },
-  chipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderWidth: 1,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  footerRight: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
+  root: { flexGrow: 1, alignItems: 'center' },
+  card: { width: '100%', maxWidth: 680, paddingTop: 24 },
+  roadmap: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  roadStep: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  footerRight: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  saving: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
 });

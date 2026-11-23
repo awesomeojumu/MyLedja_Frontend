@@ -550,6 +550,7 @@ export class WorkspaceRepository {
     for (const a of body.accounts) {
       const type = (a.type in ACCOUNT_KIND_INFO ? a.type : 'other_asset') as AccountKind;
       await this.addAccount({
+        ...(a.id ? { id: a.id } : {}),
         name: a.name,
         type,
         currency: a.currency,
@@ -570,6 +571,8 @@ export class WorkspaceRepository {
   }
 
   async addAccount(input: {
+    /** An id made on the device (Welcome), so records made before sync can point at it. */
+    id?: string;
     name: string;
     type: AccountKind;
     institution?: string;
@@ -582,7 +585,7 @@ export class WorkspaceRepository {
   }): Promise<Result<Account>> {
     const snapshot = await this.load();
     const account: Account = {
-      id: this.newId(),
+      id: input.id ?? this.newId(),
       name: input.name,
       type: input.type,
       currency: input.currency ?? snapshot.settings.currency ?? 'NGN',
