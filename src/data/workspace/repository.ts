@@ -1221,17 +1221,26 @@ export class WorkspaceRepository {
    * The category for a catalogue entry (a taxonomy id such as `exp-food`), made the first time it's needed.
    * Matches on the key, then on the name, so renamed and synced copies are found too.
    */
-  async ensureCatalogCategory(input: { key: string; name: string; kind: 'income' | 'expense' }): Promise<Category> {
+  async ensureCatalogCategory(input: {
+    key: string;
+    name: string;
+    kind: 'income' | 'expense';
+    /** The category group's name; it's made the first time. Defaults to Spending or Income. */
+    group?: string;
+  }): Promise<Category> {
     const snapshot = await this.load();
     const lower = input.name.trim().toLowerCase();
     const found =
       snapshot.categories.find((c) => c.key === input.key) ??
-      snapshot.categories.find((c) => c.kind === input.kind && c.name.trim().toLowerCase() === lower);
+      // Subcategory keys must match exactly; only general lines fall back to the name.
+      (input.key.includes(':')
+        ? undefined
+        : snapshot.categories.find((c) => c.kind === input.kind && !c.key && c.name.trim().toLowerCase() === lower));
     if (found) {
       if (found.hidden) await this.updateCategory({ ...found, hidden: false });
       return found;
     }
-    const groupName = input.kind === 'income' ? 'Income' : 'Spending';
+    const groupName = input.group?.trim() || (input.kind === 'income' ? 'Income' : 'Spending');
     const groups = await this.store.list('category_groups');
     const existingGroup = groups.find(
       (g) => String(g.data.kind ?? '') === input.kind && String(g.data.name ?? '').toLowerCase() === groupName.toLowerCase(),

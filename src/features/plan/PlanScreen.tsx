@@ -110,7 +110,7 @@ export function PlanScreen() {
     const payFrom = pickAccount(accounts, 'bills');
     if (repo && payFrom) {
       const today = new Date().toISOString().slice(0, 10);
-      void resolveCategoryId(repo, categories, b.category, 'expense')
+      void resolveCategoryId(repo, categories, b.subcategory ? `${b.category}: ${b.subcategory}` : b.category, 'expense')
         .then((categoryId) =>
           repo.addRecurring({
             kind: 'bill',
@@ -140,7 +140,7 @@ export function PlanScreen() {
     if (bill && repo && payFrom) {
       const today = new Date().toISOString().slice(0, 10);
       const known = schedule?.categoryId && categories.some((c) => c.id === schedule.categoryId) ? schedule.categoryId : null;
-      void (known ? Promise.resolve(known) : resolveCategoryId(repo, categories, bill.category, 'expense'))
+      void (known ? Promise.resolve(known) : resolveCategoryId(repo, categories, bill.subcategory ? `${bill.category}: ${bill.subcategory}` : bill.category, 'expense'))
         .then((categoryId) =>
           repo.addTransaction({
             kind: 'expense',

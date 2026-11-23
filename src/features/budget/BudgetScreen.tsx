@@ -24,7 +24,7 @@ import {
   type RecurringBillItem,
 } from '../plan/billsModel';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
-import { categoryForTaxonomy, resolveCategoryId } from '../categories/catalog';
+import { resolveCategoryId, taxonomyFor } from '../categories/catalog';
 import type { CategoryDefinition } from '../../data/categoriesTaxonomy';
 import { monthCodeOf, shiftMonth, thisMonthLabel } from '../../lib/months';
 
@@ -50,7 +50,19 @@ export function BudgetScreen() {
   // Live Database Hook
   const { repo, categories: dbCategories, events: dbEvents } = useDatabaseData();
   // Budget rows come from the Settings catalogue; spending is recorded against the workspace category.
-  const dbIdOf = (def: CategoryDefinition) => categoryForTaxonomy(dbCategories, def)?.id ?? def.id;
+  // A budget row counts its general line and every subcategory under it.
+  const idsOf = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const c of dbCategories) {
+      if (c.deleted) continue;
+      const def = taxonomyFor(c);
+      if (!def) continue;
+      const set = map.get(def.id) ?? new Set<string>();
+      set.add(c.id);
+      map.set(def.id, set);
+    }
+    return (def: CategoryDefinition) => map.get(def.id) ?? new Set<string>();
+  }, [dbCategories]);
 
   // Sheets State
   const [moveMoneyVisible, setMoveMoneyVisible] = useState(false);
@@ -203,7 +215,7 @@ export function BudgetScreen() {
         if (monthOf(ev.date) === targetMonthCode) {
           for (const line of ev.lines) {
             // Income lines credit the category, so they carry a negative amount.
-            if (line.ledgerAccountId === dbIdOf(cat)) {
+            if (idsOf(cat).has(line.ledgerAccountId)) {
               realReceived += line.amountMinor < 0n ? -line.amountMinor : line.amountMinor;
             }
           }
@@ -221,7 +233,7 @@ export function BudgetScreen() {
         targetExpenseCategory: saved?.targetExpenseCategory,
       };
     });
-  }, [activeIncomeCategories, incomeCategoryConfigs, getSubcategoriesForIncome, dbEvents, currentMonth]);
+  }, [activeIncomeCategories, incomeCategoryConfigs, getSubcategoriesForIncome, dbEvents, currentMonth, idsOf]);
 
   const { totalIncomeExpectedMinor, totalIncomeReceivedMinor } = useMemo(() => {
     let exp = 0n;
@@ -326,7 +338,7 @@ export function BudgetScreen() {
             if (ev.status !== 'posted' || ev.type !== 'expense') continue;
             if (monthOf(ev.date) === targetMonthCode) {
               for (const line of ev.lines) {
-                if (line.ledgerAccountId === dbIdOf(cat) && line.amountMinor > 0n) {
+                if (idsOf(cat).has(line.ledgerAccountId) && line.amountMinor > 0n) {
                   realSpent += line.amountMinor;
                 }
               }
@@ -439,6 +451,7 @@ export function BudgetScreen() {
     subcategoryCustomLimits,
     categoryScheduledBillsMap,
     dbEvents,
+    idsOf,
   ]);
 
   // Aggregate Totals

@@ -5,7 +5,7 @@ import { useTheme, BottomSheet, CurrencyInput, TextInput, Dropdown, Button } fro
 import { t } from '../../i18n';
 import { parseAmount } from '../../money';
 import { useDatabaseData } from '../../data/workspace/useDatabaseData';
-import { useCategoryChoices } from '../categories/catalog';
+import { useCategoryTree } from '../categories/catalog';
 import { isSavingsAccount, isSpendingAccount } from '../accounts/purpose';
 import { recordEntry, type QuickEntry } from '../transactions/recordEntry';
 
@@ -39,8 +39,9 @@ export function QuickTransactionSheet({
   const router = useRouter();
   const { repo, accounts, goals, holdings, debts } = useDatabaseData();
   const [type, setType] = useState(initialType);
-  const expenseChoices = useCategoryChoices('expense');
-  const incomeChoices = useCategoryChoices('income');
+  // `choice` is a category's key; `detail` is the id of a subcategory under it, or '' for the general line.
+  const expenseChoices = useCategoryTree('expense');
+  const incomeChoices = useCategoryTree('income');
   const choices = type === 'income' ? incomeChoices : expenseChoices;
 
   const liveAccounts = useMemo(() => accounts.filter((a) => !a.archived), [accounts]);
@@ -80,17 +81,21 @@ export function QuickTransactionSheet({
         defaultAccountId && liveAccounts.some((a) => a.id === defaultAccountId) ? defaultAccountId : (payAccounts[0]?.id ?? ''),
       );
       const startChoices = initialType === 'income' ? incomeChoices : expenseChoices;
-      setChoice(defaultCategoryId && startChoices.some((c) => c.id === defaultCategoryId) ? defaultCategoryId : '');
+      const start = defaultCategoryId
+        ? startChoices.find((c) => c.generalId === defaultCategoryId || c.children.some((k) => k.id === defaultCategoryId))
+        : undefined;
+      setChoice(start?.key ?? '');
+      setDetail(start && start.generalId !== defaultCategoryId ? (defaultCategoryId ?? '') : '');
     }
   }
 
-  const selectedCategory = choices.find((c) => c.id === choice);
+  const selectedCategory = choices.find((c) => c.key === choice);
 
   const categoryOptions = useMemo(() => {
     const opts = choices.map((c) => ({
       label: c.name,
-      value: c.id,
-      subtitle: c.subcategories.length > 0 ? c.subcategories.slice(0, 3).join(', ') : undefined,
+      value: c.key,
+      subtitle: c.children.length > 0 ? c.children.slice(0, 3).map((k) => k.name).join(', ') : undefined,
     }));
     if (type === 'expense') opts.push({ label: t('quick.optionSave'), value: SAVE, subtitle: t('quick.optionSaveBody') });
     opts.push(
@@ -156,11 +161,11 @@ export function QuickTransactionSheet({
       entry = {
         flow: type,
         accountId,
-        categoryId: choice,
+        // The subcategory picked, else the category's general line.
+        categoryId: detail || selectedCategory?.generalId || '',
         amount: parsed.minor,
         date,
         payee,
-        detail: detail || undefined,
       };
       done = type === 'expense' ? t('quick.savedExpense') : t('quick.savedIncome');
     }
@@ -248,13 +253,13 @@ export function QuickTransactionSheet({
             containerStyle={gap}
           />
 
-          {selectedCategory && selectedCategory.subcategories.length > 0 && (
+          {selectedCategory && selectedCategory.children.length > 0 && (
             <Dropdown
               label={t('quick.detail')}
               value={detail}
               options={[
                 { label: t('quick.detailNone'), value: '' },
-                ...selectedCategory.subcategories.map((s) => ({ label: s, value: s })),
+                ...selectedCategory.children.map((k) => ({ label: k.name, value: k.id })),
               ]}
               onSelect={setDetail}
               containerStyle={gap}
