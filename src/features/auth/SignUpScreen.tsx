@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Lock, Mail, User, Globe, Check } from 'lucide-react-native';
+import { Lock, Mail, User, Check } from 'lucide-react-native';
 import { useTheme, TextInput, Button } from '../../design';
 import { useAuth } from './AuthProvider';
 import { authApi } from '../../api/auth';
 import { ApiError, NetworkError } from '../../api/client';
+import { isTwoFactorRequired } from '../../api/security';
 import { t } from '../../i18n';
 import { TermsPrivacySheet } from './TermsPrivacySheet';
+import { GoogleSignInButton } from './GoogleSignInButton';
+import { useGoogleSignIn } from './useGoogleSignIn';
 
 export function SignUpScreen() {
   const { colors, typography, spacing, radii } = useTheme();
@@ -22,6 +25,38 @@ export function SignUpScreen() {
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Google Sign-Up
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogleCredential = async (idToken: string) => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      const res = await authApi(client).signInWithGoogle({ idToken, staySignedIn: true });
+      if (isTwoFactorRequired(res)) {
+        // If an existing linked account had 2FA, redirect to sign-in
+        router.replace('/sign-in' as never);
+        return;
+      }
+      await signedIn(res, true);
+      router.replace((res.user.setupComplete ? '/' : '/welcome') as never);
+    } catch (err) {
+      if (err instanceof ApiError && err.body.code === 'google_link_needed') {
+        setError(t('signIn.googleLinkPassword'));
+        return;
+      }
+      setError(errorText(err));
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const { clientId } = useGoogleSignIn({
+    client,
+    onSuccess: handleGoogleCredential,
+    onError: setError,
+  });
 
   // Terms sheet
   const [termsVisible, setTermsVisible] = useState(false);
@@ -262,13 +297,12 @@ export function SignUpScreen() {
               size="lg"
             />
 
-            {/* Google needs the platform sign-in SDK, which isn't in this build yet. */}
             <View style={{ marginTop: spacing.md }}>
-              <Button
-                label={t('ui.signUpScreen.signUpWithGoogle')}
-                onPress={() => setError(t('signIn.googleUnavailable'))}
-                variant="secondary"
-                icon={<Globe size={18} color={colors.textSecondary} />}
+              <GoogleSignInButton
+                clientId={clientId}
+                onCredential={handleGoogleCredential}
+                mode="signup"
+                loading={googleLoading}
               />
             </View>
           </>

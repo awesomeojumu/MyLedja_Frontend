@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Eye, EyeOff, Lock, Mail, Fingerprint, Globe } from 'lucide-react-native';
+import { Eye, EyeOff, Lock, Mail, Fingerprint } from 'lucide-react-native';
 import { useTheme, TextInput, Button } from '../../design';
 import { useAuth } from './AuthProvider';
 import { authApi } from '../../api/auth';
@@ -10,6 +10,8 @@ import { ApiError, NetworkError } from '../../api/client';
 import { t } from '../../i18n';
 import { TwoFactorChallengeSheet } from './TwoFactorChallengeSheet';
 import { PasskeyPromptSheet } from './PasskeyPromptSheet';
+import { GoogleSignInButton } from './GoogleSignInButton';
+import { useGoogleSignIn } from './useGoogleSignIn';
 
 export function SignInScreen() {
   const { colors, typography, spacing, radii } = useTheme();
@@ -84,8 +86,59 @@ export function SignInScreen() {
     }
   };
 
-  // Google needs the platform sign-in SDK, which isn't in this build yet.
-  const handleSocialGoogle = () => setError(t('signIn.googleUnavailable'));
+  // Google Sign-In
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogleCredential = async (idToken: string) => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      const res = await authApi(client).signInWithGoogle({ idToken, staySignedIn });
+      if (isTwoFactorRequired(res)) {
+        setChallengeToken(res.challengeToken);
+        setTwoFactorVisible(true);
+        return;
+      }
+      await signedIn(res, staySignedIn);
+      finish(res.user.setupComplete);
+    } catch (err) {
+      if (err instanceof ApiError && err.body.code === 'google_link_needed') {
+        const linkToken = typeof err.body.linkToken === 'string' ? err.body.linkToken : undefined;
+        setError(t('signIn.googleLinkPassword'));
+        if (linkToken && password) {
+          // If password was already typed, link immediately
+          try {
+            const linked = await authApi(client).signIn({
+              email: typeof err.body.email === 'string' ? err.body.email : email.trim(),
+              password,
+              staySignedIn,
+              googleLinkToken: linkToken,
+            });
+            if (isTwoFactorRequired(linked)) {
+              setChallengeToken(linked.challengeToken);
+              setTwoFactorVisible(true);
+              return;
+            }
+            await signedIn(linked, staySignedIn);
+            finish(linked.user.setupComplete);
+            return;
+          } catch {
+            // keep standard error
+          }
+        }
+        return;
+      }
+      setError(errorText(err));
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const { clientId } = useGoogleSignIn({
+    client,
+    onSuccess: handleGoogleCredential,
+    onError: setError,
+  });
 
   return (
     <ScrollView
@@ -286,11 +339,11 @@ export function SignInScreen() {
             icon={<Fingerprint size={18} color={colors.primary} />}
           />
 
-          <Button
-            label={t('ui.signInScreen.continueWithGoogle')}
-            onPress={handleSocialGoogle}
-            variant="secondary"
-            icon={<Globe size={18} color={colors.textSecondary} />}
+          <GoogleSignInButton
+            clientId={clientId}
+            onCredential={handleGoogleCredential}
+            mode="signin"
+            loading={googleLoading}
           />
         </View>
 

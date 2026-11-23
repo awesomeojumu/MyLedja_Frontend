@@ -1,7 +1,15 @@
 import { v7 as uuidv7 } from 'uuid';
 import type { SessionStore } from '@/data/session';
 
-export type ApiErrorBody = { code: string; message: string; field?: string; retryAfterSeconds?: number };
+export type ApiErrorBody = {
+  code: string;
+  message: string;
+  field?: string;
+  retryAfterSeconds?: number;
+  email?: string;
+  linkToken?: string;
+  [key: string]: unknown;
+};
 
 export class ApiError extends Error {
   constructor(

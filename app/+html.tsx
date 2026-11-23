@@ -28,6 +28,7 @@ export default function Root({ children }: PropsWithChildren) {
             }
           `
         }} />
+        <script src="https://accounts.google.com/gsi/client" async defer />
       </head>
       <body>{children}</body>
     </html>
